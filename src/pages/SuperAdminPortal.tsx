@@ -218,7 +218,7 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
             </p>
           </div>
 
-          <nav className="flex lg:flex-col gap-1.5 overflow-x-auto no-scrollbar">
+          <nav className="grid grid-cols-2 sm:grid-cols-4 lg:flex lg:flex-col gap-1.5">
             {navItems.map((item) => {
               const Icon = item.icon;
               const active = activeTab === item.id;
@@ -227,18 +227,37 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
                   key={item.id}
                   type="button"
                   onClick={() => setActiveTab(item.id)}
-                  className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition-colors cursor-pointer ${
+                  className={`flex items-center justify-center lg:justify-start gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-colors cursor-pointer min-h-[40px] ${
                     active
                       ? 'bg-amber-500 text-zinc-950'
-                      : 'text-zinc-300 hover:bg-zinc-900 hover:text-white'
+                      : 'text-zinc-300 bg-zinc-900/60 lg:bg-transparent hover:bg-zinc-900 hover:text-white'
                   }`}
                 >
                   <Icon className="w-4 h-4 shrink-0" />
-                  <span>{item.label}</span>
+                  <span className="truncate">{item.label}</span>
                 </button>
               );
             })}
           </nav>
+
+          <div className="grid grid-cols-2 gap-2 lg:hidden">
+            <button
+              type="button"
+              onClick={() => onNavigate('/admin')}
+              className="py-2 px-3 rounded-xl bg-zinc-900 border border-zinc-800 text-xs font-bold text-zinc-200 hover:bg-zinc-800 flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <Store className="w-3.5 h-3.5" />
+              <span className="truncate">{t.superAdmin.backToOwner}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigate('/')}
+              className="py-2 px-3 rounded-xl bg-zinc-900 border border-zinc-800 text-xs font-bold text-zinc-200 hover:bg-zinc-800 flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              {isRtl ? <ArrowRight className="w-3.5 h-3.5" /> : <ArrowLeft className="w-3.5 h-3.5" />}
+              <span className="truncate">{t.superAdmin.backToHome}</span>
+            </button>
+          </div>
         </div>
 
         <div className="hidden lg:block p-5 border-t border-zinc-800 space-y-2">
@@ -271,13 +290,19 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
 
       {/* Main Content */}
       <div className="flex-1 min-w-0 flex flex-col">
-        <header className="bg-white border-b border-zinc-200 px-6 py-3.5 flex items-center justify-between gap-4">
-          <div className="text-xs text-zinc-500 flex items-center gap-2">
-            <span>{t.brandName}</span>
+        <header className="bg-white border-b border-zinc-200 px-4 sm:px-6 py-3.5 flex items-center justify-between gap-3">
+          <div className="text-xs text-zinc-500 flex items-center gap-2 min-w-0 truncate">
+            <button
+              type="button"
+              onClick={() => onNavigate('/')}
+              className="hover:text-zinc-950 font-semibold cursor-pointer shrink-0"
+            >
+              {t.brandName}
+            </button>
             <span>/</span>
-            <span>{t.nav.superAdmin}</span>
-            <span>/</span>
-            <span className="font-bold text-zinc-900">
+            <span className="hidden sm:inline">{t.nav.superAdmin}</span>
+            <span className="hidden sm:inline">/</span>
+            <span className="font-bold text-zinc-900 truncate">
               {navItems.find((n) => n.id === activeTab)?.label}
             </span>
           </div>

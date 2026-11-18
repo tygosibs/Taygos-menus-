@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Bell, BellOff, Check, Clock, Volume2, XCircle } from 'lucide-react';
+import { AlertCircle, Bell, BellOff, Check, Clock, RefreshCw, Volume2, XCircle } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { subscribeOwnerOrders, updateOrderStatus } from '../../lib/firestoreService';
-import { playOrderAlertChime } from '../../lib/sound';
+import { playOrderAlertChime, unlockAudioContext } from '../../lib/sound';
 import { Order, OrderStatus, Restaurant } from '../../types/menu';
 
 interface LiveOrdersTabProps {
@@ -16,6 +16,8 @@ export function LiveOrdersTab({ restaurant }: LiveOrdersTabProps) {
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
   const [filterStatus, setFilterStatus] = useState<'all' | OrderStatus>('all');
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
@@ -43,31 +45,48 @@ export function LiveOrdersTab({ restaurant }: LiveOrdersTabProps) {
   };
 
   useEffect(() => {
+    const unlock = () => unlockAudioContext();
+    window.addEventListener('pointerdown', unlock, { once: true });
+    return () => window.removeEventListener('pointerdown', unlock);
+  }, []);
+
+  useEffect(() => {
     initializedRef.current = false;
     knownIdsRef.current = new Set();
+    setLoading(true);
+    setLoadError(null);
 
-    const unsub = subscribeOwnerOrders(restaurant.id, restaurant.ownerId, (incoming) => {
-      if (!initializedRef.current) {
-        incoming.forEach((o) => knownIdsRef.current.add(o.id));
-        initializedRef.current = true;
-      } else {
-        let hasNewPending = false;
-        incoming.forEach((o) => {
-          if (!knownIdsRef.current.has(o.id)) {
-            knownIdsRef.current.add(o.id);
-            if (o.status === 'pending') hasNewPending = true;
+    const unsub = subscribeOwnerOrders(
+      restaurant.id,
+      restaurant.ownerId,
+      (incoming) => {
+        if (!initializedRef.current) {
+          incoming.forEach((o) => knownIdsRef.current.add(o.id));
+          initializedRef.current = true;
+        } else {
+          let hasNewPending = false;
+          incoming.forEach((o) => {
+            if (!knownIdsRef.current.has(o.id)) {
+              knownIdsRef.current.add(o.id);
+              if (o.status === 'pending') hasNewPending = true;
+            }
+          });
+          if (hasNewPending && soundEnabled) {
+            playOrderAlertChime();
           }
-        });
-        if (hasNewPending && soundEnabled) {
-          playOrderAlertChime();
         }
+        setOrders(incoming);
+        setLoadError(null);
+        setLoading(false);
+      },
+      (err) => {
+        setLoadError(err.message || (isEn ? 'Could not load orders.' : 'تعذر تحميل الطلبات.'));
+        setLoading(false);
       }
-      setOrders(incoming);
-      setLoading(false);
-    });
+    );
 
     return () => unsub();
-  }, [restaurant.id, restaurant.ownerId, soundEnabled]);
+  }, [restaurant.id, restaurant.ownerId, soundEnabled, retryKey, isEn]);
 
   const filteredOrders = useMemo(() => {
     if (filterStatus === 'all') return orders;
@@ -88,11 +107,11 @@ export function LiveOrdersTab({ restaurant }: LiveOrdersTabProps) {
   const pendingCount = orders.filter((o) => o.status === 'pending').length;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-zinc-200 rounded-2xl p-5">
+    <div className="space-y-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-zinc-200 rounded-2xl p-4 sm:p-5">
         <div>
-          <h2 className="text-lg font-extrabold text-zinc-950">{t.admin.orders.title}</h2>
-          <p className="text-xs text-zinc-500 mt-0.5">
+          <h2 className="text-base sm:text-lg font-extrabold text-zinc-950">{t.admin.orders.title}</h2>
+          <p className="text-xs text-zinc-500 mt-0.5 leading-relaxed">
             {t.admin.orders.subtitle}
             {pendingCount > 0 && (
               <span className="font-mono-num font-bold text-amber-700 ms-2">
@@ -102,11 +121,14 @@ export function LiveOrdersTab({ restaurant }: LiveOrdersTabProps) {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
           <button
             type="button"
-            onClick={() => playOrderAlertChime()}
-            className="px-3.5 py-2 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-700 hover:bg-zinc-50 flex items-center gap-1.5 cursor-pointer"
+            onClick={() => {
+              unlockAudioContext();
+              playOrderAlertChime();
+            }}
+            className="min-h-[40px] px-3.5 py-2 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-700 hover:bg-zinc-50 flex items-center gap-1.5 cursor-pointer"
           >
             <Volume2 className="w-4 h-4" />
             <span>{t.admin.orders.testSound}</span>
@@ -114,7 +136,7 @@ export function LiveOrdersTab({ restaurant }: LiveOrdersTabProps) {
           <button
             type="button"
             onClick={() => setSoundEnabled((v) => !v)}
-            className={`px-3.5 py-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 cursor-pointer ${
+            className={`min-h-[40px] px-3.5 py-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 cursor-pointer ${
               soundEnabled
                 ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
                 : 'border-zinc-200 bg-zinc-50 text-zinc-500'
@@ -138,7 +160,7 @@ export function LiveOrdersTab({ restaurant }: LiveOrdersTabProps) {
             key={tab.id}
             type="button"
             onClick={() => setFilterStatus(tab.id)}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap cursor-pointer ${
+            className={`min-h-[38px] px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap cursor-pointer ${
               filterStatus === tab.id
                 ? 'bg-zinc-950 text-white'
                 : 'bg-white border border-zinc-200 text-zinc-600 hover:text-zinc-950'
@@ -149,6 +171,23 @@ export function LiveOrdersTab({ restaurant }: LiveOrdersTabProps) {
         ))}
       </div>
 
+      {loadError && (
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 text-xs text-red-800">
+          <div className="flex items-center gap-2 font-bold">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{loadError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setRetryKey((k) => k + 1)}
+            className="px-3 py-1.5 rounded-lg bg-red-600 text-white font-bold flex items-center gap-1.5 hover:bg-red-700 cursor-pointer"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>{isEn ? 'Retry' : 'إعادة المحاولة'}</span>
+          </button>
+        </div>
+      )}
+
       {loading ? (
         <div className="space-y-3 animate-pulse">
           {[1, 2].map((n) => (
@@ -156,12 +195,12 @@ export function LiveOrdersTab({ restaurant }: LiveOrdersTabProps) {
           ))}
         </div>
       ) : filteredOrders.length === 0 ? (
-        <div className="bg-white border border-zinc-200 rounded-2xl p-12 text-center space-y-2">
+        <div className="bg-white border border-zinc-200 rounded-2xl p-8 sm:p-12 text-center space-y-2">
           <Clock className="w-8 h-8 text-zinc-300 mx-auto" />
           <h3 className="text-base font-bold text-zinc-800">{t.admin.orders.emptyTitle}</h3>
           <p className="text-xs text-zinc-500 max-w-md mx-auto leading-relaxed">
             {t.admin.orders.emptyDesc}{' '}
-            <span className="font-mono-num">/menu/{restaurant.slug}</span>
+            <span className="font-mono-num" dir="ltr">/menu/{restaurant.slug}</span>
           </p>
         </div>
       ) : (

@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ArrowRight, Palette, PauseCircle } from 'lucide-react';
+import { onAuthStateChanged, User } from 'firebase/auth';
+import {
+  ArrowLeft,
+  ArrowRight,
+  Home,
+  LayoutDashboard,
+  Palette,
+  PauseCircle,
+  X,
+} from 'lucide-react';
 import { LanguageToggleButton } from '../components/LanguageToggleButton';
 import { CartDrawer } from '../components/menu/CartDrawer';
 import { ItemModal } from '../components/menu/ItemModal';
@@ -7,6 +16,7 @@ import { ThemeRenderer } from '../components/menu/ThemeRenderer';
 import { useLanguage } from '../contexts/LanguageContext';
 import { DEMO_RESTAURANTS } from '../data/demoRestaurants';
 import { getThemeMeta, isCustomThemeId, MENU_THEMES } from '../data/themes';
+import { auth, isSuperAdminEmail } from '../lib/firebase';
 import {
   fetchActiveCustomThemes,
   fetchCustomThemeById,
@@ -23,6 +33,8 @@ const VALID_THEME_IDS = new Set<string>(MENU_THEMES.map((t) => t.id));
 
 export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
   const { lang, dir, isRtl, t, loc } = useLanguage();
+  const isEn = lang === 'en';
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
@@ -36,8 +48,9 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
+  const [topBarDismissed, setTopBarDismissed] = useState(false);
 
-  const showThemeSwitcher = useMemo(() => {
+  const urlThemeMode = useMemo(() => {
     if (isDemoMode) return true;
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
@@ -48,7 +61,11 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
   }, [isDemoMode]);
 
   useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (u) => {
+      setCurrentUser(u);
+    });
     fetchActiveCustomThemes().then(setCustomThemes);
+    return () => unsub();
   }, []);
 
   useEffect(() => {
@@ -160,7 +177,6 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
           },
         ];
       }
-      // If decrementing an item that was added with custom options, reduce the last matching item
       const anyIdx = prev.findIndex((c) => c.menuItem.id === item.id);
       if (anyIdx >= 0 && delta < 0) {
         const nextQty = prev[anyIdx].quantity + delta;
@@ -214,17 +230,25 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
     return (
       <div
         dir={dir}
-        className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center p-6"
+        className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center p-4 sm:p-6"
       >
-        <div className="max-w-md w-full bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center space-y-4">
-          <div className="flex justify-center">
+        <div className="max-w-md w-full bg-zinc-900 border border-zinc-800 rounded-2xl p-6 sm:p-8 text-center space-y-4">
+          <div className="flex justify-between items-center">
             <LanguageToggleButton variant="dark" compact />
+            <button
+              type="button"
+              onClick={() => onNavigate('/')}
+              aria-label={t.menu.backHome}
+              className="w-9 h-9 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 flex items-center justify-center cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
           <h1 className="text-2xl font-bold">{t.menu.notFoundTitle}</h1>
           <p className="text-sm text-zinc-400 leading-relaxed">
             {error || `${t.menu.notFoundDesc} (${slug})`}
           </p>
-          <div className="pt-2 flex items-center justify-center gap-3">
+          <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
             <button
               type="button"
               onClick={() => onNavigate('/')}
@@ -245,15 +269,27 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
     );
   }
 
+  const isOwner = Boolean(currentUser && currentUser.uid === restaurant.ownerId);
+  const isSuperAdmin = isSuperAdminEmail(currentUser?.email);
+  const showControlBar = urlThemeMode || isOwner || isSuperAdmin;
+
   if (!isDemoMode && restaurant.isSuspended) {
     return (
       <div
         dir={dir}
-        className="min-h-screen bg-[#FAFAFA] text-zinc-900 flex items-center justify-center p-6"
+        className="min-h-screen bg-[#FAFAFA] text-zinc-900 flex items-center justify-center p-4 sm:p-6"
       >
-        <div className="max-w-md w-full bg-white border border-zinc-200 rounded-2xl p-8 text-center space-y-4 shadow-sm">
-          <div className="flex justify-end">
+        <div className="max-w-md w-full bg-white border border-zinc-200 rounded-2xl p-6 sm:p-8 text-center space-y-4 shadow-sm">
+          <div className="flex justify-between items-center">
             <LanguageToggleButton variant="light" compact />
+            <button
+              type="button"
+              onClick={() => onNavigate('/')}
+              aria-label={t.menu.backHome}
+              className="w-9 h-9 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-600 flex items-center justify-center cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
           <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center mx-auto">
             <PauseCircle className="w-7 h-7" />
@@ -265,7 +301,16 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
             </span>{' '}
             — {t.menu.suspendedDesc}
           </p>
-          <div className="pt-2">
+          <div className="pt-2 flex flex-wrap items-center justify-center gap-2.5">
+            {(isOwner || isSuperAdmin) && (
+              <button
+                type="button"
+                onClick={() => onNavigate(isSuperAdmin && !isOwner ? '/super-admin' : '/admin')}
+                className="px-4 py-2.5 rounded-xl bg-amber-500 text-zinc-950 text-xs font-extrabold hover:bg-amber-400 cursor-pointer"
+              >
+                {t.nav.ownerDashboard}
+              </button>
+            )}
             <button
               type="button"
               onClick={() => onNavigate('/')}
@@ -286,34 +331,58 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
     : null;
   const isDarkSurface = getThemeMeta(effectiveTheme).isDark;
 
+  const dashboardTarget = isSuperAdmin && !isOwner ? '/super-admin' : '/admin';
+
   return (
     <div className="relative min-h-screen">
-      {/* Unobtrusive Theme Preview Strip for Demos / Owner Preview */}
-      {showThemeSwitcher && (
+      {/* Owner / Preview Quick Navigation & Theme Bar (Dismissible to a compact pill, never traps anyone) */}
+      {showControlBar && !topBarDismissed && (
         <div
           dir={dir}
-          className="bg-zinc-950 text-zinc-200 border-b border-zinc-800 px-4 py-2 flex items-center justify-between gap-3 overflow-x-auto no-scrollbar"
+          className="bg-zinc-950 text-zinc-200 border-b border-zinc-800 px-3 sm:px-4 py-2 flex items-center justify-between gap-2.5 overflow-x-auto no-scrollbar"
         >
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={() => onNavigate('/')}
-              className="text-xs text-zinc-400 hover:text-white flex items-center gap-1 cursor-pointer"
+              className="min-h-[34px] px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 text-xs font-bold text-zinc-200 hover:bg-zinc-800 hover:text-white flex items-center gap-1.5 cursor-pointer"
             >
-              {isRtl ? (
-                <ArrowRight className="w-3.5 h-3.5" />
-              ) : (
-                <ArrowLeft className="w-3.5 h-3.5" />
-              )}
-              <span>{t.nav.home}</span>
+              <Home className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">{t.nav.home}</span>
             </button>
-            <span className="text-zinc-700">|</span>
-            <span className="text-xs text-zinc-400 flex items-center gap-1.5">
-              <Palette className="w-3.5 h-3.5" />
-              <span>{lang === 'en' ? 'Themes Preview:' : 'معاينة الثيمات:'}</span>
-            </span>
+
+            {(isOwner || isSuperAdmin) && (
+              <button
+                type="button"
+                onClick={() => onNavigate(dashboardTarget)}
+                className="min-h-[34px] px-3 py-1 rounded-lg bg-amber-500 text-zinc-950 text-xs font-extrabold hover:bg-amber-400 flex items-center gap-1.5 cursor-pointer"
+              >
+                <LayoutDashboard className="w-3.5 h-3.5" />
+                <span>
+                  {isEn ? 'Back to Dashboard' : 'العودة للوحة التحكم'}
+                </span>
+              </button>
+            )}
+
+            {!isOwner && !isSuperAdmin && (
+              <button
+                type="button"
+                onClick={() => onNavigate('/admin')}
+                className="min-h-[34px] px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 text-xs font-bold text-zinc-300 hover:text-white flex items-center gap-1 cursor-pointer"
+              >
+                {isRtl ? <ArrowRight className="w-3.5 h-3.5" /> : <ArrowLeft className="w-3.5 h-3.5" />}
+                <span>{t.nav.ownerDashboard}</span>
+              </button>
+            )}
           </div>
+
           <div className="flex items-center gap-1.5 shrink-0">
+            <span className="text-[11px] text-zinc-400 flex items-center gap-1 me-1">
+              <Palette className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">
+                {isEn ? 'Themes:' : 'معاينة الثيمات:'}
+              </span>
+            </span>
             {MENU_THEMES.map((th) => {
               const active = effectiveTheme === th.id;
               return (
@@ -327,7 +396,7 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
                       : 'bg-zinc-900 text-zinc-400 hover:text-white'
                   }`}
                 >
-                  {th.number}. {lang === 'en' ? th.englishName : th.name}
+                  {th.number}. {isEn ? th.englishName : th.name}
                 </button>
               );
             })}
@@ -351,8 +420,27 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
             })}
             <span className="text-zinc-700 mx-1">|</span>
             <LanguageToggleButton variant="dark" compact />
+            <button
+              type="button"
+              onClick={() => setTopBarDismissed(true)}
+              aria-label={isEn ? 'Minimize bar' : 'تصغير الشريط'}
+              className="w-8 h-8 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
         </div>
+      )}
+
+      {showControlBar && topBarDismissed && (isOwner || isSuperAdmin) && (
+        <button
+          type="button"
+          onClick={() => onNavigate(dashboardTarget)}
+          className="fixed bottom-20 end-3 z-40 px-3.5 py-2 rounded-full bg-zinc-950/90 text-white border border-white/15 shadow-lg text-xs font-extrabold flex items-center gap-1.5 hover:bg-zinc-900 cursor-pointer"
+        >
+          <LayoutDashboard className="w-3.5 h-3.5 text-amber-400" />
+          <span>{isEn ? 'Dashboard' : 'لوحة التحكم'}</span>
+        </button>
       )}
 
       <ThemeRenderer

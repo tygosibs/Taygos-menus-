@@ -40,6 +40,15 @@ export function ItemModal({
     }
   }, [item]);
 
+  useEffect(() => {
+    if (!item) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [item, onClose]);
+
   const unitPrice = useMemo(() => {
     if (!item) return 0;
     const baseForSize = selectedSize ? selectedSize.price : item.basePrice;

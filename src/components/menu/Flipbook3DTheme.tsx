@@ -112,6 +112,24 @@ export function Flipbook3DTheme({
     }
   }, [focusedItem]);
 
+  useEffect(() => {
+    if (!focusedItem) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setFocusedItem(null);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [focusedItem]);
+
+  const resetToMainMenu = () => {
+    setSelectedMainCatId('all');
+    setSelectedSubCatId('all');
+    setSearchQuery('');
+    setPageIndex(0);
+    setFocusedItem(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const unitPrice = useMemo(() => {
     if (!focusedItem) return 0;
     const base = selectedSize ? selectedSize.price : focusedItem.basePrice;
@@ -183,7 +201,12 @@ export function Flipbook3DTheme({
       {/* Top Luxury Cover Header */}
       <header className="max-w-6xl mx-auto px-4 pt-6 pb-4 text-[#F7EFE4]">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#C6A46C]/25 pb-5">
-          <div className="flex items-center gap-3.5 min-w-0">
+          <button
+            type="button"
+            onClick={resetToMainMenu}
+            aria-label={lang === 'en' ? 'Return to main menu' : 'العودة للقائمة الرئيسية'}
+            className="flex items-center gap-3.5 min-w-0 text-start cursor-pointer hover:opacity-90 transition-opacity"
+          >
             {restaurant.logoUrl && (
               <SafeImage
                 src={restaurant.logoUrl}
@@ -196,14 +219,14 @@ export function Flipbook3DTheme({
                 <BookOpen className="w-3.5 h-3.5 shrink-0" />
                 <span>{t.menu.coverBadge}</span>
               </div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight truncate mt-0.5">
+              <h1 className="text-xl sm:text-3xl font-extrabold tracking-tight truncate mt-0.5">
                 {restName}
               </h1>
               {restTagline && (
                 <p className="text-xs text-[#D6C8B8] line-clamp-1 mt-0.5">{restTagline}</p>
               )}
             </div>
-          </div>
+          </button>
 
           <div className="flex flex-wrap items-center gap-2.5 shrink-0">
             <div className="relative flex-1 sm:w-52">
@@ -360,15 +383,26 @@ export function Flipbook3DTheme({
               <div className="hidden lg:block pointer-events-none absolute inset-y-0 left-1/2 -translate-x-1/2 w-8 bg-gradient-to-r from-transparent via-[#C6A46C]/15 to-transparent" />
 
               {/* Page Header */}
-              <div className="flex items-center justify-between gap-4 border-b border-[#E2D4C0] pb-3.5 mb-6 relative z-10">
-                <div className="text-xs font-bold text-[#7A6552]">
-                  {selectedMainCatId === 'all'
-                    ? lang === 'en'
-                      ? "Chef's Curated Menu"
-                      : 'قائمة الشيف المختارة'
-                    : selectedSubCatId !== 'all'
-                      ? `${categoryNameMap.get(selectedMainCatId) || ''} › ${categoryNameMap.get(selectedSubCatId) || ''}`
-                      : categoryNameMap.get(selectedMainCatId) || t.menu.allCategories}
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#E2D4C0] pb-3.5 mb-6 relative z-10">
+                <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-[#7A6552]">
+                  <span>
+                    {selectedMainCatId === 'all'
+                      ? lang === 'en'
+                        ? "Chef's Curated Menu"
+                        : 'قائمة الشيف المختارة'
+                      : selectedSubCatId !== 'all'
+                        ? `${categoryNameMap.get(selectedMainCatId) || ''} › ${categoryNameMap.get(selectedSubCatId) || ''}`
+                        : categoryNameMap.get(selectedMainCatId) || t.menu.allCategories}
+                  </span>
+                  {(selectedMainCatId !== 'all' || selectedSubCatId !== 'all' || searchQuery.trim() !== '') && (
+                    <button
+                      type="button"
+                      onClick={resetToMainMenu}
+                      className="px-2.5 py-0.5 rounded-lg bg-[#E9DEC9] hover:bg-[#DFCFB4] text-[#2A2018] text-[11px] font-bold cursor-pointer"
+                    >
+                      {lang === 'en' ? 'Reset / All' : 'عرض الكل'}
+                    </button>
+                  )}
                 </div>
                 <div className="font-mono-num text-xs font-bold text-[#7A6552]">
                   {t.menu.pageLabel} {safePageIndex + 1} / {pages.length}
@@ -379,6 +413,13 @@ export function Flipbook3DTheme({
                 <div className="py-16 text-center space-y-3 text-[#7A6552]">
                   <UtensilsCrossed className="w-9 h-9 mx-auto opacity-40" />
                   <p className="text-base font-bold">{t.menu.noResults}</p>
+                  <button
+                    type="button"
+                    onClick={resetToMainMenu}
+                    className="px-4 py-2 rounded-xl bg-[#2A2018] text-white text-xs font-bold cursor-pointer"
+                  >
+                    {lang === 'en' ? 'Back to All Dishes' : 'العودة لكل القوائم'}
+                  </button>
                 </div>
               ) : (
                 <div

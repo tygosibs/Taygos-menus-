@@ -322,59 +322,65 @@ export function OnboardingForm({ ownerId, ownerDisplayName, onCreated }: Onboard
   }, [previewCart, serviceCharge, taxRate]);
 
   return (
-    <div dir={dir} className={`${step === 2 ? 'max-w-5xl' : 'max-w-3xl'} mx-auto py-8 px-4 transition-all`}>
-      {/* 2-Step Progress Stepper */}
-      <div className="mb-6 bg-white border border-zinc-200 rounded-2xl p-4 flex items-center justify-between gap-3">
+    <div dir={dir} className={`${step === 2 ? 'max-w-5xl' : 'max-w-3xl'} mx-auto py-4 sm:py-8 px-3 sm:px-4 transition-all`}>
+      {/* 2-Step Progress Stepper (Responsive Grid — zero horizontal overflow on 360px phones) */}
+      <div className="mb-5 sm:mb-6 bg-white border border-zinc-200 rounded-2xl p-2 sm:p-3.5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1.5 sm:gap-3">
         <button
           type="button"
           onClick={() => setStep(1)}
-          className={`flex-1 flex items-center gap-3 p-2.5 rounded-xl text-start transition-colors cursor-pointer ${
+          className={`min-w-0 w-full flex items-center gap-2 sm:gap-3 px-2.5 py-2 sm:p-2.5 rounded-xl text-start transition-colors cursor-pointer ${
             step === 1 ? 'bg-zinc-950 text-white' : 'bg-emerald-50 text-emerald-900'
           }`}
         >
           <span
-            className={`w-7 h-7 rounded-lg flex items-center justify-center font-mono-num text-xs font-extrabold shrink-0 ${
+            className={`w-6 h-6 sm:w-7 sm:h-7 rounded-lg flex items-center justify-center font-mono-num text-[11px] sm:text-xs font-extrabold shrink-0 ${
               step === 1 ? 'bg-white text-zinc-950' : 'bg-emerald-600 text-white'
             }`}
           >
-            {step > 1 ? <Check className="w-4 h-4" /> : '1'}
+            {step > 1 ? <Check className="w-3.5 h-3.5" /> : '1'}
           </span>
           <div className="min-w-0">
-            <p className="text-xs font-extrabold truncate">
-              {isEn ? 'Step 1: Basic Info' : 'الخطوة ١: بيانات المطعم'}
+            <p className="text-[11px] sm:text-xs font-extrabold truncate">
+              <span className="sm:hidden">{isEn ? '1. Details' : '١. البيانات'}</span>
+              <span className="hidden sm:inline">
+                {isEn ? 'Step 1: Basic Info' : 'الخطوة ١: بيانات المطعم'}
+              </span>
             </p>
-            <p className={`text-[11px] truncate ${step === 1 ? 'text-zinc-300' : 'text-emerald-700'}`}>
+            <p className={`hidden sm:block text-[11px] truncate ${step === 1 ? 'text-zinc-300' : 'text-emerald-700'}`}>
               {isEn ? 'Name, URL & contact' : 'الاسم والرابط والواتساب'}
             </p>
           </div>
         </button>
 
-        <div className="text-zinc-300 shrink-0">
-          {isRtl ? <ArrowLeft className="w-4 h-4" /> : <ArrowRight className="w-4 h-4" />}
+        <div className="text-zinc-300 shrink-0 px-0.5">
+          {isRtl ? <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
         </div>
 
         <button
           type="button"
           disabled={step === 1}
           onClick={() => step === 2 && setStep(2)}
-          className={`flex-1 flex items-center gap-3 p-2.5 rounded-xl text-start transition-colors ${
+          className={`min-w-0 w-full flex items-center gap-2 sm:gap-3 px-2.5 py-2 sm:p-2.5 rounded-xl text-start transition-colors ${
             step === 2
               ? 'bg-zinc-950 text-white'
               : 'bg-zinc-50 text-zinc-400 cursor-not-allowed'
           }`}
         >
           <span
-            className={`w-7 h-7 rounded-lg flex items-center justify-center font-mono-num text-xs font-extrabold shrink-0 ${
+            className={`w-6 h-6 sm:w-7 sm:h-7 rounded-lg flex items-center justify-center font-mono-num text-[11px] sm:text-xs font-extrabold shrink-0 ${
               step === 2 ? 'bg-white text-zinc-950' : 'bg-zinc-200 text-zinc-500'
             }`}
           >
             2
           </span>
           <div className="min-w-0">
-            <p className="text-xs font-extrabold truncate">
-              {isEn ? 'Step 2: Preview & Pick Theme' : 'الخطوة ٢: المعاينة واختيار الثيم'}
+            <p className="text-[11px] sm:text-xs font-extrabold truncate">
+              <span className="sm:hidden">{isEn ? '2. Theme' : '٢. الثيم'}</span>
+              <span className="hidden sm:inline">
+                {isEn ? 'Step 2: Preview & Pick Theme' : 'الخطوة ٢: المعاينة واختيار الثيم'}
+              </span>
             </p>
-            <p className={`text-[11px] truncate ${step === 2 ? 'text-zinc-300' : 'text-zinc-400'}`}>
+            <p className={`hidden sm:block text-[11px] truncate ${step === 2 ? 'text-zinc-300' : 'text-zinc-400'}`}>
               {isEn ? 'All themes unlocked to preview' : 'جميع الثيمات متاحة للمعاينة الحية'}
             </p>
           </div>
@@ -383,14 +389,14 @@ export function OnboardingForm({ ownerId, ownerDisplayName, onCreated }: Onboard
 
       {/* STEP 1: RESTAURANT DETAILS */}
       {step === 1 && (
-        <div className="bg-white border border-zinc-200 rounded-2xl p-6 sm:p-8 space-y-6 shadow-xs">
+        <div className="bg-white border border-zinc-200 rounded-2xl p-4 sm:p-8 space-y-6 shadow-xs">
           <div className="flex flex-wrap items-start justify-between gap-3 border-b border-zinc-100 pb-5">
-            <div className="space-y-1.5">
-              <p className="text-xs font-semibold text-[#A61C1C]">
+            <div className="space-y-1.5 min-w-0">
+              <p className="text-xs font-semibold text-[#A61C1C] truncate">
                 {isEn ? `Welcome, ${ownerDisplayName}` : `مرحباً، ${ownerDisplayName}`}
               </p>
-              <h1 className="text-2xl font-extrabold text-zinc-950">{t.onboarding.title}</h1>
-              <p className="text-sm text-zinc-600">{t.onboarding.subtitle}</p>
+              <h1 className="text-xl sm:text-2xl font-extrabold text-zinc-950">{t.onboarding.title}</h1>
+              <p className="text-xs sm:text-sm text-zinc-600">{t.onboarding.subtitle}</p>
             </div>
             <button
               type="button"
@@ -439,7 +445,7 @@ export function OnboardingForm({ ownerId, ownerDisplayName, onCreated }: Onboard
                 <label className="block text-xs font-bold text-zinc-700 mb-1.5">
                   {t.onboarding.slugLabel}
                 </label>
-                <div className="flex items-center rounded-xl border border-zinc-200 overflow-hidden focus-within:border-zinc-500">
+                <div className="flex items-center rounded-xl border border-zinc-200 overflow-hidden focus-within:border-zinc-500 min-w-0">
                   <input
                     type="text"
                     required
@@ -447,9 +453,9 @@ export function OnboardingForm({ ownerId, ownerDisplayName, onCreated }: Onboard
                     value={slug}
                     onChange={(e) => handleSlugChange(e.target.value)}
                     placeholder="dar-kitchen"
-                    className="flex-1 px-3.5 py-2.5 text-sm font-mono-num text-left focus:outline-none"
+                    className="min-w-0 flex-1 px-3.5 py-2.5 text-sm font-mono-num text-left focus:outline-none"
                   />
-                  <span className="px-3 py-2.5 bg-zinc-50 text-zinc-500 text-xs font-mono-num border-s border-zinc-200">
+                  <span className="px-3 py-2.5 bg-zinc-50 text-zinc-500 text-xs font-mono-num border-s border-zinc-200 shrink-0">
                     /menu/
                   </span>
                 </div>
@@ -898,13 +904,13 @@ export function OnboardingForm({ ownerId, ownerDisplayName, onCreated }: Onboard
               </div>
             </div>
 
-            <div className="p-4 sm:p-6 bg-zinc-100/80 border-b border-zinc-200">
+            <div className="p-3 sm:p-6 bg-zinc-100/80 border-b border-zinc-200">
               <div
                 style={{ transform: 'translateZ(0)' }}
                 className={`relative overflow-hidden transition-all duration-200 bg-white ${
                   previewViewport === 'mobile'
-                    ? 'max-w-[395px] mx-auto h-[560px] rounded-[28px] border-[6px] border-zinc-900 shadow-2xl'
-                    : 'w-full h-[560px] rounded-2xl border border-zinc-300 shadow-md'
+                    ? 'max-w-[395px] mx-auto h-[460px] sm:h-[560px] rounded-[24px] sm:rounded-[28px] border-[4px] sm:border-[6px] border-zinc-900 shadow-2xl'
+                    : 'w-full h-[460px] sm:h-[560px] rounded-2xl border border-zinc-300 shadow-md'
                 }`}
               >
                 <div className="w-full h-full overflow-y-auto overflow-x-hidden">
@@ -927,9 +933,9 @@ export function OnboardingForm({ ownerId, ownerDisplayName, onCreated }: Onboard
               </div>
             </div>
 
-            <div className="p-5 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-5 bg-white">
+            <div className="p-4 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white">
               <div className="space-y-1.5 min-w-0">
-                <h3 className="text-lg font-extrabold text-zinc-950">{selectedThemeTitle}</h3>
+                <h3 className="text-base sm:text-lg font-extrabold text-zinc-950">{selectedThemeTitle}</h3>
                 <p className="text-xs sm:text-sm text-zinc-600 leading-relaxed max-w-2xl">
                   {selectedThemeDesc}
                 </p>
@@ -938,12 +944,12 @@ export function OnboardingForm({ ownerId, ownerDisplayName, onCreated }: Onboard
                 )}
               </div>
 
-              <div className="flex flex-wrap items-center gap-3 shrink-0">
+              <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2.5 shrink-0 w-full md:w-auto">
                 <button
                   type="button"
                   onClick={() => setStep(1)}
                   disabled={submitting}
-                  className="px-4 py-3 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-700 hover:bg-zinc-50 cursor-pointer disabled:opacity-50"
+                  className="min-h-[44px] px-4 py-2.5 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-700 hover:bg-zinc-50 cursor-pointer disabled:opacity-50"
                 >
                   {isEn ? 'Edit Details' : 'تعديل البيانات'}
                 </button>
@@ -952,7 +958,7 @@ export function OnboardingForm({ ownerId, ownerDisplayName, onCreated }: Onboard
                   disabled={submitting}
                   onClick={handleCreateRestaurant}
                   style={{ backgroundColor: primaryColor }}
-                  className="min-h-[48px] px-6 py-3 rounded-xl text-white font-extrabold text-sm hover:opacity-95 transition-opacity disabled:opacity-60 flex items-center gap-2 cursor-pointer shadow-md"
+                  className="min-h-[48px] px-5 sm:px-6 py-3 rounded-xl text-white font-extrabold text-sm hover:opacity-95 transition-opacity disabled:opacity-60 flex items-center justify-center gap-2 cursor-pointer shadow-md"
                 >
                   {submitting ? (
                     <>

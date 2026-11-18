@@ -671,8 +671,8 @@ export function ThemeCustomizerTab({
             style={{ transform: 'translateZ(0)' }}
             className={`relative overflow-hidden transition-all duration-200 bg-white ${
               previewViewport === 'mobile'
-                ? 'max-w-[395px] mx-auto h-[580px] rounded-[28px] border-[6px] border-zinc-900 shadow-2xl'
-                : 'w-full h-[580px] rounded-2xl border border-zinc-300 shadow-md'
+                ? 'max-w-[395px] mx-auto h-[460px] sm:h-[580px] rounded-[28px] border-[6px] border-zinc-900 shadow-2xl'
+                : 'w-full h-[460px] sm:h-[580px] rounded-2xl border border-zinc-300 shadow-md'
             }`}
           >
             <div className="w-full h-full overflow-y-auto overflow-x-hidden">
@@ -811,7 +811,7 @@ export function ThemeCustomizerTab({
       {/* 3. Bilingual Store Settings Form */}
       <form
         onSubmit={handleSaveSettings}
-        className="bg-white border border-zinc-200 rounded-2xl p-6 space-y-5"
+        className="bg-white border border-zinc-200 rounded-2xl p-4 sm:p-6 space-y-5"
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -889,9 +889,9 @@ export function ThemeCustomizerTab({
                 required
                 value={slug}
                 onChange={(e) => setSlug(sanitizeSlug(e.target.value))}
-                className="flex-1 px-3.5 py-2.5 text-sm font-mono-num text-left focus:outline-none"
+                className="flex-1 min-w-0 px-3.5 py-2.5 text-sm font-mono-num text-left focus:outline-none"
               />
-              <span className="px-3 py-2.5 bg-zinc-50 text-zinc-500 text-xs font-mono-num border-s border-zinc-200">
+              <span className="px-3 py-2.5 bg-zinc-50 text-zinc-500 text-xs font-mono-num border-s border-zinc-200 shrink-0">
                 /menu/
               </span>
             </div>

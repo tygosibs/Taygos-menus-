@@ -79,6 +79,21 @@ export function TenantsManagerTab({ onOpenPublicMenu }: TenantsManagerTabProps) 
     loadTenants();
   }, [loadTenants]);
 
+  useEffect(() => {
+    if (!conciergeRestaurant && !deleteTarget) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (deleteTarget && !deleting) {
+          setDeleteTarget(null);
+        } else if (conciergeRestaurant) {
+          setConciergeRestaurant(null);
+        }
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [conciergeRestaurant, deleteTarget, deleting]);
+
   const stats = useMemo(() => {
     const total = restaurants.length;
     const suspended = restaurants.filter((r) => Boolean(r.isSuspended)).length;
@@ -442,22 +457,32 @@ export function TenantsManagerTab({ onOpenPublicMenu }: TenantsManagerTabProps) 
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-5xl bg-[#F5F6F8] h-full overflow-y-auto shadow-2xl flex flex-col"
           >
-            <div className="sticky top-0 z-20 bg-white border-b border-zinc-200 px-6 py-4 flex items-center justify-between gap-4">
-              <div className="min-w-0">
-                <p className="text-[11px] font-bold text-amber-700">
-                  {t.superAdmin.tenants.conciergeTitle}
-                </p>
-                <div className="flex flex-wrap items-center gap-2 mt-0.5">
-                  <h3 className="text-lg font-extrabold text-zinc-950 truncate">
-                    {loc(conciergeRestaurant.name, conciergeRestaurant.name_en)}
-                  </h3>
-                  <span className="text-xs text-zinc-500 font-mono-num" dir="ltr">
-                    /menu/{conciergeRestaurant.slug}
-                  </span>
+            <div className="sticky top-0 z-20 bg-white border-b border-zinc-200 px-4 sm:px-6 py-3.5 sm:py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-start justify-between gap-3 min-w-0">
+                <div className="min-w-0">
+                  <p className="text-[11px] font-bold text-amber-700">
+                    {t.superAdmin.tenants.conciergeTitle}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                    <h3 className="text-base sm:text-lg font-extrabold text-zinc-950 truncate">
+                      {loc(conciergeRestaurant.name, conciergeRestaurant.name_en)}
+                    </h3>
+                    <span className="text-xs text-zinc-500 font-mono-num" dir="ltr">
+                      /menu/{conciergeRestaurant.slug}
+                    </span>
+                  </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setConciergeRestaurant(null)}
+                  className="sm:hidden w-11 h-11 rounded-xl bg-zinc-100 text-zinc-700 hover:bg-zinc-200 flex items-center justify-center cursor-pointer shrink-0"
+                  aria-label={t.superAdmin.tenants.closeConcierge}
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
 
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={() => setBilingualOpen((o) => !o)}
@@ -481,7 +506,7 @@ export function TenantsManagerTab({ onOpenPublicMenu }: TenantsManagerTabProps) 
                 <button
                   type="button"
                   onClick={() => setConciergeRestaurant(null)}
-                  className="p-2 rounded-xl bg-zinc-100 text-zinc-700 hover:bg-zinc-200 cursor-pointer"
+                  className="hidden sm:flex w-11 h-11 rounded-xl bg-zinc-100 text-zinc-700 hover:bg-zinc-200 items-center justify-center cursor-pointer"
                   aria-label={t.superAdmin.tenants.closeConcierge}
                 >
                   <X className="w-5 h-5" />
@@ -584,11 +609,11 @@ export function TenantsManagerTab({ onOpenPublicMenu }: TenantsManagerTabProps) 
               )}
 
               {/* Concierge Inner Mode Tabs */}
-              <div className="flex items-center gap-2 bg-white border border-zinc-200 rounded-2xl p-1.5 w-fit">
+              <div className="flex flex-wrap items-center gap-2 bg-white border border-zinc-200 rounded-2xl p-1.5 w-full sm:w-fit">
                 <button
                   type="button"
                   onClick={() => setConciergeTab('menu')}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors ${
+                  className={`flex-1 sm:flex-initial px-4 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-colors ${
                     conciergeTab === 'menu'
                       ? 'bg-zinc-950 text-white'
                       : 'text-zinc-600 hover:bg-zinc-100'
@@ -600,7 +625,7 @@ export function TenantsManagerTab({ onOpenPublicMenu }: TenantsManagerTabProps) 
                 <button
                   type="button"
                   onClick={() => setConciergeTab('theme')}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors ${
+                  className={`flex-1 sm:flex-initial px-4 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-colors ${
                     conciergeTab === 'theme'
                       ? 'bg-zinc-950 text-white'
                       : 'text-zinc-600 hover:bg-zinc-100'

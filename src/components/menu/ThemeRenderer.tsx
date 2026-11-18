@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import {
   ChevronLeft,
@@ -79,6 +79,29 @@ export function ThemeRenderer({
     setCarouselIdx(0);
   };
 
+  const resetToMainMenu = () => {
+    setSelectedMainCatId('all');
+    setSelectedSubCatId('all');
+    setSearchQuery('');
+    setCarouselIdx(0);
+    setReelsSearchOpen(false);
+    setQuickCatsOpen(false);
+    setInfoModalOpen(false);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    if (!quickCatsOpen && !infoModalOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setQuickCatsOpen(false);
+        setInfoModalOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [quickCatsOpen, infoModalOpen]);
+
   const availableItems = useMemo(() => items.filter((i) => i.isAvailable), [items]);
 
   const filteredItems = useMemo(() => {
@@ -148,14 +171,30 @@ export function ThemeRenderer({
       </div>
     ) : null;
 
+  const isFiltered =
+    selectedMainCatId !== 'all' || selectedSubCatId !== 'all' || searchQuery.trim() !== '';
+
   const EmptyState = ({ dark }: { dark: boolean }) => (
     <div
-      className={`py-16 text-center rounded-2xl border ${
+      className={`py-14 px-4 text-center rounded-2xl border space-y-3 ${
         dark ? 'border-zinc-800 text-zinc-400' : 'border-stone-200 text-stone-500'
       }`}
     >
-      <UtensilsCrossed className="w-8 h-8 mx-auto mb-3 opacity-40" />
+      <UtensilsCrossed className="w-8 h-8 mx-auto opacity-40" />
       <p className="text-base font-semibold">{t.menu.noResults}</p>
+      {isFiltered && (
+        <button
+          type="button"
+          onClick={resetToMainMenu}
+          className={`px-4 py-2 rounded-xl text-xs font-bold cursor-pointer transition-colors ${
+            dark
+              ? 'bg-zinc-800 text-white hover:bg-zinc-700'
+              : 'bg-zinc-900 text-white hover:bg-zinc-800'
+          }`}
+        >
+          {lang === 'en' ? 'Show All Dishes' : 'عرض كل الأصناف'}
+        </button>
+      )}
     </div>
   );
 
@@ -211,8 +250,13 @@ export function ThemeRenderer({
           className="text-white pt-5 pb-12 px-4 shadow-lg relative"
         >
           <div className="max-w-5xl mx-auto space-y-5">
-            <header className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3 min-w-0">
+            <header className="flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={resetToMainMenu}
+                aria-label={restName}
+                className="flex items-center gap-3 min-w-0 text-start cursor-pointer hover:opacity-90 transition-opacity"
+              >
                 {restaurant.logoUrl && (
                   <SafeImage
                     src={restaurant.logoUrl}
@@ -221,12 +265,12 @@ export function ThemeRenderer({
                   />
                 )}
                 <div className="min-w-0">
-                  <h1 className="text-xl sm:text-2xl font-extrabold truncate">{restName}</h1>
+                  <h1 className="text-lg sm:text-2xl font-extrabold truncate">{restName}</h1>
                   {restTagline && (
                     <p className="text-xs text-white/80 line-clamp-1">{restTagline}</p>
                   )}
                 </div>
-              </div>
+              </button>
               <div className="flex items-center gap-2 shrink-0">
                 <LanguageToggleButton variant="glass" compact />
                 <button
@@ -501,28 +545,40 @@ export function ThemeRenderer({
 
         <div className="max-w-5xl mx-auto px-4 pt-5 space-y-5">
           {/* Header */}
-          <header className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0">
-              {restaurant.logoUrl && (
-                <SafeImage
-                  src={restaurant.logoUrl}
-                  alt={restName}
-                  className="w-12 h-12 rounded-2xl object-cover border border-zinc-200 bg-white shrink-0"
-                />
-              )}
-              <div className="min-w-0">
-                <h1 className="text-xl sm:text-2xl font-extrabold text-zinc-950 truncate">
-                  {restName}
-                </h1>
-                {restTagline && (
-                  <p className="text-xs text-zinc-500 line-clamp-1 mt-0.5">{restTagline}</p>
+          <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center justify-between gap-3 min-w-0">
+              <button
+                type="button"
+                onClick={resetToMainMenu}
+                aria-label={restName}
+                className="flex items-center gap-3 min-w-0 text-start cursor-pointer hover:opacity-90 transition-opacity"
+              >
+                {restaurant.logoUrl && (
+                  <SafeImage
+                    src={restaurant.logoUrl}
+                    alt={restName}
+                    className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl object-cover border border-zinc-200 bg-white shrink-0"
+                  />
                 )}
+                <div className="min-w-0">
+                  <h1 className="text-lg sm:text-2xl font-extrabold text-zinc-950 truncate">
+                    {restName}
+                  </h1>
+                  {restTagline && (
+                    <p className="text-xs text-zinc-500 line-clamp-1 mt-0.5">{restTagline}</p>
+                  )}
+                </div>
+              </button>
+              <div className="sm:hidden shrink-0">
+                <LanguageToggleButton variant="light" compact />
               </div>
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
-              <LanguageToggleButton variant="light" compact />
-              <div className="relative w-36 sm:w-56 shrink-0">
+            <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
+              <div className="hidden sm:block shrink-0">
+                <LanguageToggleButton variant="light" compact />
+              </div>
+              <div className="relative flex-1 sm:w-56">
                 <Search className="w-4 h-4 text-zinc-400 absolute start-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="search"
@@ -767,7 +823,8 @@ export function ThemeRenderer({
                 <button
                   type="button"
                   onClick={() => setQuickCatsOpen(false)}
-                  className="p-1.5 rounded-lg hover:bg-zinc-100 cursor-pointer"
+                  aria-label={lang === 'en' ? 'Close' : 'إغلاق'}
+                  className="w-10 h-10 rounded-xl hover:bg-zinc-100 flex items-center justify-center cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -838,7 +895,8 @@ export function ThemeRenderer({
                 <button
                   type="button"
                   onClick={() => setInfoModalOpen(false)}
-                  className="p-1.5 rounded-lg hover:bg-zinc-100 cursor-pointer"
+                  aria-label={lang === 'en' ? 'Close' : 'إغلاق'}
+                  className="w-10 h-10 rounded-xl hover:bg-zinc-100 flex items-center justify-center cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -874,23 +932,30 @@ export function ThemeRenderer({
         <ClosedBanner />
         <div className="max-w-6xl mx-auto px-4 pt-6 space-y-6">
           <header className="bg-[#1A1A1A] border border-zinc-800 rounded-2xl p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={resetToMainMenu}
+              aria-label={restName}
+              className="flex items-center gap-3.5 min-w-0 text-start cursor-pointer hover:opacity-90 transition-opacity"
+            >
               {restaurant.logoUrl && (
                 <SafeImage
                   src={restaurant.logoUrl}
                   alt={restName}
-                  className="w-14 h-14 rounded-xl object-cover border border-amber-500/40 shrink-0"
+                  className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl object-cover border border-amber-500/40 shrink-0"
                 />
               )}
-              <div>
-                <h1 className="text-2xl font-extrabold text-white tracking-wide">{restName}</h1>
+              <div className="min-w-0">
+                <h1 className="text-xl sm:text-2xl font-extrabold text-white tracking-wide truncate">
+                  {restName}
+                </h1>
                 {restTagline && (
-                  <p className="text-xs sm:text-sm text-zinc-400 mt-1 max-w-xl leading-relaxed">
+                  <p className="text-xs sm:text-sm text-zinc-400 mt-1 max-w-xl leading-relaxed line-clamp-2">
                     {restTagline}
                   </p>
                 )}
               </div>
-            </div>
+            </button>
             <div className="flex items-center gap-2.5 shrink-0">
               <LanguageToggleButton variant="dark" compact />
               <button
@@ -1042,16 +1107,23 @@ export function ThemeRenderer({
             <LanguageToggleButton variant="dark" compact />
           </div>
           <header className="text-center space-y-3 border-b border-[#D4AF37]/25 pb-8">
-            {restaurant.logoUrl && (
-              <SafeImage
-                src={restaurant.logoUrl}
-                alt={restName}
-                className="w-16 h-16 rounded-full object-cover mx-auto border-2 border-[#D4AF37]/60"
-              />
-            )}
-            <h1 className="text-3xl sm:text-4xl font-extrabold tracking-wide text-[#F5F2EB]">
-              {restName}
-            </h1>
+            <button
+              type="button"
+              onClick={resetToMainMenu}
+              aria-label={restName}
+              className="mx-auto flex flex-col items-center gap-3 cursor-pointer hover:opacity-90 transition-opacity"
+            >
+              {restaurant.logoUrl && (
+                <SafeImage
+                  src={restaurant.logoUrl}
+                  alt={restName}
+                  className="w-16 h-16 rounded-full object-cover mx-auto border-2 border-[#D4AF37]/60"
+                />
+              )}
+              <h1 className="text-3xl sm:text-4xl font-extrabold tracking-wide text-[#F5F2EB]">
+                {restName}
+              </h1>
+            </button>
             {restTagline && (
               <p className="text-sm text-zinc-400 max-w-xl mx-auto leading-relaxed">
                 {restTagline}
@@ -1228,7 +1300,12 @@ export function ThemeRenderer({
         {/* Overlay Header & Category Filter Pills */}
         <header className="absolute top-0 inset-x-0 z-30 bg-gradient-to-b from-black/85 via-black/45 to-transparent px-4 pt-4 pb-6 space-y-3 pointer-events-none">
           <div className="max-w-3xl mx-auto flex items-center justify-between gap-3 pointer-events-auto">
-            <div className="flex items-center gap-2.5 min-w-0">
+            <button
+              type="button"
+              onClick={resetToMainMenu}
+              aria-label={restName}
+              className="flex items-center gap-2.5 min-w-0 text-start cursor-pointer hover:opacity-90 transition-opacity"
+            >
               {restaurant.logoUrl && (
                 <SafeImage
                   src={restaurant.logoUrl}
@@ -1237,7 +1314,7 @@ export function ThemeRenderer({
                 />
               )}
               <h1 className="text-base sm:text-lg font-extrabold truncate">{restName}</h1>
-            </div>
+            </button>
 
             <div className="flex items-center gap-2 shrink-0">
               <LanguageToggleButton variant="glass" compact />
@@ -1465,14 +1542,21 @@ export function ThemeRenderer({
             <LanguageToggleButton variant="light" compact />
           </div>
           <header className="text-center space-y-3 border-b border-[#E5DDD0] pb-7">
-            {restaurant.logoUrl && (
-              <SafeImage
-                src={restaurant.logoUrl}
-                alt={restName}
-                className="w-16 h-16 rounded-full object-cover mx-auto border border-[#D7CBB8]"
-              />
-            )}
-            <h1 className="text-3xl font-extrabold tracking-tight text-[#3E2A20]">{restName}</h1>
+            <button
+              type="button"
+              onClick={resetToMainMenu}
+              aria-label={restName}
+              className="mx-auto flex flex-col items-center gap-3 cursor-pointer hover:opacity-90 transition-opacity"
+            >
+              {restaurant.logoUrl && (
+                <SafeImage
+                  src={restaurant.logoUrl}
+                  alt={restName}
+                  className="w-16 h-16 rounded-full object-cover mx-auto border border-[#D7CBB8]"
+                />
+              )}
+              <h1 className="text-3xl font-extrabold tracking-tight text-[#3E2A20]">{restName}</h1>
+            </button>
             {restTagline && (
               <p className="text-sm text-[#7A6154] max-w-lg mx-auto leading-relaxed">
                 {restTagline}
@@ -1638,23 +1722,30 @@ export function ThemeRenderer({
         <ClosedBanner />
         <div className="max-w-6xl mx-auto px-4 pt-6 space-y-6">
           <header className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={resetToMainMenu}
+              aria-label={restName}
+              className="flex items-center gap-3.5 min-w-0 text-start cursor-pointer hover:opacity-90 transition-opacity"
+            >
               {restaurant.logoUrl && (
                 <SafeImage
                   src={restaurant.logoUrl}
                   alt={restName}
-                  className="w-14 h-14 rounded-2xl object-cover border border-slate-200 shrink-0"
+                  className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl object-cover border border-slate-200 shrink-0"
                 />
               )}
-              <div>
-                <h1 className="text-2xl font-extrabold text-slate-950">{restName}</h1>
+              <div className="min-w-0">
+                <h1 className="text-xl sm:text-2xl font-extrabold text-slate-950 truncate">
+                  {restName}
+                </h1>
                 {restTagline && (
                   <p className="text-xs sm:text-sm text-slate-500 mt-0.5 line-clamp-1">
                     {restTagline}
                   </p>
                 )}
               </div>
-            </div>
+            </button>
             <div className="flex items-center gap-2.5 shrink-0">
               <LanguageToggleButton variant="light" compact />
               <button
@@ -1822,26 +1913,38 @@ export function ThemeRenderer({
 
       {/* Fixed Kiosk Top Header & Large Icon Category Bar */}
       <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            {restaurant.logoUrl && (
-              <SafeImage
-                src={restaurant.logoUrl}
-                alt={restName}
-                className="w-11 h-11 rounded-xl object-cover border border-slate-200 shrink-0"
-              />
-            )}
-            <div className="min-w-0">
-              <h1 className="text-lg sm:text-xl font-extrabold truncate">{restName}</h1>
-              <p className="text-[11px] text-slate-500">
-                {lang === 'en' ? 'Order fast with one tap' : 'اطلب بسرعة بضغطة واحدة'}
-              </p>
+        <div className="max-w-7xl mx-auto px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+          <div className="flex items-center justify-between gap-3 min-w-0">
+            <button
+              type="button"
+              onClick={resetToMainMenu}
+              aria-label={restName}
+              className="flex items-center gap-3 min-w-0 text-start cursor-pointer hover:opacity-90 transition-opacity"
+            >
+              {restaurant.logoUrl && (
+                <SafeImage
+                  src={restaurant.logoUrl}
+                  alt={restName}
+                  className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl object-cover border border-slate-200 shrink-0"
+                />
+              )}
+              <div className="min-w-0">
+                <h1 className="text-base sm:text-xl font-extrabold truncate">{restName}</h1>
+                <p className="text-[11px] text-slate-500 truncate">
+                  {lang === 'en' ? 'Order fast with one tap' : 'اطلب بسرعة بضغطة واحدة'}
+                </p>
+              </div>
+            </button>
+            <div className="sm:hidden shrink-0">
+              <LanguageToggleButton variant="light" compact />
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            <LanguageToggleButton variant="light" compact />
-            <div className="relative w-36 sm:w-60 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
+            <div className="hidden sm:block shrink-0">
+              <LanguageToggleButton variant="light" compact />
+            </div>
+            <div className="relative flex-1 sm:w-60">
               <Search className="w-4 h-4 text-slate-400 absolute start-3 top-1/2 -translate-y-1/2" />
               <input
                 type="search"

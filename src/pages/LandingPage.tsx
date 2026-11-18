@@ -82,7 +82,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
     <div dir={dir} className="min-h-screen bg-[#FAFAFA] text-zinc-900 flex flex-col">
       {/* 3-Zone Top Bar Contract */}
       <header className="border-b border-zinc-200 bg-white/95 backdrop-blur-sm sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between gap-4 sm:gap-8">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3.5 sm:py-4 flex items-center justify-between gap-2 sm:gap-8">
           <a
             href="/"
             onClick={(e) => {
@@ -145,7 +145,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
       </header>
 
       {/* Hero Split */}
-      <section className="max-w-7xl mx-auto px-6 py-12 lg:py-16 grid grid-cols-1 lg:grid-cols-12 gap-10 items-stretch w-full">
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 py-10 sm:py-12 lg:py-16 grid grid-cols-1 lg:grid-cols-12 gap-8 sm:gap-10 items-stretch w-full">
         <div className="lg:col-span-6 flex flex-col justify-center space-y-6">
           <p className="text-xs font-semibold text-amber-700 tracking-wide">
             {t.landing.badge}
@@ -371,7 +371,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
 
       {/* Core Platform Capabilities (Dynamic CMS) */}
       <section id="capabilities" className="border-t border-zinc-200 bg-white py-14">
-        <div className="max-w-7xl mx-auto px-6 space-y-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-8">
           <div className="max-w-2xl">
             <h2 className="text-2xl sm:text-3xl font-extrabold text-zinc-950">
               {t.landing.featuresTitle}
@@ -405,7 +405,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
       {/* Pricing Plans Section (Dynamic CMS) */}
       {cms.pricingPlans.length > 0 && (
         <section id="pricing" className="border-t border-zinc-200 bg-[#FAFAFA] py-14">
-          <div className="max-w-7xl mx-auto px-6 space-y-8">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-8">
             <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
               <div>
                 <h2 className="text-2xl sm:text-3xl font-extrabold text-zinc-950">
@@ -508,7 +508,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
       )}
 
       {/* Live Demo Restaurants Directory */}
-      <section id="demos" className="max-w-7xl mx-auto px-6 py-14 space-y-8 w-full">
+      <section id="demos" className="max-w-7xl mx-auto px-4 sm:px-6 py-14 space-y-8 w-full">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>
             <h2 className="text-2xl sm:text-3xl font-extrabold text-zinc-950">
@@ -567,7 +567,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
 
       {/* Owner Login / Sign-up Portal Section */}
       <section id="owner-login" className="border-t border-zinc-200 bg-white py-14">
-        <div className="max-w-5xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
           <div className="lg:col-span-6 space-y-4">
             <p className="text-xs font-semibold text-amber-700">{t.landing.badge}</p>
             <h2 className="text-2xl sm:text-3xl font-extrabold text-zinc-950 leading-tight">
@@ -620,7 +620,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
 
       {/* Quiet Footer */}
       <footer className="mt-auto border-t border-zinc-200 bg-white py-6">
-        <div className="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-zinc-500">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-zinc-500">
           <span>{loc(cms.footerText, cms.footerText_en)}</span>
           <div className="flex items-center gap-5">
             {cleanWhatsappDigits && (

@@ -638,9 +638,13 @@ export async function submitPublicOrder(input: SubmitOrderInput): Promise<{ id: 
   }
 
   try {
-    const batch = writeBatch(db);
-    batch.set(doc(db, 'orders', orderId), payload);
+    await setDoc(doc(db, 'orders', orderId), payload);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, path);
+  }
 
+  // Best-effort popularity counter update; never fail or roll back the customer's order if an item was edited/removed
+  try {
     const qtyByItem = new Map<string, number>();
     input.items.forEach((item) => {
       if (item.menuItemId) {
@@ -649,18 +653,21 @@ export async function submitPublicOrder(input: SubmitOrderInput): Promise<{ id: 
       }
     });
 
-    qtyByItem.forEach((qty, menuItemId) => {
-      batch.update(doc(db, 'menu_items', menuItemId), {
-        ordersCount: increment(qty),
-        updatedAt: serverTimestamp(),
+    if (qtyByItem.size > 0) {
+      const statsBatch = writeBatch(db);
+      qtyByItem.forEach((qty, menuItemId) => {
+        statsBatch.update(doc(db, 'menu_items', menuItemId), {
+          ordersCount: increment(qty),
+          updatedAt: serverTimestamp(),
+        });
       });
-    });
-
-    await batch.commit();
-    return { id: orderId, orderNumber };
-  } catch (error) {
-    handleFirestoreError(error, OperationType.CREATE, path);
+      await statsBatch.commit();
+    }
+  } catch {
+    // Non-fatal counter sync failure
   }
+
+  return { id: orderId, orderNumber };
 }
 
 function getMillis(ts: unknown): number {
@@ -675,7 +682,8 @@ function getMillis(ts: unknown): number {
 export function subscribeOwnerOrders(
   restaurantId: string,
   ownerId: string,
-  onData: (orders: Order[]) => void
+  onData: (orders: Order[]) => void,
+  onError?: (err: Error) => void
 ): () => void {
   const path = 'orders';
   const q = query(
@@ -691,7 +699,13 @@ export function subscribeOwnerOrders(
         .sort((a, b) => getMillis(b.createdAt) - getMillis(a.createdAt));
       onData(list);
     },
-    (error) => handleFirestoreError(error, OperationType.LIST, path)
+    (error) => {
+      if (onError) {
+        onError(error instanceof Error ? error : new Error('Failed to load orders'));
+      } else {
+        handleFirestoreError(error, OperationType.LIST, path);
+      }
+    }
   );
 }
 
