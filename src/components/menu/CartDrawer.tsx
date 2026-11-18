@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   CheckCircle2,
   Copy,
@@ -10,6 +10,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
+import { useLanguage } from '../../contexts/LanguageContext';
 import { submitPublicOrder } from '../../lib/firestoreService';
 import { CartItem, OrderItemPayload, OrderType, Restaurant } from '../../types/menu';
 import { SafeImage } from '../SafeImage';
@@ -35,10 +36,15 @@ export function CartDrawer({
   onRemoveItem,
   onClearCart,
 }: CartDrawerProps) {
+  const { lang, dir, t, loc, formatCurrency } = useLanguage();
+  const initialTable =
+    typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search).get('table') || ''
+      : '';
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [orderType, setOrderType] = useState<OrderType>('dine_in');
-  const [tableNumber, setTableNumber] = useState('');
+  const [tableNumber, setTableNumber] = useState(initialTable);
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [notes, setNotes] = useState('');
 
@@ -49,6 +55,12 @@ export function CartDrawer({
     whatsappMessage: string;
   } | null>(null);
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (cart.length > 0 && confirmedOrder) {
+      setConfirmedOrder(null);
+    }
+  }, [cart.length, confirmedOrder]);
 
   const subtotal = useMemo(
     () => cart.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0),
@@ -66,25 +78,74 @@ export function CartDrawer({
   );
 
   const total = subtotal + serviceCharge + taxAmount;
+  const displayCurrency = formatCurrency(restaurant.currency);
 
-  const formatPrice = (val: number) => `${val.toFixed(2).replace(/\.00$/, '')} ${restaurant.currency}`;
+  const formatPrice = (val: number) => `${val.toFixed(2).replace(/\.00$/, '')} ${displayCurrency}`;
 
   const buildOrderItems = (): OrderItemPayload[] =>
     cart.map((c) => {
       const payload: OrderItemPayload = {
         menuItemId: c.menuItem.id,
-        name: c.menuItem.name,
-        addonNames: c.selectedAddons.map((a) => a.name),
+        name: loc(c.menuItem.name, c.menuItem.name_en),
+        addonNames: c.selectedAddons.map((a) => loc(a.name, a.name_en)),
         quantity: c.quantity,
         unitPrice: Number(c.unitPrice.toFixed(2)),
         lineTotal: Number((c.unitPrice * c.quantity).toFixed(2)),
       };
-      if (c.selectedSize?.name) payload.sizeName = c.selectedSize.name;
+      if (c.selectedSize?.name) {
+        payload.sizeName = loc(c.selectedSize.name, c.selectedSize.name_en);
+      }
       if (c.notes) payload.notes = c.notes;
       return payload;
     });
 
   const buildWhatsappInvoice = (orderNumber: string): string => {
+    const restName = loc(restaurant.name, restaurant.name_en);
+    if (lang === 'en') {
+      const typeLabel =
+        orderType === 'dine_in'
+          ? `Dine-In (Table: ${tableNumber || 'N/A'})`
+          : orderType === 'delivery'
+            ? `Delivery (${deliveryAddress || 'N/A'})`
+            : 'Pickup';
+
+      const lines = [
+        `*New Order from ${restName}*`,
+        `Order #: ${orderNumber}`,
+        `Order Type: ${typeLabel}`,
+        `Customer: ${customerName.trim()}`,
+        `Phone: ${customerPhone.trim()}`,
+        `----------------`,
+        ...cart.map((c, idx) => {
+          const sizeTxt = c.selectedSize
+            ? ` (${loc(c.selectedSize.name, c.selectedSize.name_en)})`
+            : '';
+          const addonTxt =
+            c.selectedAddons.length > 0
+              ? `\n   + Add-ons: ${c.selectedAddons.map((a) => loc(a.name, a.name_en)).join(', ')}`
+              : '';
+          const noteTxt = c.notes ? `\n   * Note: ${c.notes}` : '';
+          return `${idx + 1}. ${loc(c.menuItem.name, c.menuItem.name_en)}${sizeTxt} × ${
+            c.quantity
+          } = ${formatPrice(c.unitPrice * c.quantity)}${addonTxt}${noteTxt}`;
+        }),
+        `----------------`,
+        `Subtotal: ${formatPrice(subtotal)}`,
+      ];
+
+      if (serviceCharge > 0) {
+        lines.push(`Service Charge (${restaurant.serviceCharge}%): ${formatPrice(serviceCharge)}`);
+      }
+      if (taxAmount > 0) {
+        lines.push(`Tax (${restaurant.taxRate}%): ${formatPrice(taxAmount)}`);
+      }
+      lines.push(`*Grand Total: ${formatPrice(total)}*`);
+      if (notes.trim()) {
+        lines.push(`Order Notes: ${notes.trim()}`);
+      }
+      return lines.join('\n');
+    }
+
     const typeLabel =
       orderType === 'dine_in'
         ? `صالة (طاولة: ${tableNumber || 'غير محدد'})`
@@ -93,22 +154,24 @@ export function CartDrawer({
           : 'استلام من الفرع';
 
     const lines = [
-      `*طلب جديد من ${restaurant.name}*`,
+      `*طلب جديد من ${restName}*`,
       `رقم الطلب: ${orderNumber}`,
       `نوع الطلب: ${typeLabel}`,
       `العميل: ${customerName.trim()}`,
       `الجوال: ${customerPhone.trim()}`,
       `----------------`,
       ...cart.map((c, idx) => {
-        const sizeTxt = c.selectedSize ? ` (${c.selectedSize.name})` : '';
+        const sizeTxt = c.selectedSize
+          ? ` (${loc(c.selectedSize.name, c.selectedSize.name_en)})`
+          : '';
         const addonTxt =
           c.selectedAddons.length > 0
-            ? `\n   + إضافات: ${c.selectedAddons.map((a) => a.name).join('، ')}`
+            ? `\n   + إضافات: ${c.selectedAddons.map((a) => loc(a.name, a.name_en)).join('، ')}`
             : '';
         const noteTxt = c.notes ? `\n   * ملاحظة: ${c.notes}` : '';
-        return `${idx + 1}. ${c.menuItem.name}${sizeTxt} × ${c.quantity} = ${formatPrice(
-          c.unitPrice * c.quantity
-        )}${addonTxt}${noteTxt}`;
+        return `${idx + 1}. ${loc(c.menuItem.name, c.menuItem.name_en)}${sizeTxt} × ${
+          c.quantity
+        } = ${formatPrice(c.unitPrice * c.quantity)}${addonTxt}${noteTxt}`;
       }),
       `----------------`,
       `المجموع الفرعي: ${formatPrice(subtotal)}`,
@@ -129,23 +192,19 @@ export function CartDrawer({
 
   const validateForm = (): boolean => {
     if (!restaurant.isOpen) {
-      setErrorMsg('عذراً، المطعم مغلق حالياً لاستقبال الطلبات.');
+      setErrorMsg(t.menu.closedBanner);
       return false;
     }
-    if (!customerName.trim()) {
-      setErrorMsg('يرجى إدخال اسم العميل');
-      return false;
-    }
-    if (customerPhone.trim().length < 5) {
-      setErrorMsg('يرجى إدخال رقم جوال صحيح');
+    if (!customerName.trim() || customerPhone.trim().length < 5) {
+      setErrorMsg(t.menu.errMissingCustomer);
       return false;
     }
     if (orderType === 'dine_in' && !tableNumber.trim()) {
-      setErrorMsg('يرجى إدخال رقم الطاولة لطلبات الصالة');
+      setErrorMsg(t.menu.errMissingTable);
       return false;
     }
     if (orderType === 'delivery' && !deliveryAddress.trim()) {
-      setErrorMsg('يرجى إدخال عنوان التوصيل');
+      setErrorMsg(t.menu.errMissingAddress);
       return false;
     }
     setErrorMsg(null);
@@ -195,9 +254,7 @@ export function CartDrawer({
         document.body.removeChild(link);
       }
     } catch (err) {
-      setErrorMsg(
-        err instanceof Error ? err.message : 'تعذر إرسال الطلب حالياً. يرجى المحاولة مجدداً.'
-      );
+      setErrorMsg(err instanceof Error ? err.message : t.menu.errOrderFailed);
     } finally {
       setSubmitting(false);
     }
@@ -206,7 +263,8 @@ export function CartDrawer({
   if (!open) return null;
 
   const cleanWhatsapp = restaurant.whatsappNumber.replace(/[^0-9]/g, '');
-  const activeMessage = confirmedOrder?.whatsappMessage || buildWhatsappInvoice('مسودة');
+  const activeMessage =
+    confirmedOrder?.whatsappMessage || buildWhatsappInvoice(lang === 'en' ? 'DRAFT' : 'مسودة');
   const whatsappHref = `https://wa.me/${cleanWhatsapp}?text=${encodeURIComponent(activeMessage)}`;
 
   const handleCopyInvoice = async () => {
@@ -219,26 +277,33 @@ export function CartDrawer({
     }
   };
 
+  const handleCloseDrawer = () => {
+    if (confirmedOrder) {
+      setConfirmedOrder(null);
+    }
+    onClose();
+  };
+
   return (
     <div
+      dir={dir}
       className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm"
-      onClick={onClose}
+      onClick={handleCloseDrawer}
       role="dialog"
       aria-modal="true"
-      aria-label="سلة الطلبات"
+      aria-label={t.menu.cartTitle}
     >
       <div
-        dir="rtl"
         onClick={(e) => e.stopPropagation()}
         className="w-full max-w-md bg-white text-stone-900 h-full flex flex-col shadow-2xl"
       >
         <div className="px-5 py-4 border-b border-stone-200 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
             <ShoppingBag className="w-5 h-5" style={{ color: restaurant.primaryColor }} />
-            <h2 className="text-lg font-bold">سلة الطلبات</h2>
+            <h2 className="text-lg font-bold">{t.menu.cartTitle}</h2>
             {cart.length > 0 && (
               <span className="text-xs text-stone-500 font-mono-num">
-                ({cart.reduce((s, c) => s + c.quantity, 0)} أصناف)
+                ({cart.reduce((s, c) => s + c.quantity, 0)} {t.menu.itemsCountLabel})
               </span>
             )}
           </div>
@@ -248,7 +313,7 @@ export function CartDrawer({
               setConfirmedOrder(null);
               onClose();
             }}
-            aria-label="إغلاق السلة"
+            aria-label={lang === 'en' ? 'Close cart' : 'إغلاق السلة'}
             className="w-9 h-9 rounded-lg hover:bg-stone-100 flex items-center justify-center cursor-pointer"
           >
             <X className="w-5 h-5" />
@@ -261,22 +326,26 @@ export function CartDrawer({
               <div className="p-5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-950 space-y-2">
                 <div className="flex items-center gap-2 font-bold text-base">
                   <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-                  <span>تم استلام طلبك بنجاح</span>
+                  <span>{t.menu.orderSuccessTitle}</span>
                 </div>
                 <p className="text-sm text-emerald-800">
-                  رقم الطلب:{' '}
+                  {t.menu.orderNumberLabel}:{' '}
                   <span className="font-mono-num font-bold">{confirmedOrder.orderNumber}</span>
-                  {isDemoMode && ' (وضع المعاينة التجريبي)'}
+                  {isDemoMode && (lang === 'en' ? ' (Demo Preview)' : ' (وضع المعاينة التجريبي)')}
                 </p>
                 <p className="text-xs text-emerald-700 leading-relaxed">
                   {isDemoMode
-                    ? 'في المطاعم المفعّلة، يظهر هذا الطلب فوراً مع تنبيه صوتي في لوحة تحكم المطعم.'
-                    : 'وصل طلبك الآن إلى شاشة المطبخ في لوحة تحكم المطعم.'}
+                    ? lang === 'en'
+                      ? 'In active restaurants, this order appears live with an audio chime inside the Owner Kitchen Dashboard.'
+                      : 'في المطاعم المفعّلة، يظهر هذا الطلب فوراً مع تنبيه صوتي في لوحة تحكم المطعم.'
+                    : t.menu.orderSuccessDesc}
                 </p>
               </div>
 
               <div className="space-y-2">
-                <p className="text-sm font-bold text-stone-800">ملخص الفاتورة المنسقة:</p>
+                <p className="text-sm font-bold text-stone-800">
+                  {lang === 'en' ? 'Formatted Order Summary:' : 'ملخص الفاتورة المنسقة:'}
+                </p>
                 <pre className="p-4 rounded-xl bg-stone-50 border border-stone-200 text-xs text-stone-700 whitespace-pre-wrap leading-relaxed font-sans">
                   {confirmedOrder.whatsappMessage}
                 </pre>
@@ -290,7 +359,7 @@ export function CartDrawer({
                   className="w-full py-3 px-4 rounded-xl bg-emerald-600 text-white font-bold text-sm flex items-center justify-center gap-2 hover:bg-emerald-700 transition-colors"
                 >
                   <MessageCircle className="w-4 h-4" />
-                  <span>إرسال الفاتورة عبر واتساب المطعم</span>
+                  <span>{t.menu.openWhatsappAgain}</span>
                 </a>
                 <button
                   type="button"
@@ -298,91 +367,118 @@ export function CartDrawer({
                   className="w-full py-2.5 px-4 rounded-xl border border-stone-300 text-stone-700 font-semibold text-sm flex items-center justify-center gap-2 hover:bg-stone-50 transition-colors cursor-pointer"
                 >
                   <Copy className="w-4 h-4" />
-                  <span>{copied ? 'تم نسخ نص الفاتورة' : 'نسخ نص الفاتورة'}</span>
+                  <span>
+                    {copied
+                      ? lang === 'en'
+                        ? 'Invoice copied'
+                        : 'تم نسخ نص الفاتورة'
+                      : lang === 'en'
+                        ? 'Copy invoice text'
+                        : 'نسخ نص الفاتورة'}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setConfirmedOrder(null);
+                    onClose();
+                  }}
+                  className="w-full py-2.5 px-4 rounded-xl bg-stone-100 text-stone-800 font-semibold text-xs hover:bg-stone-200 transition-colors cursor-pointer"
+                >
+                  {t.menu.newOrderBtn}
                 </button>
               </div>
             </div>
           ) : cart.length === 0 ? (
             <div className="py-16 text-center space-y-3 text-stone-500">
               <ShoppingBag className="w-10 h-10 mx-auto opacity-30" />
-              <p className="text-base font-semibold text-stone-700">السلة فارغة حالياً</p>
-              <p className="text-sm">اختر وجباتك المفضلة من القائمة لإضافتها هنا.</p>
+              <p className="text-base font-semibold text-stone-700">{t.menu.cartEmptyTitle}</p>
+              <p className="text-sm">{t.menu.cartEmptyDesc}</p>
             </div>
           ) : (
             <>
               <div className="space-y-3">
-                {cart.map((c) => (
-                  <div
-                    key={c.cartKey}
-                    className="p-3 rounded-xl border border-stone-200 bg-stone-50/60 flex gap-3"
-                  >
-                    <SafeImage
-                      src={c.menuItem.imageUrl}
-                      alt={c.menuItem.name}
-                      className="w-16 h-16 rounded-lg object-cover shrink-0"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2">
-                        <h3 className="text-sm font-bold text-stone-900 truncate">
-                          {c.menuItem.name}
-                        </h3>
-                        <button
-                          type="button"
-                          onClick={() => onRemoveItem(c.cartKey)}
-                          aria-label="حذف الصنف"
-                          className="text-stone-400 hover:text-red-600 transition-colors cursor-pointer"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                      {(c.selectedSize || c.selectedAddons.length > 0) && (
-                        <p className="text-xs text-stone-500 mt-0.5 line-clamp-2">
-                          {c.selectedSize?.name}
-                          {c.selectedSize && c.selectedAddons.length > 0 ? ' · ' : ''}
-                          {c.selectedAddons.map((a) => a.name).join('، ')}
-                        </p>
-                      )}
-                      {c.notes && (
-                        <p className="text-[11px] text-amber-700 mt-0.5">ملاحظة: {c.notes}</p>
-                      )}
-                      <div className="mt-2.5 flex items-center justify-between">
-                        <div className="flex items-center gap-1.5 bg-white border border-stone-200 rounded-lg px-1.5 py-0.5">
+                {cart.map((c) => {
+                  const itemName = loc(c.menuItem.name, c.menuItem.name_en);
+                  const sizeLabel = c.selectedSize
+                    ? loc(c.selectedSize.name, c.selectedSize.name_en)
+                    : '';
+                  const addonsLabel = c.selectedAddons
+                    .map((a) => loc(a.name, a.name_en))
+                    .join(lang === 'en' ? ', ' : '، ');
+                  return (
+                    <div
+                      key={c.cartKey}
+                      className="p-3 rounded-xl border border-stone-200 bg-stone-50/60 flex gap-3"
+                    >
+                      <SafeImage
+                        src={c.menuItem.imageUrl}
+                        alt={itemName}
+                        className="w-16 h-16 rounded-lg object-cover shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <h3 className="text-sm font-bold text-stone-900 truncate">{itemName}</h3>
                           <button
                             type="button"
-                            onClick={() => onUpdateQty(c.cartKey, -1)}
-                            aria-label="تقليل"
-                            className="w-6 h-6 flex items-center justify-center text-stone-700 hover:bg-stone-100 rounded cursor-pointer"
+                            onClick={() => onRemoveItem(c.cartKey)}
+                            aria-label={lang === 'en' ? 'Remove item' : 'حذف الصنف'}
+                            className="text-stone-400 hover:text-red-600 transition-colors cursor-pointer"
                           >
-                            <Minus className="w-3.5 h-3.5" />
-                          </button>
-                          <span className="w-5 text-center font-mono-num text-xs font-bold">
-                            {c.quantity}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => onUpdateQty(c.cartKey, 1)}
-                            aria-label="زيادة"
-                            className="w-6 h-6 flex items-center justify-center text-stone-700 hover:bg-stone-100 rounded cursor-pointer"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
-                        <span className="font-mono-num text-sm font-bold text-stone-900">
-                          {formatPrice(c.unitPrice * c.quantity)}
-                        </span>
+                        {(sizeLabel || addonsLabel) && (
+                          <p className="text-xs text-stone-500 mt-0.5 line-clamp-2">
+                            {sizeLabel}
+                            {sizeLabel && addonsLabel ? ' · ' : ''}
+                            {addonsLabel}
+                          </p>
+                        )}
+                        {c.notes && (
+                          <p className="text-[11px] text-amber-700 mt-0.5">
+                            {lang === 'en' ? `Note: ${c.notes}` : `ملاحظة: ${c.notes}`}
+                          </p>
+                        )}
+                        <div className="mt-2.5 flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 bg-white border border-stone-200 rounded-lg px-1.5 py-0.5">
+                            <button
+                              type="button"
+                              onClick={() => onUpdateQty(c.cartKey, -1)}
+                              aria-label={lang === 'en' ? 'Decrease' : 'تقليل'}
+                              className="w-6 h-6 flex items-center justify-center text-stone-700 hover:bg-stone-100 rounded cursor-pointer"
+                            >
+                              <Minus className="w-3.5 h-3.5" />
+                            </button>
+                            <span className="w-5 text-center font-mono-num text-xs font-bold">
+                              {c.quantity}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => onUpdateQty(c.cartKey, 1)}
+                              aria-label={lang === 'en' ? 'Increase' : 'زيادة'}
+                              className="w-6 h-6 flex items-center justify-center text-stone-700 hover:bg-stone-100 rounded cursor-pointer"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                          <span className="font-mono-num text-sm font-bold text-stone-900">
+                            {formatPrice(c.unitPrice * c.quantity)}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               <div className="space-y-2.5">
-                <label className="block text-sm font-bold">نوع الطلب</label>
+                <label className="block text-sm font-bold">{t.menu.orderTypeLabel}</label>
                 <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-stone-100">
                   {[
-                    { id: 'dine_in' as OrderType, label: 'صالة' },
-                    { id: 'delivery' as OrderType, label: 'دليفري' },
-                    { id: 'pickup' as OrderType, label: 'استلام' },
+                    { id: 'dine_in' as OrderType, label: t.menu.dineIn },
+                    { id: 'delivery' as OrderType, label: t.menu.delivery },
+                    { id: 'pickup' as OrderType, label: t.menu.pickup },
                   ].map((opt) => {
                     const active = orderType === opt.id;
                     return (
@@ -406,25 +502,25 @@ export function CartDrawer({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-semibold text-stone-600 mb-1">
-                      الاسم *
+                      {t.menu.customerName}
                     </label>
                     <input
                       type="text"
                       value={customerName}
                       onChange={(e) => setCustomerName(e.target.value)}
-                      placeholder="أحمد محمد"
+                      placeholder={t.menu.customerNamePlaceholder}
                       className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-sm focus:outline-none focus:border-stone-400"
                     />
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-stone-600 mb-1">
-                      رقم الجوال *
+                      {t.menu.customerPhone}
                     </label>
                     <input
                       type="tel"
                       value={customerPhone}
                       onChange={(e) => setCustomerPhone(e.target.value)}
-                      placeholder="010XXXXXXXX"
+                      placeholder={t.menu.customerPhonePlaceholder}
                       className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-sm font-mono-num focus:outline-none focus:border-stone-400"
                     />
                   </div>
@@ -433,13 +529,13 @@ export function CartDrawer({
                 {orderType === 'dine_in' && (
                   <div>
                     <label className="block text-xs font-semibold text-stone-600 mb-1">
-                      رقم الطاولة *
+                      {t.menu.tableNumber}
                     </label>
                     <input
                       type="text"
                       value={tableNumber}
                       onChange={(e) => setTableNumber(e.target.value)}
-                      placeholder="مثال: طاولة 7"
+                      placeholder={t.menu.tableNumberPlaceholder}
                       className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-sm focus:outline-none focus:border-stone-400"
                     />
                   </div>
@@ -448,13 +544,13 @@ export function CartDrawer({
                 {orderType === 'delivery' && (
                   <div>
                     <label className="block text-xs font-semibold text-stone-600 mb-1">
-                      عنوان التوصيل *
+                      {t.menu.deliveryAddress}
                     </label>
                     <input
                       type="text"
                       value={deliveryAddress}
                       onChange={(e) => setDeliveryAddress(e.target.value)}
-                      placeholder="الحي، الشارع، رقم المبنى..."
+                      placeholder={t.menu.deliveryAddressPlaceholder}
                       className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-sm focus:outline-none focus:border-stone-400"
                     />
                   </div>
@@ -462,13 +558,13 @@ export function CartDrawer({
 
                 <div>
                   <label className="block text-xs font-semibold text-stone-600 mb-1">
-                    ملاحظات إضافية (اختياري)
+                    {t.menu.orderNotes}
                   </label>
                   <input
                     type="text"
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
-                    placeholder="تعليمات التوصيل أو التحضير..."
+                    placeholder={t.menu.orderNotesPlaceholder}
                     className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-sm focus:outline-none focus:border-stone-400"
                   />
                 </div>
@@ -476,23 +572,27 @@ export function CartDrawer({
 
               <div className="p-4 rounded-xl bg-stone-50 border border-stone-200 space-y-2 text-sm">
                 <div className="flex items-center justify-between text-stone-600">
-                  <span>المجموع الفرعي</span>
+                  <span>{t.menu.subtotal}</span>
                   <span className="font-mono-num">{formatPrice(subtotal)}</span>
                 </div>
                 {restaurant.serviceCharge > 0 && (
                   <div className="flex items-center justify-between text-stone-600">
-                    <span>رسوم الخدمة ({restaurant.serviceCharge}%)</span>
+                    <span>
+                      {t.menu.serviceCharge} ({restaurant.serviceCharge}%)
+                    </span>
                     <span className="font-mono-num">{formatPrice(serviceCharge)}</span>
                   </div>
                 )}
                 {restaurant.taxRate > 0 && (
                   <div className="flex items-center justify-between text-stone-600">
-                    <span>الضريبة المضافة ({restaurant.taxRate}%)</span>
+                    <span>
+                      {t.menu.tax} ({restaurant.taxRate}%)
+                    </span>
                     <span className="font-mono-num">{formatPrice(taxAmount)}</span>
                   </div>
                 )}
                 <div className="pt-2 border-t border-stone-200 flex items-center justify-between font-bold text-base text-stone-900">
-                  <span>الإجمالي النهائي</span>
+                  <span>{t.menu.grandTotal}</span>
                   <span className="font-mono-num">{formatPrice(total)}</span>
                 </div>
               </div>
@@ -517,9 +617,7 @@ export function CartDrawer({
             >
               <Send className="w-4 h-4" />
               <span>
-                {submitting
-                  ? 'جاري إرسال الطلب...'
-                  : `إرسال الطلب للمطعم (${formatPrice(total)})`}
+                {submitting ? t.menu.sendingBtn : `${t.menu.sendDirectBtn} (${formatPrice(total)})`}
               </span>
             </button>
 
@@ -530,7 +628,7 @@ export function CartDrawer({
               className="w-full min-h-[46px] py-3 px-4 rounded-xl border border-emerald-600 text-emerald-700 font-bold text-sm flex items-center justify-center gap-2 hover:bg-emerald-50 transition-colors disabled:opacity-60 cursor-pointer"
             >
               <MessageCircle className="w-4 h-4" />
-              <span>طلب عبر واتساب</span>
+              <span>{t.menu.sendWhatsappBtn}</span>
             </button>
           </div>
         )}

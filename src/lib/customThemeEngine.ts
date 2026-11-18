@@ -1,3 +1,4 @@
+import { AppLang } from '../data/translations';
 import { Category, MenuItem, Restaurant } from '../types/menu';
 
 function safeJsonForInlineScript(data: unknown): string {
@@ -13,32 +14,44 @@ export const TEMPLATE_VARIABLE_DOCS = [
   {
     token: '{{RESTAURANT_JSON}}',
     label: 'بيانات المطعم (JSON)',
-    hint: 'يحتوي على name, logoUrl, primaryColor, whatsappNumber, taxRate, serviceCharge, currency',
+    label_en: 'Restaurant Object (JSON)',
+    hint: 'يحتوي على name, name_en, tagline, tagline_en, logoUrl, primaryColor, currency',
+    hint_en: 'Includes name, name_en, tagline, tagline_en, logoUrl, primaryColor, currency',
   },
   {
     token: '{{CATEGORIES_JSON}}',
     label: 'مصفوفة الأقسام (JSON)',
-    hint: 'قائمة الأقسام النشطة بالترتيب (id, name, imageUrl)',
+    label_en: 'Categories Array (JSON)',
+    hint: 'قائمة الأقسام النشطة بالترتيب (id, name, name_en, imageUrl)',
+    hint_en: 'Sorted categories array (id, name, name_en, imageUrl)',
   },
   {
     token: '{{ITEMS_JSON}}',
     label: 'مصفوفة الوجبات (JSON)',
-    hint: 'الأصناف المتاحة مع السعر الأساسي و sizes و addons و ordersCount',
+    label_en: 'Menu Items Array (JSON)',
+    hint: 'الأصناف المتاحة مع name, name_en, description, description_en, sizes, addons',
+    hint_en: 'Available items with name, name_en, description, description_en, sizes, addons',
+  },
+  {
+    token: '{{CURRENT_LANG}}',
+    label: 'اللغة الحالية (ar | en)',
+    label_en: 'Current Language (ar | en)',
+    hint: 'قيمة اللغة المختارة حالياً من قبل العميل ("ar" أو "en")',
+    hint_en: 'Active guest language code ("ar" or "en")',
   },
   {
     token: 'window.MENU_DATA',
     label: 'كائن البيانات الشامل (JS)',
-    hint: 'يحتوي تلقائياً على { restaurant, categories, items } داخل بيئة الجافاسكربت',
-  },
-  {
-    token: "window.parent.postMessage({ type: 'ADD_TO_CART', itemId, quantity: 1 }, '*')",
-    label: 'جسر الإضافة للسلة',
-    hint: 'إضافة أي صنف مباشرة إلى سلة المنصة الذكية',
+    label_en: 'Global Data Object (JS)',
+    hint: 'يحتوي تلقائياً على { restaurant, categories, items, currentLang } داخل الجافاسكربت',
+    hint_en: 'Auto-populated { restaurant, categories, items, currentLang } in JS runtime',
   },
   {
     token: "window.parent.postMessage({ type: 'OPEN_ITEM_MODAL', itemId }, '*')",
     label: 'جسر فتح تفاصيل الصنف',
+    label_en: 'Open Dish Modal Bridge',
     hint: 'فتح نافذة اختيار الأحجام والإضافات الأصلية للمنصة',
+    hint_en: 'Triggers native platform modal for portion sizes & add-ons',
   },
 ];
 
@@ -70,7 +83,7 @@ export const STARTER_CUSTOM_CSS = `:root {
 
 body {
   margin: 0;
-  font-family: 'Cairo', 'Tajawal', sans-serif;
+  font-family: 'Cairo', 'Tajawal', system-ui, sans-serif;
   background: var(--bg);
   color: var(--text);
   padding-bottom: 92px;
@@ -246,6 +259,9 @@ body {
 export const STARTER_CUSTOM_JS = `const restaurant = {{RESTAURANT_JSON}};
 const categories = {{CATEGORIES_JSON}};
 const items = {{ITEMS_JSON}};
+const lang = (window.MENU_DATA && window.MENU_DATA.currentLang) || 'ar';
+const isEn = lang === 'en';
+const locText = (ar, en) => (isEn ? (en || ar || '') : (ar || en || ''));
 
 if (restaurant && restaurant.primaryColor) {
   document.documentElement.style.setProperty('--accent', restaurant.primaryColor);
@@ -260,8 +276,12 @@ if (logoEl) {
   }
 }
 
-document.getElementById('rest-name').textContent = restaurant.name || 'قائمة الطعام';
-document.getElementById('rest-tagline').textContent = restaurant.tagline || '';
+document.getElementById('rest-name').textContent = locText(restaurant.name, restaurant.name_en) || (isEn ? 'Digital Menu' : 'قائمة الطعام');
+document.getElementById('rest-tagline').textContent = locText(restaurant.tagline, restaurant.tagline_en);
+const searchEl = document.getElementById('search-input');
+if (searchEl) {
+  searchEl.placeholder = isEn ? 'Search your favorite dish...' : 'ابحث عن وجبتك المفضلة...';
+}
 
 let selectedCat = 'all';
 let query = '';
@@ -270,7 +290,7 @@ function renderCategories() {
   const bar = document.getElementById('cat-bar');
   const allBtn = document.createElement('button');
   allBtn.className = 'cat-btn ' + (selectedCat === 'all' ? 'active' : '');
-  allBtn.textContent = 'الكل (' + items.length + ')';
+  allBtn.textContent = (isEn ? 'All' : 'الكل') + ' (' + items.length + ')';
   allBtn.onclick = () => { selectedCat = 'all'; renderCategories(); renderItems(); };
   bar.innerHTML = '';
   bar.appendChild(allBtn);
@@ -278,7 +298,7 @@ function renderCategories() {
   categories.forEach((cat) => {
     const btn = document.createElement('button');
     btn.className = 'cat-btn ' + (selectedCat === cat.id ? 'active' : '');
-    btn.textContent = cat.name;
+    btn.textContent = locText(cat.name, cat.name_en);
     btn.onclick = () => { selectedCat = cat.id; renderCategories(); renderItems(); };
     bar.appendChild(btn);
   });
@@ -289,26 +309,32 @@ function renderItems() {
   grid.innerHTML = '';
   const list = items.filter((item) => {
     const catOk = selectedCat === 'all' || item.categoryId === selectedCat;
-    const textOk = !query || (item.name || '').toLowerCase().includes(query) || (item.description || '').toLowerCase().includes(query);
+    const displayTitle = locText(item.name, item.name_en).toLowerCase();
+    const displayDesc = locText(item.description, item.description_en).toLowerCase();
+    const textOk = !query || displayTitle.includes(query) || displayDesc.includes(query);
     return catOk && textOk;
   });
 
+  const curr = isEn && restaurant.currency === 'ج.م' ? 'EGP' : (restaurant.currency || (isEn ? 'EGP' : 'ج.م'));
+
   list.forEach((item) => {
+    const itemName = locText(item.name, item.name_en);
+    const itemDesc = locText(item.description, item.description_en);
     const card = document.createElement('article');
     card.className = 'card';
     card.innerHTML = \`
       <div>
-        \${item.imageUrl ? \`<img src="\${item.imageUrl}" alt="\${item.name}" class="js-open" />\` : ''}
+        \${item.imageUrl ? \`<img src="\${item.imageUrl}" alt="\${itemName}" class="js-open" />\` : ''}
         <div class="card-body">
-          <h3 class="card-title js-open">\${item.name}</h3>
-          <p class="card-desc">\${item.description || ''}</p>
+          <h3 class="card-title js-open">\${itemName}</h3>
+          <p class="card-desc">\${itemDesc}</p>
         </div>
       </div>
       <div class="card-footer">
-        <span class="price">\${item.basePrice} \${restaurant.currency || 'ج.م'}</span>
+        <span class="price">\${item.basePrice} \${curr}</span>
         <div class="actions">
-          <button type="button" class="btn-detail js-open">التفاصيل</button>
-          <button type="button" class="btn-add js-add">+ سلة</button>
+          <button type="button" class="btn-detail js-open">\${isEn ? 'Details' : 'التفاصيل'}</button>
+          <button type="button" class="btn-add js-add">\${isEn ? '+ Cart' : '+ سلة'}</button>
         </div>
       </div>
     \`;
@@ -339,7 +365,10 @@ export function buildCustomThemeSrcDoc(params: {
   restaurant: Restaurant;
   categories: Category[];
   items: MenuItem[];
+  currentLang?: AppLang;
 }): string {
+  const currentLang: AppLang = params.currentLang || 'ar';
+  const dir = currentLang === 'ar' ? 'rtl' : 'ltr';
   const availableItems = params.items.filter((i) => i.isAvailable !== false);
   const restJson = safeJsonForInlineScript(params.restaurant);
   const catsJson = safeJsonForInlineScript(params.categories);
@@ -349,14 +378,15 @@ export function buildCustomThemeSrcDoc(params: {
     (source || '')
       .replace(/\{\{RESTAURANT_JSON\}\}/g, restJson)
       .replace(/\{\{CATEGORIES_JSON\}\}/g, catsJson)
-      .replace(/\{\{ITEMS_JSON\}\}/g, itemsJson);
+      .replace(/\{\{ITEMS_JSON\}\}/g, itemsJson)
+      .replace(/\{\{CURRENT_LANG\}\}/g, currentLang);
 
   const compiledHtml = applyTokens(params.htmlCode);
   const compiledCss = applyTokens(params.cssCode);
   const compiledJs = applyTokens(params.jsCode);
 
   return `<!doctype html>
-<html lang="ar" dir="rtl">
+<html lang="${currentLang}" dir="${dir}">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -374,7 +404,8 @@ export function buildCustomThemeSrcDoc(params: {
       window.MENU_DATA = {
         restaurant: ${restJson},
         categories: ${catsJson},
-        items: ${itemsJson}
+        items: ${itemsJson},
+        currentLang: "${currentLang}"
       };
       window.openItemModal = function(itemOrId) {
         var itemId = typeof itemOrId === 'string' ? itemOrId : (itemOrId && itemOrId.id);

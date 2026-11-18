@@ -6,6 +6,8 @@ import {
   updateProfile,
 } from 'firebase/auth';
 import { AlertCircle, KeyRound, Loader2, Lock, Mail, ShieldCheck, User as UserIcon } from 'lucide-react';
+import { useLanguage } from '../../contexts/LanguageContext';
+import { AppLang } from '../../data/translations';
 import { auth, googleAuthProvider } from '../../lib/firebase';
 import { ensureUserProfile } from '../../lib/firestoreService';
 
@@ -16,44 +18,75 @@ interface OwnerAuthCardProps {
 
 type AuthMode = 'login' | 'register';
 
-function mapFirebaseAuthError(err: unknown): { message: string; isProviderDisabled?: boolean } {
+function mapFirebaseAuthError(
+  err: unknown,
+  lang: AppLang
+): { message: string; isProviderDisabled?: boolean } {
   const code =
     typeof err === 'object' && err !== null && 'code' in err
       ? String((err as { code?: string }).code)
       : '';
+  const isEn = lang === 'en';
 
   switch (code) {
     case 'auth/operation-not-allowed':
       return {
         isProviderDisabled: true,
-        message:
-          'تسجيل الدخول بالبريد الإلكتروني وكلمة المرور غير مفعّل حالياً في مشروع Firebase. يرجى تفعيله من Firebase Console ← Authentication ← Sign-in method ← Email/Password، أو استخدام زر الدخول عبر Google أدناه.',
+        message: isEn
+          ? 'Email/Password sign-in is not currently enabled in Firebase Console. Enable it under Authentication → Sign-in method, or use Continue with Google below.'
+          : 'تسجيل الدخول بالبريد الإلكتروني وكلمة المرور غير مفعّل حالياً في مشروع Firebase. يرجى تفعيله من Firebase Console ← Authentication ← Sign-in method ← Email/Password، أو استخدام زر الدخول عبر Google أدناه.',
       };
     case 'auth/email-already-in-use':
-      return { message: 'هذا البريد الإلكتروني مسجّل بالفعل. جرّب تسجيل الدخول بدلاً من ذلك.' };
+      return {
+        message: isEn
+          ? 'This email is already registered. Try signing in instead.'
+          : 'هذا البريد الإلكتروني مسجّل بالفعل. جرّب تسجيل الدخول بدلاً من ذلك.',
+      };
     case 'auth/invalid-credential':
     case 'auth/wrong-password':
     case 'auth/user-not-found':
-      return { message: 'البريد الإلكتروني أو كلمة المرور غير صحيحة.' };
+      return {
+        message: isEn
+          ? 'Incorrect email or password.'
+          : 'البريد الإلكتروني أو كلمة المرور غير صحيحة.',
+      };
     case 'auth/weak-password':
-      return { message: 'كلمة المرور يجب أن تتكون من 6 أحرف على الأقل.' };
+      return {
+        message: isEn
+          ? 'Password must be at least 6 characters.'
+          : 'كلمة المرور يجب أن تتكون من 6 أحرف على الأقل.',
+      };
     case 'auth/invalid-email':
-      return { message: 'صيغة البريد الإلكتروني غير صحيحة.' };
+      return {
+        message: isEn ? 'Invalid email address format.' : 'صيغة البريد الإلكتروني غير صحيحة.',
+      };
     case 'auth/too-many-requests':
-      return { message: 'تم إجراء محاولات متكررة. انتظر قليلاً ثم أعد المحاولة.' };
+      return {
+        message: isEn
+          ? 'Too many attempts. Please wait a moment and try again.'
+          : 'تم إجراء محاولات متكررة. انتظر قليلاً ثم أعد المحاولة.',
+      };
     case 'auth/popup-closed-by-user':
-      return { message: 'تم إغلاق نافذة تسجيل الدخول قبل إتمام العملية.' };
+      return {
+        message: isEn
+          ? 'Sign-in window was closed before completing.'
+          : 'تم إغلاق نافذة تسجيل الدخول قبل إتمام العملية.',
+      };
     default:
       return {
         message:
           err instanceof Error && err.message
             ? err.message
+            : isEn
+            ? 'Authentication error occurred. Please check your connection and try again.'
             : 'حدث خطأ أثناء المصادقة. تأكد من الاتصال بالإنترنت وحاول مجدداً.',
       };
   }
 }
 
 export function OwnerAuthCard({ onSuccess, compact = false }: OwnerAuthCardProps) {
+  const { lang, dir, t } = useLanguage();
+  const isEn = lang === 'en';
   const [mode, setMode] = useState<AuthMode>('login');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -70,19 +103,24 @@ export function OwnerAuthCard({ onSuccess, compact = false }: OwnerAuthCardProps
 
     const cleanEmail = email.trim();
     if (!cleanEmail || !password) {
-      setErrorInfo({ message: 'يرجى إدخال البريد الإلكتروني وكلمة المرور.' });
+      setErrorInfo({
+        message: isEn
+          ? 'Please enter your email and password.'
+          : 'يرجى إدخال البريد الإلكتروني وكلمة المرور.',
+      });
       return;
     }
 
     if (mode === 'register' && password.length < 6) {
-      setErrorInfo({ message: 'كلمة المرور يجب أن تكون 6 أحرف أو أرقام على الأقل.' });
+      setErrorInfo({ message: t.auth.errWeakPass });
       return;
     }
 
     setLoading(true);
     try {
       if (mode === 'register') {
-        const displayName = fullName.trim() || cleanEmail.split('@')[0] || 'صاحب مطعم';
+        const displayName =
+          fullName.trim() || cleanEmail.split('@')[0] || (isEn ? 'Restaurant Owner' : 'صاحب مطعم');
         const cred = await createUserWithEmailAndPassword(auth, cleanEmail, password);
         await updateProfile(cred.user, { displayName });
         await ensureUserProfile(cred.user.uid, cleanEmail, displayName);
@@ -91,12 +129,12 @@ export function OwnerAuthCard({ onSuccess, compact = false }: OwnerAuthCardProps
         await ensureUserProfile(
           cred.user.uid,
           cred.user.email || cleanEmail,
-          cred.user.displayName || 'صاحب مطعم'
+          cred.user.displayName || (isEn ? 'Restaurant Owner' : 'صاحب مطعم')
         );
       }
       onSuccess?.();
     } catch (err) {
-      setErrorInfo(mapFirebaseAuthError(err));
+      setErrorInfo(mapFirebaseAuthError(err, lang));
     } finally {
       setLoading(false);
     }
@@ -110,11 +148,11 @@ export function OwnerAuthCard({ onSuccess, compact = false }: OwnerAuthCardProps
       await ensureUserProfile(
         cred.user.uid,
         cred.user.email || '',
-        cred.user.displayName || 'صاحب مطعم'
+        cred.user.displayName || (isEn ? 'Restaurant Owner' : 'صاحب مطعم')
       );
       onSuccess?.();
     } catch (err) {
-      setErrorInfo(mapFirebaseAuthError(err));
+      setErrorInfo(mapFirebaseAuthError(err, lang));
     } finally {
       setGoogleLoading(false);
     }
@@ -122,6 +160,7 @@ export function OwnerAuthCard({ onSuccess, compact = false }: OwnerAuthCardProps
 
   return (
     <div
+      dir={dir}
       className={`bg-white border border-zinc-200 rounded-2xl shadow-sm ${
         compact ? 'p-6' : 'p-7 sm:p-8'
       } space-y-5`}
@@ -144,7 +183,7 @@ export function OwnerAuthCard({ onSuccess, compact = false }: OwnerAuthCardProps
                   : 'text-zinc-600 hover:text-zinc-950'
               }`}
             >
-              تسجيل الدخول
+              {t.auth.loginTab}
             </button>
             <button
               type="button"
@@ -158,19 +197,15 @@ export function OwnerAuthCard({ onSuccess, compact = false }: OwnerAuthCardProps
                   : 'text-zinc-600 hover:text-zinc-950'
               }`}
             >
-              حساب جديد
+              {t.auth.registerTab}
             </button>
           </div>
         </div>
 
         <h2 className="text-xl font-extrabold text-zinc-950 pt-2">
-          {mode === 'login' ? 'دخول أصحاب المطاعم' : 'إنشاء حساب مطعم جديد'}
+          {mode === 'login' ? t.auth.ownerLoginHeading : t.auth.ownerRegisterHeading}
         </h2>
-        <p className="text-xs text-zinc-600 leading-relaxed">
-          {mode === 'login'
-            ? 'أدخل بريدك الإلكتروني وكلمة المرور للوصول إلى لوحة إدارة المنيو والطلبات الحية.'
-            : 'أنشئ حسابك ثم أتمم إعداد بيانات مطعمك والرابط المميز خلال دقيقة واحدة.'}
-        </p>
+        <p className="text-xs text-zinc-600 leading-relaxed">{t.auth.ownerHeadingDesc}</p>
       </div>
 
       {errorInfo && (
@@ -180,7 +215,7 @@ export function OwnerAuthCard({ onSuccess, compact = false }: OwnerAuthCardProps
             <p className="leading-relaxed font-medium">{errorInfo.message}</p>
           </div>
           {errorInfo.isProviderDisabled && (
-            <p className="text-[11px] text-red-700 font-mono-num pr-6" dir="ltr">
+            <p className="text-[11px] text-red-700 font-mono-num ps-6" dir="ltr">
               Project: gen-lang-client-0179420211 → Authentication → Sign-in method → Email/Password
             </p>
           )}
@@ -190,24 +225,28 @@ export function OwnerAuthCard({ onSuccess, compact = false }: OwnerAuthCardProps
       <form onSubmit={handleSubmit} className="space-y-3.5">
         {mode === 'register' && (
           <div>
-            <label className="block text-xs font-bold text-zinc-700 mb-1.5">اسم المالك أو المدير</label>
+            <label className="block text-xs font-bold text-zinc-700 mb-1.5">
+              {t.auth.fullNameLabel}
+            </label>
             <div className="relative">
-              <UserIcon className="w-4 h-4 text-zinc-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
+              <UserIcon className="w-4 h-4 text-zinc-400 absolute start-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                placeholder="مثال: أحمد محمود"
-                className="w-full pr-10 pl-3.5 py-2.5 rounded-xl border border-zinc-300 text-sm focus:outline-none focus:border-zinc-950"
+                placeholder={t.auth.fullNamePlaceholder}
+                className="w-full ps-10 pe-3.5 py-2.5 rounded-xl border border-zinc-300 text-sm focus:outline-none focus:border-zinc-950"
               />
             </div>
           </div>
         )}
 
         <div>
-          <label className="block text-xs font-bold text-zinc-700 mb-1.5">البريد الإلكتروني</label>
+          <label className="block text-xs font-bold text-zinc-700 mb-1.5">
+            {t.auth.emailLabel}
+          </label>
           <div className="relative">
-            <Mail className="w-4 h-4 text-zinc-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
+            <Mail className="w-4 h-4 text-zinc-400 absolute start-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="email"
               dir="ltr"
@@ -215,15 +254,17 @@ export function OwnerAuthCard({ onSuccess, compact = false }: OwnerAuthCardProps
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="owner@restaurant.com"
-              className="w-full pr-10 pl-3.5 py-2.5 rounded-xl border border-zinc-300 text-sm font-mono-num text-left focus:outline-none focus:border-zinc-950"
+              className="w-full ps-10 pe-3.5 py-2.5 rounded-xl border border-zinc-300 text-sm font-mono-num text-left focus:outline-none focus:border-zinc-950"
             />
           </div>
         </div>
 
         <div>
-          <label className="block text-xs font-bold text-zinc-700 mb-1.5">كلمة المرور</label>
+          <label className="block text-xs font-bold text-zinc-700 mb-1.5">
+            {t.auth.passwordLabel}
+          </label>
           <div className="relative">
-            <Lock className="w-4 h-4 text-zinc-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
+            <Lock className="w-4 h-4 text-zinc-400 absolute start-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="password"
               dir="ltr"
@@ -232,7 +273,7 @@ export function OwnerAuthCard({ onSuccess, compact = false }: OwnerAuthCardProps
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
-              className="w-full pr-10 pl-3.5 py-2.5 rounded-xl border border-zinc-300 text-sm font-mono-num text-left focus:outline-none focus:border-zinc-950"
+              className="w-full ps-10 pe-3.5 py-2.5 rounded-xl border border-zinc-300 text-sm font-mono-num text-left focus:outline-none focus:border-zinc-950"
             />
           </div>
         </div>
@@ -245,12 +286,20 @@ export function OwnerAuthCard({ onSuccess, compact = false }: OwnerAuthCardProps
           {loading ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" />
-              <span>{mode === 'login' ? 'جاري تسجيل الدخول...' : 'جاري إنشاء الحساب...'}</span>
+              <span>
+                {mode === 'login'
+                  ? isEn
+                    ? 'Signing in...'
+                    : 'جاري تسجيل الدخول...'
+                  : isEn
+                  ? 'Creating account...'
+                  : 'جاري إنشاء الحساب...'}
+              </span>
             </>
           ) : (
             <>
               <KeyRound className="w-4 h-4" />
-              <span>{mode === 'login' ? 'دخول إلى لوحة التحكم' : 'إنشاء الحساب والمتابعة'}</span>
+              <span>{mode === 'login' ? t.auth.loginBtn : t.auth.registerBtn}</span>
             </>
           )}
         </button>
@@ -258,7 +307,7 @@ export function OwnerAuthCard({ onSuccess, compact = false }: OwnerAuthCardProps
 
       <div className="relative flex items-center py-1">
         <div className="flex-1 border-t border-zinc-200" />
-        <span className="px-3 text-[11px] font-semibold text-zinc-400">أو</span>
+        <span className="px-3 text-[11px] font-semibold text-zinc-400">{isEn ? 'OR' : 'أو'}</span>
         <div className="flex-1 border-t border-zinc-200" />
       </div>
 
@@ -271,15 +320,17 @@ export function OwnerAuthCard({ onSuccess, compact = false }: OwnerAuthCardProps
         {googleLoading ? (
           <>
             <Loader2 className="w-4 h-4 animate-spin" />
-            <span>جاري الاتصال بحساب Google...</span>
+            <span>{isEn ? 'Connecting to Google...' : 'جاري الاتصال بحساب Google...'}</span>
           </>
         ) : (
-          <span>المتابعة بحساب Google</span>
+          <span>{isEn ? 'Continue with Google' : 'المتابعة بحساب Google'}</span>
         )}
       </button>
 
       <p className="text-[11px] text-zinc-500 text-center leading-relaxed">
-        بيانات كل مطعم معزولة بالكامل ومرتبطة بحساب مالكه عبر قواعد أمان Firestore.
+        {isEn
+          ? 'Each restaurant workspace is strictly isolated and protected by Firestore security rules.'
+          : 'بيانات كل مطعم معزولة بالكامل ومرتبطة بحساب مالكه عبر قواعد أمان Firestore.'}
       </p>
     </div>
   );

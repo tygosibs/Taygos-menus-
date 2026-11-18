@@ -15,8 +15,10 @@ import {
   UtensilsCrossed,
   X,
 } from 'lucide-react';
+import { useLanguage } from '../../contexts/LanguageContext';
 import { isCustomThemeId } from '../../data/themes';
 import { ActiveTheme, CartItem, Category, CustomTheme, MenuItem, Restaurant } from '../../types/menu';
+import { LanguageToggleButton } from '../LanguageToggleButton';
 import { SafeImage } from '../SafeImage';
 import { CustomThemeIframe } from './CustomThemeIframe';
 import { Flipbook3DTheme } from './Flipbook3DTheme';
@@ -50,6 +52,7 @@ export function ThemeRenderer({
   onQuickStepItem,
   onOpenCart,
 }: ThemeRendererProps) {
+  const { lang, dir, isRtl, t, loc, formatCurrency } = useLanguage();
   const [selectedCatId, setSelectedCatId] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [carouselIdx, setCarouselIdx] = useState(0);
@@ -68,7 +71,9 @@ export function ThemeRenderer({
       const textMatch =
         !q ||
         item.name.toLowerCase().includes(q) ||
-        (item.description || '').toLowerCase().includes(q);
+        (item.name_en || '').toLowerCase().includes(q) ||
+        (item.description || '').toLowerCase().includes(q) ||
+        (item.description_en || '').toLowerCase().includes(q);
       return catMatch && textMatch;
     });
   }, [availableItems, selectedCatId, searchQuery]);
@@ -81,8 +86,11 @@ export function ThemeRenderer({
     return map;
   }, [cart]);
 
-  const formatPrice = (p: number) => `${p.toFixed(2).replace(/\.00$/, '')} ${restaurant.currency}`;
+  const displayCurrency = formatCurrency(restaurant.currency);
+  const formatPrice = (p: number) => `${p.toFixed(2).replace(/\.00$/, '')} ${displayCurrency}`;
   const accent = restaurant.primaryColor || '#A61C1C';
+  const restName = loc(restaurant.name, restaurant.name_en);
+  const restTagline = loc(restaurant.tagline, restaurant.tagline_en);
 
   // DYNAMIC INJECTED CUSTOM THEME (from Super Admin custom_themes collection)
   if (isCustomThemeId(activeTheme) && customTheme) {
@@ -119,7 +127,7 @@ export function ThemeRenderer({
   const ClosedBanner = () =>
     !restaurant.isOpen ? (
       <div className="bg-red-950/95 text-red-100 text-xs font-bold text-center py-2 px-4 border-b border-red-800">
-        المطعم مغلق حالياً لاستقبال الطلبات — يمكنك تصفح القائمة فقط
+        {t.menu.closedBanner}
       </div>
     ) : null;
 
@@ -130,7 +138,7 @@ export function ThemeRenderer({
       }`}
     >
       <UtensilsCrossed className="w-8 h-8 mx-auto mb-3 opacity-40" />
-      <p className="text-base font-semibold">لا توجد أصناف مطابقة للبحث حالياً</p>
+      <p className="text-base font-semibold">{t.menu.noResults}</p>
     </div>
   );
 
@@ -146,7 +154,7 @@ export function ThemeRenderer({
           >
             <span className="flex items-center gap-2.5">
               <ShoppingBag className="w-5 h-5" />
-              <span>عرض السلة</span>
+              <span>{t.menu.viewCart}</span>
               <span className="font-mono-num text-xs bg-black/25 px-2 py-0.5 rounded-md">
                 {cartCount}
               </span>
@@ -174,7 +182,7 @@ export function ThemeRenderer({
     };
 
     return (
-      <div dir="rtl" className="min-h-screen bg-[#FAF9F7] text-stone-900 pb-24">
+      <div dir={dir} className="min-h-screen bg-[#FAF9F7] text-stone-900 pb-24">
         <ClosedBanner />
         {/* Curved Top Arc */}
         <section
@@ -191,25 +199,28 @@ export function ThemeRenderer({
                 {restaurant.logoUrl && (
                   <SafeImage
                     src={restaurant.logoUrl}
-                    alt={restaurant.name}
+                    alt={restName}
                     className="w-11 h-11 rounded-full object-cover border-2 border-white/50 shrink-0"
                   />
                 )}
                 <div className="min-w-0">
-                  <h1 className="text-xl sm:text-2xl font-extrabold truncate">{restaurant.name}</h1>
-                  {restaurant.tagline && (
-                    <p className="text-xs text-white/80 line-clamp-1">{restaurant.tagline}</p>
+                  <h1 className="text-xl sm:text-2xl font-extrabold truncate">{restName}</h1>
+                  {restTagline && (
+                    <p className="text-xs text-white/80 line-clamp-1">{restTagline}</p>
                   )}
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={onOpenCart}
-                className="min-h-[44px] px-3.5 py-2 rounded-xl bg-black/25 hover:bg-black/35 text-white text-xs font-bold flex items-center gap-2 shrink-0 cursor-pointer"
-              >
-                <ShoppingBag className="w-4 h-4" />
-                <span className="font-mono-num">{cartCount}</span>
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                <LanguageToggleButton variant="glass" compact />
+                <button
+                  type="button"
+                  onClick={onOpenCart}
+                  className="min-h-[44px] px-3.5 py-2 rounded-xl bg-black/25 hover:bg-black/35 text-white text-xs font-bold flex items-center gap-2 shrink-0 cursor-pointer"
+                >
+                  <ShoppingBag className="w-4 h-4" />
+                  <span className="font-mono-num">{cartCount}</span>
+                </button>
+              </div>
             </header>
 
             {/* Circular Category Icons Along the Curve */}
@@ -231,12 +242,15 @@ export function ThemeRenderer({
                 >
                   <LayoutGrid className="w-5 h-5" />
                 </div>
-                <span className="text-[11px] font-bold whitespace-nowrap">الكل</span>
+                <span className="text-[11px] font-bold whitespace-nowrap">
+                  {t.menu.allCategories}
+                </span>
               </button>
 
               {categories.map((cat, idx) => {
                 const isActive = selectedCatId === cat.id;
                 const arcDrop = Math.abs(idx - activeCatIndex) === 0 ? 'translate-y-1' : '';
+                const catName = loc(cat.name, cat.name_en);
                 return (
                   <button
                     key={cat.id}
@@ -256,11 +270,11 @@ export function ThemeRenderer({
                     >
                       <SafeImage
                         src={cat.imageUrl}
-                        alt={cat.name}
+                        alt={catName}
                         className="w-full h-full object-cover"
                       />
                     </div>
-                    <span className="text-[11px] font-bold whitespace-nowrap">{cat.name}</span>
+                    <span className="text-[11px] font-bold whitespace-nowrap">{catName}</span>
                   </button>
                 );
               })}
@@ -280,8 +294,13 @@ export function ThemeRenderer({
               dragConstraints={{ left: 0, right: 0 }}
               dragElastic={0.18}
               onDragEnd={(_, info) => {
-                if (info.offset.x > 50) stepSlide(1);
-                else if (info.offset.x < -50) stepSlide(-1);
+                if (isRtl) {
+                  if (info.offset.x > 50) stepSlide(1);
+                  else if (info.offset.x < -50) stepSlide(-1);
+                } else {
+                  if (info.offset.x < -50) stepSlide(1);
+                  else if (info.offset.x > 50) stepSlide(-1);
+                }
               }}
               className="flex flex-col items-center text-center"
             >
@@ -289,10 +308,14 @@ export function ThemeRenderer({
                 <button
                   type="button"
                   onClick={() => stepSlide(-1)}
-                  aria-label="الطبق السابق"
+                  aria-label={t.menu.storyPrev}
                   className="w-11 h-11 rounded-full bg-white border border-stone-200 shadow-md flex items-center justify-center text-stone-800 hover:bg-stone-100 cursor-pointer shrink-0"
                 >
-                  <ChevronRight className="w-5 h-5" />
+                  {isRtl ? (
+                    <ChevronRight className="w-5 h-5" />
+                  ) : (
+                    <ChevronLeft className="w-5 h-5" />
+                  )}
                 </button>
 
                 <div
@@ -301,7 +324,7 @@ export function ThemeRenderer({
                 >
                   <SafeImage
                     src={spotlightItem.imageUrl}
-                    alt={spotlightItem.name}
+                    alt={loc(spotlightItem.name, spotlightItem.name_en)}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   />
                 </div>
@@ -309,16 +332,20 @@ export function ThemeRenderer({
                 <button
                   type="button"
                   onClick={() => stepSlide(1)}
-                  aria-label="الطبق التالي"
+                  aria-label={t.menu.storyNext}
                   className="w-11 h-11 rounded-full bg-white border border-stone-200 shadow-md flex items-center justify-center text-stone-800 hover:bg-stone-100 cursor-pointer shrink-0"
                 >
-                  <ChevronLeft className="w-5 h-5" />
+                  {isRtl ? (
+                    <ChevronLeft className="w-5 h-5" />
+                  ) : (
+                    <ChevronRight className="w-5 h-5" />
+                  )}
                 </button>
               </div>
 
               <div className="mt-4 space-y-1.5 max-w-md">
                 <h2 className="text-xl sm:text-2xl font-extrabold text-stone-950 flex items-center justify-center gap-1.5">
-                  <span>{spotlightItem.name}</span>
+                  <span>{loc(spotlightItem.name, spotlightItem.name_en)}</span>
                   {spotlightItem.isSpicy && <Flame className="w-4 h-4 text-red-500 shrink-0" />}
                 </h2>
                 <p
@@ -327,8 +354,10 @@ export function ThemeRenderer({
                 >
                   {formatPrice(spotlightItem.basePrice)}
                 </p>
-                {spotlightItem.description && (
-                  <p className="text-xs text-stone-500 line-clamp-2">{spotlightItem.description}</p>
+                {loc(spotlightItem.description, spotlightItem.description_en) && (
+                  <p className="text-xs text-stone-500 line-clamp-2">
+                    {loc(spotlightItem.description, spotlightItem.description_en)}
+                  </p>
                 )}
                 <div className="pt-2">
                   <button
@@ -337,7 +366,7 @@ export function ThemeRenderer({
                     style={{ backgroundColor: accent }}
                     className="min-h-[44px] px-6 py-2.5 rounded-full text-white text-xs font-bold shadow-md hover:opacity-95 cursor-pointer"
                   >
-                    عرض التفاصيل والإضافات
+                    {t.menu.customizeOrder}
                   </button>
                 </div>
               </div>
@@ -348,15 +377,17 @@ export function ThemeRenderer({
         {/* Search & Full List Below */}
         <main className="max-w-5xl mx-auto px-4 pt-10 space-y-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <h3 className="text-base font-extrabold text-stone-900">كل الأطباق المتاحة</h3>
+            <h3 className="text-base font-extrabold text-stone-900">
+              {lang === 'en' ? 'All Available Dishes' : 'كل الأطباق المتاحة'}
+            </h3>
             <div className="relative w-full sm:w-64">
-              <Search className="w-4 h-4 text-stone-400 absolute right-3 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-stone-400 absolute start-3 top-1/2 -translate-y-1/2" />
               <input
                 type="search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="ابحث عن وجبة..."
-                className="w-full pr-9 pl-3 py-2.5 rounded-xl bg-white border border-stone-200 text-sm focus:outline-none focus:border-stone-400"
+                placeholder={t.menu.searchPlaceholder}
+                className="w-full ps-9 pe-3 py-2.5 rounded-xl bg-white border border-stone-200 text-sm focus:outline-none focus:border-stone-400"
               />
             </div>
           </div>
@@ -365,41 +396,45 @@ export function ThemeRenderer({
             <EmptyState dark={false} />
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {filteredItems.map((item) => (
-                <article
-                  key={item.id}
-                  onClick={() => onSelectItem(item)}
-                  className="bg-white border border-stone-200 rounded-2xl p-3.5 flex gap-4 items-center hover:shadow-md transition-shadow cursor-pointer"
-                >
-                  <SafeImage
-                    src={item.imageUrl}
-                    alt={item.name}
-                    className="w-24 h-24 rounded-xl object-cover shrink-0"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <h4 className="text-base font-bold text-stone-900 truncate flex items-center gap-1.5">
-                      <span>{item.name}</span>
-                      {item.isSpicy && <Flame className="w-3.5 h-3.5 text-red-500 shrink-0" />}
-                    </h4>
-                    {item.description && (
-                      <p className="text-xs text-stone-500 mt-1 line-clamp-2 leading-relaxed">
-                        {item.description}
-                      </p>
-                    )}
-                    <div className="mt-3 flex items-center justify-between gap-2">
-                      <span className="font-mono-num text-sm font-extrabold text-stone-900">
-                        {formatPrice(item.basePrice)}
-                      </span>
-                      <span
-                        style={{ backgroundColor: accent }}
-                        className="w-9 h-9 rounded-xl text-white flex items-center justify-center shrink-0"
-                      >
-                        <Plus className="w-4 h-4" />
-                      </span>
+              {filteredItems.map((item) => {
+                const itemName = loc(item.name, item.name_en);
+                const itemDesc = loc(item.description, item.description_en);
+                return (
+                  <article
+                    key={item.id}
+                    onClick={() => onSelectItem(item)}
+                    className="bg-white border border-stone-200 rounded-2xl p-3.5 flex gap-4 items-center hover:shadow-md transition-shadow cursor-pointer"
+                  >
+                    <SafeImage
+                      src={item.imageUrl}
+                      alt={itemName}
+                      className="w-24 h-24 rounded-xl object-cover shrink-0"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-base font-bold text-stone-900 truncate flex items-center gap-1.5">
+                        <span>{itemName}</span>
+                        {item.isSpicy && <Flame className="w-3.5 h-3.5 text-red-500 shrink-0" />}
+                      </h4>
+                      {itemDesc && (
+                        <p className="text-xs text-stone-500 mt-1 line-clamp-2 leading-relaxed">
+                          {itemDesc}
+                        </p>
+                      )}
+                      <div className="mt-3 flex items-center justify-between gap-2">
+                        <span className="font-mono-num text-sm font-extrabold text-stone-900">
+                          {formatPrice(item.basePrice)}
+                        </span>
+                        <span
+                          style={{ backgroundColor: accent }}
+                          className="w-9 h-9 rounded-xl text-white flex items-center justify-center shrink-0"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                </article>
-              ))}
+                  </article>
+                );
+              })}
             </div>
           )}
         </main>
@@ -412,39 +447,42 @@ export function ThemeRenderer({
   // THEME 3: MODERN LIGHT FLOATING
   if (activeTheme === 'theme-3') {
     return (
-      <div dir="rtl" className="min-h-screen bg-[#F5F5F5] text-zinc-900 pb-28">
+      <div dir={dir} className="min-h-screen bg-[#F5F5F5] text-zinc-900 pb-28">
         <ClosedBanner />
 
         <div className="max-w-5xl mx-auto px-4 pt-5 space-y-5">
           {/* Header */}
-          <header className="flex items-center justify-between gap-4">
+          <header className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
               {restaurant.logoUrl && (
                 <SafeImage
                   src={restaurant.logoUrl}
-                  alt={restaurant.name}
+                  alt={restName}
                   className="w-12 h-12 rounded-2xl object-cover border border-zinc-200 bg-white shrink-0"
                 />
               )}
               <div className="min-w-0">
                 <h1 className="text-xl sm:text-2xl font-extrabold text-zinc-950 truncate">
-                  {restaurant.name}
+                  {restName}
                 </h1>
-                {restaurant.tagline && (
-                  <p className="text-xs text-zinc-500 line-clamp-1 mt-0.5">{restaurant.tagline}</p>
+                {restTagline && (
+                  <p className="text-xs text-zinc-500 line-clamp-1 mt-0.5">{restTagline}</p>
                 )}
               </div>
             </div>
 
-            <div className="relative w-40 sm:w-64 shrink-0">
-              <Search className="w-4 h-4 text-zinc-400 absolute right-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="search"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="بحث..."
-                className="w-full pr-9 pl-3 py-2.5 rounded-full bg-white border border-zinc-200 text-xs sm:text-sm focus:outline-none focus:border-zinc-950"
-              />
+            <div className="flex items-center gap-2 shrink-0">
+              <LanguageToggleButton variant="light" compact />
+              <div className="relative w-36 sm:w-56 shrink-0">
+                <Search className="w-4 h-4 text-zinc-400 absolute start-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={t.menu.searchPlaceholder}
+                  className="w-full ps-9 pe-3 py-2.5 rounded-full bg-white border border-zinc-200 text-xs sm:text-sm focus:outline-none focus:border-zinc-950"
+                />
+              </div>
             </div>
           </header>
 
@@ -472,12 +510,13 @@ export function ThemeRenderer({
                   selectedCatId === 'all' ? 'font-extrabold text-zinc-950' : 'text-zinc-500 font-medium'
                 }`}
               >
-                الكل
+                {t.menu.allCategories}
               </span>
             </button>
 
             {categories.map((cat) => {
               const active = selectedCatId === cat.id;
+              const catName = loc(cat.name, cat.name_en);
               return (
                 <button
                   key={cat.id}
@@ -494,7 +533,7 @@ export function ThemeRenderer({
                   >
                     <SafeImage
                       src={cat.imageUrl}
-                      alt={cat.name}
+                      alt={catName}
                       className="w-full h-full object-cover"
                     />
                   </div>
@@ -503,7 +542,7 @@ export function ThemeRenderer({
                       active ? 'font-extrabold text-zinc-950' : 'text-zinc-500 font-medium'
                     }`}
                   >
-                    {cat.name}
+                    {catName}
                   </span>
                 </button>
               );
@@ -515,51 +554,56 @@ export function ThemeRenderer({
             <EmptyState dark={false} />
           ) : (
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-5">
-              {filteredItems.map((item) => (
-                <article
-                  key={item.id}
-                  onClick={() => onSelectItem(item)}
-                  className="bg-white rounded-2xl p-3 sm:p-4 flex flex-col justify-between gap-3 shadow-xs hover:shadow-md transition-shadow cursor-pointer"
-                >
-                  <div className="space-y-2.5">
-                    <div className="aspect-[4/3] rounded-xl overflow-hidden bg-zinc-100">
-                      <SafeImage
-                        src={item.imageUrl}
-                        alt={item.name}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <h3 className="text-sm sm:text-base font-extrabold text-zinc-950 line-clamp-1 flex items-center gap-1">
-                        <span className="truncate">{item.name}</span>
-                        {item.isSpicy && <Flame className="w-3.5 h-3.5 text-red-500 shrink-0" />}
-                      </h3>
-                      <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-500">
-                        <span className="font-mono-num font-bold text-zinc-950 text-xs sm:text-sm">
-                          {formatPrice(item.basePrice)}
-                        </span>
-                        {typeof item.calories === 'number' && item.calories > 0 && (
-                          <>
-                            <span aria-hidden="true">·</span>
-                            <span className="font-mono-num">{item.calories} سعرة</span>
-                          </>
-                        )}
+              {filteredItems.map((item) => {
+                const itemName = loc(item.name, item.name_en);
+                return (
+                  <article
+                    key={item.id}
+                    onClick={() => onSelectItem(item)}
+                    className="bg-white rounded-2xl p-3 sm:p-4 flex flex-col justify-between gap-3 shadow-xs hover:shadow-md transition-shadow cursor-pointer"
+                  >
+                    <div className="space-y-2.5">
+                      <div className="aspect-[4/3] rounded-xl overflow-hidden bg-zinc-100">
+                        <SafeImage
+                          src={item.imageUrl}
+                          alt={itemName}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <h3 className="text-sm sm:text-base font-extrabold text-zinc-950 line-clamp-1 flex items-center gap-1">
+                          <span className="truncate">{itemName}</span>
+                          {item.isSpicy && <Flame className="w-3.5 h-3.5 text-red-500 shrink-0" />}
+                        </h3>
+                        <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-500">
+                          <span className="font-mono-num font-bold text-zinc-950 text-xs sm:text-sm">
+                            {formatPrice(item.basePrice)}
+                          </span>
+                          {typeof item.calories === 'number' && item.calories > 0 && (
+                            <>
+                              <span aria-hidden="true">·</span>
+                              <span className="font-mono-num">
+                                {item.calories} {t.menu.caloriesUnit}
+                              </span>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onSelectItem(item);
-                    }}
-                    className="w-full min-h-[40px] py-2 px-3 rounded-full bg-zinc-950 text-white text-xs font-bold hover:bg-zinc-800 transition-colors cursor-pointer"
-                  >
-                    عرض الاختيارات
-                  </button>
-                </article>
-              ))}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectItem(item);
+                      }}
+                      className="w-full min-h-[40px] py-2 px-3 rounded-full bg-zinc-950 text-white text-xs font-bold hover:bg-zinc-800 transition-colors cursor-pointer"
+                    >
+                      {t.menu.customizeOrder}
+                    </button>
+                  </article>
+                );
+              })}
             </div>
           )}
         </div>
@@ -567,8 +611,8 @@ export function ThemeRenderer({
         {/* Floating Rounded Black Bottom Navigation Bar */}
         <div className="fixed bottom-4 inset-x-0 z-40 px-4 flex justify-center pointer-events-none">
           <nav
-            aria-label="شريط التنقل السريع"
-            className="pointer-events-auto bg-[#111111] text-white rounded-full px-3 h-14 shadow-2xl flex items-center gap-2 sm:gap-4 border border-white/10"
+            aria-label={lang === 'en' ? 'Quick Navigation' : 'شريط التنقل السريع'}
+            className="pointer-events-auto bg-[#111111] text-white rounded-full px-3 h-14 shadow-2xl flex items-center gap-1.5 sm:gap-3 border border-white/10"
           >
             <button
               type="button"
@@ -577,39 +621,43 @@ export function ThemeRenderer({
                 setSearchQuery('');
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
-              aria-label="الرئيسية"
-              className="min-w-[44px] h-11 px-3 rounded-full hover:bg-white/10 flex items-center justify-center gap-1.5 text-xs font-bold cursor-pointer"
+              aria-label={t.nav.home}
+              className="min-w-[44px] h-11 px-2.5 sm:px-3 rounded-full hover:bg-white/10 flex items-center justify-center gap-1.5 text-xs font-bold cursor-pointer"
             >
               <Home className="w-4 h-4" />
-              <span className="hidden sm:inline">الرئيسية</span>
+              <span className="hidden sm:inline">{t.nav.home}</span>
             </button>
 
             <button
               type="button"
               onClick={() => setQuickCatsOpen((o) => !o)}
-              aria-label="الأقسام"
-              className="min-w-[44px] h-11 px-3 rounded-full hover:bg-white/10 flex items-center justify-center gap-1.5 text-xs font-bold cursor-pointer"
+              aria-label={lang === 'en' ? 'Categories' : 'الأقسام'}
+              className="min-w-[44px] h-11 px-2.5 sm:px-3 rounded-full hover:bg-white/10 flex items-center justify-center gap-1.5 text-xs font-bold cursor-pointer"
             >
               <LayoutGrid className="w-4 h-4" />
-              <span className="hidden sm:inline">الأقسام</span>
+              <span className="hidden sm:inline">
+                {lang === 'en' ? 'Categories' : 'الأقسام'}
+              </span>
             </button>
 
             <button
               type="button"
               onClick={() => setInfoModalOpen(true)}
-              aria-label="معلومات المطعم"
-              className="min-w-[44px] h-11 px-3 rounded-full hover:bg-white/10 flex items-center justify-center gap-1.5 text-xs font-bold cursor-pointer"
+              aria-label={lang === 'en' ? 'Restaurant Info' : 'معلومات المطعم'}
+              className="min-w-[44px] h-11 px-2.5 sm:px-3 rounded-full hover:bg-white/10 flex items-center justify-center gap-1.5 text-xs font-bold cursor-pointer"
             >
               <Info className="w-4 h-4" />
-              <span className="hidden sm:inline">المطعم</span>
+              <span className="hidden sm:inline">{lang === 'en' ? 'Info' : 'المطعم'}</span>
             </button>
+
+            <LanguageToggleButton variant="dark" compact />
 
             <button
               type="button"
               onClick={onOpenCart}
-              aria-label="السلة"
+              aria-label={t.menu.viewCart}
               style={{ backgroundColor: accent === '#111111' ? '#FFFFFF' : accent }}
-              className={`min-w-[44px] h-10 px-4 rounded-full flex items-center justify-center gap-2 text-xs font-extrabold cursor-pointer ${
+              className={`min-w-[44px] h-10 px-3.5 sm:px-4 rounded-full flex items-center justify-center gap-2 text-xs font-extrabold cursor-pointer ${
                 accent === '#111111' ? 'text-zinc-950' : 'text-white'
               }`}
             >
@@ -633,7 +681,9 @@ export function ThemeRenderer({
               className="w-full max-w-md bg-white rounded-2xl p-5 space-y-3 shadow-2xl"
             >
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-extrabold">الانتقال إلى قسم</h3>
+                <h3 className="text-sm font-extrabold">
+                  {lang === 'en' ? 'Jump to Category' : 'الانتقال إلى قسم'}
+                </h3>
                 <button
                   type="button"
                   onClick={() => setQuickCatsOpen(false)}
@@ -651,7 +701,7 @@ export function ThemeRenderer({
                   }}
                   className="py-2.5 px-3 rounded-xl border border-zinc-200 text-xs font-bold hover:bg-zinc-50 cursor-pointer"
                 >
-                  جميع الأصناف
+                  {t.menu.allCategories}
                 </button>
                 {categories.map((cat) => (
                   <button
@@ -663,7 +713,7 @@ export function ThemeRenderer({
                     }}
                     className="py-2.5 px-3 rounded-xl border border-zinc-200 text-xs font-bold hover:bg-zinc-50 cursor-pointer truncate"
                   >
-                    {cat.name}
+                    {loc(cat.name, cat.name_en)}
                   </button>
                 ))}
               </div>
@@ -682,7 +732,7 @@ export function ThemeRenderer({
               className="w-full max-w-sm bg-white rounded-2xl p-6 space-y-3 shadow-2xl"
             >
               <div className="flex items-center justify-between">
-                <h3 className="text-base font-extrabold">{restaurant.name}</h3>
+                <h3 className="text-base font-extrabold">{restName}</h3>
                 <button
                   type="button"
                   onClick={() => setInfoModalOpen(false)}
@@ -691,14 +741,19 @@ export function ThemeRenderer({
                   <X className="w-4 h-4" />
                 </button>
               </div>
-              {restaurant.tagline && (
-                <p className="text-xs text-zinc-600 leading-relaxed">{restaurant.tagline}</p>
-              )}
+              {restTagline && <p className="text-xs text-zinc-600 leading-relaxed">{restTagline}</p>}
               <div className="text-xs text-zinc-700 space-y-1.5 pt-2 border-t border-zinc-100 font-mono-num">
-                <p>الحالة: {restaurant.isOpen ? 'مفتوح الآن' : 'مغلق حالياً'}</p>
-                <p>نسبة الضريبة: {restaurant.taxRate}%</p>
-                <p>رسوم الخدمة: {restaurant.serviceCharge}%</p>
-                <p dir="ltr" className="text-right">
+                <p>
+                  {lang === 'en' ? 'Status:' : 'الحالة:'}{' '}
+                  {restaurant.isOpen ? t.menu.openNow : t.menu.closedNow}
+                </p>
+                <p>
+                  {t.menu.tax}: {restaurant.taxRate}%
+                </p>
+                <p>
+                  {t.menu.serviceCharge}: {restaurant.serviceCharge}%
+                </p>
+                <p dir="ltr" className="text-start">
                   WhatsApp: +{restaurant.whatsappNumber}
                 </p>
               </div>
@@ -713,7 +768,7 @@ export function ThemeRenderer({
   if (activeTheme === 'theme-4') {
     const amber = '#F59E0B';
     return (
-      <div dir="rtl" className="min-h-screen bg-[#0F0F0F] text-zinc-100 pb-24">
+      <div dir={dir} className="min-h-screen bg-[#0F0F0F] text-zinc-100 pb-24">
         <ClosedBanner />
         <div className="max-w-6xl mx-auto px-4 pt-6 space-y-6">
           <header className="bg-[#1A1A1A] border border-zinc-800 rounded-2xl p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -721,31 +776,32 @@ export function ThemeRenderer({
               {restaurant.logoUrl && (
                 <SafeImage
                   src={restaurant.logoUrl}
-                  alt={restaurant.name}
+                  alt={restName}
                   className="w-14 h-14 rounded-xl object-cover border border-amber-500/40 shrink-0"
                 />
               )}
               <div>
-                <h1 className="text-2xl font-extrabold text-white tracking-wide">
-                  {restaurant.name}
-                </h1>
-                {restaurant.tagline && (
+                <h1 className="text-2xl font-extrabold text-white tracking-wide">{restName}</h1>
+                {restTagline && (
                   <p className="text-xs sm:text-sm text-zinc-400 mt-1 max-w-xl leading-relaxed">
-                    {restaurant.tagline}
+                    {restTagline}
                   </p>
                 )}
               </div>
             </div>
-            <button
-              type="button"
-              onClick={onOpenCart}
-              style={{ backgroundColor: amber }}
-              className="min-h-[44px] px-4 py-2.5 rounded-xl text-zinc-950 font-extrabold text-sm flex items-center justify-center gap-2 shrink-0 cursor-pointer hover:opacity-95"
-            >
-              <ShoppingBag className="w-4 h-4" />
-              <span>السلة</span>
-              <span className="font-mono-num">({cartCount})</span>
-            </button>
+            <div className="flex items-center gap-2.5 shrink-0">
+              <LanguageToggleButton variant="dark" compact />
+              <button
+                type="button"
+                onClick={onOpenCart}
+                style={{ backgroundColor: amber }}
+                className="min-h-[44px] px-4 py-2.5 rounded-xl text-zinc-950 font-extrabold text-sm flex items-center justify-center gap-2 shrink-0 cursor-pointer hover:opacity-95"
+              >
+                <ShoppingBag className="w-4 h-4" />
+                <span>{lang === 'en' ? 'Cart' : 'السلة'}</span>
+                <span className="font-mono-num">({cartCount})</span>
+              </button>
+            </div>
           </header>
 
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
@@ -759,7 +815,7 @@ export function ThemeRenderer({
                     : 'bg-[#1A1A1A] border border-zinc-800 text-zinc-300 hover:border-amber-500/40'
                 }`}
               >
-                جميع الأصناف
+                {t.menu.allCategories}
               </button>
               {categories.map((cat) => (
                 <button
@@ -772,19 +828,19 @@ export function ThemeRenderer({
                       : 'bg-[#1A1A1A] border border-zinc-800 text-zinc-300 hover:border-amber-500/40'
                   }`}
                 >
-                  {cat.name}
+                  {loc(cat.name, cat.name_en)}
                 </button>
               ))}
             </div>
 
             <div className="relative w-full md:w-64">
-              <Search className="w-4 h-4 text-zinc-500 absolute right-3 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-zinc-500 absolute start-3 top-1/2 -translate-y-1/2" />
               <input
                 type="search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="ابحث عن وجبة..."
-                className="w-full pr-9 pl-3 py-2.5 rounded-xl bg-[#1A1A1A] border border-zinc-800 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-amber-500"
+                placeholder={t.menu.searchPlaceholder}
+                className="w-full ps-9 pe-3 py-2.5 rounded-xl bg-[#1A1A1A] border border-zinc-800 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-amber-500"
               />
             </div>
           </div>
@@ -793,42 +849,46 @@ export function ThemeRenderer({
             <EmptyState dark={true} />
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {filteredItems.map((item) => (
-                <article
-                  key={item.id}
-                  onClick={() => onSelectItem(item)}
-                  className="bg-[#1A1A1A] border border-zinc-800 rounded-2xl overflow-hidden flex flex-col hover:border-amber-500/50 transition-colors cursor-pointer"
-                >
-                  <div className="aspect-[4/3] bg-zinc-900 overflow-hidden">
-                    <SafeImage
-                      src={item.imageUrl}
-                      alt={item.name}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <div className="p-4 flex-1 flex flex-col justify-between gap-4">
-                    <div>
-                      <h3 className="text-lg font-extrabold text-white flex items-center gap-1.5">
-                        <span>{item.name}</span>
-                        {item.isSpicy && <Flame className="w-4 h-4 text-red-400 shrink-0" />}
-                      </h3>
-                      {item.description && (
-                        <p className="text-xs text-zinc-400 mt-1.5 line-clamp-2 leading-relaxed">
-                          {item.description}
-                        </p>
-                      )}
+              {filteredItems.map((item) => {
+                const itemName = loc(item.name, item.name_en);
+                const itemDesc = loc(item.description, item.description_en);
+                return (
+                  <article
+                    key={item.id}
+                    onClick={() => onSelectItem(item)}
+                    className="bg-[#1A1A1A] border border-zinc-800 rounded-2xl overflow-hidden flex flex-col hover:border-amber-500/50 transition-colors cursor-pointer"
+                  >
+                    <div className="aspect-[4/3] bg-zinc-900 overflow-hidden">
+                      <SafeImage
+                        src={item.imageUrl}
+                        alt={itemName}
+                        className="w-full h-full object-cover"
+                      />
                     </div>
-                    <div className="flex items-center justify-between pt-2 border-t border-zinc-800">
-                      <span className="font-mono-num text-sm font-extrabold px-2.5 py-1 rounded-lg bg-amber-500/15 text-amber-400 border border-amber-500/30 shadow-[0_0_15px_rgba(245,158,11,0.18)]">
-                        {formatPrice(item.basePrice)}
-                      </span>
-                      <span className="w-9 h-9 rounded-xl bg-[#F59E0B] text-zinc-950 flex items-center justify-center shrink-0">
-                        <Plus className="w-4 h-4 stroke-[2.5]" />
-                      </span>
+                    <div className="p-4 flex-1 flex flex-col justify-between gap-4">
+                      <div>
+                        <h3 className="text-lg font-extrabold text-white flex items-center gap-1.5">
+                          <span>{itemName}</span>
+                          {item.isSpicy && <Flame className="w-4 h-4 text-red-400 shrink-0" />}
+                        </h3>
+                        {itemDesc && (
+                          <p className="text-xs text-zinc-400 mt-1.5 line-clamp-2 leading-relaxed">
+                            {itemDesc}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between pt-2 border-t border-zinc-800">
+                        <span className="font-mono-num text-sm font-extrabold px-2.5 py-1 rounded-lg bg-amber-500/15 text-amber-400 border border-amber-500/30 shadow-[0_0_15px_rgba(245,158,11,0.18)]">
+                          {formatPrice(item.basePrice)}
+                        </span>
+                        <span className="w-9 h-9 rounded-xl bg-[#F59E0B] text-zinc-950 flex items-center justify-center shrink-0">
+                          <Plus className="w-4 h-4 stroke-[2.5]" />
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                </article>
-              ))}
+                  </article>
+                );
+              })}
             </div>
           )}
         </div>
@@ -841,23 +901,26 @@ export function ThemeRenderer({
   if (activeTheme === 'theme-5') {
     const gold = '#D4AF37';
     return (
-      <div dir="rtl" className="min-h-screen bg-[#12151C] text-[#F5F2EB] pb-24">
+      <div dir={dir} className="min-h-screen bg-[#12151C] text-[#F5F2EB] pb-24">
         <ClosedBanner />
-        <div className="max-w-5xl mx-auto px-4 pt-10 space-y-9">
+        <div className="max-w-5xl mx-auto px-4 pt-6 space-y-9">
+          <div className="flex justify-end">
+            <LanguageToggleButton variant="dark" compact />
+          </div>
           <header className="text-center space-y-3 border-b border-[#D4AF37]/25 pb-8">
             {restaurant.logoUrl && (
               <SafeImage
                 src={restaurant.logoUrl}
-                alt={restaurant.name}
+                alt={restName}
                 className="w-16 h-16 rounded-full object-cover mx-auto border-2 border-[#D4AF37]/60"
               />
             )}
             <h1 className="text-3xl sm:text-4xl font-extrabold tracking-wide text-[#F5F2EB]">
-              {restaurant.name}
+              {restName}
             </h1>
-            {restaurant.tagline && (
+            {restTagline && (
               <p className="text-sm text-zinc-400 max-w-xl mx-auto leading-relaxed">
-                {restaurant.tagline}
+                {restTagline}
               </p>
             )}
           </header>
@@ -873,7 +936,7 @@ export function ThemeRenderer({
                     : 'border-[#D4AF37]/30 text-zinc-300 hover:border-[#D4AF37]'
                 }`}
               >
-                جميع الأطباق
+                {t.menu.allCategories}
               </button>
               {categories.map((cat) => (
                 <button
@@ -886,19 +949,19 @@ export function ThemeRenderer({
                       : 'border-[#D4AF37]/30 text-zinc-300 hover:border-[#D4AF37]'
                   }`}
                 >
-                  {cat.name}
+                  {loc(cat.name, cat.name_en)}
                 </button>
               ))}
             </div>
 
             <div className="relative w-full sm:w-60">
-              <Search className="w-4 h-4 text-[#D4AF37] absolute right-3 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-[#D4AF37] absolute start-3 top-1/2 -translate-y-1/2" />
               <input
                 type="search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="بحث..."
-                className="w-full pr-9 pl-3 py-2 rounded-full bg-[#181C25] border border-[#D4AF37]/30 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#D4AF37]"
+                placeholder={t.menu.searchPlaceholder}
+                className="w-full ps-9 pe-3 py-2 rounded-full bg-[#181C25] border border-[#D4AF37]/30 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#D4AF37]"
               />
             </div>
           </div>
@@ -907,52 +970,62 @@ export function ThemeRenderer({
             <EmptyState dark={true} />
           ) : (
             <div className="space-y-4">
-              {filteredItems.map((item) => (
-                <article
-                  key={item.id}
-                  onClick={() => onSelectItem(item)}
-                  className="bg-[#181C25] border border-[#D4AF37]/25 hover:border-[#D4AF37]/70 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-5 transition-colors cursor-pointer"
-                >
-                  <SafeImage
-                    src={item.imageUrl}
-                    alt={item.name}
-                    className="w-full sm:w-36 h-44 sm:h-28 rounded-xl object-cover shrink-0 border border-[#D4AF37]/25"
-                  />
-                  <div className="flex-1 min-w-0 space-y-2">
-                    <div className="flex items-baseline justify-between gap-4">
-                      <h3 className="text-lg font-extrabold tracking-wide flex items-center gap-1.5">
-                        <span>{item.name}</span>
-                        {item.isSpicy && <Flame className="w-4 h-4 text-red-400 shrink-0" />}
-                      </h3>
-                      <span
-                        className="font-mono-num text-base font-extrabold shrink-0"
-                        style={{ color: gold }}
-                      >
-                        {formatPrice(item.basePrice)}
-                      </span>
-                    </div>
-                    {item.description && (
-                      <p className="text-sm text-zinc-400 leading-relaxed max-w-2xl">
-                        {item.description}
-                      </p>
-                    )}
-                    <div className="pt-1 flex items-center justify-between text-xs text-zinc-400">
-                      <div className="flex items-center gap-2">
-                        {typeof item.calories === 'number' && item.calories > 0 && (
-                          <span className="font-mono-num">{item.calories} سعرة</span>
-                        )}
-                        {item.sizes.length > 0 && (
-                          <>
-                            <span aria-hidden="true">·</span>
-                            <span className="font-mono-num">متوفر بـ {item.sizes.length} أحجام</span>
-                          </>
-                        )}
+              {filteredItems.map((item) => {
+                const itemName = loc(item.name, item.name_en);
+                const itemDesc = loc(item.description, item.description_en);
+                return (
+                  <article
+                    key={item.id}
+                    onClick={() => onSelectItem(item)}
+                    className="bg-[#181C25] border border-[#D4AF37]/25 hover:border-[#D4AF37]/70 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-5 transition-colors cursor-pointer"
+                  >
+                    <SafeImage
+                      src={item.imageUrl}
+                      alt={itemName}
+                      className="w-full sm:w-36 h-44 sm:h-28 rounded-xl object-cover shrink-0 border border-[#D4AF37]/25"
+                    />
+                    <div className="flex-1 min-w-0 space-y-2">
+                      <div className="flex items-baseline justify-between gap-4">
+                        <h3 className="text-lg font-extrabold tracking-wide flex items-center gap-1.5">
+                          <span>{itemName}</span>
+                          {item.isSpicy && <Flame className="w-4 h-4 text-red-400 shrink-0" />}
+                        </h3>
+                        <span
+                          className="font-mono-num text-base font-extrabold shrink-0"
+                          style={{ color: gold }}
+                        >
+                          {formatPrice(item.basePrice)}
+                        </span>
                       </div>
-                      <span className="text-[#D4AF37] font-bold">اطلب الآن</span>
+                      {itemDesc && (
+                        <p className="text-sm text-zinc-400 leading-relaxed max-w-2xl">
+                          {itemDesc}
+                        </p>
+                      )}
+                      <div className="pt-1 flex items-center justify-between text-xs text-zinc-400">
+                        <div className="flex items-center gap-2">
+                          {typeof item.calories === 'number' && item.calories > 0 && (
+                            <span className="font-mono-num">
+                              {item.calories} {t.menu.caloriesUnit}
+                            </span>
+                          )}
+                          {item.sizes.length > 0 && (
+                            <>
+                              <span aria-hidden="true">·</span>
+                              <span className="font-mono-num">
+                                {lang === 'en'
+                                  ? `${item.sizes.length} sizes`
+                                  : `متوفر بـ ${item.sizes.length} أحجام`}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                        <span className="text-[#D4AF37] font-bold">{t.menu.addToCart}</span>
+                      </div>
                     </div>
-                  </div>
-                </article>
-              ))}
+                  </article>
+                );
+              })}
             </div>
           )}
         </div>
@@ -975,12 +1048,15 @@ export function ThemeRenderer({
         quantity: 1,
         unitPrice,
       });
-      setReelsToast(`تمت إضافة "${item.name}" للسلة`);
+      const itemName = loc(item.name, item.name_en);
+      setReelsToast(
+        lang === 'en' ? `Added "${itemName}" to cart` : `تمت إضافة "${itemName}" للسلة`
+      );
       setTimeout(() => setReelsToast(null), 2200);
     };
 
     return (
-      <div dir="rtl" className="h-[100dvh] bg-black text-white flex flex-col overflow-hidden relative">
+      <div dir={dir} className="h-[100dvh] bg-black text-white flex flex-col overflow-hidden relative">
         <ClosedBanner />
 
         {/* Overlay Header & Category Filter Pills */}
@@ -990,18 +1066,19 @@ export function ThemeRenderer({
               {restaurant.logoUrl && (
                 <SafeImage
                   src={restaurant.logoUrl}
-                  alt={restaurant.name}
+                  alt={restName}
                   className="w-10 h-10 rounded-full object-cover border border-white/40 shrink-0"
                 />
               )}
-              <h1 className="text-base sm:text-lg font-extrabold truncate">{restaurant.name}</h1>
+              <h1 className="text-base sm:text-lg font-extrabold truncate">{restName}</h1>
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
+              <LanguageToggleButton variant="glass" compact />
               <button
                 type="button"
                 onClick={() => setReelsSearchOpen((s) => !s)}
-                aria-label="بحث"
+                aria-label={lang === 'en' ? 'Search' : 'بحث'}
                 className="w-10 h-10 rounded-full bg-black/50 backdrop-blur-md border border-white/20 flex items-center justify-center cursor-pointer"
               >
                 <Search className="w-4 h-4" />
@@ -1024,7 +1101,7 @@ export function ThemeRenderer({
                 type="search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="ابحث عن طبق..."
+                placeholder={t.menu.searchPlaceholder}
                 className="w-full px-4 py-2 rounded-full bg-black/70 backdrop-blur-md border border-white/25 text-sm text-white placeholder:text-zinc-400 focus:outline-none"
               />
             </div>
@@ -1041,7 +1118,7 @@ export function ThemeRenderer({
                   : 'bg-black/45 backdrop-blur-md border border-white/20 text-white/85'
               }`}
             >
-              الكل
+              {t.menu.allCategories}
             </button>
             {categories.map((cat) => (
               <button
@@ -1055,7 +1132,7 @@ export function ThemeRenderer({
                     : 'bg-black/45 backdrop-blur-md border border-white/20 text-white/85'
                 }`}
               >
-                {cat.name}
+                {loc(cat.name, cat.name_en)}
               </button>
             ))}
           </div>
@@ -1071,90 +1148,102 @@ export function ThemeRenderer({
             className="flex-1 overflow-y-auto snap-y snap-mandatory no-scrollbar"
             style={{ scrollSnapType: 'y mandatory' }}
           >
-            {filteredItems.map((item, idx) => (
-              <section
-                key={item.id}
-                className="snap-start h-full min-h-full relative flex items-end justify-center overflow-hidden bg-zinc-950"
-              >
-                <SafeImage
-                  src={item.imageUrl}
-                  alt={item.name}
-                  className="absolute inset-0 w-full h-full object-cover"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/35 to-black/30" />
+            {filteredItems.map((item, idx) => {
+              const itemName = loc(item.name, item.name_en);
+              const itemDesc = loc(item.description, item.description_en);
+              return (
+                <section
+                  key={item.id}
+                  className="snap-start h-full min-h-full relative flex items-end justify-center overflow-hidden bg-zinc-950"
+                >
+                  <SafeImage
+                    src={item.imageUrl}
+                    alt={itemName}
+                    className="absolute inset-0 w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/35 to-black/30" />
 
-                <div className="relative z-20 w-full max-w-3xl mx-auto px-5 pb-8 pt-20 flex items-end justify-between gap-4">
-                  {/* Dish Info Bottom Overlay */}
-                  <div className="flex-1 min-w-0 space-y-2">
-                    <p className="font-mono-num text-xs text-white/70">
-                      {idx + 1} / {filteredItems.length}
-                      {item.ordersCount > 0 ? ` · طُلب +${item.ordersCount} مرة` : ''}
-                    </p>
-                    <h2 className="text-2xl sm:text-3xl font-extrabold text-white flex items-center gap-2">
-                      <span>{item.name}</span>
-                      {item.isSpicy && <Flame className="w-5 h-5 text-red-400 shrink-0" />}
-                    </h2>
-                    {item.description && (
-                      <p className="text-xs sm:text-sm text-zinc-200 line-clamp-2 max-w-xl leading-relaxed">
-                        {item.description}
+                  <div className="relative z-20 w-full max-w-3xl mx-auto px-5 pb-8 pt-20 flex items-end justify-between gap-4">
+                    {/* Dish Info Bottom Overlay */}
+                    <div className="flex-1 min-w-0 space-y-2">
+                      <p className="font-mono-num text-xs text-white/70">
+                        {idx + 1} / {filteredItems.length}
+                        {item.ordersCount > 0
+                          ? lang === 'en'
+                            ? ` · +${item.ordersCount} ${t.menu.ordersCountLabel}`
+                            : ` · طُلب +${item.ordersCount} مرة`
+                          : ''}
                       </p>
-                    )}
-                    <div className="flex items-center gap-3 pt-1">
-                      <span
-                        style={{ backgroundColor: accent }}
-                        className="font-mono-num text-base font-extrabold px-3.5 py-1.5 rounded-xl text-white shadow-lg"
-                      >
-                        {formatPrice(item.basePrice)}
-                      </span>
-                      {typeof item.calories === 'number' && item.calories > 0 && (
-                        <span className="font-mono-num text-xs text-white/80">
-                          {item.calories} سعرة
-                        </span>
+                      <h2 className="text-2xl sm:text-3xl font-extrabold text-white flex items-center gap-2">
+                        <span>{itemName}</span>
+                        {item.isSpicy && <Flame className="w-5 h-5 text-red-400 shrink-0" />}
+                      </h2>
+                      {itemDesc && (
+                        <p className="text-xs sm:text-sm text-zinc-200 line-clamp-2 max-w-xl leading-relaxed">
+                          {itemDesc}
+                        </p>
                       )}
+                      <div className="flex items-center gap-3 pt-1">
+                        <span
+                          style={{ backgroundColor: accent }}
+                          className="font-mono-num text-base font-extrabold px-3.5 py-1.5 rounded-xl text-white shadow-lg"
+                        >
+                          {formatPrice(item.basePrice)}
+                        </span>
+                        {typeof item.calories === 'number' && item.calories > 0 && (
+                          <span className="font-mono-num text-xs text-white/80">
+                            {item.calories} {t.menu.caloriesUnit}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Floating Vertical Action Icons */}
+                    <div className="flex flex-col items-center gap-3 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => onSelectItem(item)}
+                        className="flex flex-col items-center gap-1 cursor-pointer"
+                      >
+                        <span className="w-12 h-12 rounded-full bg-black/55 backdrop-blur-md border border-white/25 flex items-center justify-center hover:bg-black/75">
+                          <Info className="w-5 h-5" />
+                        </span>
+                        <span className="text-[10px] font-bold">
+                          {lang === 'en' ? 'Details' : 'التفاصيل'}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => onSelectItem(item)}
+                        className="flex flex-col items-center gap-1 cursor-pointer"
+                      >
+                        <span className="w-12 h-12 rounded-full bg-black/55 backdrop-blur-md border border-white/25 flex items-center justify-center hover:bg-black/75">
+                          <SlidersHorizontal className="w-5 h-5" />
+                        </span>
+                        <span className="text-[10px] font-bold">
+                          {lang === 'en' ? 'Options' : 'إضافات'}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleReelsQuickAdd(item)}
+                        className="flex flex-col items-center gap-1 cursor-pointer"
+                      >
+                        <span
+                          style={{ backgroundColor: accent }}
+                          className="w-12 h-12 rounded-full text-white shadow-xl flex items-center justify-center hover:opacity-90"
+                        >
+                          <Plus className="w-6 h-6" />
+                        </span>
+                        <span className="text-[10px] font-bold">{t.menu.quickAdd}</span>
+                      </button>
                     </div>
                   </div>
-
-                  {/* Floating Vertical Action Icons */}
-                  <div className="flex flex-col items-center gap-3 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => onSelectItem(item)}
-                      className="flex flex-col items-center gap-1 cursor-pointer"
-                    >
-                      <span className="w-12 h-12 rounded-full bg-black/55 backdrop-blur-md border border-white/25 flex items-center justify-center hover:bg-black/75">
-                        <Info className="w-5 h-5" />
-                      </span>
-                      <span className="text-[10px] font-bold">التفاصيل</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => onSelectItem(item)}
-                      className="flex flex-col items-center gap-1 cursor-pointer"
-                    >
-                      <span className="w-12 h-12 rounded-full bg-black/55 backdrop-blur-md border border-white/25 flex items-center justify-center hover:bg-black/75">
-                        <SlidersHorizontal className="w-5 h-5" />
-                      </span>
-                      <span className="text-[10px] font-bold">إضافات</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleReelsQuickAdd(item)}
-                      className="flex flex-col items-center gap-1 cursor-pointer"
-                    >
-                      <span
-                        style={{ backgroundColor: accent }}
-                        className="w-12 h-12 rounded-full text-white shadow-xl flex items-center justify-center hover:opacity-90"
-                      >
-                        <Plus className="w-6 h-6" />
-                      </span>
-                      <span className="text-[10px] font-bold">إضافة</span>
-                    </button>
-                  </div>
-                </div>
-              </section>
-            ))}
+                </section>
+              );
+            })}
           </div>
         )}
 
@@ -1173,23 +1262,24 @@ export function ThemeRenderer({
   if (activeTheme === 'theme-7') {
     const espresso = '#5C4033';
     return (
-      <div dir="rtl" className="min-h-screen bg-[#FAF7F2] text-[#5C4033] pb-24">
+      <div dir={dir} className="min-h-screen bg-[#FAF7F2] text-[#5C4033] pb-24">
         <ClosedBanner />
-        <div className="max-w-4xl mx-auto px-4 pt-8 space-y-8">
+        <div className="max-w-4xl mx-auto px-4 pt-6 space-y-8">
+          <div className="flex justify-end">
+            <LanguageToggleButton variant="light" compact />
+          </div>
           <header className="text-center space-y-3 border-b border-[#E5DDD0] pb-7">
             {restaurant.logoUrl && (
               <SafeImage
                 src={restaurant.logoUrl}
-                alt={restaurant.name}
+                alt={restName}
                 className="w-16 h-16 rounded-full object-cover mx-auto border border-[#D7CBB8]"
               />
             )}
-            <h1 className="text-3xl font-extrabold tracking-tight text-[#3E2A20]">
-              {restaurant.name}
-            </h1>
-            {restaurant.tagline && (
+            <h1 className="text-3xl font-extrabold tracking-tight text-[#3E2A20]">{restName}</h1>
+            {restTagline && (
               <p className="text-sm text-[#7A6154] max-w-lg mx-auto leading-relaxed">
-                {restaurant.tagline}
+                {restTagline}
               </p>
             )}
           </header>
@@ -1204,7 +1294,7 @@ export function ThemeRenderer({
                   selectedCatId === 'all' ? '' : 'border-transparent text-[#8F776A]'
                 }`}
               >
-                القائمة الكاملة
+                {t.menu.allCategories}
               </button>
               {categories.map((cat) => (
                 <button
@@ -1216,19 +1306,19 @@ export function ThemeRenderer({
                     selectedCatId === cat.id ? '' : 'border-transparent text-[#8F776A]'
                   }`}
                 >
-                  {cat.name}
+                  {loc(cat.name, cat.name_en)}
                 </button>
               ))}
             </div>
 
             <div className="relative w-full sm:w-56">
-              <Search className="w-4 h-4 text-[#8F776A] absolute right-3 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-[#8F776A] absolute start-3 top-1/2 -translate-y-1/2" />
               <input
                 type="search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="ابحث..."
-                className="w-full pr-9 pl-3 py-2 rounded-xl bg-white border border-[#E5DDD0] text-sm focus:outline-none"
+                placeholder={t.menu.searchPlaceholder}
+                className="w-full ps-9 pe-3 py-2 rounded-xl bg-white border border-[#E5DDD0] text-sm focus:outline-none"
               />
             </div>
           </div>
@@ -1237,48 +1327,54 @@ export function ThemeRenderer({
             <EmptyState dark={false} />
           ) : (
             <div className="divide-y divide-[#E7DFD3] border-t border-b border-[#E7DFD3]">
-              {filteredItems.map((item) => (
-                <article
-                  key={item.id}
-                  onClick={() => onSelectItem(item)}
-                  className="py-4 px-2 flex items-center gap-4 hover:bg-white/70 transition-colors cursor-pointer"
-                >
-                  <SafeImage
-                    src={item.imageUrl}
-                    alt={item.name}
-                    className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover shrink-0 border border-[#E5DDD0]"
-                  />
-                  <div className="flex-1 min-w-0 space-y-1">
-                    <div className="flex items-start justify-between gap-3">
-                      <h3 className="text-base font-extrabold text-[#3E2A20] flex items-center gap-1.5">
-                        <span>{item.name}</span>
-                        {item.isSpicy && <Flame className="w-3.5 h-3.5 text-red-500 shrink-0" />}
-                      </h3>
-                      <span className="font-mono-num text-sm font-extrabold shrink-0 text-[#5C4033]">
-                        {formatPrice(item.basePrice)}
-                      </span>
+              {filteredItems.map((item) => {
+                const itemName = loc(item.name, item.name_en);
+                const itemDesc = loc(item.description, item.description_en);
+                return (
+                  <article
+                    key={item.id}
+                    onClick={() => onSelectItem(item)}
+                    className="py-4 px-2 flex items-center gap-4 hover:bg-white/70 transition-colors cursor-pointer"
+                  >
+                    <SafeImage
+                      src={item.imageUrl}
+                      alt={itemName}
+                      className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover shrink-0 border border-[#E5DDD0]"
+                    />
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <h3 className="text-base font-extrabold text-[#3E2A20] flex items-center gap-1.5">
+                          <span>{itemName}</span>
+                          {item.isSpicy && <Flame className="w-3.5 h-3.5 text-red-500 shrink-0" />}
+                        </h3>
+                        <span className="font-mono-num text-sm font-extrabold shrink-0 text-[#5C4033]">
+                          {formatPrice(item.basePrice)}
+                        </span>
+                      </div>
+                      {itemDesc && (
+                        <p className="text-xs text-[#7A6154] line-clamp-2 leading-relaxed">
+                          {itemDesc}
+                        </p>
+                      )}
+                      <div className="pt-1 flex items-center justify-between text-xs text-[#8F776A]">
+                        <span>
+                          {typeof item.calories === 'number' && item.calories > 0
+                            ? `${item.calories} ${t.menu.caloriesUnit}`
+                            : lang === 'en'
+                              ? 'Freshly prepared'
+                              : 'محضر طازجاً'}
+                        </span>
+                        <span
+                          style={{ backgroundColor: espresso }}
+                          className="px-3 py-1 rounded-lg text-white text-[11px] font-bold"
+                        >
+                          {t.menu.addToCart}
+                        </span>
+                      </div>
                     </div>
-                    {item.description && (
-                      <p className="text-xs text-[#7A6154] line-clamp-2 leading-relaxed">
-                        {item.description}
-                      </p>
-                    )}
-                    <div className="pt-1 flex items-center justify-between text-xs text-[#8F776A]">
-                      <span>
-                        {typeof item.calories === 'number' && item.calories > 0
-                          ? `${item.calories} سعرة حرارية`
-                          : 'محضر طازجاً'}
-                      </span>
-                      <span
-                        style={{ backgroundColor: espresso }}
-                        className="px-3 py-1 rounded-lg text-white text-[11px] font-bold"
-                      >
-                        اطلب الآن
-                      </span>
-                    </div>
-                  </div>
-                </article>
-              ))}
+                  </article>
+                );
+              })}
             </div>
           )}
         </div>
@@ -1296,7 +1392,7 @@ export function ThemeRenderer({
     const featuredSet = new Set(topThreshold);
 
     return (
-      <div dir="rtl" className="min-h-screen bg-[#F4F6F8] text-slate-900 pb-24">
+      <div dir={dir} className="min-h-screen bg-[#F4F6F8] text-slate-900 pb-24">
         <ClosedBanner />
         <div className="max-w-6xl mx-auto px-4 pt-6 space-y-6">
           <header className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -1304,29 +1400,32 @@ export function ThemeRenderer({
               {restaurant.logoUrl && (
                 <SafeImage
                   src={restaurant.logoUrl}
-                  alt={restaurant.name}
+                  alt={restName}
                   className="w-14 h-14 rounded-2xl object-cover border border-slate-200 shrink-0"
                 />
               )}
               <div>
-                <h1 className="text-2xl font-extrabold text-slate-950">{restaurant.name}</h1>
-                {restaurant.tagline && (
+                <h1 className="text-2xl font-extrabold text-slate-950">{restName}</h1>
+                {restTagline && (
                   <p className="text-xs sm:text-sm text-slate-500 mt-0.5 line-clamp-1">
-                    {restaurant.tagline}
+                    {restTagline}
                   </p>
                 )}
               </div>
             </div>
-            <button
-              type="button"
-              onClick={onOpenCart}
-              style={{ backgroundColor: accent }}
-              className="min-h-[44px] px-4 py-2.5 rounded-2xl text-white text-xs font-bold flex items-center justify-center gap-2 shrink-0 cursor-pointer"
-            >
-              <ShoppingBag className="w-4 h-4" />
-              <span>السلة</span>
-              <span className="font-mono-num">({cartCount})</span>
-            </button>
+            <div className="flex items-center gap-2.5 shrink-0">
+              <LanguageToggleButton variant="light" compact />
+              <button
+                type="button"
+                onClick={onOpenCart}
+                style={{ backgroundColor: accent }}
+                className="min-h-[44px] px-4 py-2.5 rounded-2xl text-white text-xs font-bold flex items-center justify-center gap-2 shrink-0 cursor-pointer"
+              >
+                <ShoppingBag className="w-4 h-4" />
+                <span>{lang === 'en' ? 'Cart' : 'السلة'}</span>
+                <span className="font-mono-num">({cartCount})</span>
+              </button>
+            </div>
           </header>
 
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
@@ -1339,7 +1438,7 @@ export function ThemeRenderer({
                   selectedCatId === 'all' ? '' : 'bg-white border border-slate-200 text-slate-700'
                 }`}
               >
-                الكل
+                {t.menu.allCategories}
               </button>
               {categories.map((cat) => (
                 <button
@@ -1351,19 +1450,19 @@ export function ThemeRenderer({
                     selectedCatId === cat.id ? '' : 'bg-white border border-slate-200 text-slate-700'
                   }`}
                 >
-                  {cat.name}
+                  {loc(cat.name, cat.name_en)}
                 </button>
               ))}
             </div>
 
             <div className="relative w-full md:w-64">
-              <Search className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-slate-400 absolute start-3 top-1/2 -translate-y-1/2" />
               <input
                 type="search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="بحث في القائمة..."
-                className="w-full pr-9 pl-3 py-2.5 rounded-xl bg-white border border-slate-200 text-sm focus:outline-none"
+                placeholder={t.menu.searchPlaceholder}
+                className="w-full ps-9 pe-3 py-2.5 rounded-xl bg-white border border-slate-200 text-sm focus:outline-none"
               />
             </div>
           </div>
@@ -1374,6 +1473,8 @@ export function ThemeRenderer({
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 auto-rows-fr">
               {filteredItems.map((item) => {
                 const isFeatured = featuredSet.has(item.id);
+                const itemName = loc(item.name, item.name_en);
+                const itemDesc = loc(item.description, item.description_en);
                 return (
                   <article
                     key={item.id}
@@ -1389,15 +1490,15 @@ export function ThemeRenderer({
                     >
                       <SafeImage
                         src={item.imageUrl}
-                        alt={item.name}
+                        alt={itemName}
                         className="w-full h-full object-cover"
                       />
                       {isFeatured && (
                         <span
                           style={{ backgroundColor: accent }}
-                          className="absolute top-3 right-3 px-3 py-1 rounded-full text-white text-[11px] font-extrabold shadow-md"
+                          className="absolute top-3 start-3 px-3 py-1 rounded-full text-white text-[11px] font-extrabold shadow-md"
                         >
-                          الأكثر طلباً
+                          {t.menu.popularBadge}
                         </span>
                       )}
                     </div>
@@ -1409,12 +1510,12 @@ export function ThemeRenderer({
                             isFeatured ? 'text-lg' : 'text-sm sm:text-base'
                           }`}
                         >
-                          <span className="line-clamp-1">{item.name}</span>
+                          <span className="line-clamp-1">{itemName}</span>
                           {item.isSpicy && <Flame className="w-3.5 h-3.5 text-red-500 shrink-0" />}
                         </h3>
-                        {item.description && (
+                        {itemDesc && (
                           <p className="text-xs text-slate-500 mt-1 line-clamp-2 leading-relaxed">
-                            {item.description}
+                            {itemDesc}
                           </p>
                         )}
                       </div>
@@ -1444,35 +1545,40 @@ export function ThemeRenderer({
 
   // THEME 9: FAST-FOOD KIOSK EXPRESS
   return (
-    <div dir="rtl" className="min-h-screen bg-white text-slate-950 pb-28">
+    <div dir={dir} className="min-h-screen bg-white text-slate-950 pb-28">
       <ClosedBanner />
 
       {/* Fixed Kiosk Top Header & Large Icon Category Bar */}
       <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             {restaurant.logoUrl && (
               <SafeImage
                 src={restaurant.logoUrl}
-                alt={restaurant.name}
+                alt={restName}
                 className="w-11 h-11 rounded-xl object-cover border border-slate-200 shrink-0"
               />
             )}
             <div className="min-w-0">
-              <h1 className="text-lg sm:text-xl font-extrabold truncate">{restaurant.name}</h1>
-              <p className="text-[11px] text-slate-500">اطلب بسرعة بضغطة واحدة</p>
+              <h1 className="text-lg sm:text-xl font-extrabold truncate">{restName}</h1>
+              <p className="text-[11px] text-slate-500">
+                {lang === 'en' ? 'Order fast with one tap' : 'اطلب بسرعة بضغطة واحدة'}
+              </p>
             </div>
           </div>
 
-          <div className="relative w-44 sm:w-64 shrink-0">
-            <Search className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="search"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="ابحث..."
-              className="w-full pr-9 pl-3 py-2 rounded-xl bg-slate-100 text-xs sm:text-sm focus:outline-none focus:bg-white focus:ring-2 focus:ring-slate-300"
-            />
+          <div className="flex items-center gap-2 shrink-0">
+            <LanguageToggleButton variant="light" compact />
+            <div className="relative w-36 sm:w-60 shrink-0">
+              <Search className="w-4 h-4 text-slate-400 absolute start-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={t.menu.searchPlaceholder}
+                className="w-full ps-9 pe-3 py-2 rounded-xl bg-slate-100 text-xs sm:text-sm focus:outline-none focus:bg-white focus:ring-2 focus:ring-slate-300"
+              />
+            </div>
           </div>
         </div>
 
@@ -1486,30 +1592,33 @@ export function ThemeRenderer({
             }`}
           >
             <LayoutGrid className="w-4 h-4" />
-            <span>الكل</span>
+            <span>{t.menu.allCategories}</span>
           </button>
-          {categories.map((cat) => (
-            <button
-              key={cat.id}
-              type="button"
-              onClick={() => setSelectedCatId(cat.id)}
-              style={
-                selectedCatId === cat.id ? { backgroundColor: accent, color: '#fff' } : undefined
-              }
-              className={`min-h-[48px] px-3 py-1.5 rounded-2xl text-xs font-extrabold flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer ${
-                selectedCatId === cat.id
-                  ? 'shadow-sm'
-                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
-            >
-              <SafeImage
-                src={cat.imageUrl}
-                alt={cat.name}
-                className="w-8 h-8 rounded-xl object-cover shrink-0"
-              />
-              <span>{cat.name}</span>
-            </button>
-          ))}
+          {categories.map((cat) => {
+            const catName = loc(cat.name, cat.name_en);
+            return (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => setSelectedCatId(cat.id)}
+                style={
+                  selectedCatId === cat.id ? { backgroundColor: accent, color: '#fff' } : undefined
+                }
+                className={`min-h-[48px] px-3 py-1.5 rounded-2xl text-xs font-extrabold flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer ${
+                  selectedCatId === cat.id
+                    ? 'shadow-sm'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                <SafeImage
+                  src={cat.imageUrl}
+                  alt={catName}
+                  className="w-8 h-8 rounded-xl object-cover shrink-0"
+                />
+                <span>{catName}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -1521,6 +1630,7 @@ export function ThemeRenderer({
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
             {filteredItems.map((item) => {
               const qty = itemQtyMap.get(item.id) || 0;
+              const itemName = loc(item.name, item.name_en);
               return (
                 <article
                   key={item.id}
@@ -1533,13 +1643,13 @@ export function ThemeRenderer({
                     <div className="aspect-[4/3] rounded-xl overflow-hidden bg-white border border-slate-100">
                       <SafeImage
                         src={item.imageUrl}
-                        alt={item.name}
+                        alt={itemName}
                         className="w-full h-full object-cover"
                       />
                     </div>
                     <div>
                       <h3 className="text-sm sm:text-base font-extrabold text-slate-950 line-clamp-1 flex items-center gap-1">
-                        <span className="truncate">{item.name}</span>
+                        <span className="truncate">{itemName}</span>
                         {item.isSpicy && <Flame className="w-3.5 h-3.5 text-red-500 shrink-0" />}
                       </h3>
                       <p
@@ -1561,14 +1671,14 @@ export function ThemeRenderer({
                         className="w-full min-h-[44px] py-2 px-3 rounded-xl text-white text-xs font-extrabold flex items-center justify-center gap-1.5 hover:opacity-95 cursor-pointer"
                       >
                         <Plus className="w-4 h-4" />
-                        <span>إضافة سريعة</span>
+                        <span>{t.menu.quickAdd}</span>
                       </button>
                     ) : (
                       <div className="w-full min-h-[44px] rounded-xl bg-white border-2 border-slate-900 px-1.5 flex items-center justify-between">
                         <button
                           type="button"
                           onClick={() => onQuickStepItem(item, 1)}
-                          aria-label="زيادة الكمية"
+                          aria-label={lang === 'en' ? 'Increase quantity' : 'زيادة الكمية'}
                           style={{ backgroundColor: accent }}
                           className="w-8 h-8 rounded-lg text-white flex items-center justify-center cursor-pointer"
                         >
@@ -1580,7 +1690,7 @@ export function ThemeRenderer({
                         <button
                           type="button"
                           onClick={() => onQuickStepItem(item, -1)}
-                          aria-label="تقليل الكمية"
+                          aria-label={lang === 'en' ? 'Decrease quantity' : 'تقليل الكمية'}
                           className="w-8 h-8 rounded-lg bg-slate-100 text-slate-900 flex items-center justify-center hover:bg-slate-200 cursor-pointer"
                         >
                           <Minus className="w-4 h-4" />
@@ -1600,7 +1710,11 @@ export function ThemeRenderer({
         <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
           <div className="space-y-0.5">
             <p className="text-xs text-slate-500 font-semibold">
-              {cartCount > 0 ? `${cartCount} أصناف في طلبك` : 'اختر وجباتك للبدء'}
+              {cartCount > 0
+                ? `${cartCount} ${t.menu.itemsCountLabel}`
+                : lang === 'en'
+                  ? 'Tap dishes to start ordering'
+                  : 'اختر وجباتك للبدء'}
             </p>
             <p className="font-mono-num text-lg font-extrabold text-slate-950">
               {formatPrice(cartTotal)}
@@ -1614,7 +1728,7 @@ export function ThemeRenderer({
             className="min-h-[48px] px-6 py-3 rounded-xl text-white text-sm font-extrabold flex items-center gap-2 hover:opacity-95 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
           >
             <ShoppingBag className="w-4 h-4" />
-            <span>إتمام الطلب</span>
+            <span>{t.menu.viewCart}</span>
           </button>
         </div>
       </div>

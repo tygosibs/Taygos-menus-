@@ -1,17 +1,44 @@
-import { FormEvent, useEffect, useState } from 'react';
-import { Check, Code2, ExternalLink, Loader2, Save, Sparkles, Upload } from 'lucide-react';
-import { COLOR_PRESETS, MENU_THEMES } from '../../data/themes';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Check,
+  Code2,
+  ExternalLink,
+  Eye,
+  Loader2,
+  Monitor,
+  Palette,
+  Save,
+  Smartphone,
+  Sparkles,
+  Upload,
+  Wand2,
+} from 'lucide-react';
+import { useLanguage } from '../../contexts/LanguageContext';
+import { DEMO_RESTAURANTS } from '../../data/demoRestaurants';
+import { COLOR_PRESETS, getThemeMeta, isCustomThemeId, MENU_THEMES } from '../../data/themes';
+import { autoSuggestEnglish } from '../../data/translations';
 import {
   fetchActiveCustomThemes,
   isSlugAvailable,
   sanitizeSlug,
-  updateRestaurantActiveTheme,
+  subscribeCategories,
+  subscribeMenuItems,
   updateRestaurantSettings,
   updateRestaurantThemeAndTaxes,
 } from '../../lib/firestoreService';
 import { CURATED_FOOD_IMAGES, uploadRestaurantAsset } from '../../lib/imageUtils';
-import { ActiveTheme, CustomTheme, Restaurant } from '../../types/menu';
+import {
+  ActiveTheme,
+  CartItem,
+  Category,
+  CustomTheme,
+  MenuItem,
+  Restaurant,
+} from '../../types/menu';
 import { SafeImage } from '../SafeImage';
+import { CartDrawer } from '../menu/CartDrawer';
+import { ItemModal } from '../menu/ItemModal';
+import { ThemeRenderer } from '../menu/ThemeRenderer';
 
 interface ThemeCustomizerTabProps {
   restaurant: Restaurant;
@@ -19,199 +46,42 @@ interface ThemeCustomizerTabProps {
   onOpenPublicMenu: (path: string) => void;
 }
 
-function ThemeMiniPreview({
-  themeId,
-  bgPreview,
-  cardPreview,
-  accent,
-}: {
-  themeId: ActiveTheme;
-  bgPreview: string;
-  cardPreview: string;
-  accent: string;
-}) {
-  if (themeId === 'theme-1') {
-    return (
-      <div
-        style={{ backgroundColor: bgPreview }}
-        className="h-24 rounded-xl p-2.5 flex items-center justify-center gap-1.5 overflow-hidden relative border border-black/15"
-      >
-        <div
-          style={{ backgroundColor: cardPreview }}
-          className="w-1/2 h-full rounded-r-md p-1.5 shadow-md flex flex-col justify-between"
-        >
-          <div className="w-6 h-6 rounded-full mx-auto shadow" style={{ backgroundColor: accent }} />
-          <div className="space-y-1">
-            <div className="h-1.5 w-3/4 mx-auto rounded bg-stone-800/30" />
-            <div className="h-1.5 w-1/2 mx-auto rounded bg-stone-800/20" />
-          </div>
-        </div>
-        <div
-          style={{ backgroundColor: cardPreview }}
-          className="w-1/2 h-full rounded-l-md p-1.5 shadow-md flex flex-col justify-between opacity-95"
-        >
-          <div className="h-1.5 w-2/3 rounded bg-stone-800/30" />
-          <div className="grid grid-cols-2 gap-1">
-            <div className="h-6 rounded bg-stone-800/15" />
-            <div className="h-6 rounded bg-stone-800/15" />
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (themeId === 'theme-2') {
-    return (
-      <div className="h-24 rounded-xl bg-stone-50 overflow-hidden relative border border-black/10 flex flex-col justify-between">
-        <div
-          style={{
-            backgroundColor: accent,
-            borderBottomLeftRadius: '50% 18px',
-            borderBottomRightRadius: '50% 18px',
-          }}
-          className="h-11 w-full flex items-end justify-center pb-1 gap-2"
-        >
-          <span className="w-3 h-3 rounded-full bg-white/60" />
-          <span className="w-4 h-4 rounded-full bg-white border border-black/10" />
-          <span className="w-3 h-3 rounded-full bg-white/60" />
-        </div>
-        <div className="pb-2 flex flex-col items-center gap-1">
-          <div className="w-7 h-7 rounded-full bg-stone-300 border-2 border-white shadow -mt-4" />
-          <div className="h-1.5 w-12 rounded bg-stone-300" />
-        </div>
-      </div>
-    );
-  }
-
-  if (themeId === 'theme-3') {
-    return (
-      <div
-        style={{ backgroundColor: bgPreview }}
-        className="h-24 rounded-xl p-2 flex flex-col justify-between border border-black/10 relative"
-      >
-        <div className="grid grid-cols-2 gap-1.5">
-          <div className="h-11 rounded-lg bg-white p-1.5 flex flex-col justify-between">
-            <div className="h-4 rounded bg-stone-200" />
-            <div className="h-2 w-full rounded bg-zinc-900" />
-          </div>
-          <div className="h-11 rounded-lg bg-white p-1.5 flex flex-col justify-between">
-            <div className="h-4 rounded bg-stone-200" />
-            <div className="h-2 w-full rounded bg-zinc-900" />
-          </div>
-        </div>
-        <div className="h-5 w-4/5 mx-auto rounded-full bg-[#111111] flex items-center justify-around px-2">
-          <span className="w-1.5 h-1.5 rounded-full bg-white" />
-          <span className="w-1.5 h-1.5 rounded-full bg-white/50" />
-          <span className="w-1.5 h-1.5 rounded-full bg-white/50" />
-        </div>
-      </div>
-    );
-  }
-
-  if (themeId === 'theme-6') {
-    return (
-      <div
-        style={{ backgroundColor: bgPreview }}
-        className="h-24 rounded-xl p-2.5 flex items-end justify-between border border-black/15 relative overflow-hidden"
-      >
-        <div className="space-y-1 w-2/3">
-          <div className="h-2 w-3/4 rounded bg-white/80" />
-          <div className="h-1.5 w-1/2 rounded bg-white/40" />
-        </div>
-        <div className="flex flex-col gap-1">
-          <span className="w-4 h-4 rounded-full bg-white/20" />
-          <span className="w-4 h-4 rounded-full" style={{ backgroundColor: accent }} />
-        </div>
-      </div>
-    );
-  }
-
-  if (themeId === 'theme-8') {
-    return (
-      <div
-        style={{ backgroundColor: bgPreview }}
-        className="h-24 rounded-xl p-2 grid grid-cols-3 gap-1.5 border border-black/10"
-      >
-        <div className="col-span-2 rounded-lg bg-white p-1.5 flex flex-col justify-between border border-slate-200">
-          <span className="h-1.5 w-8 rounded" style={{ backgroundColor: accent }} />
-          <div className="h-6 rounded bg-slate-100" />
-        </div>
-        <div className="col-span-1 flex flex-col gap-1.5">
-          <div className="flex-1 rounded-lg bg-white border border-slate-200" />
-          <div className="flex-1 rounded-lg bg-white border border-slate-200" />
-        </div>
-      </div>
-    );
-  }
-
-  if (themeId === 'theme-9') {
-    return (
-      <div
-        style={{ backgroundColor: bgPreview }}
-        className="h-24 rounded-xl p-2 flex flex-col justify-between border border-black/10"
-      >
-        <div className="flex gap-1">
-          <span className="h-3 w-8 rounded" style={{ backgroundColor: accent }} />
-          <span className="h-3 w-8 rounded bg-slate-200" />
-        </div>
-        <div className="grid grid-cols-2 gap-1.5">
-          <div className="h-8 rounded bg-slate-100 flex items-center justify-between px-1.5">
-            <span className="h-2 w-6 rounded bg-slate-300" />
-            <span className="w-3.5 h-3.5 rounded text-[8px] text-white flex items-center justify-center" style={{ backgroundColor: accent }}>
-              +
-            </span>
-          </div>
-          <div className="h-8 rounded bg-slate-100 flex items-center justify-between px-1.5">
-            <span className="h-2 w-6 rounded bg-slate-300" />
-            <span className="w-3.5 h-3.5 rounded text-[8px] text-white flex items-center justify-center" style={{ backgroundColor: accent }}>
-              +
-            </span>
-          </div>
-        </div>
-        <div className="h-3.5 rounded" style={{ backgroundColor: accent }} />
-      </div>
-    );
-  }
-
-  return (
-    <div
-      style={{ backgroundColor: bgPreview }}
-      className="h-24 rounded-xl p-2.5 flex flex-col justify-between border border-black/15"
-    >
-      <div className="flex items-center justify-between">
-        <span className="h-2 w-12 rounded" style={{ backgroundColor: accent }} />
-        <span className="w-3 h-3 rounded-full" style={{ backgroundColor: accent }} />
-      </div>
-      <div className="grid grid-cols-2 gap-1.5">
-        <div style={{ backgroundColor: cardPreview }} className="h-9 rounded-lg border border-white/10" />
-        <div style={{ backgroundColor: cardPreview }} className="h-9 rounded-lg border border-white/10" />
-      </div>
-    </div>
-  );
-}
-
 export function ThemeCustomizerTab({
   restaurant,
   onRestaurantUpdated,
   onOpenPublicMenu,
 }: ThemeCustomizerTabProps) {
-  const [activeTheme, setActiveTheme] = useState<ActiveTheme>(restaurant.activeTheme);
+  const { lang, dir, t, loc } = useLanguage();
+  const isEn = lang === 'en';
+  const previewCardRef = useRef<HTMLDivElement | null>(null);
+
+  // Selected theme currently being previewed in the Live Theme Preview Card
+  const [selectedPreviewTheme, setSelectedPreviewTheme] = useState<ActiveTheme>(
+    restaurant.activeTheme
+  );
   const [primaryColor, setPrimaryColor] = useState(restaurant.primaryColor);
   const [taxRate, setTaxRate] = useState(restaurant.taxRate);
   const [serviceCharge, setServiceCharge] = useState(restaurant.serviceCharge);
-  const [switchingThemeId, setSwitchingThemeId] = useState<ActiveTheme | null>(null);
-  const [savingTheme, setSavingTheme] = useState(false);
+
+  const [activatingTheme, setActivatingTheme] = useState(false);
   const [themeSavedMsg, setThemeSavedMsg] = useState<string | null>(null);
+  const [themeErrorMsg, setThemeErrorMsg] = useState<string | null>(null);
   const [customThemes, setCustomThemes] = useState<CustomTheme[]>([]);
 
-  useEffect(() => {
-    fetchActiveCustomThemes().then(setCustomThemes);
-  }, []);
+  // Live restaurant menu data for the interactive preview frame
+  const [ownerCategories, setOwnerCategories] = useState<Category[]>([]);
+  const [ownerItems, setOwnerItems] = useState<MenuItem[]>([]);
+  const [previewViewport, setPreviewViewport] = useState<'mobile' | 'desktop'>('mobile');
+  const [previewSelectedItem, setPreviewSelectedItem] = useState<MenuItem | null>(null);
+  const [previewCart, setPreviewCart] = useState<CartItem[]>([]);
+  const [previewCartOpen, setPreviewCartOpen] = useState(false);
 
   // Store settings
   const [name, setName] = useState(restaurant.name);
+  const [nameEn, setNameEn] = useState(restaurant.name_en || '');
   const [slug, setSlug] = useState(restaurant.slug);
   const [tagline, setTagline] = useState(restaurant.tagline || '');
+  const [taglineEn, setTaglineEn] = useState(restaurant.tagline_en || '');
   const [whatsappNumber, setWhatsappNumber] = useState(restaurant.whatsappNumber);
   const [currency, setCurrency] = useState(restaurant.currency);
   const [logoUrl, setLogoUrl] = useState(restaurant.logoUrl || '');
@@ -221,51 +91,194 @@ export function ThemeCustomizerTab({
   const [settingsMsg, setSettingsMsg] = useState<string | null>(null);
   const [settingsError, setSettingsError] = useState<string | null>(null);
 
-  const handleSelectThemeImmediate = async (nextTheme: ActiveTheme) => {
-    setActiveTheme(nextTheme);
-    setSwitchingThemeId(nextTheme);
+  useEffect(() => {
+    fetchActiveCustomThemes().then(setCustomThemes);
+  }, []);
+
+  useEffect(() => {
+    const unsubCats = subscribeCategories(restaurant.id, setOwnerCategories);
+    const unsubItems = subscribeMenuItems(restaurant.id, setOwnerItems);
+    return () => {
+      unsubCats();
+      unsubItems();
+    };
+  }, [restaurant.id]);
+
+  // Keep local state aligned if parent restaurant updates externally
+  useEffect(() => {
+    setSelectedPreviewTheme(restaurant.activeTheme);
+    setPrimaryColor(restaurant.primaryColor);
+    setTaxRate(restaurant.taxRate);
+    setServiceCharge(restaurant.serviceCharge);
+  }, [restaurant.id, restaurant.activeTheme, restaurant.primaryColor, restaurant.taxRate, restaurant.serviceCharge]);
+
+  const demoBundle = DEMO_RESTAURANTS['buns-lab'];
+  const hasRealDishes = useMemo(
+    () => ownerCategories.length > 0 && ownerItems.some((item) => item.isAvailable),
+    [ownerCategories, ownerItems]
+  );
+
+  const previewCategories = hasRealDishes ? ownerCategories : demoBundle.categories;
+  const previewItems = hasRealDishes ? ownerItems : demoBundle.items;
+
+  const previewRestaurant = useMemo<Restaurant>(
+    () => ({
+      ...restaurant,
+      name: name || restaurant.name,
+      name_en: nameEn || restaurant.name_en,
+      tagline: tagline || restaurant.tagline,
+      tagline_en: taglineEn || restaurant.tagline_en,
+      logoUrl: logoUrl || restaurant.logoUrl,
+      currency: currency || restaurant.currency,
+      isOpen,
+      taxRate,
+      serviceCharge,
+      activeTheme: selectedPreviewTheme,
+      primaryColor,
+    }),
+    [
+      restaurant,
+      name,
+      nameEn,
+      tagline,
+      taglineEn,
+      logoUrl,
+      currency,
+      isOpen,
+      taxRate,
+      serviceCharge,
+      selectedPreviewTheme,
+      primaryColor,
+    ]
+  );
+
+  const selectedCustomTheme = useMemo(
+    () =>
+      isCustomThemeId(selectedPreviewTheme)
+        ? customThemes.find((ct) => ct.id === selectedPreviewTheme) || null
+        : null,
+    [selectedPreviewTheme, customThemes]
+  );
+
+  const selectedThemeMeta = useMemo(
+    () => getThemeMeta(selectedPreviewTheme),
+    [selectedPreviewTheme]
+  );
+
+  const selectedThemeFullName = selectedCustomTheme
+    ? loc(selectedCustomTheme.name, selectedCustomTheme.name_en)
+    : loc(selectedThemeMeta.name, selectedThemeMeta.englishName);
+
+  const selectedThemeDescription = selectedCustomTheme
+    ? loc(selectedCustomTheme.description, selectedCustomTheme.description_en) ||
+      loc(selectedThemeMeta.description, selectedThemeMeta.description_en)
+    : loc(selectedThemeMeta.description, selectedThemeMeta.description_en);
+
+  const isSelectedAlreadyActive =
+    restaurant.activeTheme === selectedPreviewTheme &&
+    restaurant.primaryColor.toLowerCase() === primaryColor.toLowerCase();
+
+  const handleSelectIconForPreview = (nextThemeId: ActiveTheme) => {
+    setSelectedPreviewTheme(nextThemeId);
     setThemeSavedMsg(null);
+    setThemeErrorMsg(null);
+    setPreviewSelectedItem(null);
+    // Smoothly scroll preview card into view only if partially off-screen
+    previewCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
+
+  const handleActivateSelectedTheme = async () => {
+    setActivatingTheme(true);
+    setThemeSavedMsg(null);
+    setThemeErrorMsg(null);
     try {
-      await updateRestaurantActiveTheme(restaurant.id, nextTheme);
+      await updateRestaurantThemeAndTaxes(restaurant.id, {
+        activeTheme: selectedPreviewTheme,
+        primaryColor,
+        taxRate,
+        serviceCharge,
+      });
       onRestaurantUpdated({
         ...restaurant,
-        activeTheme: nextTheme,
+        activeTheme: selectedPreviewTheme,
+        primaryColor,
+        taxRate,
+        serviceCharge,
       });
-      const label =
-        MENU_THEMES.find((t) => t.id === nextTheme)?.name ||
-        customThemes.find((t) => t.id === nextTheme)?.name ||
-        nextTheme;
-      setThemeSavedMsg(`تم تفعيل ثيم "${label}" فوراً في المنيو العام.`);
-      setTimeout(() => setThemeSavedMsg(null), 3500);
+      setThemeSavedMsg(
+        isEn
+          ? `"${selectedThemeFullName}" is now live on your customer menu!`
+          : `تم تفعيل ثيم "${selectedThemeFullName}" لمطعمك وحفظه بنجاح.`
+      );
+      setTimeout(() => setThemeSavedMsg(null), 4000);
+    } catch (err) {
+      setThemeErrorMsg(
+        err instanceof Error
+          ? err.message
+          : isEn
+            ? 'Could not activate theme. Please try again.'
+            : 'تعذر حفظ وتفعيل الثيم، يرجى المحاولة مرة أخرى.'
+      );
     } finally {
-      setSwitchingThemeId(null);
+      setActivatingTheme(false);
     }
   };
 
-  const handleSaveThemeAndColor = async (e: FormEvent) => {
-    e.preventDefault();
-    setSavingTheme(true);
-    setThemeSavedMsg(null);
-    try {
-      await updateRestaurantThemeAndTaxes(restaurant.id, {
-        activeTheme,
-        primaryColor,
-        taxRate,
-        serviceCharge,
-      });
-      onRestaurantUpdated({
-        ...restaurant,
-        activeTheme,
-        primaryColor,
-        taxRate,
-        serviceCharge,
-      });
-      setThemeSavedMsg('تم حفظ اللون الأساسي والثيم ونسب الضريبة بنجاح.');
-      setTimeout(() => setThemeSavedMsg(null), 3500);
-    } finally {
-      setSavingTheme(false);
-    }
+  // Preview Cart Handlers (sandboxed in memory)
+  const handlePreviewAddToCart = (incoming: CartItem) => {
+    setPreviewCart((prev) => {
+      const idx = prev.findIndex((c) => c.cartKey === incoming.cartKey);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], quantity: next[idx].quantity + incoming.quantity };
+        return next;
+      }
+      return [...prev, incoming];
+    });
   };
+
+  const handlePreviewQuickStep = (item: MenuItem, delta: number) => {
+    const defaultSize = item.sizes && item.sizes.length > 0 ? item.sizes[0] : undefined;
+    const unitPrice = defaultSize ? defaultSize.price : item.basePrice;
+    const quickKey = `${item.id}__${defaultSize?.name || 'std'}____`;
+
+    setPreviewCart((prev) => {
+      const idx = prev.findIndex((c) => c.cartKey === quickKey);
+      if (idx >= 0) {
+        const nextQty = prev[idx].quantity + delta;
+        if (nextQty <= 0) return prev.filter((_, i) => i !== idx);
+        const next = [...prev];
+        next[idx] = { ...next[idx], quantity: nextQty };
+        return next;
+      }
+      if (delta > 0) {
+        return [
+          ...prev,
+          {
+            cartKey: quickKey,
+            menuItem: item,
+            selectedSize: defaultSize,
+            selectedAddons: [],
+            quantity: delta,
+            unitPrice,
+          },
+        ];
+      }
+      return prev;
+    });
+  };
+
+  const previewCartCount = useMemo(
+    () => previewCart.reduce((s, c) => s + c.quantity, 0),
+    [previewCart]
+  );
+
+  const previewCartTotal = useMemo(() => {
+    const sub = previewCart.reduce((s, c) => s + c.unitPrice * c.quantity, 0);
+    const svc = (sub * (serviceCharge || 0)) / 100;
+    const tax = ((sub + svc) * (taxRate || 0)) / 100;
+    return sub + svc + tax;
+  }, [previewCart, serviceCharge, taxRate]);
 
   const handleLogoUpload = async (file: File) => {
     setUploadingLogo(true);
@@ -277,6 +290,11 @@ export function ThemeCustomizerTab({
     }
   };
 
+  const handleAutoFillEn = () => {
+    if (name.trim() && !nameEn.trim()) setNameEn(autoSuggestEnglish(name));
+    if (tagline.trim() && !taglineEn.trim()) setTaglineEn(autoSuggestEnglish(tagline));
+  };
+
   const handleSaveSettings = async (e: FormEvent) => {
     e.preventDefault();
     setSettingsError(null);
@@ -284,13 +302,13 @@ export function ThemeCustomizerTab({
 
     const cleanSlug = sanitizeSlug(slug);
     if (cleanSlug.length < 2) {
-      setSettingsError('يرجى إدخال رابط مميز صالح بالإنجليزية.');
+      setSettingsError(t.onboarding.errSlugInvalid);
       return;
     }
     if (cleanSlug !== restaurant.slug) {
       const avail = await isSlugAvailable(cleanSlug, restaurant.id);
       if (!avail) {
-        setSettingsError('هذا الرابط محجوز لمطعم آخر، اختر اسماً مختلفاً.');
+        setSettingsError(t.onboarding.errSlugTaken);
         return;
       }
     }
@@ -299,8 +317,10 @@ export function ThemeCustomizerTab({
     try {
       const updated = await updateRestaurantSettings(restaurant, {
         name,
+        name_en: nameEn,
         slug: cleanSlug,
         tagline,
+        tagline_en: taglineEn,
         whatsappNumber,
         logoUrl,
         currency,
@@ -311,46 +331,46 @@ export function ThemeCustomizerTab({
       });
       onRestaurantUpdated(updated);
       setSlug(updated.slug);
-      setSettingsMsg('تم تحديث إعدادات المطعم بنجاح.');
+      setSettingsMsg(t.admin.themes.savedToast);
       setTimeout(() => setSettingsMsg(null), 3500);
     } catch (err) {
-      setSettingsError(err instanceof Error ? err.message : 'تعذر حفظ الإعدادات');
+      setSettingsError(
+        err instanceof Error ? err.message : isEn ? 'Failed to save settings' : 'تعذر حفظ الإعدادات'
+      );
     } finally {
       setSavingSettings(false);
     }
   };
 
   return (
-    <div className="space-y-6">
+    <div dir={dir} className="space-y-6">
+      {/* Header Banner */}
       <div className="bg-white border border-zinc-200 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-lg font-extrabold text-zinc-950">مظهر المنيو (9 ثيمات تريند)</h2>
-          <p className="text-xs text-zinc-500 mt-0.5">
-            اضغط على أي ثيم لتفعيله فوراً في المنيو العام، وخصّص اللون الأساسي وإعدادات المطعم
-          </p>
+          <h2 className="text-lg font-extrabold text-zinc-950">{t.admin.themes.title}</h2>
+          <p className="text-xs text-zinc-500 mt-0.5">{t.admin.themes.subtitle}</p>
         </div>
         <button
           type="button"
           onClick={() => onOpenPublicMenu(`/menu/${restaurant.slug}?preview=1`)}
-          className="px-4 py-2.5 rounded-xl bg-zinc-950 text-white text-xs font-bold hover:bg-zinc-800 flex items-center gap-2 shrink-0 cursor-pointer"
+          className="px-4 py-2.5 rounded-xl bg-zinc-950 text-white text-xs font-bold hover:bg-zinc-800 flex items-center gap-2 shrink-0 whitespace-nowrap cursor-pointer"
         >
           <ExternalLink className="w-4 h-4" />
-          <span>معاينة المنيو العام</span>
+          <span>{t.admin.themes.previewLink}</span>
         </button>
       </div>
 
-      {/* 9 Trending Themes Visual Cards */}
-      <form
-        onSubmit={handleSaveThemeAndColor}
-        className="bg-white border border-zinc-200 rounded-2xl p-6 space-y-6"
-      >
+      {/* 1. Luxury 2-Column Photo Cards Grid */}
+      <section className="bg-white border border-zinc-200 rounded-2xl p-4 sm:p-6 space-y-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h3 className="text-sm font-extrabold text-zinc-950">
-              1. اختر مظهر المنيو (تحديث فوري في قاعدة البيانات)
+              1. {isEn ? 'Choose a Theme Design to Preview' : 'اختر تصميم المنيو لمعاينته وتفعيله'}
             </h3>
             <p className="text-xs text-zinc-500 mt-0.5">
-              يدعم محرك العرض 9 تصاميم احترافية بما فيها كتاب المنيو ثلاثي الأبعاد ومنيو الريلز
+              {isEn
+                ? 'Tap any theme card below to inspect an interactive live preview with your restaurant menu.'
+                : 'اضغط على أي بطاقة لاستعراض الثيم تفاعلياً ببيانات مطعمك في شاشة المعاينة بالأسفل.'}
             </p>
           </div>
           {themeSavedMsg && (
@@ -360,208 +380,434 @@ export function ThemeCustomizerTab({
           )}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {MENU_THEMES.map((t) => {
-            const active = activeTheme === t.id;
-            const isUpdating = switchingThemeId === t.id;
+        {/* 2-Column Full-Photo Cards Grid (9 Built-In + Custom Injected) */}
+        <div className="grid grid-cols-2 gap-3 sm:gap-4">
+          {MENU_THEMES.map((themeItem) => {
+            const isSelected = selectedPreviewTheme === themeItem.id;
+            const isLive = restaurant.activeTheme === themeItem.id;
+            const themeName = loc(themeItem.name, themeItem.englishName);
+            const secondaryName = isEn ? themeItem.name : themeItem.englishName;
+
             return (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => handleSelectThemeImmediate(t.id)}
-                className={`p-4 rounded-2xl border text-right transition-all cursor-pointer flex flex-col justify-between gap-3 ${
-                  active
-                    ? 'border-zinc-950 ring-2 ring-zinc-950 bg-zinc-50/70'
-                    : 'border-zinc-200 bg-white hover:border-zinc-400'
+              <article
+                key={themeItem.id}
+                onClick={() => handleSelectIconForPreview(themeItem.id)}
+                className={`group rounded-2xl overflow-hidden border bg-white text-start transition-all cursor-pointer flex flex-col justify-between ${
+                  isSelected
+                    ? 'border-zinc-950 ring-2 ring-zinc-950 shadow-md'
+                    : 'border-zinc-200 hover:-translate-y-0.5 hover:shadow-lg hover:border-zinc-300'
                 }`}
               >
-                <div className="space-y-3 w-full">
-                  <ThemeMiniPreview
-                    themeId={t.id}
-                    bgPreview={t.bgPreview}
-                    cardPreview={t.cardPreview}
-                    accent={active ? primaryColor : t.recommendedColor}
+                <div className="aspect-[4/3] bg-zinc-100 overflow-hidden relative">
+                  <SafeImage
+                    src={themeItem.coverImage}
+                    alt={themeName}
+                    className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-300"
                   />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-black/15" />
+                  <span className="absolute top-2.5 start-2.5 px-2 py-0.5 rounded-md bg-black/65 backdrop-blur-xs text-white text-[11px] font-mono-num font-bold">
+                    {String(themeItem.number).padStart(2, '0')}
+                  </span>
 
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="text-xs text-zinc-500 font-mono-num flex items-center gap-1.5">
-                        <span>{String(t.number).padStart(2, '0')}</span>
-                        <span aria-hidden="true">·</span>
-                        <span className="truncate">{t.englishName}</span>
-                      </p>
-                      <h4 className="text-sm font-extrabold text-zinc-950 mt-0.5 flex items-center gap-1.5">
-                        <span>{t.name}</span>
-                        {t.isFlagship && <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />}
-                      </h4>
-                    </div>
-                    <span
-                      className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 border ${
-                        active
-                          ? 'bg-zinc-950 border-zinc-950 text-white'
-                          : 'border-zinc-300 text-transparent'
-                      }`}
-                    >
-                      {isUpdating ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
-                      ) : (
-                        <Check className="w-3.5 h-3.5" />
-                      )}
+                  {isLive ? (
+                    <span className="absolute top-2.5 end-2.5 px-2 py-0.5 rounded-md bg-emerald-600 text-white text-[10px] font-extrabold flex items-center gap-1 shadow-sm">
+                      <Check className="w-3 h-3 stroke-[3]" />
+                      <span>{isEn ? 'Active' : 'مُفعّل'}</span>
                     </span>
+                  ) : (
+                    themeItem.isFlagship && (
+                      <span className="absolute top-2.5 end-2.5 px-2 py-0.5 rounded-md bg-amber-400 text-zinc-950 text-[10px] font-extrabold flex items-center gap-1 shadow-sm">
+                        <Sparkles className="w-3 h-3" />
+                        <span className="hidden sm:inline">
+                          {isEn ? 'Flagship' : 'الأكثر تميزاً'}
+                        </span>
+                      </span>
+                    )
+                  )}
+                </div>
+
+                <div className="p-3 sm:p-4 flex-1 flex flex-col justify-between gap-2.5">
+                  <div className="space-y-0.5">
+                    <p className="text-[11px] text-zinc-500 truncate">{secondaryName}</p>
+                    <h4 className="text-xs sm:text-base font-extrabold text-zinc-950 line-clamp-1">
+                      {themeName}
+                    </h4>
                   </div>
 
-                  <p className="text-xs text-zinc-500 leading-relaxed">{t.description}</p>
+                  <div className="pt-2 border-t border-zinc-100 flex items-center justify-between gap-2">
+                    <span
+                      className="w-3.5 h-3.5 rounded-full border border-black/10 shrink-0"
+                      style={{
+                        backgroundColor: isSelected ? primaryColor : themeItem.recommendedColor,
+                      }}
+                    />
+                    <span
+                      className={`px-2.5 sm:px-3 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 whitespace-nowrap ${
+                        isSelected
+                          ? 'bg-zinc-950 text-white'
+                          : isLive
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            : 'bg-zinc-100 text-zinc-800 group-hover:bg-zinc-950 group-hover:text-white transition-colors'
+                      }`}
+                    >
+                      <Eye className="w-3 h-3" />
+                      <span>
+                        {isSelected
+                          ? isEn
+                            ? 'Previewing'
+                            : 'قيد المعاينة'
+                          : isEn
+                            ? 'Preview'
+                            : 'معاينة'}
+                      </span>
+                    </span>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+
+          {customThemes.map((ct) => {
+            const customId = ct.id as ActiveTheme;
+            const isSelected = selectedPreviewTheme === customId;
+            const isLive = restaurant.activeTheme === customId;
+            const ctName = loc(ct.name, ct.name_en);
+
+            return (
+              <article
+                key={ct.id}
+                onClick={() => handleSelectIconForPreview(customId)}
+                className={`group rounded-2xl overflow-hidden border bg-white text-start transition-all cursor-pointer flex flex-col justify-between ${
+                  isSelected
+                    ? 'border-zinc-950 ring-2 ring-zinc-950 shadow-md'
+                    : 'border-zinc-200 hover:-translate-y-0.5 hover:shadow-lg hover:border-zinc-300'
+                }`}
+              >
+                <div className="aspect-[4/3] bg-zinc-900 overflow-hidden relative">
+                  <SafeImage
+                    src={
+                      ct.previewImage ||
+                      '/src/assets/images/theme_flipbook_3d_1794974837314.jpg'
+                    }
+                    alt={ctName}
+                    className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-300"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/15" />
+                  <span className="absolute top-2.5 start-2.5 px-2 py-0.5 rounded-md bg-amber-400 text-zinc-950 text-[10px] font-extrabold flex items-center gap-1">
+                    <Code2 className="w-3 h-3" />
+                    <span>{isEn ? 'Custom' : 'مخصص'}</span>
+                  </span>
+                  {isLive && (
+                    <span className="absolute top-2.5 end-2.5 px-2 py-0.5 rounded-md bg-emerald-600 text-white text-[10px] font-extrabold flex items-center gap-1 shadow-sm">
+                      <Check className="w-3 h-3 stroke-[3]" />
+                      <span>{isEn ? 'Active' : 'مُفعّل'}</span>
+                    </span>
+                  )}
                 </div>
 
-                <div className="pt-2 border-t border-zinc-100 w-full flex items-center justify-between text-[11px] font-bold">
-                  <span className={active ? 'text-emerald-700' : 'text-zinc-500'}>
-                    {active ? 'مفعّل حالياً' : 'اضغط للتفعيل الفوري'}
-                  </span>
-                  <span className="font-mono-num text-zinc-400">{t.id}</span>
+                <div className="p-3 sm:p-4 flex-1 flex flex-col justify-between gap-2.5">
+                  <div className="space-y-0.5">
+                    <p className="text-[11px] text-amber-700 font-bold truncate">
+                      {t.admin.themes.customThemesBadge}
+                    </p>
+                    <h4 className="text-xs sm:text-base font-extrabold text-zinc-950 line-clamp-1">
+                      {ctName}
+                    </h4>
+                  </div>
+
+                  <div className="pt-2 border-t border-zinc-100 flex items-center justify-between gap-2">
+                    <span className="font-mono-num text-[10px] text-zinc-400 truncate" dir="ltr">
+                      {ct.id}
+                    </span>
+                    <span
+                      className={`px-2.5 sm:px-3 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 whitespace-nowrap ${
+                        isSelected
+                          ? 'bg-zinc-950 text-white'
+                          : isLive
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            : 'bg-zinc-100 text-zinc-800 group-hover:bg-zinc-950 group-hover:text-white transition-colors'
+                      }`}
+                    >
+                      <Eye className="w-3 h-3" />
+                      <span>
+                        {isSelected
+                          ? isEn
+                            ? 'Previewing'
+                            : 'قيد المعاينة'
+                          : isEn
+                            ? 'Preview'
+                            : 'معاينة'}
+                      </span>
+                    </span>
+                  </div>
                 </div>
-              </button>
+              </article>
             );
           })}
         </div>
+      </section>
 
-        {/* Custom Injected Themes from Super Admin */}
-        {customThemes.length > 0 && (
-          <div className="space-y-3 pt-4 border-t border-zinc-100">
-            <div className="flex items-center gap-2">
-              <Code2 className="w-4 h-4 text-amber-600" />
-              <h4 className="text-xs font-extrabold text-zinc-950">
-                ثيمات إضافية مخصصة ({customThemes.length})
-              </h4>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {customThemes.map((ct) => {
-                const customId = ct.id as ActiveTheme;
-                const active = activeTheme === customId;
-                const isUpdating = switchingThemeId === customId;
-                return (
-                  <button
-                    key={ct.id}
-                    type="button"
-                    onClick={() => handleSelectThemeImmediate(customId)}
-                    className={`p-4 rounded-2xl border text-right transition-all cursor-pointer flex flex-col justify-between gap-3 ${
-                      active
-                        ? 'border-zinc-950 ring-2 ring-zinc-950 bg-zinc-50/70'
-                        : 'border-zinc-200 bg-white hover:border-zinc-400'
-                    }`}
-                  >
-                    <div className="space-y-3 w-full">
-                      <div className="h-24 rounded-xl overflow-hidden bg-zinc-900 border border-black/10 relative">
-                        <SafeImage
-                          src={ct.previewImage}
-                          alt={ct.name}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="text-[11px] text-amber-700 font-bold">ثيم مخصص</p>
-                          <h4 className="text-sm font-extrabold text-zinc-950 mt-0.5 truncate">
-                            {ct.name}
-                          </h4>
-                        </div>
-                        <span
-                          className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 border ${
-                            active
-                              ? 'bg-zinc-950 border-zinc-950 text-white'
-                              : 'border-zinc-300 text-transparent'
-                          }`}
-                        >
-                          {isUpdating ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
-                          ) : (
-                            <Check className="w-3.5 h-3.5" />
-                          )}
-                        </span>
-                      </div>
-
-                      {ct.description && (
-                        <p className="text-xs text-zinc-500 leading-relaxed line-clamp-2">
-                          {ct.description}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="pt-2 border-t border-zinc-100 w-full flex items-center justify-between text-[11px] font-bold">
-                      <span className={active ? 'text-emerald-700' : 'text-zinc-500'}>
-                        {active ? 'مفعّل حالياً' : 'اضغط للتفعيل الفوري'}
-                      </span>
-                      <span className="font-mono-num text-zinc-400 truncate max-w-[110px]" dir="ltr">
-                        {ct.id}
-                      </span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
+      {/* 2. Embedded Live Theme Preview Card (Directly Below the Icons Grid) */}
+      <section
+        ref={previewCardRef}
+        className="bg-white border border-zinc-200 rounded-2xl overflow-hidden"
+      >
+        {/* Preview Controls Header */}
+        <div className="px-5 py-4 border-b border-zinc-200 bg-zinc-50/70 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-extrabold text-zinc-950">
+              {isEn ? 'Live Interactive Preview' : 'شاشة المعاينة الحية التفاعلية'}
+            </span>
+            <span className="text-xs text-zinc-400" aria-hidden="true">
+              ·
+            </span>
+            <span className="text-xs text-zinc-600">
+              {hasRealDishes
+                ? isEn
+                  ? 'Using your live restaurant menu'
+                  : 'تعرض أصناف مطعمك الفعلية'
+                : isEn
+                  ? 'Sample dishes shown (add items in Menu Builder)'
+                  : 'تعرض أطباقاً تجريبية لحين إضافة وجباتك'}
+            </span>
           </div>
-        )}
 
-        <div className="space-y-3 pt-4 border-t border-zinc-100">
-          <label className="block text-xs font-bold text-zinc-800">
-            اللون الأساسي لهوية المطعم
-          </label>
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Quick Brand Color Bar */}
+            <div className="flex items-center gap-1.5">
+              <Palette className="w-3.5 h-3.5 text-zinc-500 me-0.5" />
               {COLOR_PRESETS.map((c) => (
                 <button
                   key={c.hex}
                   type="button"
                   onClick={() => setPrimaryColor(c.hex)}
-                  title={c.name}
+                  title={loc(c.name, c.name_en)}
                   style={{ backgroundColor: c.hex }}
-                  className={`w-8 h-8 rounded-full flex items-center justify-center cursor-pointer border-2 ${
+                  className={`w-6 h-6 rounded-full flex items-center justify-center cursor-pointer border-2 transition-transform ${
                     primaryColor.toLowerCase() === c.hex.toLowerCase()
                       ? 'border-zinc-950 scale-110'
-                      : 'border-white shadow-sm'
+                      : 'border-white shadow-xs hover:scale-105'
                   }`}
                 >
                   {primaryColor.toLowerCase() === c.hex.toLowerCase() && (
-                    <Check className="w-4 h-4 text-white" />
+                    <Check className="w-3 h-3 text-white" />
                   )}
                 </button>
               ))}
-              <label className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-zinc-200 text-xs cursor-pointer">
+              <label className="flex items-center gap-1 px-2 py-1 rounded-lg border border-zinc-200 bg-white text-[11px] cursor-pointer">
                 <input
                   type="color"
                   value={primaryColor}
                   onChange={(e) => setPrimaryColor(e.target.value)}
-                  className="w-5 h-5 border-0 bg-transparent cursor-pointer"
+                  className="w-4 h-4 border-0 bg-transparent cursor-pointer"
                 />
-                <span className="font-mono-num font-semibold">{primaryColor}</span>
+                <span className="font-mono-num font-semibold text-zinc-700" dir="ltr">
+                  {primaryColor}
+                </span>
               </label>
             </div>
 
+            {/* Viewport Switcher (Mobile vs Desktop) */}
+            <div className="flex items-center gap-1 p-1 rounded-xl bg-zinc-200/70">
+              <button
+                type="button"
+                onClick={() => setPreviewViewport('mobile')}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 whitespace-nowrap cursor-pointer transition-colors ${
+                  previewViewport === 'mobile'
+                    ? 'bg-white text-zinc-950 shadow-xs'
+                    : 'text-zinc-600 hover:text-zinc-950'
+                }`}
+              >
+                <Smartphone className="w-3.5 h-3.5" />
+                <span>{isEn ? 'Mobile' : 'جوال'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPreviewViewport('desktop')}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 whitespace-nowrap cursor-pointer transition-colors ${
+                  previewViewport === 'desktop'
+                    ? 'bg-white text-zinc-950 shadow-xs'
+                    : 'text-zinc-600 hover:text-zinc-950'
+                }`}
+              >
+                <Monitor className="w-3.5 h-3.5" />
+                <span>{isEn ? 'Wide' : 'شاشة كاملة'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Live Interactive Preview Viewport */}
+        <div className="p-4 sm:p-6 bg-zinc-100/80 border-b border-zinc-200">
+          <div
+            style={{ transform: 'translateZ(0)' }}
+            className={`relative overflow-hidden transition-all duration-200 bg-white ${
+              previewViewport === 'mobile'
+                ? 'max-w-[395px] mx-auto h-[580px] rounded-[28px] border-[6px] border-zinc-900 shadow-2xl'
+                : 'w-full h-[580px] rounded-2xl border border-zinc-300 shadow-md'
+            }`}
+          >
+            <div className="w-full h-full overflow-y-auto overflow-x-hidden">
+              <ThemeRenderer
+                key={`${selectedPreviewTheme}_${primaryColor}`}
+                restaurant={previewRestaurant}
+                categories={previewCategories}
+                items={previewItems}
+                activeTheme={selectedPreviewTheme}
+                customTheme={selectedCustomTheme}
+                cart={previewCart}
+                cartCount={previewCartCount}
+                cartTotal={previewCartTotal}
+                onSelectItem={(item) => setPreviewSelectedItem(item)}
+                onAddToCart={handlePreviewAddToCart}
+                onQuickStepItem={handlePreviewQuickStep}
+                onOpenCart={() => setPreviewCartOpen(true)}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Theme Signature Showcase + Full Name/Description + Activate CTA */}
+        <div className="p-5 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-5 bg-white">
+          <div className="flex items-start gap-4 min-w-0">
+            {/* Signature Visual Cover Image of Selected Theme */}
+            <div className="w-28 h-24 sm:w-36 sm:h-28 rounded-2xl overflow-hidden border border-zinc-200 shrink-0 shadow-xs bg-zinc-100">
+              <SafeImage
+                src={
+                  selectedCustomTheme?.previewImage ||
+                  selectedThemeMeta.coverImage ||
+                  '/src/assets/images/theme_flipbook_3d_1794974837314.jpg'
+                }
+                alt={selectedThemeFullName}
+                className="w-full h-full object-cover"
+              />
+            </div>
+
+            {/* Full Theme Name, Metadata & Full Description */}
+            <div className="space-y-1.5 min-w-0">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+                <span className="font-mono-num font-bold text-zinc-700">
+                  {selectedCustomTheme
+                    ? isEn
+                      ? 'Custom Theme'
+                      : 'ثيم مخصص'
+                    : `${isEn ? 'Theme' : 'ثيم'} ${String(selectedThemeMeta.number).padStart(2, '0')}`}
+                </span>
+                {!selectedCustomTheme && (
+                  <>
+                    <span aria-hidden="true">·</span>
+                    <span>{selectedThemeMeta.englishName}</span>
+                  </>
+                )}
+                {selectedThemeMeta.isFlagship && (
+                  <>
+                    <span aria-hidden="true">·</span>
+                    <span className="inline-flex items-center gap-1 text-amber-700 font-bold">
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>{isEn ? 'Flagship' : 'الأكثر تميزاً'}</span>
+                    </span>
+                  </>
+                )}
+                {restaurant.activeTheme === selectedPreviewTheme && (
+                  <>
+                    <span aria-hidden="true">·</span>
+                    <span className="font-bold text-emerald-700">
+                      {isEn ? 'Active on Public Menu' : 'مُفعّل حالياً في المنيو'}
+                    </span>
+                  </>
+                )}
+              </div>
+
+              <h4 className="text-lg sm:text-xl font-extrabold text-zinc-950">
+                {selectedThemeFullName}
+              </h4>
+
+              <p className="text-xs sm:text-sm text-zinc-600 leading-relaxed max-w-2xl">
+                {selectedThemeDescription}
+              </p>
+
+              {themeErrorMsg && (
+                <p className="text-xs font-bold text-red-600 pt-1">{themeErrorMsg}</p>
+              )}
+              {themeSavedMsg && (
+                <p className="text-xs font-bold text-emerald-700 pt-1">{themeSavedMsg}</p>
+              )}
+            </div>
+          </div>
+
+          {/* Primary Activation CTA */}
+          <div className="flex flex-col sm:flex-row md:flex-col items-stretch sm:items-center md:items-end gap-2.5 shrink-0">
             <button
-              type="submit"
-              disabled={savingTheme}
-              className="px-6 py-2.5 rounded-xl bg-zinc-950 text-white text-sm font-bold hover:bg-zinc-800 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              type="button"
+              disabled={activatingTheme}
+              onClick={handleActivateSelectedTheme}
+              style={!isSelectedAlreadyActive ? { backgroundColor: primaryColor } : undefined}
+              className={`min-h-[46px] px-6 py-3 rounded-xl text-sm font-extrabold flex items-center justify-center gap-2 whitespace-nowrap transition-all cursor-pointer disabled:opacity-60 shadow-sm ${
+                isSelectedAlreadyActive
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                  : 'text-white hover:opacity-95'
+              }`}
             >
-              <Save className="w-4 h-4" />
-              <span>{savingTheme ? 'جاري الحفظ...' : 'حفظ اللون والضرائب'}</span>
+              {activatingTheme ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Check className="w-4 h-4" />
+              )}
+              <span>
+                {activatingTheme
+                  ? t.admin.themes.savingBtn
+                  : isSelectedAlreadyActive
+                    ? isEn
+                      ? 'Active on My Restaurant'
+                      : 'هذا الثيم مُفعّل لمطعمك'
+                    : isEn
+                      ? 'Activate This Theme for My Restaurant'
+                      : 'تفعيل هذا الثيم لمطعمي'}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                onOpenPublicMenu(`/menu/${restaurant.slug}?theme=${selectedPreviewTheme}`)
+              }
+              className="px-4 py-2 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-700 hover:bg-zinc-50 flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span>{isEn ? 'Open Fullscreen Preview' : 'معاينة بملء الشاشة'}</span>
             </button>
           </div>
         </div>
-      </form>
+      </section>
 
-      {/* Store Settings Form */}
+      {/* 3. Bilingual Store Settings Form */}
       <form
         onSubmit={handleSaveSettings}
         className="bg-white border border-zinc-200 rounded-2xl p-6 space-y-5"
       >
-        <h3 className="text-sm font-extrabold text-zinc-950">2. إعدادات المطعم والضرائب وحالة العمل</h3>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-extrabold text-zinc-950">
+              2. {t.admin.themes.settingsTitle}
+            </h3>
+            <p className="text-xs text-zinc-500 mt-0.5">{t.admin.themes.settingsSubtitle}</p>
+          </div>
+          <button
+            type="button"
+            onClick={handleAutoFillEn}
+            className="px-3 py-1.5 rounded-lg border border-zinc-200 text-xs font-bold text-zinc-700 hover:bg-zinc-50 flex items-center gap-1.5 cursor-pointer"
+          >
+            <Wand2 className="w-3.5 h-3.5 text-amber-600" />
+            <span>{t.admin.menu.autoFillEn}</span>
+          </button>
+        </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-bold mb-1">اسم المطعم *</label>
+            <label className="block text-xs font-bold mb-1">{t.admin.themes.nameArLabel}</label>
             <input
               type="text"
+              dir="rtl"
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -569,7 +815,45 @@ export function ThemeCustomizerTab({
             />
           </div>
           <div>
-            <label className="block text-xs font-bold mb-1">الرابط المميز (Slug) *</label>
+            <label className="block text-xs font-bold mb-1">{t.admin.themes.nameEnLabel}</label>
+            <input
+              type="text"
+              dir="ltr"
+              value={nameEn}
+              onChange={(e) => setNameEn(e.target.value)}
+              placeholder="e.g. Buns Lab"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm text-left"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-bold mb-1">{t.admin.themes.taglineArLabel}</label>
+            <input
+              type="text"
+              dir="rtl"
+              value={tagline}
+              onChange={(e) => setTagline(e.target.value)}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold mb-1">{t.admin.themes.taglineEnLabel}</label>
+            <input
+              type="text"
+              dir="ltr"
+              value={taglineEn}
+              onChange={(e) => setTaglineEn(e.target.value)}
+              placeholder="e.g. Daily fresh smash burgers..."
+              className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm text-left"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
+          <div className="sm:col-span-2">
+            <label className="block text-xs font-bold mb-1">{t.admin.themes.slugLabel} *</label>
             <div className="flex items-center rounded-xl border border-zinc-200 overflow-hidden">
               <input
                 type="text"
@@ -577,39 +861,26 @@ export function ThemeCustomizerTab({
                 required
                 value={slug}
                 onChange={(e) => setSlug(sanitizeSlug(e.target.value))}
-                className="flex-1 px-3.5 py-2.5 text-sm font-mono-num focus:outline-none"
+                className="flex-1 px-3.5 py-2.5 text-sm font-mono-num text-left focus:outline-none"
               />
-              <span className="px-3 py-2.5 bg-zinc-50 text-zinc-500 text-xs font-mono-num border-r border-zinc-200">
+              <span className="px-3 py-2.5 bg-zinc-50 text-zinc-500 text-xs font-mono-num border-s border-zinc-200">
                 /menu/
               </span>
             </div>
           </div>
-        </div>
-
-        <div>
-          <label className="block text-xs font-bold mb-1">الشعار النصي / الوصف (Tagline)</label>
-          <input
-            type="text"
-            value={tagline}
-            onChange={(e) => setTagline(e.target.value)}
-            className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm"
-          />
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
           <div>
-            <label className="block text-xs font-bold mb-1">رقم واتساب الطلبات *</label>
+            <label className="block text-xs font-bold mb-1">{t.admin.themes.whatsappLabel} *</label>
             <input
               type="tel"
               dir="ltr"
               required
               value={whatsappNumber}
               onChange={(e) => setWhatsappNumber(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm font-mono-num"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm font-mono-num text-left"
             />
           </div>
           <div>
-            <label className="block text-xs font-bold mb-1">العملة</label>
+            <label className="block text-xs font-bold mb-1">{t.admin.themes.currencyLabel}</label>
             <input
               type="text"
               required
@@ -618,36 +889,42 @@ export function ThemeCustomizerTab({
               className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm"
             />
           </div>
-          <div>
-            <label className="block text-xs font-bold mb-1">نسبة الضريبة (%)</label>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              step="0.5"
-              value={taxRate}
-              onChange={(e) => setTaxRate(Number(e.target.value))}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm font-mono-num"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-bold mb-1">رسوم الخدمة (%)</label>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              step="0.5"
-              value={serviceCharge}
-              onChange={(e) => setServiceCharge(Number(e.target.value))}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm font-mono-num"
-            />
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs font-bold mb-1">
+                {isEn ? 'Tax %' : 'الضريبة %'}
+              </label>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step="0.5"
+                value={taxRate}
+                onChange={(e) => setTaxRate(Number(e.target.value))}
+                className="w-full px-2.5 py-2.5 rounded-xl border border-zinc-200 text-sm font-mono-num"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold mb-1">
+                {isEn ? 'Svc %' : 'الخدمة %'}
+              </label>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step="0.5"
+                value={serviceCharge}
+                onChange={(e) => setServiceCharge(Number(e.target.value))}
+                className="w-full px-2.5 py-2.5 rounded-xl border border-zinc-200 text-sm font-mono-num"
+              />
+            </div>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-4">
           <SafeImage
             src={logoUrl}
-            alt={name}
+            alt={loc(name, nameEn)}
             className="w-14 h-14 rounded-xl object-cover border border-zinc-200"
           />
           <label className="px-3.5 py-2 rounded-xl border border-zinc-300 text-xs font-bold cursor-pointer hover:bg-zinc-50 flex items-center gap-1.5">
@@ -656,7 +933,7 @@ export function ThemeCustomizerTab({
             ) : (
               <Upload className="w-4 h-4" />
             )}
-            <span>تغيير الشعار</span>
+            <span>{t.admin.themes.logoLabel}</span>
             <input
               type="file"
               accept="image/*"
@@ -691,7 +968,7 @@ export function ThemeCustomizerTab({
               onChange={(e) => setIsOpen(e.target.checked)}
               className="w-4 h-4 accent-emerald-600"
             />
-            <span>المطعم مفتوح ويستقبل الطلبات حالياً</span>
+            <span>{t.admin.themes.isOpenYes}</span>
           </label>
 
           <button
@@ -700,13 +977,44 @@ export function ThemeCustomizerTab({
             className="px-6 py-2.5 rounded-xl bg-zinc-950 text-white text-sm font-bold hover:bg-zinc-800 flex items-center gap-2 cursor-pointer disabled:opacity-50"
           >
             <Save className="w-4 h-4" />
-            <span>{savingSettings ? 'جاري الحفظ...' : 'حفظ إعدادات المطعم'}</span>
+            <span>{savingSettings ? t.admin.themes.savingBtn : t.admin.themes.saveSettingsBtn}</span>
           </button>
         </div>
 
         {settingsMsg && <p className="text-xs font-bold text-emerald-700">{settingsMsg}</p>}
         {settingsError && <p className="text-xs font-bold text-red-600">{settingsError}</p>}
       </form>
+
+      {/* Interactive Preview Modals (sandboxed, never write real orders) */}
+      <ItemModal
+        item={previewSelectedItem}
+        currency={previewRestaurant.currency}
+        primaryColor={primaryColor}
+        taxRate={taxRate}
+        serviceCharge={serviceCharge}
+        isDarkSurface={selectedThemeMeta.isDark}
+        onClose={() => setPreviewSelectedItem(null)}
+        onAddToCart={handlePreviewAddToCart}
+      />
+
+      <CartDrawer
+        open={previewCartOpen}
+        restaurant={previewRestaurant}
+        cart={previewCart}
+        isDemoMode={true}
+        onClose={() => setPreviewCartOpen(false)}
+        onUpdateQty={(cartKey, delta) => {
+          setPreviewCart((prev) =>
+            prev
+              .map((c) => (c.cartKey === cartKey ? { ...c, quantity: c.quantity + delta } : c))
+              .filter((c) => c.quantity > 0)
+          );
+        }}
+        onRemoveItem={(cartKey) => {
+          setPreviewCart((prev) => prev.filter((c) => c.cartKey !== cartKey));
+        }}
+        onClearCart={() => setPreviewCart([])}
+      />
     </div>
   );
 }

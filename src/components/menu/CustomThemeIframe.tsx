@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ShoppingBag } from 'lucide-react';
+import { useLanguage } from '../../contexts/LanguageContext';
 import { buildCustomThemeSrcDoc } from '../../lib/customThemeEngine';
 import { CartItem, Category, CustomTheme, MenuItem, Restaurant } from '../../types/menu';
+import { LanguageToggleButton } from '../LanguageToggleButton';
 
 interface CustomThemeIframeProps {
   customTheme: CustomTheme;
@@ -26,6 +28,7 @@ export function CustomThemeIframe({
   onAddToCart,
   onOpenCart,
 }: CustomThemeIframeProps) {
+  const { lang, dir, t, loc, formatCurrency } = useLanguage();
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
@@ -38,8 +41,9 @@ export function CustomThemeIframe({
         restaurant,
         categories,
         items,
+        currentLang: lang,
       }),
-    [customTheme, restaurant, categories, items]
+    [customTheme, restaurant, categories, items, lang]
   );
 
   useEffect(() => {
@@ -112,23 +116,29 @@ export function CustomThemeIframe({
           unitPrice,
         });
 
-        setToastMsg(`تمت إضافة "${found.name}" إلى السلة`);
+        setToastMsg(`${t.menu.addedToCart}: ${loc(found.name, found.name_en)}`);
         setTimeout(() => setToastMsg(null), 2200);
       }
     };
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [items, onSelectItem, onAddToCart, onOpenCart]);
+  }, [items, onSelectItem, onAddToCart, onOpenCart, t.menu.addedToCart, loc]);
 
   const accent = restaurant.primaryColor || '#A61C1C';
-  const formattedTotal = `${cartTotal.toFixed(2).replace(/\.00$/, '')} ${restaurant.currency}`;
+  const currencyLabel = formatCurrency(restaurant.currency);
+  const formattedTotal = `${cartTotal.toFixed(2).replace(/\.00$/, '')} ${currencyLabel}`;
 
   return (
-    <div className="relative w-full min-h-screen bg-zinc-950">
+    <div dir={dir} className="relative w-full min-h-screen bg-zinc-950">
+      <div className="fixed top-3 end-3 z-40">
+        <LanguageToggleButton variant="glass" />
+      </div>
+
       <iframe
+        key={`${customTheme.id}_${lang}`}
         ref={iframeRef}
-        title={customTheme.name}
+        title={loc(customTheme.name, customTheme.name_en)}
         sandbox="allow-scripts"
         srcDoc={srcDoc}
         className="w-full min-h-screen border-0 block bg-white"
@@ -136,7 +146,7 @@ export function CustomThemeIframe({
 
       {toastMsg && (
         <div
-          dir="rtl"
+          dir={dir}
           className="fixed top-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-xl bg-zinc-950/95 text-white text-xs font-bold shadow-xl border border-white/15"
         >
           {toastMsg}
@@ -144,7 +154,7 @@ export function CustomThemeIframe({
       )}
 
       {cartCount > 0 && (
-        <div dir="rtl" className="fixed bottom-4 inset-x-0 z-40 px-4 pointer-events-none">
+        <div dir={dir} className="fixed bottom-4 inset-x-0 z-40 px-4 pointer-events-none">
           <div className="max-w-lg mx-auto pointer-events-auto">
             <button
               type="button"
@@ -154,7 +164,7 @@ export function CustomThemeIframe({
             >
               <span className="flex items-center gap-2.5">
                 <ShoppingBag className="w-5 h-5" />
-                <span>عرض السلة</span>
+                <span>{t.menu.viewCart}</span>
                 <span className="font-mono-num text-xs bg-black/25 px-2 py-0.5 rounded-md">
                   {cartCount}
                 </span>

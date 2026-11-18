@@ -82,8 +82,9 @@ service cloud.firestore {
           'isOpen', 'createdAt', 'updatedAt'
         ]) &&
         data.keys().hasOnly([
-          'id', 'ownerId', 'slug', 'name', 'tagline', 'whatsappNumber', 'logoUrl',
-          'activeTheme', 'primaryColor', 'taxRate', 'serviceCharge', 'currency',
+          'id', 'ownerId', 'slug', 'name', 'name_en', 'tagline', 'tagline_en',
+          'whatsappNumber', 'logoUrl', 'activeTheme', 'primaryColor',
+          'taxRate', 'serviceCharge', 'currency',
           'isOpen', 'isSuspended', 'createdAt', 'updatedAt'
         ]) &&
         isValidId(data.id) &&
@@ -91,7 +92,9 @@ service cloud.firestore {
         isValidId(data.ownerId) &&
         isValidSlug(data.slug) &&
         data.name is string && data.name.size() >= 2 && data.name.size() <= 120 &&
+        (!('name_en' in data) || (data.name_en is string && data.name_en.size() <= 120)) &&
         (!('tagline' in data) || (data.tagline is string && data.tagline.size() <= 500)) &&
+        (!('tagline_en' in data) || (data.tagline_en is string && data.tagline_en.size() <= 500)) &&
         data.whatsappNumber is string && data.whatsappNumber.size() >= 7 && data.whatsappNumber.size() <= 24 &&
         (!('logoUrl' in data) || (data.logoUrl is string && data.logoUrl.size() <= 300000)) &&
         isValidThemeId(data.activeTheme) &&
@@ -107,12 +110,13 @@ service cloud.firestore {
 
     function isValidCategoryShape(data, catId) {
       return data.keys().hasAll(['id', 'restaurantId', 'ownerId', 'name', 'sortOrder', 'createdAt']) &&
-        data.keys().hasOnly(['id', 'restaurantId', 'ownerId', 'name', 'imageUrl', 'sortOrder', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'restaurantId', 'ownerId', 'name', 'name_en', 'imageUrl', 'sortOrder', 'createdAt']) &&
         isValidId(data.id) &&
         data.id == catId &&
         isValidId(data.restaurantId) &&
         isValidId(data.ownerId) &&
         data.name is string && data.name.size() >= 1 && data.name.size() <= 80 &&
+        (!('name_en' in data) || (data.name_en is string && data.name_en.size() <= 80)) &&
         (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 300000)) &&
         data.sortOrder is number && data.sortOrder >= 0 && data.sortOrder <= 10000 &&
         data.createdAt is timestamp;
@@ -125,8 +129,9 @@ service cloud.firestore {
           'sizes', 'addons', 'sortOrder', 'createdAt', 'updatedAt'
         ]) &&
         data.keys().hasOnly([
-          'id', 'restaurantId', 'ownerId', 'categoryId', 'name', 'description',
-          'basePrice', 'imageUrl', 'calories', 'isSpicy', 'isAvailable', 'ordersCount',
+          'id', 'restaurantId', 'ownerId', 'categoryId', 'name', 'name_en',
+          'description', 'description_en', 'basePrice', 'imageUrl', 'calories',
+          'isSpicy', 'isAvailable', 'ordersCount',
           'sizes', 'addons', 'sortOrder', 'createdAt', 'updatedAt'
         ]) &&
         isValidId(data.id) &&
@@ -135,7 +140,9 @@ service cloud.firestore {
         isValidId(data.ownerId) &&
         isValidId(data.categoryId) &&
         data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
+        (!('name_en' in data) || (data.name_en is string && data.name_en.size() <= 120)) &&
         (!('description' in data) || (data.description is string && data.description.size() <= 500)) &&
+        (!('description_en' in data) || (data.description_en is string && data.description_en.size() <= 500)) &&
         data.basePrice is number && data.basePrice >= 0 && data.basePrice <= 100000 &&
         (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 300000)) &&
         (!('calories' in data) || (data.calories is number && data.calories >= 0 && data.calories <= 10000)) &&
@@ -188,16 +195,21 @@ service cloud.firestore {
           'pricingPlans', 'supportWhatsapp', 'footerText', 'updatedAt'
         ]) &&
         data.keys().hasOnly([
-          'heroTitle', 'heroSubtitle', 'ctaButtonText', 'features',
-          'pricingPlans', 'supportWhatsapp', 'footerText', 'updatedAt'
+          'heroTitle', 'heroTitle_en', 'heroSubtitle', 'heroSubtitle_en',
+          'ctaButtonText', 'ctaButtonText_en', 'features',
+          'pricingPlans', 'supportWhatsapp', 'footerText', 'footerText_en', 'updatedAt'
         ]) &&
         data.heroTitle is string && data.heroTitle.size() >= 1 && data.heroTitle.size() <= 200 &&
+        (!('heroTitle_en' in data) || (data.heroTitle_en is string && data.heroTitle_en.size() <= 200)) &&
         data.heroSubtitle is string && data.heroSubtitle.size() >= 1 && data.heroSubtitle.size() <= 600 &&
+        (!('heroSubtitle_en' in data) || (data.heroSubtitle_en is string && data.heroSubtitle_en.size() <= 600)) &&
         data.ctaButtonText is string && data.ctaButtonText.size() >= 1 && data.ctaButtonText.size() <= 80 &&
+        (!('ctaButtonText_en' in data) || (data.ctaButtonText_en is string && data.ctaButtonText_en.size() <= 80)) &&
         data.features is list && data.features.size() <= 12 && (data.features.size() == 0 || data.features[0] is map) &&
         data.pricingPlans is list && data.pricingPlans.size() <= 6 && (data.pricingPlans.size() == 0 || data.pricingPlans[0] is map) &&
         data.supportWhatsapp is string && data.supportWhatsapp.size() <= 32 &&
         data.footerText is string && data.footerText.size() >= 1 && data.footerText.size() <= 200 &&
+        (!('footerText_en' in data) || (data.footerText_en is string && data.footerText_en.size() <= 200)) &&
         data.updatedAt is timestamp;
     }
 
@@ -206,14 +218,16 @@ service cloud.firestore {
           'id', 'name', 'htmlCode', 'cssCode', 'jsCode', 'isActive', 'createdAt'
         ]) &&
         data.keys().hasOnly([
-          'id', 'name', 'description', 'previewImage',
+          'id', 'name', 'name_en', 'description', 'description_en', 'previewImage',
           'htmlCode', 'cssCode', 'jsCode', 'isActive', 'createdAt'
         ]) &&
         isValidId(data.id) &&
         data.id == themeId &&
         data.id.matches('^custom_[a-zA-Z0-9_\\-]+$') &&
         data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+        (!('name_en' in data) || (data.name_en is string && data.name_en.size() <= 100)) &&
         (!('description' in data) || (data.description is string && data.description.size() <= 400)) &&
+        (!('description_en' in data) || (data.description_en is string && data.description_en.size() <= 400)) &&
         (!('previewImage' in data) || (data.previewImage is string && data.previewImage.size() <= 300000)) &&
         data.htmlCode is string && data.htmlCode.size() <= 150000 &&
         data.cssCode is string && data.cssCode.size() <= 100000 &&
@@ -278,13 +292,13 @@ service cloud.firestore {
             existing().ownerId == request.auth.uid && (
               incoming().diff(existing()).affectedKeys().hasOnly(['activeTheme', 'updatedAt']) ||
               incoming().diff(existing()).affectedKeys().hasOnly(['activeTheme', 'primaryColor', 'taxRate', 'serviceCharge', 'updatedAt']) ||
-              incoming().diff(existing()).affectedKeys().hasOnly(['name', 'tagline', 'slug', 'whatsappNumber', 'logoUrl', 'currency', 'isOpen', 'taxRate', 'serviceCharge', 'primaryColor', 'updatedAt'])
+              incoming().diff(existing()).affectedKeys().hasOnly(['name', 'name_en', 'tagline', 'tagline_en', 'slug', 'whatsappNumber', 'logoUrl', 'currency', 'isOpen', 'taxRate', 'serviceCharge', 'primaryColor', 'updatedAt'])
             )
           ) || (
             isSuperAdmin() && (
               incoming().diff(existing()).affectedKeys().hasOnly(['isSuspended', 'updatedAt']) ||
               incoming().diff(existing()).affectedKeys().hasOnly(['activeTheme', 'primaryColor', 'taxRate', 'serviceCharge', 'updatedAt']) ||
-              incoming().diff(existing()).affectedKeys().hasOnly(['name', 'tagline', 'whatsappNumber', 'logoUrl', 'currency', 'isOpen', 'isSuspended', 'taxRate', 'serviceCharge', 'primaryColor', 'updatedAt'])
+              incoming().diff(existing()).affectedKeys().hasOnly(['name', 'name_en', 'tagline', 'tagline_en', 'whatsappNumber', 'logoUrl', 'currency', 'isOpen', 'isSuspended', 'taxRate', 'serviceCharge', 'primaryColor', 'updatedAt'])
             )
           )
         );
@@ -317,7 +331,7 @@ service cloud.firestore {
         incoming().id == existing().id &&
         incoming().restaurantId == existing().restaurantId &&
         incoming().createdAt == existing().createdAt &&
-        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'imageUrl', 'sortOrder']) && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'name_en', 'imageUrl', 'sortOrder']) && (
           (
             isVerifiedAccount() &&
             existing().ownerId == request.auth.uid &&
@@ -370,7 +384,7 @@ service cloud.firestore {
             ) && (
               incoming().diff(existing()).affectedKeys().hasOnly(['isAvailable', 'updatedAt']) ||
               incoming().diff(existing()).affectedKeys().hasOnly([
-                'categoryId', 'name', 'description', 'basePrice', 'imageUrl', 'calories',
+                'categoryId', 'name', 'name_en', 'description', 'description_en', 'basePrice', 'imageUrl', 'calories',
                 'isSpicy', 'isAvailable', 'ordersCount', 'sizes', 'addons', 'sortOrder', 'updatedAt'
               ])
             )
@@ -444,7 +458,7 @@ service cloud.firestore {
         incoming().createdAt == existing().createdAt && (
           incoming().diff(existing()).affectedKeys().hasOnly(['isActive']) ||
           incoming().diff(existing()).affectedKeys().hasOnly([
-            'name', 'description', 'previewImage', 'htmlCode', 'cssCode', 'jsCode', 'isActive'
+            'name', 'name_en', 'description', 'description_en', 'previewImage', 'htmlCode', 'cssCode', 'jsCode', 'isActive'
           ])
         );
       allow delete: if isSuperAdmin() && isValidId(themeId);

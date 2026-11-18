@@ -102,8 +102,10 @@ export async function fetchOwnerRestaurant(ownerId: string): Promise<Restaurant 
 export interface CreateRestaurantInput {
   ownerId: string;
   name: string;
+  name_en?: string;
   slug: string;
   tagline?: string;
+  tagline_en?: string;
   whatsappNumber: string;
   logoUrl?: string;
   activeTheme: ActiveTheme;
@@ -138,8 +140,14 @@ export async function createRestaurant(input: CreateRestaurantInput): Promise<Re
       updatedAt: serverTimestamp(),
     };
 
+    if (input.name_en?.trim()) {
+      restPayload.name_en = input.name_en.trim().slice(0, 120);
+    }
     if (input.tagline?.trim()) {
       restPayload.tagline = input.tagline.trim().slice(0, 500);
+    }
+    if (input.tagline_en?.trim()) {
+      restPayload.tagline_en = input.tagline_en.trim().slice(0, 500);
     }
     if (input.logoUrl?.trim()) {
       restPayload.logoUrl = input.logoUrl.trim().slice(0, 300000);
@@ -162,6 +170,7 @@ export async function createRestaurant(input: CreateRestaurantInput): Promise<Re
           restaurantId: restId,
           ownerId: input.ownerId,
           name: cat.name,
+          name_en: cat.name_en,
           imageUrl: cat.imageUrl,
           sortOrder: cat.sortOrder,
           createdAt: serverTimestamp(),
@@ -176,7 +185,9 @@ export async function createRestaurant(input: CreateRestaurantInput): Promise<Re
             ownerId: input.ownerId,
             categoryId: catId,
             name: item.name,
+            name_en: item.name_en,
             description: item.description,
+            description_en: item.description_en,
             basePrice: item.basePrice,
             imageUrl: item.imageUrl,
             calories: item.calories,
@@ -243,8 +254,10 @@ export async function updateRestaurantSettings(
   restaurant: Restaurant,
   updates: {
     name: string;
+    name_en?: string;
     slug: string;
     tagline: string;
+    tagline_en?: string;
     whatsappNumber: string;
     logoUrl: string;
     currency: string;
@@ -268,10 +281,15 @@ export async function updateRestaurantSettings(
       batch.delete(doc(db, 'slugs', restaurant.slug));
     }
 
+    const cleanNameEn = (updates.name_en || '').trim().slice(0, 120);
+    const cleanTaglineEn = (updates.tagline_en || '').trim().slice(0, 500);
+
     batch.update(doc(db, 'restaurants', restaurant.id), {
       name: updates.name.trim().slice(0, 120),
+      name_en: cleanNameEn,
       slug: cleanSlug,
       tagline: updates.tagline.trim().slice(0, 500),
+      tagline_en: cleanTaglineEn,
       whatsappNumber: updates.whatsappNumber.trim().slice(0, 24),
       logoUrl: updates.logoUrl.trim().slice(0, 300000),
       currency: updates.currency.trim().slice(0, 16) || 'ج.م',
@@ -286,6 +304,8 @@ export async function updateRestaurantSettings(
     return {
       ...restaurant,
       ...updates,
+      name_en: cleanNameEn,
+      tagline_en: cleanTaglineEn,
       slug: cleanSlug,
     };
   } catch (error) {
@@ -368,11 +388,12 @@ export function subscribeMenuItems(
 export async function saveCategory(
   restaurantId: string,
   ownerId: string,
-  data: { id?: string; name: string; imageUrl?: string; sortOrder: number }
+  data: { id?: string; name: string; name_en?: string; imageUrl?: string; sortOrder: number }
 ): Promise<void> {
   const isNew = !data.id;
   const catId = data.id || makeId('cat');
   const path = `categories/${catId}`;
+  const cleanNameEn = (data.name_en || '').trim().slice(0, 80);
   try {
     if (isNew) {
       const payload: Record<string, unknown> = {
@@ -383,6 +404,9 @@ export async function saveCategory(
         sortOrder: Number(data.sortOrder) || 0,
         createdAt: serverTimestamp(),
       };
+      if (cleanNameEn) {
+        payload.name_en = cleanNameEn;
+      }
       if (data.imageUrl?.trim()) {
         payload.imageUrl = data.imageUrl.trim().slice(0, 300000);
       }
@@ -390,6 +414,7 @@ export async function saveCategory(
     } else {
       await updateDoc(doc(db, 'categories', catId), {
         name: data.name.trim().slice(0, 80),
+        name_en: cleanNameEn,
         imageUrl: (data.imageUrl || '').trim().slice(0, 300000),
         sortOrder: Number(data.sortOrder) || 0,
       });
@@ -430,7 +455,9 @@ export async function saveMenuItem(
     id?: string;
     categoryId: string;
     name: string;
+    name_en?: string;
     description?: string;
+    description_en?: string;
     basePrice: number;
     calories?: number;
     imageUrl?: string;
@@ -448,12 +475,16 @@ export async function saveMenuItem(
 
   const cleanSizes = data.sizes.slice(0, 10).map((s) => ({
     name: s.name.trim().slice(0, 40),
+    ...(s.name_en?.trim() ? { name_en: s.name_en.trim().slice(0, 40) } : {}),
     price: Math.max(0, Number(s.price) || 0),
   }));
   const cleanAddons = data.addons.slice(0, 20).map((a) => ({
     name: a.name.trim().slice(0, 60),
+    ...(a.name_en?.trim() ? { name_en: a.name_en.trim().slice(0, 60) } : {}),
     price: Math.max(0, Number(a.price) || 0),
   }));
+  const cleanNameEn = (data.name_en || '').trim().slice(0, 120);
+  const cleanDescEn = (data.description_en || '').trim().slice(0, 500);
 
   try {
     if (isNew) {
@@ -473,8 +504,14 @@ export async function saveMenuItem(
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       };
+      if (cleanNameEn) {
+        payload.name_en = cleanNameEn;
+      }
       if (data.description?.trim()) {
         payload.description = data.description.trim().slice(0, 500);
+      }
+      if (cleanDescEn) {
+        payload.description_en = cleanDescEn;
       }
       if (typeof data.calories === 'number' && !Number.isNaN(data.calories) && data.calories >= 0) {
         payload.calories = Math.min(10000, Math.round(data.calories));
@@ -487,7 +524,9 @@ export async function saveMenuItem(
       await updateDoc(doc(db, 'menu_items', itemId), {
         categoryId: data.categoryId,
         name: data.name.trim().slice(0, 120),
+        name_en: cleanNameEn,
         description: (data.description || '').trim().slice(0, 500),
+        description_en: cleanDescEn,
         basePrice: Math.max(0, Number(data.basePrice) || 0),
         calories:
           typeof data.calories === 'number' && !Number.isNaN(data.calories) && data.calories >= 0
@@ -669,6 +708,7 @@ export async function seedStarterMenuForRestaurant(
         restaurantId,
         ownerId,
         name: cat.name,
+        name_en: cat.name_en,
         imageUrl: cat.imageUrl,
         sortOrder: cat.sortOrder,
         createdAt: serverTimestamp(),
@@ -682,7 +722,9 @@ export async function seedStarterMenuForRestaurant(
           ownerId,
           categoryId: catId,
           name: item.name,
+          name_en: item.name_en,
           description: item.description,
+          description_en: item.description_en,
           basePrice: item.basePrice,
           imageUrl: item.imageUrl,
           calories: item.calories,
@@ -745,6 +787,39 @@ export async function toggleRestaurantSuspension(
   }
 }
 
+export async function updateRestaurantBilingualInfoForSuperAdmin(
+  restaurantId: string,
+  updates: {
+    name: string;
+    name_en?: string;
+    tagline?: string;
+    tagline_en?: string;
+  }
+): Promise<{ name: string; name_en: string; tagline: string; tagline_en: string }> {
+  const path = `restaurants/${restaurantId}`;
+  const cleanName = updates.name.trim().slice(0, 120);
+  const cleanNameEn = (updates.name_en || '').trim().slice(0, 120);
+  const cleanTagline = (updates.tagline || '').trim().slice(0, 500);
+  const cleanTaglineEn = (updates.tagline_en || '').trim().slice(0, 500);
+  try {
+    await updateDoc(doc(db, 'restaurants', restaurantId), {
+      name: cleanName,
+      name_en: cleanNameEn,
+      tagline: cleanTagline,
+      tagline_en: cleanTaglineEn,
+      updatedAt: serverTimestamp(),
+    });
+    return {
+      name: cleanName,
+      name_en: cleanNameEn,
+      tagline: cleanTagline,
+      tagline_en: cleanTaglineEn,
+    };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
 export async function deleteRestaurantAccountCompletely(
   restaurant: Restaurant
 ): Promise<void> {
@@ -780,7 +855,6 @@ export async function deleteRestaurantAccountCompletely(
 }
 
 export async function fetchPlatformLandingSettings(): Promise<PlatformLandingSettings> {
-  const path = 'platform_settings/landing';
   try {
     const snap = await getDoc(doc(db, 'platform_settings', 'landing'));
     if (!snap.exists()) {
@@ -789,8 +863,11 @@ export async function fetchPlatformLandingSettings(): Promise<PlatformLandingSet
     const data = snap.data() as Partial<PlatformLandingSettings>;
     return {
       heroTitle: data.heroTitle || DEFAULT_PLATFORM_LANDING.heroTitle,
+      heroTitle_en: data.heroTitle_en || DEFAULT_PLATFORM_LANDING.heroTitle_en,
       heroSubtitle: data.heroSubtitle || DEFAULT_PLATFORM_LANDING.heroSubtitle,
+      heroSubtitle_en: data.heroSubtitle_en || DEFAULT_PLATFORM_LANDING.heroSubtitle_en,
       ctaButtonText: data.ctaButtonText || DEFAULT_PLATFORM_LANDING.ctaButtonText,
+      ctaButtonText_en: data.ctaButtonText_en || DEFAULT_PLATFORM_LANDING.ctaButtonText_en,
       features:
         Array.isArray(data.features) && data.features.length > 0
           ? data.features
@@ -801,6 +878,7 @@ export async function fetchPlatformLandingSettings(): Promise<PlatformLandingSet
           : DEFAULT_PLATFORM_LANDING.pricingPlans,
       supportWhatsapp: data.supportWhatsapp ?? DEFAULT_PLATFORM_LANDING.supportWhatsapp,
       footerText: data.footerText || DEFAULT_PLATFORM_LANDING.footerText,
+      footerText_en: data.footerText_en || DEFAULT_PLATFORM_LANDING.footerText_en,
       updatedAt: data.updatedAt,
     };
   } catch {
@@ -817,7 +895,9 @@ export async function savePlatformLandingSettings(
       .slice(0, 12)
       .map((f) => ({
         title: (f.title || '').trim().slice(0, 120),
+        title_en: (f.title_en || '').trim().slice(0, 120),
         description: (f.description || '').trim().slice(0, 300),
+        description_en: (f.description_en || '').trim().slice(0, 300),
       }))
       .filter((f) => f.title.length > 0);
 
@@ -826,10 +906,17 @@ export async function savePlatformLandingSettings(
       .map((p, idx) => ({
         id: (p.id || `plan_${idx + 1}`).trim().slice(0, 40),
         name: (p.name || '').trim().slice(0, 80),
+        name_en: (p.name_en || '').trim().slice(0, 80),
         price: (p.price || '0').trim().slice(0, 32),
         period: (p.period || '').trim().slice(0, 48),
+        period_en: (p.period_en || '').trim().slice(0, 48),
         description: (p.description || '').trim().slice(0, 240),
+        description_en: (p.description_en || '').trim().slice(0, 240),
         features: (p.features || [])
+          .map((item) => item.trim().slice(0, 120))
+          .filter(Boolean)
+          .slice(0, 10),
+        features_en: (p.features_en || [])
           .map((item) => item.trim().slice(0, 120))
           .filter(Boolean)
           .slice(0, 10),
@@ -840,15 +927,19 @@ export async function savePlatformLandingSettings(
     await setDoc(doc(db, 'platform_settings', 'landing'), {
       heroTitle:
         settings.heroTitle.trim().slice(0, 200) || DEFAULT_PLATFORM_LANDING.heroTitle,
+      heroTitle_en: (settings.heroTitle_en || '').trim().slice(0, 200),
       heroSubtitle:
         settings.heroSubtitle.trim().slice(0, 600) || DEFAULT_PLATFORM_LANDING.heroSubtitle,
+      heroSubtitle_en: (settings.heroSubtitle_en || '').trim().slice(0, 600),
       ctaButtonText:
         settings.ctaButtonText.trim().slice(0, 80) || DEFAULT_PLATFORM_LANDING.ctaButtonText,
+      ctaButtonText_en: (settings.ctaButtonText_en || '').trim().slice(0, 80),
       features: cleanFeatures,
       pricingPlans: cleanPlans,
       supportWhatsapp: settings.supportWhatsapp.trim().slice(0, 32),
       footerText:
         settings.footerText.trim().slice(0, 200) || DEFAULT_PLATFORM_LANDING.footerText,
+      footerText_en: (settings.footerText_en || '').trim().slice(0, 200),
       updatedAt: serverTimestamp(),
     });
   } catch (error) {
@@ -897,7 +988,9 @@ export async function fetchCustomThemeById(themeId: string): Promise<CustomTheme
 export async function saveCustomTheme(data: {
   id?: string;
   name: string;
+  name_en?: string;
   description?: string;
+  description_en?: string;
   previewImage?: string;
   htmlCode: string;
   cssCode: string;
@@ -909,7 +1002,9 @@ export async function saveCustomTheme(data: {
   const path = `custom_themes/${themeId}`;
 
   const cleanName = data.name.trim().slice(0, 100);
+  const cleanNameEn = (data.name_en || '').trim().slice(0, 100);
   const cleanDesc = (data.description || '').trim().slice(0, 400);
+  const cleanDescEn = (data.description_en || '').trim().slice(0, 400);
   const cleanPreview = (data.previewImage || '').trim().slice(0, 300000);
   const cleanHtml = (data.htmlCode || '').slice(0, 150000);
   const cleanCss = (data.cssCode || '').slice(0, 100000);
@@ -926,13 +1021,17 @@ export async function saveCustomTheme(data: {
         isActive: Boolean(data.isActive),
         createdAt: serverTimestamp(),
       };
+      if (cleanNameEn) payload.name_en = cleanNameEn;
       if (cleanDesc) payload.description = cleanDesc;
+      if (cleanDescEn) payload.description_en = cleanDescEn;
       if (cleanPreview) payload.previewImage = cleanPreview;
       await setDoc(doc(db, 'custom_themes', themeId), payload);
     } else {
       await updateDoc(doc(db, 'custom_themes', themeId), {
         name: cleanName,
+        name_en: cleanNameEn,
         description: cleanDesc,
+        description_en: cleanDescEn,
         previewImage: cleanPreview,
         htmlCode: cleanHtml,
         cssCode: cleanCss,

@@ -17,6 +17,7 @@ import {
   Sparkles,
   Trash2,
 } from 'lucide-react';
+import { useLanguage } from '../../contexts/LanguageContext';
 import { DEMO_RESTAURANTS } from '../../data/demoRestaurants';
 import {
   buildCustomThemeSrcDoc,
@@ -39,6 +40,7 @@ type CodeLangTab = 'html' | 'css' | 'js';
 type PreviewDevice = 'mobile' | 'desktop';
 
 export function ThemeInjectorTab() {
+  const { t, lang, loc } = useLanguage();
   const [themes, setThemes] = useState<CustomTheme[]>([]);
   const [loadingList, setLoadingList] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -46,8 +48,12 @@ export function ThemeInjectorTab() {
   // Editor state
   const [editingId, setEditingId] = useState<string | undefined>(undefined);
   const [name, setName] = useState('ثيم نيون داكن مخصص');
+  const [nameEn, setNameEn] = useState('Custom Dark Neon Theme');
   const [description, setDescription] = useState(
     'تصميم عصري قابل للتخصيص بالكامل عبر HTML و CSS و JavaScript.'
+  );
+  const [descriptionEn, setDescriptionEn] = useState(
+    'Modern customizable theme built with injected HTML, CSS, and JavaScript.'
   );
   const [previewImage, setPreviewImage] = useState(CURATED_FOOD_IMAGES[0].url);
   const [isActive, setIsActive] = useState(true);
@@ -76,11 +82,11 @@ export function ThemeInjectorTab() {
       const list = await fetchAllCustomThemes();
       setThemes(list);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'تعذر تحميل الثيمات المخصصة');
+      setError(err instanceof Error ? err.message : t.auth.errGeneric);
     } finally {
       setLoadingList(false);
     }
-  }, []);
+  }, [t.auth.errGeneric]);
 
   useEffect(() => {
     loadThemes();
@@ -95,9 +101,7 @@ export function ThemeInjectorTab() {
       if (!data || typeof data !== 'object' || !data.type) return;
       const type = String(data.type);
       const itemId = typeof data.itemId === 'string' ? data.itemId : '';
-      setLastSandboxEvent(
-        itemId ? `تم التقاط حدث ${type} للصنف (${itemId})` : `تم التقاط حدث ${type}`
-      );
+      setLastSandboxEvent(itemId ? `Event ${type} (${itemId})` : `Event ${type}`);
       setTimeout(() => setLastSandboxEvent(null), 3500);
     };
     window.addEventListener('message', onMessage);
@@ -113,14 +117,17 @@ export function ThemeInjectorTab() {
         restaurant: demoBundle.restaurant,
         categories: demoBundle.categories,
         items: demoBundle.items,
+        currentLang: lang,
       }),
-    [htmlCode, cssCode, jsCode, demoBundle]
+    [htmlCode, cssCode, jsCode, demoBundle, lang]
   );
 
   const startNewTheme = () => {
     setEditingId(undefined);
     setName('ثيم مخصص جديد');
+    setNameEn('New Custom Theme');
     setDescription('ثيم مخصص مبني بحقن الأكواد مع ربط كامل بالسلة الذكية.');
+    setDescriptionEn('Custom code-injected menu theme connected to the smart cart.');
     setPreviewImage(CURATED_FOOD_IMAGES[0].url);
     setIsActive(true);
     setHtmlCode(STARTER_CUSTOM_HTML);
@@ -133,7 +140,9 @@ export function ThemeInjectorTab() {
   const loadThemeIntoEditor = (theme: CustomTheme) => {
     setEditingId(theme.id);
     setName(theme.name);
+    setNameEn(theme.name_en || '');
     setDescription(theme.description || '');
+    setDescriptionEn(theme.description_en || '');
     setPreviewImage(theme.previewImage || CURATED_FOOD_IMAGES[0].url);
     setIsActive(theme.isActive);
     setHtmlCode(theme.htmlCode);
@@ -163,7 +172,9 @@ export function ThemeInjectorTab() {
       const saved = await saveCustomTheme({
         id: editingId,
         name,
+        name_en: nameEn,
         description,
+        description_en: descriptionEn,
         previewImage,
         htmlCode,
         cssCode,
@@ -176,10 +187,10 @@ export function ThemeInjectorTab() {
         if (exists) return prev.map((t) => (t.id === saved.id ? saved : t));
         return [saved, ...prev];
       });
-      setSaveNotice(`تم حفظ ونشر الثيم "${saved.name}" بنجاح (${saved.id})`);
+      setSaveNotice(`${loc(saved.name, saved.name_en)} (${saved.id})`);
       setTimeout(() => setSaveNotice(null), 4000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'تعذر حفظ الثيم المخصص');
+      setError(err instanceof Error ? err.message : t.auth.errGeneric);
     } finally {
       setSaving(false);
     }
@@ -220,11 +231,9 @@ export function ThemeInjectorTab() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-extrabold text-zinc-950">
-              مكتبة الثيمات المخصصة ({themes.length})
+              {t.superAdmin.injector.savedThemesTitle} ({themes.length})
             </h2>
-            <p className="text-xs text-zinc-500 mt-0.5">
-              الثيمات المفعّلة هنا تظهر فوراً لجميع أصحاب المطاعم داخل مخصص المظهر لاختيارها وتطبيقها
-            </p>
+            <p className="text-xs text-zinc-500 mt-0.5">{t.superAdmin.injector.subtitle}</p>
           </div>
           <button
             type="button"
@@ -232,26 +241,26 @@ export function ThemeInjectorTab() {
             className="px-4 py-2.5 rounded-xl bg-zinc-950 text-white text-xs font-bold hover:bg-zinc-800 flex items-center gap-1.5 cursor-pointer self-start sm:self-auto"
           >
             <Plus className="w-4 h-4" />
-            <span>ثيم مخصص جديد</span>
+            <span>{t.superAdmin.injector.newThemeBtn}</span>
           </button>
         </div>
 
         {loadingList ? (
           <div className="py-6 text-center text-xs text-zinc-500 flex items-center justify-center gap-2">
             <Loader2 className="w-4 h-4 animate-spin" />
-            <span>جاري تحميل الثيمات المحقونة...</span>
+            <span>{t.admin.loadingWorkspace}</span>
           </div>
         ) : themes.length === 0 ? (
           <div className="p-6 rounded-xl bg-zinc-50 border border-dashed border-zinc-300 text-center text-xs text-zinc-500">
-            لا توجد ثيمات مخصصة محفوظة بعد. استخدم محرر الأكواد أدناه لإنشاء ونشر أول ثيم مخصص.
+            {t.superAdmin.injector.noThemes}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-            {themes.map((t) => {
-              const isSelected = editingId === t.id;
+            {themes.map((ct) => {
+              const isSelected = editingId === ct.id;
               return (
                 <div
-                  key={t.id}
+                  key={ct.id}
                   className={`rounded-2xl border p-3.5 flex flex-col justify-between gap-3 transition-colors ${
                     isSelected
                       ? 'border-zinc-950 bg-zinc-50 ring-1 ring-zinc-950'
@@ -260,28 +269,34 @@ export function ThemeInjectorTab() {
                 >
                   <div className="flex items-start gap-3">
                     <SafeImage
-                      src={t.previewImage}
-                      alt={t.name}
+                      src={ct.previewImage}
+                      alt={loc(ct.name, ct.name_en)}
                       className="w-16 h-16 rounded-xl object-cover border border-zinc-200 shrink-0"
                     />
                     <div className="min-w-0 flex-1 space-y-1">
                       <div className="flex items-center justify-between gap-2">
-                        <h3 className="text-sm font-extrabold text-zinc-950 truncate">{t.name}</h3>
+                        <h3 className="text-sm font-extrabold text-zinc-950 truncate">
+                          {loc(ct.name, ct.name_en)}
+                        </h3>
                         <span
                           className={`text-[10px] font-bold px-2 py-0.5 rounded-md border shrink-0 ${
-                            t.isActive
+                            ct.isActive
                               ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                               : 'bg-zinc-100 text-zinc-500 border-zinc-200'
                           }`}
                         >
-                          {t.isActive ? 'مفعّل' : 'مخفي'}
+                          {ct.isActive
+                            ? t.superAdmin.injector.activeLabel
+                            : t.superAdmin.injector.inactiveLabel}
                         </span>
                       </div>
                       <p className="text-[11px] font-mono-num text-zinc-400 truncate" dir="ltr">
-                        {t.id}
+                        {ct.id}
                       </p>
-                      {t.description && (
-                        <p className="text-xs text-zinc-500 line-clamp-2">{t.description}</p>
+                      {(ct.description || ct.description_en) && (
+                        <p className="text-xs text-zinc-500 line-clamp-2">
+                          {loc(ct.description, ct.description_en)}
+                        </p>
                       )}
                     </div>
                   </div>
@@ -289,36 +304,36 @@ export function ThemeInjectorTab() {
                   <div className="pt-2.5 border-t border-zinc-100 flex items-center justify-between gap-2">
                     <button
                       type="button"
-                      onClick={() => loadThemeIntoEditor(t)}
+                      onClick={() => loadThemeIntoEditor(ct)}
                       className="px-3 py-1.5 rounded-lg bg-zinc-950 text-white text-xs font-bold hover:bg-zinc-800 flex items-center gap-1 cursor-pointer"
                     >
                       <Edit3 className="w-3.5 h-3.5" />
-                      <span>تعديل الكود</span>
+                      <span>{lang === 'en' ? 'Edit' : 'تعديل'}</span>
                     </button>
 
                     <div className="flex items-center gap-1.5">
                       <button
                         type="button"
-                        disabled={busyId === t.id}
-                        onClick={() => handleToggleActive(t)}
+                        disabled={busyId === ct.id}
+                        onClick={() => handleToggleActive(ct)}
                         className="px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-bold text-zinc-700 hover:bg-zinc-50 flex items-center gap-1 cursor-pointer"
                       >
-                        {t.isActive ? (
+                        {ct.isActive ? (
                           <>
                             <EyeOff className="w-3.5 h-3.5" />
-                            <span>إخفاء</span>
+                            <span>{lang === 'en' ? 'Hide' : 'إخفاء'}</span>
                           </>
                         ) : (
                           <>
                             <Eye className="w-3.5 h-3.5" />
-                            <span>تفعيل</span>
+                            <span>{lang === 'en' ? 'Activate' : 'تفعيل'}</span>
                           </>
                         )}
                       </button>
                       <button
                         type="button"
-                        onClick={() => setDeleteTarget(t)}
-                        aria-label="حذف الثيم"
+                        onClick={() => setDeleteTarget(ct)}
+                        aria-label={t.superAdmin.injector.deleteThemeBtn}
                         className="p-1.5 rounded-lg border border-zinc-200 text-rose-600 hover:bg-rose-50 cursor-pointer"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -346,7 +361,7 @@ export function ThemeInjectorTab() {
             <div className="flex items-center gap-2">
               <Palette className="w-4 h-4 text-amber-600" />
               <h3 className="text-sm font-extrabold text-zinc-950">
-                {editingId ? `تعديل الثيم (${editingId})` : 'إنشاء وحقن ثيم جديد'}
+                {editingId ? `${t.superAdmin.injector.title} (${editingId})` : t.superAdmin.injector.title}
               </h3>
             </div>
 
@@ -366,34 +381,40 @@ export function ThemeInjectorTab() {
                 ) : (
                   <Save className="w-4 h-4" />
                 )}
-                <span>{saving ? 'جاري الحفظ...' : editingId ? 'حفظ التعديلات' : 'نشر الثيم للمطاعم'}</span>
+                <span>
+                  {saving ? t.superAdmin.injector.savingBtn : t.superAdmin.injector.saveThemeBtn}
+                </span>
               </button>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
-              <label className="block text-xs font-bold text-zinc-800 mb-1">اسم الثيم *</label>
+              <label className="block text-xs font-bold text-zinc-800 mb-1">
+                {t.superAdmin.injector.nameArLabel}
+              </label>
               <input
                 type="text"
+                dir="rtl"
                 required
                 maxLength={100}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="مثال: ثيم المجلة الكلاسيكي"
                 className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-xs font-bold"
               />
             </div>
 
-            <div className="sm:col-span-2">
-              <label className="block text-xs font-bold text-zinc-800 mb-1">وصف مختصر</label>
+            <div>
+              <label className="block text-xs font-bold text-zinc-800 mb-1">
+                {t.superAdmin.injector.nameEnLabel}
+              </label>
               <input
                 type="text"
-                maxLength={400}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="يظهر لأصحاب المطاعم في صفحة اختيار الثيمات"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-xs"
+                dir="ltr"
+                maxLength={100}
+                value={nameEn}
+                onChange={(e) => setNameEn(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-xs font-bold"
               />
             </div>
 
@@ -405,8 +426,36 @@ export function ThemeInjectorTab() {
                   onChange={(e) => setIsActive(e.target.checked)}
                   className="w-4 h-4 accent-zinc-950"
                 />
-                <span>متاح لأصحاب المطاعم (نشط)</span>
+                <span>{t.superAdmin.injector.isActiveToggle}</span>
               </label>
+            </div>
+
+            <div className="lg:col-span-1">
+              <label className="block text-xs font-bold text-zinc-800 mb-1">
+                {t.superAdmin.injector.descArLabel}
+              </label>
+              <input
+                type="text"
+                dir="rtl"
+                maxLength={400}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-xs"
+              />
+            </div>
+
+            <div className="lg:col-span-2">
+              <label className="block text-xs font-bold text-zinc-800 mb-1">
+                {t.superAdmin.injector.descEnLabel}
+              </label>
+              <input
+                type="text"
+                dir="ltr"
+                maxLength={400}
+                value={descriptionEn}
+                onChange={(e) => setDescriptionEn(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-xs"
+              />
             </div>
           </div>
 
@@ -418,7 +467,7 @@ export function ThemeInjectorTab() {
             />
             <div className="flex-1 min-w-[200px]">
               <label className="block text-[11px] font-bold text-zinc-600 mb-1">
-                رابط صورة المعاينة (Preview Image URL)
+                {t.superAdmin.injector.previewImgLabel}
               </label>
               <input
                 type="text"
@@ -450,11 +499,8 @@ export function ThemeInjectorTab() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-amber-400" />
-              <h3 className="text-sm font-extrabold">دليل المتغيرات المتاحة (Data Variables)</h3>
+              <h3 className="text-sm font-extrabold">{t.superAdmin.injector.variablesGuideTitle}</h3>
             </div>
-            <span className="text-[11px] text-zinc-400">
-              تُحقن تلقائياً ببيانات المطعم الحيّة عند عرض المنيو للعملاء
-            </span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
@@ -466,7 +512,9 @@ export function ThemeInjectorTab() {
                   className="p-3 rounded-xl bg-zinc-900 border border-zinc-800 flex flex-col justify-between gap-2"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-bold text-amber-300">{item.label}</span>
+                    <span className="text-xs font-bold text-amber-300">
+                      {loc(item.label, item.label_en)}
+                    </span>
                     <button
                       type="button"
                       onClick={() => handleCopyToken(item.token)}
@@ -477,7 +525,9 @@ export function ThemeInjectorTab() {
                       ) : (
                         <Copy className="w-3 h-3" />
                       )}
-                      <span>{isCopied ? 'نُسخ' : 'نسخ'}</span>
+                      <span>
+                        {isCopied ? t.superAdmin.injector.copiedVar : t.superAdmin.injector.copyVarBtn}
+                      </span>
                     </button>
                   </div>
                   <code
@@ -486,7 +536,9 @@ export function ThemeInjectorTab() {
                   >
                     {item.token}
                   </code>
-                  <p className="text-[11px] text-zinc-400 leading-relaxed">{item.hint}</p>
+                  <p className="text-[11px] text-zinc-400 leading-relaxed">
+                    {loc(item.hint, item.hint_en)}
+                  </p>
                 </div>
               );
             })}
@@ -536,7 +588,7 @@ export function ThemeInjectorTab() {
                 }}
                 className="text-[11px] font-bold text-zinc-300 hover:text-white underline underline-offset-4 cursor-pointer"
               >
-                إدراج القالب المبدئي
+                {t.superAdmin.injector.loadBoilerplateBtn}
               </button>
             </div>
 
@@ -578,9 +630,11 @@ export function ThemeInjectorTab() {
           <div className="xl:col-span-5 bg-white border border-zinc-200 rounded-2xl overflow-hidden flex flex-col">
             <div className="px-4 py-3 border-b border-zinc-200 bg-zinc-50 flex flex-wrap items-center justify-between gap-2">
               <div>
-                <p className="text-xs font-extrabold text-zinc-950">معاينة حية (Sandbox)</p>
+                <p className="text-xs font-extrabold text-zinc-950">
+                  {t.superAdmin.injector.livePreviewTitle}
+                </p>
                 <p className="text-[11px] text-zinc-500">
-                  مربوطة ببيانات تجريبية لـ {demoBundle.restaurant.name}
+                  {loc(demoBundle.restaurant.name, demoBundle.restaurant.name_en)}
                 </p>
               </div>
 
@@ -588,7 +642,7 @@ export function ThemeInjectorTab() {
                 <button
                   type="button"
                   onClick={() => setPreviewDevice('mobile')}
-                  title="عرض الجوال"
+                  title={lang === 'en' ? 'Mobile' : 'جوال'}
                   className={`p-1.5 rounded-lg border cursor-pointer ${
                     previewDevice === 'mobile'
                       ? 'bg-zinc-950 text-white border-zinc-950'
@@ -600,7 +654,7 @@ export function ThemeInjectorTab() {
                 <button
                   type="button"
                   onClick={() => setPreviewDevice('desktop')}
-                  title="عرض سطح المكتب"
+                  title={lang === 'en' ? 'Desktop' : 'سطح المكتب'}
                   className={`p-1.5 rounded-lg border cursor-pointer ${
                     previewDevice === 'desktop'
                       ? 'bg-zinc-950 text-white border-zinc-950'
@@ -615,7 +669,7 @@ export function ThemeInjectorTab() {
                   className="px-2.5 py-1.5 rounded-lg bg-zinc-950 text-white text-[11px] font-bold hover:bg-zinc-800 flex items-center gap-1 cursor-pointer"
                 >
                   <Play className="w-3 h-3" />
-                  <span>تشغيل</span>
+                  <span>{t.superAdmin.injector.refreshPreviewBtn}</span>
                 </button>
               </div>
             </div>
@@ -633,9 +687,9 @@ export function ThemeInjectorTab() {
                 }`}
               >
                 <iframe
-                  key={previewNonce}
+                  key={`${previewNonce}_${lang}`}
                   ref={sandboxIframeRef}
-                  title="معاينة الثيم المخصص"
+                  title={t.superAdmin.injector.livePreviewTitle}
                   sandbox="allow-scripts"
                   srcDoc={sandboxSrcDoc}
                   className="w-full h-[520px] border-0 block"
@@ -656,10 +710,12 @@ export function ThemeInjectorTab() {
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-sm bg-white rounded-2xl p-6 space-y-4 shadow-2xl"
           >
-            <h3 className="text-base font-extrabold text-zinc-950">حذف الثيم المخصص</h3>
+            <h3 className="text-base font-extrabold text-zinc-950">
+              {t.superAdmin.injector.deleteThemeBtn}
+            </h3>
             <p className="text-xs text-zinc-600 leading-relaxed">
-              هل أنت متأكد من حذف ثيم <span className="font-bold">"{deleteTarget.name}"</span>؟ لن
-              يتمكن أصحاب المطاعم من اختياره بعد الحذف.
+              <span className="font-bold">"{loc(deleteTarget.name, deleteTarget.name_en)}"</span> —{' '}
+              {t.superAdmin.tenants.confirmDeleteDesc}
             </p>
             <div className="flex items-center justify-end gap-2">
               <button
@@ -667,7 +723,7 @@ export function ThemeInjectorTab() {
                 onClick={() => setDeleteTarget(null)}
                 className="px-4 py-2 rounded-xl border border-zinc-200 text-xs font-bold cursor-pointer"
               >
-                إلغاء
+                {t.superAdmin.tenants.cancelBtn}
               </button>
               <button
                 type="button"
@@ -675,7 +731,7 @@ export function ThemeInjectorTab() {
                 onClick={handleConfirmDelete}
                 className="px-4 py-2 rounded-xl bg-rose-600 text-white text-xs font-bold hover:bg-rose-700 cursor-pointer"
               >
-                تأكيد الحذف
+                {t.superAdmin.injector.deleteThemeBtn}
               </button>
             </div>
           </div>

@@ -14,7 +14,9 @@ export type ActiveTheme = BuiltinTheme | `custom_${string}`;
 export interface CustomTheme {
   id: string;
   name: string;
+  name_en?: string;
   description?: string;
+  description_en?: string;
   previewImage?: string;
   htmlCode: string;
   cssCode: string;
@@ -25,11 +27,13 @@ export interface CustomTheme {
 
 export interface ItemSize {
   name: string;
+  name_en?: string;
   price: number;
 }
 
 export interface ItemAddon {
   name: string;
+  name_en?: string;
   price: number;
 }
 
@@ -38,7 +42,9 @@ export interface Restaurant {
   ownerId: string;
   slug: string;
   name: string;
+  name_en?: string;
   tagline?: string;
+  tagline_en?: string;
   whatsappNumber: string;
   logoUrl?: string;
   activeTheme: ActiveTheme;
@@ -64,6 +70,7 @@ export interface Category {
   restaurantId: string;
   ownerId: string;
   name: string;
+  name_en?: string;
   imageUrl?: string;
   sortOrder: number;
   createdAt?: unknown;
@@ -75,7 +82,9 @@ export interface MenuItem {
   ownerId: string;
   categoryId: string;
   name: string;
+  name_en?: string;
   description?: string;
+  description_en?: string;
   basePrice: number;
   imageUrl?: string;
   calories?: number;
@@ -138,8 +147,12 @@ export interface ThemeMeta {
   id: ActiveTheme;
   number: number;
   name: string;
+  shortName?: string;
   englishName: string;
+  shortName_en?: string;
   description: string;
+  description_en?: string;
+  coverImage?: string;
   recommendedColor: string;
   bgPreview: string;
   cardPreview: string;
@@ -150,26 +163,36 @@ export interface ThemeMeta {
 
 export interface LandingFeature {
   title: string;
+  title_en?: string;
   description: string;
+  description_en?: string;
 }
 
 export interface LandingPricingPlan {
   id: string;
   name: string;
+  name_en?: string;
   price: string;
   period: string;
+  period_en?: string;
   description: string;
+  description_en?: string;
   features: string[];
+  features_en?: string[];
   highlighted: boolean;
 }
 
 export interface PlatformLandingSettings {
   heroTitle: string;
+  heroTitle_en?: string;
   heroSubtitle: string;
+  heroSubtitle_en?: string;
   ctaButtonText: string;
+  ctaButtonText_en?: string;
   features: LandingFeature[];
   pricingPlans: LandingPricingPlan[];
   supportWhatsapp: string;
   footerText: string;
+  footerText_en?: string;
   updatedAt?: unknown;
 }

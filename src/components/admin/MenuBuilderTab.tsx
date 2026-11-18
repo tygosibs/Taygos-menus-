@@ -9,8 +9,11 @@ import {
   Sparkles,
   Trash2,
   Upload,
+  Wand2,
   X,
 } from 'lucide-react';
+import { useLanguage } from '../../contexts/LanguageContext';
+import { autoSuggestEnglish } from '../../data/translations';
 import {
   removeCategory,
   removeMenuItem,
@@ -31,6 +34,10 @@ interface MenuBuilderTabProps {
 }
 
 export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
+  const { lang, dir, t, loc, formatCurrency } = useLanguage();
+  const isEn = lang === 'en';
+  const currencyLabel = formatCurrency(restaurant.currency);
+
   const [categories, setCategories] = useState<Category[]>([]);
   const [items, setItems] = useState<MenuItem[]>([]);
   const [activeCatFilter, setActiveCatFilter] = useState<string>('all');
@@ -40,16 +47,20 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
   const [catModalOpen, setCatModalOpen] = useState(false);
   const [editingCat, setEditingCat] = useState<Category | null>(null);
   const [catName, setCatName] = useState('');
+  const [catNameEn, setCatNameEn] = useState('');
   const [catImageUrl, setCatImageUrl] = useState(CURATED_FOOD_IMAGES[0].url);
   const [catSortOrder, setCatSortOrder] = useState(1);
   const [savingCat, setSavingCat] = useState(false);
+  const [catError, setCatError] = useState<string | null>(null);
 
   // Item Form State
   const [itemModalOpen, setItemModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [itemName, setItemName] = useState('');
+  const [itemNameEn, setItemNameEn] = useState('');
   const [itemCatId, setItemCatId] = useState('');
   const [itemDesc, setItemDesc] = useState('');
+  const [itemDescEn, setItemDescEn] = useState('');
   const [itemBasePrice, setItemBasePrice] = useState(120);
   const [itemCalories, setItemCalories] = useState(450);
   const [itemImageUrl, setItemImageUrl] = useState(CURATED_FOOD_IMAGES[0].url);
@@ -61,6 +72,7 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
   const [itemSortOrder, setItemSortOrder] = useState(1);
   const [uploadingImg, setUploadingImg] = useState(false);
   const [savingItem, setSavingItem] = useState(false);
+  const [itemError, setItemError] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubCats = subscribeCategories(restaurant.id, setCategories);
@@ -84,6 +96,8 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
   const openNewCategory = () => {
     setEditingCat(null);
     setCatName('');
+    setCatNameEn('');
+    setCatError(null);
     setCatImageUrl(CURATED_FOOD_IMAGES[0].url);
     setCatSortOrder(categories.length + 1);
     setCatModalOpen(true);
@@ -92,6 +106,8 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
   const openEditCategory = (cat: Category) => {
     setEditingCat(cat);
     setCatName(cat.name);
+    setCatNameEn(cat.name_en || '');
+    setCatError(null);
     setCatImageUrl(cat.imageUrl || CURATED_FOOD_IMAGES[0].url);
     setCatSortOrder(cat.sortOrder);
     setCatModalOpen(true);
@@ -101,14 +117,18 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
     e.preventDefault();
     if (!catName.trim()) return;
     setSavingCat(true);
+    setCatError(null);
     try {
       await saveCategory(restaurant.id, restaurant.ownerId, {
         id: editingCat?.id,
         name: catName,
+        name_en: catNameEn,
         imageUrl: catImageUrl,
         sortOrder: catSortOrder,
       });
       setCatModalOpen(false);
+    } catch (err) {
+      setCatError(err instanceof Error ? err.message : t.auth.errGeneric);
     } finally {
       setSavingCat(false);
     }
@@ -117,8 +137,11 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
   const openNewItem = () => {
     setEditingItem(null);
     setItemName('');
+    setItemNameEn('');
     setItemCatId(categories[0]?.id || '');
     setItemDesc('');
+    setItemDescEn('');
+    setItemError(null);
     setItemBasePrice(150);
     setItemCalories(450);
     setItemImageUrl(CURATED_FOOD_IMAGES[0].url);
@@ -126,10 +149,10 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
     setItemAvailable(true);
     setItemOrdersCount(25);
     setItemSizes([
-      { name: 'وسط', price: 150 },
-      { name: 'كبير', price: 195 },
+      { name: 'وسط', name_en: 'Medium', price: 150 },
+      { name: 'كبير', name_en: 'Large', price: 195 },
     ]);
-    setItemAddons([{ name: 'جبنة إضافية', price: 25 }]);
+    setItemAddons([{ name: 'جبنة إضافية', name_en: 'Extra Cheese', price: 25 }]);
     setItemSortOrder(items.length + 1);
     setItemModalOpen(true);
   };
@@ -137,8 +160,11 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
   const openEditItem = (item: MenuItem) => {
     setEditingItem(item);
     setItemName(item.name);
+    setItemNameEn(item.name_en || '');
     setItemCatId(item.categoryId);
     setItemDesc(item.description || '');
+    setItemDescEn(item.description_en || '');
+    setItemError(null);
     setItemBasePrice(item.basePrice);
     setItemCalories(item.calories ?? 0);
     setItemImageUrl(item.imageUrl || CURATED_FOOD_IMAGES[0].url);
@@ -151,16 +177,48 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
     setItemModalOpen(true);
   };
 
+  const handleAutoFillItemEn = () => {
+    if (itemName.trim() && !itemNameEn.trim()) {
+      const suggested = autoSuggestEnglish(itemName);
+      if (suggested) setItemNameEn(suggested);
+    }
+    if (itemDesc.trim() && !itemDescEn.trim()) {
+      const suggested = autoSuggestEnglish(itemDesc);
+      if (suggested) setItemDescEn(suggested);
+    }
+    setItemSizes((prev) =>
+      prev.map((sz) => {
+        if (sz.name.trim() && !sz.name_en?.trim()) {
+          const suggested = autoSuggestEnglish(sz.name);
+          return suggested ? { ...sz, name_en: suggested } : sz;
+        }
+        return sz;
+      })
+    );
+    setItemAddons((prev) =>
+      prev.map((ad) => {
+        if (ad.name.trim() && !ad.name_en?.trim()) {
+          const suggested = autoSuggestEnglish(ad.name);
+          return suggested ? { ...ad, name_en: suggested } : ad;
+        }
+        return ad;
+      })
+    );
+  };
+
   const handleSaveItem = async (e: FormEvent) => {
     e.preventDefault();
     if (!itemName.trim() || !itemCatId) return;
     setSavingItem(true);
+    setItemError(null);
     try {
       await saveMenuItem(restaurant.id, restaurant.ownerId, {
         id: editingItem?.id,
         categoryId: itemCatId,
         name: itemName,
+        name_en: itemNameEn,
         description: itemDesc,
+        description_en: itemDescEn,
         basePrice: itemBasePrice,
         calories: itemCalories,
         imageUrl: itemImageUrl,
@@ -172,6 +230,8 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
         sortOrder: itemSortOrder,
       });
       setItemModalOpen(false);
+    } catch (err) {
+      setItemError(err instanceof Error ? err.message : t.auth.errGeneric);
     } finally {
       setSavingItem(false);
     }
@@ -179,6 +239,8 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
 
   const handleImageFile = async (file: File, target: 'cat' | 'item') => {
     setUploadingImg(true);
+    if (target === 'cat') setCatError(null);
+    else setItemError(null);
     try {
       const url = await uploadRestaurantAsset(
         file,
@@ -187,6 +249,10 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
       );
       if (target === 'cat') setCatImageUrl(url);
       else setItemImageUrl(url);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : t.auth.errGeneric;
+      if (target === 'cat') setCatError(msg);
+      else setItemError(msg);
     } finally {
       setUploadingImg(false);
     }
@@ -208,10 +274,8 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
     <div className="space-y-6">
       <div className="bg-white border border-zinc-200 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-lg font-extrabold text-zinc-950">إدارة الأقسام والوجبات</h2>
-          <p className="text-xs text-zinc-500 mt-0.5">
-            إضافة وتعديل وترتيب الأقسام والأصناف مع الأحجام والإضافات والسعرات الحرارية
-          </p>
+          <h2 className="text-lg font-extrabold text-zinc-950">{t.admin.menu.title}</h2>
+          <p className="text-xs text-zinc-500 mt-0.5">{t.admin.menu.subtitle}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 shrink-0">
           {categories.length === 0 && (
@@ -222,7 +286,7 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
               className="px-4 py-2 rounded-xl border border-amber-300 bg-amber-50 text-amber-900 text-xs font-bold hover:bg-amber-100 flex items-center gap-1.5 cursor-pointer"
             >
               <Sparkles className="w-4 h-4" />
-              <span>{seeding ? 'جاري التعبئة...' : 'تعبئة قائمة تجريبية'}</span>
+              <span>{seeding ? t.admin.menu.seedingBtn : t.admin.menu.seedBtn}</span>
             </button>
           )}
           <button
@@ -231,7 +295,7 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
             className="px-4 py-2 rounded-xl border border-zinc-300 text-zinc-800 text-xs font-bold hover:bg-zinc-50 flex items-center gap-1.5 cursor-pointer"
           >
             <Plus className="w-4 h-4" />
-            <span>قسم جديد</span>
+            <span>{t.admin.menu.addCategoryBtn}</span>
           </button>
           <button
             type="button"
@@ -240,7 +304,7 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
             className="px-4 py-2 rounded-xl bg-zinc-950 text-white text-xs font-bold hover:bg-zinc-800 flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
           >
             <Plus className="w-4 h-4" />
-            <span>وجبة جديدة</span>
+            <span>{t.admin.menu.addItemBtn}</span>
           </button>
         </div>
       </div>
@@ -248,12 +312,10 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
       {/* Categories List with Reorder Controls */}
       <div className="bg-white border border-zinc-200 rounded-2xl p-5 space-y-4">
         <h3 className="text-sm font-bold text-zinc-900">
-          أقسام المنيو ({categories.length})
+          {t.admin.menu.categoriesHeading} ({categories.length})
         </h3>
         {categories.length === 0 ? (
-          <p className="text-xs text-zinc-500">
-            لا توجد أقسام بعد. ابدأ بإضافة قسم جديد أو استخدم زر التعبئة التجريبية.
-          </p>
+          <p className="text-xs text-zinc-500">{t.admin.menu.emptyCategories}</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {categories.map((cat, idx) => (
@@ -264,13 +326,15 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
                 <div className="flex items-center gap-3 min-w-0">
                   <SafeImage
                     src={cat.imageUrl}
-                    alt={cat.name}
+                    alt={loc(cat.name, cat.name_en)}
                     className="w-11 h-11 rounded-lg object-cover shrink-0"
                   />
                   <div className="min-w-0">
-                    <p className="text-xs font-bold text-zinc-900 truncate">{cat.name}</p>
-                    <p className="text-[11px] text-zinc-500 font-mono-num">
-                      ترتيب: {idx + 1}
+                    <p className="text-xs font-bold text-zinc-900 truncate">
+                      {loc(cat.name, cat.name_en)}
+                    </p>
+                    <p className="text-[11px] text-zinc-500 font-mono-num truncate">
+                      {cat.name_en ? `${cat.name} / ${cat.name_en}` : `${isEn ? 'Order' : 'ترتيب'}: ${idx + 1}`}
                     </p>
                   </div>
                 </div>
@@ -279,7 +343,7 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
                     type="button"
                     disabled={idx === 0}
                     onClick={() => moveCategory(idx, -1)}
-                    aria-label="تقديم القسم"
+                    aria-label="Move Up"
                     className="p-1.5 rounded-lg text-zinc-500 hover:bg-zinc-200/60 disabled:opacity-30 cursor-pointer"
                   >
                     <ArrowUp className="w-3.5 h-3.5" />
@@ -288,7 +352,7 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
                     type="button"
                     disabled={idx === categories.length - 1}
                     onClick={() => moveCategory(idx, 1)}
-                    aria-label="تأخير القسم"
+                    aria-label="Move Down"
                     className="p-1.5 rounded-lg text-zinc-500 hover:bg-zinc-200/60 disabled:opacity-30 cursor-pointer"
                   >
                     <ArrowDown className="w-3.5 h-3.5" />
@@ -296,7 +360,7 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
                   <button
                     type="button"
                     onClick={() => openEditCategory(cat)}
-                    aria-label="تعديل القسم"
+                    aria-label="Edit Category"
                     className="p-1.5 rounded-lg text-zinc-500 hover:bg-zinc-200/60 hover:text-zinc-900 cursor-pointer"
                   >
                     <Edit3 className="w-3.5 h-3.5" />
@@ -304,7 +368,7 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
                   <button
                     type="button"
                     onClick={() => removeCategory(cat.id)}
-                    aria-label="حذف القسم"
+                    aria-label="Delete Category"
                     className="p-1.5 rounded-lg text-zinc-400 hover:bg-red-50 hover:text-red-600 cursor-pointer"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -328,7 +392,7 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
                 : 'bg-white border border-zinc-200 text-zinc-600'
             }`}
           >
-            كل الوجبات ({items.length})
+            {t.admin.menu.allCategories} ({items.length})
           </button>
           {categories.map((cat) => (
             <button
@@ -341,19 +405,20 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
                   : 'bg-white border border-zinc-200 text-zinc-600'
               }`}
             >
-              {cat.name}
+              {loc(cat.name, cat.name_en)}
             </button>
           ))}
         </div>
 
         {visibleItems.length === 0 ? (
           <div className="bg-white border border-zinc-200 rounded-2xl p-10 text-center text-sm text-zinc-500">
-            لا توجد وجبات في هذا القسم حتى الآن.
+            {t.admin.menu.emptyItemsTitle}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {visibleItems.map((item) => {
-              const catName = categories.find((c) => c.id === item.categoryId)?.name || 'قسم';
+              const catObj = categories.find((c) => c.id === item.categoryId);
+              const catName = catObj ? loc(catObj.name, catObj.name_en) : isEn ? 'Category' : 'قسم';
               return (
                 <article
                   key={item.id}
@@ -362,7 +427,7 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
                   <div className="aspect-[4/3] bg-zinc-100 relative">
                     <SafeImage
                       src={item.imageUrl}
-                      alt={item.name}
+                      alt={loc(item.name, item.name_en)}
                       className="w-full h-full object-cover"
                     />
                   </div>
@@ -371,23 +436,33 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
                       <div className="flex items-center justify-between text-[11px] text-zinc-500">
                         <span>{catName}</span>
                         <span className="font-mono-num">
-                          {item.sizes.length} أحجام · {item.addons.length} إضافات
+                          {item.sizes.length} {isEn ? 'sizes' : 'أحجام'} · {item.addons.length}{' '}
+                          {isEn ? 'add-ons' : 'إضافات'}
                         </span>
                       </div>
                       <h4 className="text-base font-bold text-zinc-950 mt-1 flex items-center gap-1.5">
-                        <span>{item.name}</span>
+                        <span className="truncate">{loc(item.name, item.name_en)}</span>
                         {item.isSpicy && <Flame className="w-3.5 h-3.5 text-red-500 shrink-0" />}
                       </h4>
-                      {item.description && (
+                      <p className="text-[11px] font-mono-num text-zinc-400 mt-0.5 truncate" dir={isEn ? 'rtl' : 'ltr'}>
+                        {isEn
+                          ? item.name
+                            ? `AR: ${item.name}`
+                            : 'AR: —'
+                          : item.name_en
+                            ? `EN: ${item.name_en}`
+                            : 'EN: غير مضاف'}
+                      </p>
+                      {loc(item.description, item.description_en) && (
                         <p className="text-xs text-zinc-500 mt-1 line-clamp-2">
-                          {item.description}
+                          {loc(item.description, item.description_en)}
                         </p>
                       )}
                     </div>
 
                     <div className="pt-3 border-t border-zinc-100 flex items-center justify-between gap-2">
                       <span className="font-mono-num text-sm font-extrabold text-zinc-950">
-                        {item.basePrice} {restaurant.currency}
+                        {item.basePrice} {currencyLabel}
                       </span>
 
                       <div className="flex items-center gap-1.5">
@@ -402,12 +477,14 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
                               : 'bg-zinc-100 text-zinc-500 border border-zinc-200'
                           }`}
                         >
-                          {item.isAvailable ? 'متاح' : 'مخفي'}
+                          {item.isAvailable
+                            ? t.admin.menu.availableBadge
+                            : t.admin.menu.unavailableBadge}
                         </button>
                         <button
                           type="button"
                           onClick={() => openEditItem(item)}
-                          aria-label="تعديل الوجبة"
+                          aria-label="Edit Dish"
                           className="p-2 rounded-lg border border-zinc-200 text-zinc-700 hover:bg-zinc-50 cursor-pointer"
                         >
                           <Edit3 className="w-3.5 h-3.5" />
@@ -415,7 +492,7 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
                         <button
                           type="button"
                           onClick={() => removeMenuItem(item.id)}
-                          aria-label="حذف الوجبة"
+                          aria-label="Delete Dish"
                           className="p-2 rounded-lg border border-zinc-200 text-red-600 hover:bg-red-50 cursor-pointer"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -430,20 +507,21 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
         )}
       </div>
 
-      {/* Category Modal */}
+      {/* Category Modal (Bilingual AR + EN) */}
       {catModalOpen && (
         <div
           className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
           onClick={() => setCatModalOpen(false)}
         >
           <form
+            dir={dir}
             onClick={(e) => e.stopPropagation()}
             onSubmit={handleSaveCategory}
             className="w-full max-w-md bg-white rounded-2xl p-6 space-y-4 shadow-xl"
           >
             <div className="flex items-center justify-between">
               <h3 className="text-base font-extrabold">
-                {editingCat ? 'تعديل القسم' : 'إضافة قسم جديد'}
+                {editingCat ? t.admin.menu.editCategoryTitle : t.admin.menu.addCategoryBtn}
               </h3>
               <button
                 type="button"
@@ -454,20 +532,54 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
               </button>
             </div>
 
-            <div>
-              <label className="block text-xs font-bold mb-1">اسم القسم *</label>
-              <input
-                type="text"
-                required
-                value={catName}
-                onChange={(e) => setCatName(e.target.value)}
-                placeholder="مثال: برجر اللحم"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold mb-1">
+                  {isEn ? 'Category Name (AR) *' : 'اسم القسم (عربي) *'}
+                </label>
+                <input
+                  type="text"
+                  dir="rtl"
+                  required
+                  value={catName}
+                  onChange={(e) => setCatName(e.target.value)}
+                  placeholder="مثال: برجر اللحم"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm"
+                />
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold">
+                    {isEn ? 'Category Name (EN)' : 'اسم القسم (إنجليزي)'}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (catName.trim()) {
+                        const suggested = autoSuggestEnglish(catName);
+                        if (suggested) setCatNameEn(suggested);
+                      }
+                    }}
+                    className="text-[11px] font-bold text-amber-700 hover:underline cursor-pointer"
+                  >
+                    {isEn ? 'Auto EN' : 'تعبئة EN'}
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  dir="ltr"
+                  value={catNameEn}
+                  onChange={(e) => setCatNameEn(e.target.value)}
+                  placeholder="e.g. Smash Burgers"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm text-left"
+                />
+              </div>
             </div>
 
             <div>
-              <label className="block text-xs font-bold mb-1">الترتيب</label>
+              <label className="block text-xs font-bold mb-1">
+                {isEn ? 'Sort Order' : 'الترتيب'}
+              </label>
               <input
                 type="number"
                 min={0}
@@ -478,11 +590,13 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
             </div>
 
             <div className="space-y-2">
-              <label className="block text-xs font-bold">صورة القسم</label>
+              <label className="block text-xs font-bold">
+                {isEn ? 'Category Image' : 'صورة القسم'}
+              </label>
               <div className="flex items-center gap-3">
                 <SafeImage
                   src={catImageUrl}
-                  alt="صورة القسم"
+                  alt="Category"
                   className="w-14 h-14 rounded-xl object-cover border border-zinc-200"
                 />
                 <label className="px-3 py-2 rounded-xl border border-zinc-300 text-xs font-bold cursor-pointer hover:bg-zinc-50 flex items-center gap-1.5">
@@ -491,7 +605,7 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
                   ) : (
                     <Upload className="w-3.5 h-3.5" />
                   )}
-                  <span>رفع صورة</span>
+                  <span>{t.admin.menu.uploadImage}</span>
                   <input
                     type="file"
                     accept="image/*"
@@ -519,46 +633,64 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
               </div>
             </div>
 
+            {catError && (
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 font-semibold">
+                {catError}
+              </div>
+            )}
+
             <button
               type="submit"
               disabled={savingCat}
               className="w-full py-3 rounded-xl bg-zinc-950 text-white text-sm font-bold hover:bg-zinc-800 cursor-pointer disabled:opacity-50"
             >
-              {savingCat ? 'جاري الحفظ...' : 'حفظ القسم'}
+              {savingCat ? t.admin.themes.savingBtn : t.admin.menu.saveCategoryBtn}
             </button>
           </form>
         </div>
       )}
 
-      {/* Menu Item Modal */}
+      {/* Menu Item Modal (Full Bilingual AR + EN) */}
       {itemModalOpen && (
         <div
           className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
           onClick={() => setItemModalOpen(false)}
         >
           <form
+            dir={dir}
             onClick={(e) => e.stopPropagation()}
             onSubmit={handleSaveItem}
             className="w-full max-w-2xl bg-white rounded-2xl p-6 space-y-5 shadow-xl max-h-[90vh] overflow-y-auto"
           >
             <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
               <h3 className="text-lg font-extrabold">
-                {editingItem ? 'تعديل الوجبة' : 'إضافة وجبة جديدة'}
+                {editingItem ? t.admin.menu.editItemTitle : t.admin.menu.newItemTitle}
               </h3>
-              <button
-                type="button"
-                onClick={() => setItemModalOpen(false)}
-                className="p-1.5 rounded-lg hover:bg-zinc-100 cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleAutoFillItemEn}
+                  className="px-2.5 py-1.5 rounded-lg border border-zinc-200 text-[11px] font-bold text-zinc-700 hover:bg-zinc-50 flex items-center gap-1 cursor-pointer"
+                >
+                  <Wand2 className="w-3.5 h-3.5 text-amber-600" />
+                  <span>{t.admin.menu.autoFillEn}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setItemModalOpen(false)}
+                  className="p-1.5 rounded-lg hover:bg-zinc-100 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-bold mb-1">اسم الوجبة *</label>
+                <label className="block text-xs font-bold mb-1">{t.admin.menu.nameArLabel}</label>
                 <input
                   type="text"
+                  dir="rtl"
                   required
                   value={itemName}
                   onChange={(e) => setItemName(e.target.value)}
@@ -567,37 +699,64 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold mb-1">القسم *</label>
-                <select
-                  required
-                  value={itemCatId}
-                  onChange={(e) => setItemCatId(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm bg-white"
-                >
-                  {categories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </option>
-                  ))}
-                </select>
+                <label className="block text-xs font-bold mb-1">{t.admin.menu.nameEnLabel}</label>
+                <input
+                  type="text"
+                  dir="ltr"
+                  value={itemNameEn}
+                  onChange={(e) => setItemNameEn(e.target.value)}
+                  placeholder="e.g. Double Smash Burger"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm text-left"
+                />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-bold mb-1">الوصف والمكونات</label>
-              <textarea
-                rows={2}
-                value={itemDesc}
-                onChange={(e) => setItemDesc(e.target.value)}
-                placeholder="وصف شهي مختصر يظهر تحت اسم الوجبة..."
-                className="w-full px-3.5 py-2 rounded-xl border border-zinc-200 text-sm"
-              />
+              <label className="block text-xs font-bold mb-1">{t.admin.menu.categoryLabel}</label>
+              <select
+                required
+                value={itemCatId}
+                onChange={(e) => setItemCatId(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm bg-white"
+              >
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.name}
+                    {cat.name_en ? ` / ${cat.name_en}` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold mb-1">{t.admin.menu.descArLabel}</label>
+                <textarea
+                  dir="rtl"
+                  rows={2}
+                  value={itemDesc}
+                  onChange={(e) => setItemDesc(e.target.value)}
+                  placeholder="وصف شهي مختصر يظهر تحت اسم الوجبة..."
+                  className="w-full px-3.5 py-2 rounded-xl border border-zinc-200 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold mb-1">{t.admin.menu.descEnLabel}</label>
+                <textarea
+                  dir="ltr"
+                  rows={2}
+                  value={itemDescEn}
+                  onChange={(e) => setItemDescEn(e.target.value)}
+                  placeholder="Short appetizing dish description..."
+                  className="w-full px-3.5 py-2 rounded-xl border border-zinc-200 text-sm text-left"
+                />
+              </div>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div>
                 <label className="block text-xs font-bold mb-1">
-                  السعر الأساسي ({restaurant.currency}) *
+                  {t.admin.menu.basePriceLabel} ({currencyLabel})
                 </label>
                 <input
                   type="number"
@@ -610,7 +769,7 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold mb-1">السعرات</label>
+                <label className="block text-xs font-bold mb-1">{t.admin.menu.caloriesLabel}</label>
                 <input
                   type="number"
                   min={0}
@@ -620,7 +779,9 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold mb-1">عدد الطلبات</label>
+                <label className="block text-xs font-bold mb-1">
+                  {isEn ? 'Orders Count' : 'عدد الطلبات'}
+                </label>
                 <input
                   type="number"
                   min={0}
@@ -630,7 +791,9 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold mb-1">الترتيب</label>
+                <label className="block text-xs font-bold mb-1">
+                  {isEn ? 'Sort Order' : 'الترتيب'}
+                </label>
                 <input
                   type="number"
                   min={0}
@@ -642,11 +805,11 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
             </div>
 
             <div className="space-y-2">
-              <label className="block text-xs font-bold">صورة الوجبة</label>
+              <label className="block text-xs font-bold">{t.admin.menu.imageLabel}</label>
               <div className="flex flex-wrap items-center gap-3">
                 <SafeImage
                   src={itemImageUrl}
-                  alt="صورة الوجبة"
+                  alt="Dish"
                   className="w-16 h-16 rounded-xl object-cover border border-zinc-200"
                 />
                 <label className="px-3.5 py-2 rounded-xl border border-zinc-300 text-xs font-bold cursor-pointer hover:bg-zinc-50 flex items-center gap-1.5">
@@ -655,7 +818,7 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
                   ) : (
                     <Upload className="w-4 h-4" />
                   )}
-                  <span>{uploadingImg ? 'جاري الرفع...' : 'رفع من الجهاز'}</span>
+                  <span>{uploadingImg ? t.onboarding.logoUploading : t.admin.menu.uploadImage}</span>
                   <input
                     type="file"
                     accept="image/*"
@@ -684,33 +847,49 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
               </div>
             </div>
 
-            {/* Sizes Array Builder */}
+            {/* Bilingual Sizes Array Builder */}
             <div className="space-y-2.5 border-t border-zinc-100 pt-4">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-zinc-900">الأحجام والأسعار (Sizes)</span>
+                <span className="text-xs font-bold text-zinc-900">{t.admin.menu.sizesHeading}</span>
                 <button
                   type="button"
                   onClick={() =>
-                    setItemSizes((prev) => [...prev, { name: '', price: itemBasePrice }])
+                    setItemSizes((prev) => [
+                      ...prev,
+                      { name: '', name_en: '', price: itemBasePrice },
+                    ])
                   }
                   className="text-xs font-bold text-[#A61C1C] hover:opacity-80 cursor-pointer flex items-center gap-1"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>إضافة حجم</span>
+                  <span>{t.admin.menu.addSizeBtn}</span>
                 </button>
               </div>
               {itemSizes.map((sz, idx) => (
-                <div key={`sz_${idx}`} className="flex items-center gap-2">
+                <div key={`sz_${idx}`} className="grid grid-cols-12 items-center gap-2">
                   <input
                     type="text"
+                    dir="rtl"
                     value={sz.name}
                     onChange={(e) =>
                       setItemSizes((prev) =>
                         prev.map((s, i) => (i === idx ? { ...s, name: e.target.value } : s))
                       )
                     }
-                    placeholder="اسم الحجم (مثال: كبير)"
-                    className="flex-1 px-3 py-2 rounded-lg border border-zinc-200 text-xs"
+                    placeholder={t.admin.menu.sizeArPlaceholder}
+                    className="col-span-4 px-3 py-2 rounded-lg border border-zinc-200 text-xs"
+                  />
+                  <input
+                    type="text"
+                    dir="ltr"
+                    value={sz.name_en || ''}
+                    onChange={(e) =>
+                      setItemSizes((prev) =>
+                        prev.map((s, i) => (i === idx ? { ...s, name_en: e.target.value } : s))
+                      )
+                    }
+                    placeholder={t.admin.menu.sizeEnPlaceholder}
+                    className="col-span-4 px-3 py-2 rounded-lg border border-zinc-200 text-xs text-left"
                   />
                   <input
                     type="number"
@@ -723,13 +902,13 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
                         )
                       )
                     }
-                    placeholder="سعر الحجم"
-                    className="w-32 px-3 py-2 rounded-lg border border-zinc-200 text-xs font-mono-num"
+                    placeholder={isEn ? 'Price' : 'السعر'}
+                    className="col-span-3 px-3 py-2 rounded-lg border border-zinc-200 text-xs font-mono-num"
                   />
                   <button
                     type="button"
                     onClick={() => setItemSizes((prev) => prev.filter((_, i) => i !== idx))}
-                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg cursor-pointer"
+                    className="col-span-1 p-2 text-red-600 hover:bg-red-50 rounded-lg cursor-pointer flex justify-center"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -737,33 +916,46 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
               ))}
             </div>
 
-            {/* Addons Array Builder */}
+            {/* Bilingual Addons Array Builder */}
             <div className="space-y-2.5 border-t border-zinc-100 pt-4">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-zinc-900">الإضافات (Add-ons)</span>
+                <span className="text-xs font-bold text-zinc-900">{t.admin.menu.addonsHeading}</span>
                 <button
                   type="button"
                   onClick={() =>
-                    setItemAddons((prev) => [...prev, { name: '', price: 20 }])
+                    setItemAddons((prev) => [...prev, { name: '', name_en: '', price: 20 }])
                   }
                   className="text-xs font-bold text-[#A61C1C] hover:opacity-80 cursor-pointer flex items-center gap-1"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>إضافة خيار</span>
+                  <span>{t.admin.menu.addAddonBtn}</span>
                 </button>
               </div>
               {itemAddons.map((ad, idx) => (
-                <div key={`ad_${idx}`} className="flex items-center gap-2">
+                <div key={`ad_${idx}`} className="grid grid-cols-12 items-center gap-2">
                   <input
                     type="text"
+                    dir="rtl"
                     value={ad.name}
                     onChange={(e) =>
                       setItemAddons((prev) =>
                         prev.map((a, i) => (i === idx ? { ...a, name: e.target.value } : a))
                       )
                     }
-                    placeholder="اسم الإضافة (مثال: صوص ترافل)"
-                    className="flex-1 px-3 py-2 rounded-lg border border-zinc-200 text-xs"
+                    placeholder={t.admin.menu.addonArPlaceholder}
+                    className="col-span-4 px-3 py-2 rounded-lg border border-zinc-200 text-xs"
+                  />
+                  <input
+                    type="text"
+                    dir="ltr"
+                    value={ad.name_en || ''}
+                    onChange={(e) =>
+                      setItemAddons((prev) =>
+                        prev.map((a, i) => (i === idx ? { ...a, name_en: e.target.value } : a))
+                      )
+                    }
+                    placeholder={t.admin.menu.addonEnPlaceholder}
+                    className="col-span-4 px-3 py-2 rounded-lg border border-zinc-200 text-xs text-left"
                   />
                   <input
                     type="number"
@@ -774,19 +966,25 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
                         prev.map((a, i) => (i === idx ? { ...a, price: Number(e.target.value) } : a))
                       )
                     }
-                    placeholder="السعر"
-                    className="w-32 px-3 py-2 rounded-lg border border-zinc-200 text-xs font-mono-num"
+                    placeholder={isEn ? 'Price' : 'السعر'}
+                    className="col-span-3 px-3 py-2 rounded-lg border border-zinc-200 text-xs font-mono-num"
                   />
                   <button
                     type="button"
                     onClick={() => setItemAddons((prev) => prev.filter((_, i) => i !== idx))}
-                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg cursor-pointer"
+                    className="col-span-1 p-2 text-red-600 hover:bg-red-50 rounded-lg cursor-pointer flex justify-center"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
               ))}
             </div>
+
+            {itemError && (
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 font-semibold">
+                {itemError}
+              </div>
+            )}
 
             <div className="flex flex-wrap items-center justify-between gap-4 pt-3 border-t border-zinc-100">
               <div className="flex items-center gap-5">
@@ -797,7 +995,7 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
                     onChange={(e) => setItemAvailable(e.target.checked)}
                     className="w-4 h-4 accent-zinc-950"
                   />
-                  <span>متاح للطلب</span>
+                  <span>{t.admin.menu.availableToggle}</span>
                 </label>
 
                 <label className="flex items-center gap-2 text-xs font-bold cursor-pointer">
@@ -807,7 +1005,7 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
                     onChange={(e) => setItemIsSpicy(e.target.checked)}
                     className="w-4 h-4 accent-red-600"
                   />
-                  <span>صنف حار (Spicy)</span>
+                  <span>{t.admin.menu.spicyToggle}</span>
                 </label>
               </div>
 
@@ -816,7 +1014,7 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
                 disabled={savingItem}
                 className="px-6 py-2.5 rounded-xl bg-zinc-950 text-white text-sm font-bold hover:bg-zinc-800 cursor-pointer disabled:opacity-50"
               >
-                {savingItem ? 'جاري الحفظ...' : 'حفظ الوجبة'}
+                {savingItem ? t.admin.themes.savingBtn : t.admin.menu.saveItemBtn}
               </button>
             </div>
           </form>

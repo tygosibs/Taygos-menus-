@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { Check, Loader2, Plus, RotateCcw, Save, Trash2 } from 'lucide-react';
+import { useLanguage } from '../../contexts/LanguageContext';
 import { DEFAULT_PLATFORM_LANDING } from '../../data/defaultLandingSettings';
 import {
   fetchPlatformLandingSettings,
@@ -8,6 +9,8 @@ import {
 import { PlatformLandingSettings } from '../../types/menu';
 
 export function LandingCmsTab() {
+  const { lang, t } = useLanguage();
+  const isEn = lang === 'en';
   const [form, setForm] = useState<PlatformLandingSettings>(DEFAULT_PLATFORM_LANDING);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -22,7 +25,7 @@ export function LandingCmsTab() {
         if (active) setForm(data);
       })
       .catch((err) => {
-        if (active) setError(err instanceof Error ? err.message : 'تعذر تحميل إعدادات صفحة الهبوط');
+        if (active) setError(err instanceof Error ? err.message : t.auth.errGeneric);
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -30,7 +33,7 @@ export function LandingCmsTab() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [t.auth.errGeneric]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -42,7 +45,7 @@ export function LandingCmsTab() {
       setSavedNotice(true);
       setTimeout(() => setSavedNotice(false), 3500);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'تعذر حفظ تعديلات صفحة الهبوط');
+      setError(err instanceof Error ? err.message : t.auth.errGeneric);
     } finally {
       setSaving(false);
     }
@@ -57,7 +60,7 @@ export function LandingCmsTab() {
     return (
       <div className="bg-white border border-zinc-200 rounded-2xl p-12 text-center space-y-2">
         <Loader2 className="w-7 h-7 animate-spin text-zinc-700 mx-auto" />
-        <p className="text-xs font-semibold text-zinc-500">جاري تحميل محتوى صفحة الهبوط...</p>
+        <p className="text-xs font-semibold text-zinc-500">{t.admin.loadingWorkspace}</p>
       </div>
     );
   }
@@ -66,10 +69,8 @@ export function LandingCmsTab() {
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="bg-white border border-zinc-200 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-lg font-extrabold text-zinc-950">التحكم في محتوى صفحة الهبوط</h2>
-          <p className="text-xs text-zinc-500 mt-0.5">
-            تعديل نصوص الهيرو والمميزات وباقات الأسعار ورقم الدعم في الصفحة الرئيسية مباشرة عبر Firestore
-          </p>
+          <h2 className="text-lg font-extrabold text-zinc-950">{t.superAdmin.cms.title}</h2>
+          <p className="text-xs text-zinc-500 mt-0.5">{t.superAdmin.cms.subtitle}</p>
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
@@ -79,7 +80,7 @@ export function LandingCmsTab() {
             className="px-3.5 py-2.5 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-700 hover:bg-zinc-50 flex items-center gap-1.5 cursor-pointer"
           >
             <RotateCcw className="w-3.5 h-3.5" />
-            <span>استعادة الافتراضي</span>
+            <span>{isEn ? 'Reset' : 'إعادة ضبط'}</span>
           </button>
           <button
             type="submit"
@@ -94,7 +95,11 @@ export function LandingCmsTab() {
               <Save className="w-3.5 h-3.5" />
             )}
             <span>
-              {saving ? 'جاري النشر...' : savedNotice ? 'تم الحفظ والنشر' : 'حفظ ونشر التعديلات'}
+              {saving
+                ? t.superAdmin.cms.savingBtn
+                : savedNotice
+                  ? t.superAdmin.cms.savedToast
+                  : t.superAdmin.cms.saveBtn}
             </span>
           </button>
         </div>
@@ -106,47 +111,84 @@ export function LandingCmsTab() {
         </div>
       )}
 
-      {/* Hero Section & Support Settings */}
+      {/* Hero Section & Support Settings (Dual AR / EN) */}
       <div className="bg-white border border-zinc-200 rounded-2xl p-6 space-y-4">
         <h3 className="text-sm font-extrabold text-zinc-950 border-b border-zinc-100 pb-3">
-          القسم الترحيبي (Hero) وبيانات التواصل
+          {isEn
+            ? 'Hero & Global Settings (AR / EN)'
+            : 'إعدادات الهيرو والمنصة (عربي / إنجليزي)'}
         </h3>
 
-        <div>
-          <label className="block text-xs font-bold text-zinc-800 mb-1.5">
-            العنوان الرئيسي (Hero Title)
-          </label>
-          <input
-            type="text"
-            required
-            maxLength={200}
-            value={form.heroTitle}
-            onChange={(e) => setForm((p) => ({ ...p, heroTitle: e.target.value }))}
-            className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm"
-          />
-        </div>
-
-        <div>
-          <label className="block text-xs font-bold text-zinc-800 mb-1.5">
-            النص التوضيحي (Hero Subtitle)
-          </label>
-          <textarea
-            rows={3}
-            required
-            maxLength={600}
-            value={form.heroSubtitle}
-            onChange={(e) => setForm((p) => ({ ...p, heroSubtitle: e.target.value }))}
-            className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm"
-          />
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-xs font-bold text-zinc-800 mb-1.5">
-              نص زر الدعوة الرئيسي (CTA)
+              {t.superAdmin.cms.heroTitleAr}
             </label>
             <input
               type="text"
+              dir="rtl"
+              required
+              maxLength={200}
+              value={form.heroTitle}
+              onChange={(e) => setForm((p) => ({ ...p, heroTitle: e.target.value }))}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-zinc-800 mb-1.5">
+              {t.superAdmin.cms.heroTitleEn}
+            </label>
+            <input
+              type="text"
+              dir="ltr"
+              maxLength={200}
+              value={form.heroTitle_en || ''}
+              onChange={(e) => setForm((p) => ({ ...p, heroTitle_en: e.target.value }))}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-bold text-zinc-800 mb-1.5">
+              {t.superAdmin.cms.heroSubtitleAr}
+            </label>
+            <textarea
+              rows={3}
+              dir="rtl"
+              required
+              maxLength={600}
+              value={form.heroSubtitle}
+              onChange={(e) => setForm((p) => ({ ...p, heroSubtitle: e.target.value }))}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-zinc-800 mb-1.5">
+              {t.superAdmin.cms.heroSubtitleEn}
+            </label>
+            <textarea
+              rows={3}
+              dir="ltr"
+              maxLength={600}
+              value={form.heroSubtitle_en || ''}
+              onChange={(e) => setForm((p) => ({ ...p, heroSubtitle_en: e.target.value }))}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div>
+            <label className="block text-xs font-bold text-zinc-800 mb-1.5">
+              {t.superAdmin.cms.ctaAr}
+            </label>
+            <input
+              type="text"
+              dir="rtl"
               required
               maxLength={80}
               value={form.ctaButtonText}
@@ -157,7 +199,21 @@ export function LandingCmsTab() {
 
           <div>
             <label className="block text-xs font-bold text-zinc-800 mb-1.5">
-              رقم واتساب الدعم والمبيعات
+              {t.superAdmin.cms.ctaEn}
+            </label>
+            <input
+              type="text"
+              dir="ltr"
+              maxLength={80}
+              value={form.ctaButtonText_en || ''}
+              onChange={(e) => setForm((p) => ({ ...p, ctaButtonText_en: e.target.value }))}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-zinc-800 mb-1.5">
+              {t.superAdmin.cms.whatsappLabel}
             </label>
             <input
               type="text"
@@ -172,10 +228,11 @@ export function LandingCmsTab() {
 
           <div>
             <label className="block text-xs font-bold text-zinc-800 mb-1.5">
-              نص التذييل (Footer Text)
+              {t.superAdmin.cms.footerAr}
             </label>
             <input
               type="text"
+              dir="rtl"
               required
               maxLength={200}
               value={form.footerText}
@@ -183,17 +240,30 @@ export function LandingCmsTab() {
               className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm"
             />
           </div>
+
+          <div>
+            <label className="block text-xs font-bold text-zinc-800 mb-1.5">
+              {t.superAdmin.cms.footerEn}
+            </label>
+            <input
+              type="text"
+              dir="ltr"
+              maxLength={200}
+              value={form.footerText_en || ''}
+              onChange={(e) => setForm((p) => ({ ...p, footerText_en: e.target.value }))}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm"
+            />
+          </div>
         </div>
       </div>
 
-      {/* Features List Builder */}
+      {/* Features List Builder (Dual AR / EN) */}
       <div className="bg-white border border-zinc-200 rounded-2xl p-6 space-y-4">
         <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
           <div>
             <h3 className="text-sm font-extrabold text-zinc-950">
-              مميزات المنصة ({form.features.length})
+              {t.superAdmin.cms.featuresHeading} ({form.features.length})
             </h3>
-            <p className="text-[11px] text-zinc-500">تظهر في بطاقات النظام الإداري بالصفحة الرئيسية</p>
           </div>
           <button
             type="button"
@@ -201,13 +271,16 @@ export function LandingCmsTab() {
             onClick={() =>
               setForm((p) => ({
                 ...p,
-                features: [...p.features, { title: '', description: '' }],
+                features: [
+                  ...p.features,
+                  { title: '', title_en: '', description: '', description_en: '' },
+                ],
               }))
             }
             className="px-3 py-1.5 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-800 hover:bg-zinc-50 flex items-center gap-1 cursor-pointer disabled:opacity-40"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>إضافة ميزة</span>
+            <span>{t.superAdmin.cms.addFeatureBtn}</span>
           </button>
         </div>
 
@@ -219,7 +292,7 @@ export function LandingCmsTab() {
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[11px] font-bold text-zinc-500 font-mono-num">
-                  ميزة #{idx + 1}
+                  #{idx + 1}
                 </span>
                 <button
                   type="button"
@@ -234,50 +307,85 @@ export function LandingCmsTab() {
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
-              <input
-                type="text"
-                required
-                placeholder="عنوان الميزة"
-                value={feat.title}
-                onChange={(e) =>
-                  setForm((p) => ({
-                    ...p,
-                    features: p.features.map((f, i) =>
-                      i === idx ? { ...f, title: e.target.value } : f
-                    ),
-                  }))
-                }
-                className="w-full px-3 py-2 rounded-lg border border-zinc-200 bg-white text-xs font-bold"
-              />
-              <textarea
-                rows={2}
-                placeholder="وصف مختصر للميزة"
-                value={feat.description}
-                onChange={(e) =>
-                  setForm((p) => ({
-                    ...p,
-                    features: p.features.map((f, i) =>
-                      i === idx ? { ...f, description: e.target.value } : f
-                    ),
-                  }))
-                }
-                className="w-full px-3 py-2 rounded-lg border border-zinc-200 bg-white text-xs"
-              />
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <input
+                  type="text"
+                  dir="rtl"
+                  required
+                  placeholder={t.superAdmin.cms.featureTitleAr}
+                  value={feat.title}
+                  onChange={(e) =>
+                    setForm((p) => ({
+                      ...p,
+                      features: p.features.map((f, i) =>
+                        i === idx ? { ...f, title: e.target.value } : f
+                      ),
+                    }))
+                  }
+                  className="w-full px-3 py-2 rounded-lg border border-zinc-200 bg-white text-xs font-bold"
+                />
+                <input
+                  type="text"
+                  dir="ltr"
+                  placeholder={t.superAdmin.cms.featureTitleEn}
+                  value={feat.title_en || ''}
+                  onChange={(e) =>
+                    setForm((p) => ({
+                      ...p,
+                      features: p.features.map((f, i) =>
+                        i === idx ? { ...f, title_en: e.target.value } : f
+                      ),
+                    }))
+                  }
+                  className="w-full px-3 py-2 rounded-lg border border-zinc-200 bg-white text-xs font-bold"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <textarea
+                  rows={2}
+                  dir="rtl"
+                  placeholder={t.superAdmin.cms.featureDescAr}
+                  value={feat.description}
+                  onChange={(e) =>
+                    setForm((p) => ({
+                      ...p,
+                      features: p.features.map((f, i) =>
+                        i === idx ? { ...f, description: e.target.value } : f
+                      ),
+                    }))
+                  }
+                  className="w-full px-3 py-2 rounded-lg border border-zinc-200 bg-white text-xs"
+                />
+                <textarea
+                  rows={2}
+                  dir="ltr"
+                  placeholder={t.superAdmin.cms.featureDescEn}
+                  value={feat.description_en || ''}
+                  onChange={(e) =>
+                    setForm((p) => ({
+                      ...p,
+                      features: p.features.map((f, i) =>
+                        i === idx ? { ...f, description_en: e.target.value } : f
+                      ),
+                    }))
+                  }
+                  className="w-full px-3 py-2 rounded-lg border border-zinc-200 bg-white text-xs"
+                />
+              </div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Pricing Plans Builder */}
+      {/* Pricing Plans Builder (Dual AR / EN) */}
       <div className="bg-white border border-zinc-200 rounded-2xl p-6 space-y-4">
         <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
           <div>
             <h3 className="text-sm font-extrabold text-zinc-950">
-              باقات الأسعار والاشتراكات ({form.pricingPlans.length})
+              {t.superAdmin.cms.plansHeading} ({form.pricingPlans.length})
             </h3>
-            <p className="text-[11px] text-zinc-500">
-              تعديل الباقات والأسعار والمزايا المعروضة في صفحة الهبوط
-            </p>
           </div>
           <button
             type="button"
@@ -290,10 +398,14 @@ export function LandingCmsTab() {
                   {
                     id: `plan_${Date.now()}`,
                     name: 'باقة جديدة',
+                    name_en: 'New Plan',
                     price: '499',
                     period: 'ج.م / شهرياً',
+                    period_en: 'EGP / month',
                     description: '',
+                    description_en: '',
                     features: ['منيو QR متكامل'],
+                    features_en: ['Complete QR Menu'],
                     highlighted: false,
                   },
                 ],
@@ -302,7 +414,7 @@ export function LandingCmsTab() {
             className="px-3 py-1.5 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-800 hover:bg-zinc-50 flex items-center gap-1 cursor-pointer disabled:opacity-40"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>إضافة باقة</span>
+            <span>+</span>
           </button>
         </div>
 
@@ -331,7 +443,7 @@ export function LandingCmsTab() {
                     }
                     className="w-4 h-4 accent-zinc-950"
                   />
-                  <span>باقة مميزة (الأكثر طلباً)</span>
+                  <span>{t.superAdmin.cms.planHighlighted}</span>
                 </label>
 
                 <button
@@ -348,27 +460,46 @@ export function LandingCmsTab() {
                 </button>
               </div>
 
-              <input
-                type="text"
-                required
-                placeholder="اسم الباقة"
-                value={plan.name}
-                onChange={(e) =>
-                  setForm((p) => ({
-                    ...p,
-                    pricingPlans: p.pricingPlans.map((pl, i) =>
-                      i === idx ? { ...pl, name: e.target.value } : pl
-                    ),
-                  }))
-                }
-                className="w-full px-3 py-2 rounded-lg border border-zinc-200 bg-white text-xs font-bold"
-              />
-
               <div className="grid grid-cols-2 gap-2">
                 <input
                   type="text"
+                  dir="rtl"
                   required
-                  placeholder="السعر"
+                  placeholder={t.superAdmin.cms.planNameAr}
+                  value={plan.name}
+                  onChange={(e) =>
+                    setForm((p) => ({
+                      ...p,
+                      pricingPlans: p.pricingPlans.map((pl, i) =>
+                        i === idx ? { ...pl, name: e.target.value } : pl
+                      ),
+                    }))
+                  }
+                  className="w-full px-3 py-2 rounded-lg border border-zinc-200 bg-white text-xs font-bold"
+                />
+                <input
+                  type="text"
+                  dir="ltr"
+                  placeholder={t.superAdmin.cms.planNameEn}
+                  value={plan.name_en || ''}
+                  onChange={(e) =>
+                    setForm((p) => ({
+                      ...p,
+                      pricingPlans: p.pricingPlans.map((pl, i) =>
+                        i === idx ? { ...pl, name_en: e.target.value } : pl
+                      ),
+                    }))
+                  }
+                  className="w-full px-3 py-2 rounded-lg border border-zinc-200 bg-white text-xs font-bold"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <input
+                  type="text"
+                  required
+                  dir="ltr"
+                  placeholder={t.superAdmin.cms.planPrice}
                   value={plan.price}
                   onChange={(e) =>
                     setForm((p) => ({
@@ -382,7 +513,8 @@ export function LandingCmsTab() {
                 />
                 <input
                   type="text"
-                  placeholder="المدة / العملة"
+                  dir="rtl"
+                  placeholder={t.superAdmin.cms.planPeriodAr}
                   value={plan.period}
                   onChange={(e) =>
                     setForm((p) => ({
@@ -394,42 +526,99 @@ export function LandingCmsTab() {
                   }
                   className="w-full px-3 py-2 rounded-lg border border-zinc-200 bg-white text-xs"
                 />
-              </div>
-
-              <input
-                type="text"
-                placeholder="وصف الباقة"
-                value={plan.description}
-                onChange={(e) =>
-                  setForm((p) => ({
-                    ...p,
-                    pricingPlans: p.pricingPlans.map((pl, i) =>
-                      i === idx ? { ...pl, description: e.target.value } : pl
-                    ),
-                  }))
-                }
-                className="w-full px-3 py-2 rounded-lg border border-zinc-200 bg-white text-xs"
-              />
-
-              <div>
-                <label className="block text-[11px] font-bold text-zinc-600 mb-1">
-                  مزايا الباقة (كل ميزة في سطر)
-                </label>
-                <textarea
-                  rows={4}
-                  value={plan.features.join('\n')}
+                <input
+                  type="text"
+                  dir="ltr"
+                  placeholder={t.superAdmin.cms.planPeriodEn}
+                  value={plan.period_en || ''}
                   onChange={(e) =>
                     setForm((p) => ({
                       ...p,
                       pricingPlans: p.pricingPlans.map((pl, i) =>
-                        i === idx
-                          ? { ...pl, features: e.target.value.split('\n') }
-                          : pl
+                        i === idx ? { ...pl, period_en: e.target.value } : pl
                       ),
                     }))
                   }
-                  className="w-full px-3 py-2 rounded-lg border border-zinc-200 bg-white text-xs leading-relaxed"
+                  className="w-full px-3 py-2 rounded-lg border border-zinc-200 bg-white text-xs"
                 />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <input
+                  type="text"
+                  dir="rtl"
+                  placeholder={t.superAdmin.cms.planDescAr}
+                  value={plan.description}
+                  onChange={(e) =>
+                    setForm((p) => ({
+                      ...p,
+                      pricingPlans: p.pricingPlans.map((pl, i) =>
+                        i === idx ? { ...pl, description: e.target.value } : pl
+                      ),
+                    }))
+                  }
+                  className="w-full px-3 py-2 rounded-lg border border-zinc-200 bg-white text-xs"
+                />
+                <input
+                  type="text"
+                  dir="ltr"
+                  placeholder={t.superAdmin.cms.planDescEn}
+                  value={plan.description_en || ''}
+                  onChange={(e) =>
+                    setForm((p) => ({
+                      ...p,
+                      pricingPlans: p.pricingPlans.map((pl, i) =>
+                        i === idx ? { ...pl, description_en: e.target.value } : pl
+                      ),
+                    }))
+                  }
+                  className="w-full px-3 py-2 rounded-lg border border-zinc-200 bg-white text-xs"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[11px] font-bold text-zinc-600 mb-1">
+                    {t.superAdmin.cms.planFeaturesAr}
+                  </label>
+                  <textarea
+                    rows={4}
+                    dir="rtl"
+                    value={plan.features.join('\n')}
+                    onChange={(e) =>
+                      setForm((p) => ({
+                        ...p,
+                        pricingPlans: p.pricingPlans.map((pl, i) =>
+                          i === idx
+                            ? { ...pl, features: e.target.value.split('\n') }
+                            : pl
+                        ),
+                      }))
+                    }
+                    className="w-full px-3 py-2 rounded-lg border border-zinc-200 bg-white text-xs leading-relaxed"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-zinc-600 mb-1">
+                    {t.superAdmin.cms.planFeaturesEn}
+                  </label>
+                  <textarea
+                    rows={4}
+                    dir="ltr"
+                    value={(plan.features_en || []).join('\n')}
+                    onChange={(e) =>
+                      setForm((p) => ({
+                        ...p,
+                        pricingPlans: p.pricingPlans.map((pl, i) =>
+                          i === idx
+                            ? { ...pl, features_en: e.target.value.split('\n') }
+                            : pl
+                        ),
+                      }))
+                    }
+                    className="w-full px-3 py-2 rounded-lg border border-zinc-200 bg-white text-xs leading-relaxed"
+                  />
+                </div>
               </div>
             </div>
           ))}

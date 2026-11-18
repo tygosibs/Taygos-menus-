@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import {
+  ArrowLeft,
   ArrowRight,
   Building2,
   Code2,
@@ -10,10 +11,12 @@ import {
   ShieldCheck,
   Store,
 } from 'lucide-react';
+import { LanguageToggleButton } from '../components/LanguageToggleButton';
 import { OwnerAuthCard } from '../components/auth/OwnerAuthCard';
 import { LandingCmsTab } from '../components/superadmin/LandingCmsTab';
 import { TenantsManagerTab } from '../components/superadmin/TenantsManagerTab';
 import { ThemeInjectorTab } from '../components/superadmin/ThemeInjectorTab';
+import { useLanguage } from '../contexts/LanguageContext';
 import { auth, isSuperAdminEmail } from '../lib/firebase';
 
 interface SuperAdminPortalProps {
@@ -23,6 +26,7 @@ interface SuperAdminPortalProps {
 type SuperAdminTab = 'tenants' | 'themes' | 'landing';
 
 export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
+  const { t, dir, isRtl } = useLanguage();
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [activeTab, setActiveTab] = useState<SuperAdminTab>('tenants');
@@ -37,10 +41,10 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
 
   if (!authReady) {
     return (
-      <div dir="rtl" className="min-h-screen bg-zinc-50 flex items-center justify-center p-6">
+      <div dir={dir} className="min-h-screen bg-zinc-50 flex items-center justify-center p-6">
         <div className="text-center space-y-2">
           <div className="w-8 h-8 border-2 border-zinc-900 border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-sm font-semibold text-zinc-600">جاري التحقق من صلاحيات الإدارة العليا...</p>
+          <p className="text-sm font-semibold text-zinc-600">{t.superAdmin.title}...</p>
         </div>
       </div>
     );
@@ -49,36 +53,39 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
   // Gate 1: Require login
   if (!user) {
     return (
-      <div dir="rtl" className="min-h-screen bg-[#FAFAFA] flex flex-col justify-between p-6">
-        <header className="max-w-5xl w-full mx-auto flex items-center justify-between">
+      <div dir={dir} className="min-h-screen bg-[#FAFAFA] flex flex-col justify-between p-6">
+        <header className="max-w-5xl w-full mx-auto flex items-center justify-between gap-3">
           <button
             type="button"
             onClick={() => onNavigate('/')}
             className="text-xl font-extrabold text-zinc-950 cursor-pointer flex items-center gap-2"
           >
-            <span>سُفرة QR</span>
-            <span className="text-xs font-bold text-amber-700">· الإدارة العليا</span>
+            <span>{t.brandName}</span>
+            <span className="text-xs font-bold text-amber-700">· {t.nav.superAdmin}</span>
           </button>
-          <button
-            type="button"
-            onClick={() => onNavigate('/')}
-            className="text-xs font-bold text-zinc-600 hover:text-zinc-950 flex items-center gap-1 cursor-pointer"
-          >
-            <ArrowRight className="w-3.5 h-3.5" />
-            <span>العودة للرئيسية</span>
-          </button>
+          <div className="flex items-center gap-3">
+            <LanguageToggleButton />
+            <button
+              type="button"
+              onClick={() => onNavigate('/')}
+              className="text-xs font-bold text-zinc-600 hover:text-zinc-950 flex items-center gap-1 cursor-pointer"
+            >
+              {isRtl ? <ArrowRight className="w-3.5 h-3.5" /> : <ArrowLeft className="w-3.5 h-3.5" />}
+              <span>{t.superAdmin.backToHome}</span>
+            </button>
+          </div>
         </header>
 
         <main className="max-w-md w-full mx-auto my-8 space-y-4">
           <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-900 font-semibold flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 shrink-0" />
-            <span>يرجى تسجيل الدخول بحساب المشرف العام للوصول إلى لوحة الإدارة العليا.</span>
+            <span>{t.superAdmin.loginRequiredDesc}</span>
           </div>
           <OwnerAuthCard />
         </main>
 
         <footer className="text-center text-xs text-zinc-400">
-          منصة سُفرة QR · بوابة الإدارة العليا المحمية
+          {t.brandName} · {t.superAdmin.title}
         </footer>
       </div>
     );
@@ -87,18 +94,20 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
   // Gate 2: Strictly enforce tygosibs@gmail.com
   if (!isSuperAdminEmail(user.email)) {
     return (
-      <div dir="rtl" className="min-h-screen bg-[#FAFAFA] flex items-center justify-center p-6">
+      <div dir={dir} className="min-h-screen bg-[#FAFAFA] flex items-center justify-center p-6">
         <div className="max-w-md w-full bg-white border border-zinc-200 rounded-2xl p-8 text-center space-y-4 shadow-sm">
+          <div className="flex justify-end">
+            <LanguageToggleButton compact />
+          </div>
           <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
             <ShieldAlert className="w-6 h-6" />
           </div>
-          <h1 className="text-xl font-extrabold text-zinc-950">غير مصرح بالدخول</h1>
+          <h1 className="text-xl font-extrabold text-zinc-950">{t.superAdmin.accessDeniedTitle}</h1>
           <p className="text-xs text-zinc-600 leading-relaxed">
-            هذه اللوحة مخصصة لمدير المنصة فقط. الحساب المسجل حالياً (
+            {t.superAdmin.accessDeniedDesc}{' '}
             <span className="font-mono-num font-bold text-zinc-900" dir="ltr">
-              {user.email}
+              ({user.email})
             </span>
-            ) لا يملك صلاحية الوصول إلى الإدارة العليا.
           </p>
           <div className="pt-2 flex flex-wrap items-center justify-center gap-2.5">
             <button
@@ -106,21 +115,21 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
               onClick={() => onNavigate('/admin')}
               className="px-4 py-2.5 rounded-xl bg-zinc-950 text-white text-xs font-bold hover:bg-zinc-800 cursor-pointer"
             >
-              لوحة تحكم مطعمي
+              {t.superAdmin.backToOwner}
             </button>
             <button
               type="button"
               onClick={() => onNavigate('/')}
               className="px-4 py-2.5 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-700 hover:bg-zinc-50 cursor-pointer"
             >
-              الصفحة الرئيسية
+              {t.superAdmin.backToHome}
             </button>
             <button
               type="button"
               onClick={() => signOut(auth)}
               className="px-4 py-2.5 rounded-xl border border-rose-200 text-xs font-bold text-rose-700 hover:bg-rose-50 cursor-pointer"
             >
-              تبديل الحساب
+              {t.admin.signOut}
             </button>
           </div>
         </div>
@@ -129,13 +138,13 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
   }
 
   const navItems: { id: SuperAdminTab; label: string; icon: typeof Building2 }[] = [
-    { id: 'tenants', label: 'إدارة المطاعم والمشتركين', icon: Building2 },
-    { id: 'themes', label: 'إضافة وحقن ثيمات جديدة', icon: Code2 },
-    { id: 'landing', label: 'التحكم في صفحة الهبوط', icon: LayoutTemplate },
+    { id: 'tenants', label: t.superAdmin.tabs.tenants, icon: Building2 },
+    { id: 'themes', label: t.superAdmin.tabs.themeInjector, icon: Code2 },
+    { id: 'landing', label: t.superAdmin.tabs.cms, icon: LayoutTemplate },
   ];
 
   return (
-    <div dir="rtl" className="min-h-screen bg-[#F5F6F8] text-zinc-900 flex flex-col lg:flex-row">
+    <div dir={dir} className="min-h-screen bg-[#F5F6F8] text-zinc-900 flex flex-col lg:flex-row">
       {/* Sidebar */}
       <aside className="lg:w-68 bg-zinc-950 text-white shrink-0 flex flex-col justify-between">
         <div className="p-5 space-y-6">
@@ -146,16 +155,19 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
               className="text-lg font-extrabold text-white cursor-pointer flex items-center gap-2"
             >
               <ShieldCheck className="w-5 h-5 text-amber-400" />
-              <span>الإدارة العليا</span>
+              <span>{t.nav.superAdmin}</span>
             </button>
-            <button
-              type="button"
-              onClick={() => signOut(auth)}
-              aria-label="تسجيل الخروج"
-              className="lg:hidden p-2 rounded-lg text-zinc-400 hover:bg-zinc-800 cursor-pointer"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
+            <div className="lg:hidden flex items-center gap-2">
+              <LanguageToggleButton variant="dark" compact />
+              <button
+                type="button"
+                onClick={() => signOut(auth)}
+                aria-label={t.admin.signOut}
+                className="p-2 rounded-lg text-zinc-400 hover:bg-zinc-800 cursor-pointer"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           <div className="p-3.5 rounded-xl bg-zinc-900 border border-zinc-800 space-y-1">
@@ -195,15 +207,15 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
             className="w-full py-2.5 px-3 rounded-xl bg-zinc-900 border border-zinc-800 text-xs font-bold text-zinc-200 hover:bg-zinc-800 flex items-center justify-center gap-1.5 cursor-pointer"
           >
             <Store className="w-3.5 h-3.5" />
-            <span>لوحة تحكم مطعمي</span>
+            <span>{t.superAdmin.backToOwner}</span>
           </button>
           <button
             type="button"
             onClick={() => onNavigate('/')}
             className="w-full py-2 px-3 rounded-xl text-xs font-semibold text-zinc-400 hover:text-white hover:bg-zinc-900 flex items-center justify-center gap-1.5 cursor-pointer"
           >
-            <ArrowRight className="w-3.5 h-3.5" />
-            <span>عرض صفحة الهبوط</span>
+            {isRtl ? <ArrowRight className="w-3.5 h-3.5" /> : <ArrowLeft className="w-3.5 h-3.5" />}
+            <span>{t.superAdmin.backToHome}</span>
           </button>
           <button
             type="button"
@@ -211,7 +223,7 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
             className="w-full py-2 px-3 rounded-xl text-xs font-semibold text-zinc-400 hover:text-rose-400 hover:bg-zinc-900 flex items-center justify-center gap-1.5 cursor-pointer"
           >
             <LogOut className="w-3.5 h-3.5" />
-            <span>تسجيل الخروج</span>
+            <span>{t.admin.signOut}</span>
           </button>
         </div>
       </aside>
@@ -220,22 +232,27 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
       <div className="flex-1 min-w-0 flex flex-col">
         <header className="bg-white border-b border-zinc-200 px-6 py-3.5 flex items-center justify-between gap-4">
           <div className="text-xs text-zinc-500 flex items-center gap-2">
-            <span>سُفرة QR</span>
+            <span>{t.brandName}</span>
             <span>/</span>
-            <span>لوحة الإدارة العليا</span>
+            <span>{t.nav.superAdmin}</span>
             <span>/</span>
             <span className="font-bold text-zinc-900">
               {navItems.find((n) => n.id === activeTab)?.label}
             </span>
           </div>
 
-          <button
-            type="button"
-            onClick={() => onNavigate('/')}
-            className="px-3.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-bold text-zinc-800 hover:bg-zinc-50 cursor-pointer"
-          >
-            صفحة الهبوط
-          </button>
+          <div className="flex items-center gap-2">
+            <div className="hidden lg:block">
+              <LanguageToggleButton />
+            </div>
+            <button
+              type="button"
+              onClick={() => onNavigate('/')}
+              className="px-3.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-bold text-zinc-800 hover:bg-zinc-50 cursor-pointer"
+            >
+              {t.superAdmin.backToHome}
+            </button>
+          </div>
         </header>
 
         <main className="p-4 sm:p-6 max-w-6xl w-full mx-auto">

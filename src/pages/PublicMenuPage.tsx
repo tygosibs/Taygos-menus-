@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, Palette, PauseCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Palette, PauseCircle } from 'lucide-react';
+import { LanguageToggleButton } from '../components/LanguageToggleButton';
 import { CartDrawer } from '../components/menu/CartDrawer';
 import { ItemModal } from '../components/menu/ItemModal';
 import { ThemeRenderer } from '../components/menu/ThemeRenderer';
+import { useLanguage } from '../contexts/LanguageContext';
 import { DEMO_RESTAURANTS } from '../data/demoRestaurants';
 import { getThemeMeta, isCustomThemeId, MENU_THEMES } from '../data/themes';
 import {
@@ -20,6 +22,7 @@ interface PublicMenuPageProps {
 const VALID_THEME_IDS = new Set<string>(MENU_THEMES.map((t) => t.id));
 
 export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
+  const { lang, dir, isRtl, t, loc } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
@@ -102,7 +105,7 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
         setLoading(false);
       } catch (err) {
         if (!active) return;
-        setError(err instanceof Error ? err.message : 'تعذر تحميل المنيو');
+        setError(err instanceof Error ? err.message : t.auth.errGeneric);
         setLoading(false);
       }
     }
@@ -111,7 +114,7 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
     return () => {
       active = false;
     };
-  }, [slug]);
+  }, [slug, t.auth.errGeneric]);
 
   const handleAddToCart = (incoming: CartItem) => {
     setCart((prev) => {
@@ -193,7 +196,7 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
 
   if (loading) {
     return (
-      <div dir="rtl" className="min-h-screen bg-zinc-950 text-zinc-100 p-6">
+      <div dir={dir} className="min-h-screen bg-zinc-950 text-zinc-100 p-6">
         <div className="max-w-5xl mx-auto space-y-6 animate-pulse">
           <div className="h-24 rounded-2xl bg-zinc-900" />
           <div className="h-10 w-72 rounded-xl bg-zinc-900" />
@@ -210,14 +213,16 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
   if (error || !restaurant) {
     return (
       <div
-        dir="rtl"
+        dir={dir}
         className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center p-6"
       >
         <div className="max-w-md w-full bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center space-y-4">
-          <h1 className="text-2xl font-bold">المنيو غير متوفر</h1>
+          <div className="flex justify-center">
+            <LanguageToggleButton variant="dark" compact />
+          </div>
+          <h1 className="text-2xl font-bold">{t.menu.notFoundTitle}</h1>
           <p className="text-sm text-zinc-400 leading-relaxed">
-            {error ||
-              `لم يتم العثور على مطعم بالرابط (${slug}). تأكد من الرابط أو أنشئ منيو جديداً من لوحة التحكم.`}
+            {error || `${t.menu.notFoundDesc} (${slug})`}
           </p>
           <div className="pt-2 flex items-center justify-center gap-3">
             <button
@@ -225,14 +230,14 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
               onClick={() => onNavigate('/')}
               className="px-4 py-2.5 rounded-xl border border-zinc-700 text-sm font-semibold hover:bg-zinc-800 cursor-pointer"
             >
-              الرئيسية
+              {t.menu.backHome}
             </button>
             <button
               type="button"
               onClick={() => onNavigate('/admin')}
               className="px-4 py-2.5 rounded-xl bg-amber-500 text-zinc-950 text-sm font-bold hover:bg-amber-400 cursor-pointer"
             >
-              لوحة تحكم المطاعم
+              {t.nav.ownerDashboard}
             </button>
           </div>
         </div>
@@ -243,17 +248,22 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
   if (!isDemoMode && restaurant.isSuspended) {
     return (
       <div
-        dir="rtl"
+        dir={dir}
         className="min-h-screen bg-[#FAFAFA] text-zinc-900 flex items-center justify-center p-6"
       >
         <div className="max-w-md w-full bg-white border border-zinc-200 rounded-2xl p-8 text-center space-y-4 shadow-sm">
+          <div className="flex justify-end">
+            <LanguageToggleButton variant="light" compact />
+          </div>
           <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center mx-auto">
             <PauseCircle className="w-7 h-7" />
           </div>
-          <h1 className="text-xl font-extrabold text-zinc-950">عذراً، هذا المنيو متوقف مؤقتاً</h1>
+          <h1 className="text-xl font-extrabold text-zinc-950">{t.menu.suspendedTitle}</h1>
           <p className="text-xs text-zinc-500 leading-relaxed">
-            منيو مطعم <span className="font-bold text-zinc-800">{restaurant.name}</span> متوقف عن
-            العرض في الوقت الحالي. يرجى المحاولة لاحقاً أو التواصل مع إدارة المطعم.
+            <span className="font-bold text-zinc-800">
+              {loc(restaurant.name, restaurant.name_en)}
+            </span>{' '}
+            — {t.menu.suspendedDesc}
           </p>
           <div className="pt-2">
             <button
@@ -261,7 +271,7 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
               onClick={() => onNavigate('/')}
               className="px-5 py-2.5 rounded-xl bg-zinc-950 text-white text-xs font-bold hover:bg-zinc-800 cursor-pointer"
             >
-              العودة للصفحة الرئيسية
+              {t.menu.backHome}
             </button>
           </div>
         </div>
@@ -281,7 +291,7 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
       {/* Unobtrusive Theme Preview Strip for Demos / Owner Preview */}
       {showThemeSwitcher && (
         <div
-          dir="rtl"
+          dir={dir}
           className="bg-zinc-950 text-zinc-200 border-b border-zinc-800 px-4 py-2 flex items-center justify-between gap-3 overflow-x-auto no-scrollbar"
         >
           <div className="flex items-center gap-3 shrink-0">
@@ -290,30 +300,34 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
               onClick={() => onNavigate('/')}
               className="text-xs text-zinc-400 hover:text-white flex items-center gap-1 cursor-pointer"
             >
-              <ArrowRight className="w-3.5 h-3.5" />
-              <span>الرئيسية</span>
+              {isRtl ? (
+                <ArrowRight className="w-3.5 h-3.5" />
+              ) : (
+                <ArrowLeft className="w-3.5 h-3.5" />
+              )}
+              <span>{t.nav.home}</span>
             </button>
             <span className="text-zinc-700">|</span>
             <span className="text-xs text-zinc-400 flex items-center gap-1.5">
               <Palette className="w-3.5 h-3.5" />
-              <span>معاينة الثيمات:</span>
+              <span>{lang === 'en' ? 'Themes Preview:' : 'معاينة الثيمات:'}</span>
             </span>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
-            {MENU_THEMES.map((t) => {
-              const active = effectiveTheme === t.id;
+            {MENU_THEMES.map((th) => {
+              const active = effectiveTheme === th.id;
               return (
                 <button
-                  key={t.id}
+                  key={th.id}
                   type="button"
-                  onClick={() => setPreviewTheme(t.id)}
+                  onClick={() => setPreviewTheme(th.id)}
                   className={`px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-colors cursor-pointer font-mono-num ${
                     active
                       ? 'bg-amber-500 text-zinc-950'
                       : 'bg-zinc-900 text-zinc-400 hover:text-white'
                   }`}
                 >
-                  {t.number}. {t.name}
+                  {th.number}. {lang === 'en' ? th.englishName : th.name}
                 </button>
               );
             })}
@@ -331,10 +345,12 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
                       : 'bg-zinc-900 text-amber-300 hover:text-white'
                   }`}
                 >
-                  {ct.name}
+                  {loc(ct.name, ct.name_en)}
                 </button>
               );
             })}
+            <span className="text-zinc-700 mx-1">|</span>
+            <LanguageToggleButton variant="dark" compact />
           </div>
         </div>
       )}
