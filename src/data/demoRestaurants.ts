@@ -20,10 +20,62 @@ export const DEMO_RESTAURANTS: Record<string, DemoRestaurantBundle> = {
       logoUrl: '/src/assets/images/burger_smash_signature_1794967836686.jpg',
       activeTheme: 'theme-1',
       primaryColor: '#A61C1C',
+      colorMode: 'auto',
+      menuColumns: 2,
       taxRate: 14,
       serviceCharge: 12,
+      deliveryFee: 35,
       currency: 'ج.م',
       isOpen: true,
+      offers: [
+        {
+          id: 'offer_buns_bogo',
+          title: 'عرض اليوم: اشترِ دبل سماش برجر واحصل على الثاني مجاناً!',
+          title_en: 'Today Special: Buy 1 Double Smash Burger & Get 1 FREE!',
+          subtitle: 'أو استخدم كود SUFRA20 لخصم 20% على إجمالي طلبك',
+          subtitle_en: 'Or apply code SUFRA20 for 20% OFF your order',
+          badgeText: '1+1 مجاناً',
+          badgeText_en: '1+1 FREE',
+          isBogo: true,
+          promoCode: 'SUFRA20',
+          placement: 'above_grid',
+          animation: 'bounce',
+          bgColor: '#A61C1C',
+          textColor: '#FFFFFF',
+          isActive: true,
+          sortOrder: 1,
+        },
+      ],
+      promoCodes: [
+        {
+          id: 'promo_sufra20',
+          code: 'SUFRA20',
+          type: 'percent',
+          value: 20,
+          minOrder: 150,
+          description: 'خصم 20% على الطلبات فوق 150',
+          description_en: '20% off orders above 150',
+          isActive: true,
+        },
+        {
+          id: 'promo_freedel',
+          code: 'FREEDEL',
+          type: 'free_delivery',
+          value: 0,
+          description: 'توصيل مجاني',
+          description_en: 'Free Delivery',
+          isActive: true,
+        },
+        {
+          id: 'promo_noservice',
+          code: 'NOSERVICE',
+          type: 'waive_service',
+          value: 0,
+          description: 'إعفاء كامل من رسوم الخدمة',
+          description_en: '0% Service Charge',
+          isActive: true,
+        },
+      ],
     },
     categories: [
       {
@@ -111,6 +163,9 @@ export const DEMO_RESTAURANTS: Record<string, DemoRestaurantBundle> = {
           { name: 'بيكون بقري مدخن', name_en: 'Smoked Beef Bacon', price: 50 },
           { name: 'صوص ترافل جانبي', name_en: 'Side Truffle Dip', price: 25 },
         ],
+        badge: 'trending_week',
+        isBogo: true,
+        suggestedItemIds: ['item_d1', 'item_pa1'],
         sortOrder: 1,
       },
       {
@@ -136,6 +191,8 @@ export const DEMO_RESTAURANTS: Record<string, DemoRestaurantBundle> = {
           { name: 'هالبينو مشوي', name_en: 'Charred Jalapenos', price: 20 },
           { name: 'صوص المختبر السري', name_en: 'Secret Lab Sauce', price: 20 },
         ],
+        badge: 'best_seller',
+        suggestedItemIds: ['item_d1'],
         sortOrder: 2,
       },
       {
@@ -222,10 +279,39 @@ export const DEMO_RESTAURANTS: Record<string, DemoRestaurantBundle> = {
       logoUrl: '/src/assets/images/steak_wagyu_luxury_1794967837741.jpg',
       activeTheme: 'theme-5',
       primaryColor: '#D4AF37',
+      colorMode: 'auto',
+      menuColumns: 2,
       taxRate: 14,
       serviceCharge: 12,
+      deliveryFee: 45,
       currency: 'ج.م',
       isOpen: true,
+      offers: [
+        {
+          id: 'offer_saffron_vip',
+          title: 'توصيل مجاني لطلبات السهرة باستخدام الكود VIPFREE',
+          title_en: 'Complimentary evening delivery with code VIPFREE',
+          badgeText: 'VIP',
+          badgeText_en: 'VIP',
+          isBogo: false,
+          promoCode: 'VIPFREE',
+          placement: 'top',
+          animation: 'fade',
+          bgColor: '#1E2430',
+          textColor: '#FDE68A',
+          isActive: true,
+          sortOrder: 1,
+        },
+      ],
+      promoCodes: [
+        {
+          id: 'promo_vipfree',
+          code: 'VIPFREE',
+          type: 'free_delivery',
+          value: 0,
+          isActive: true,
+        },
+      ],
     },
     categories: [
       {
@@ -462,6 +548,8 @@ export interface StarterSeedItem {
   imageUrl: string;
   sizes: { name: string; name_en: string; price: number }[];
   addons: { name: string; name_en: string; price: number }[];
+  badge?: 'none' | 'best_seller' | 'trending_week' | 'chef_choice' | 'bogo' | 'new';
+  isBogo?: boolean;
   sortOrder: number;
 }
 
@@ -513,6 +601,7 @@ export function getStarterSeedData(): { mainCategories: StarterSeedMainCategory[
                   { name: 'جبنة إضافية', name_en: 'Extra Cheese', price: 25 },
                   { name: 'بطاطس مقلية', name_en: 'French Fries', price: 45 },
                 ],
+                badge: 'trending_week',
                 sortOrder: 1,
               },
               {
@@ -530,6 +619,7 @@ export function getStarterSeedData(): { mainCategories: StarterSeedMainCategory[
                   { name: '350 جرام', name_en: '350g', price: 720 },
                 ],
                 addons: [{ name: 'صوص مشروم', name_en: 'Mushroom Sauce', price: 40 }],
+                badge: 'chef_choice',
                 sortOrder: 2,
               },
             ],

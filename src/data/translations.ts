@@ -210,6 +210,7 @@ export interface TranslationStrings {
     tabs: {
       orders: string;
       menu: string;
+      offers: string;
       themes: string;
       qr: string;
     };
@@ -289,6 +290,40 @@ export interface TranslationStrings {
       caloriesUnit: string;
       editCategoryTitle: string;
       saveCategoryBtn: string;
+      badgeLabel: string;
+      bogoToggle: string;
+      suggestedItemsHeading: string;
+      quickAddonsLabel: string;
+    };
+    offers: {
+      title: string;
+      subtitle: string;
+      bannersHeading: string;
+      addBannerBtn: string;
+      bannerTitleAr: string;
+      bannerTitleEn: string;
+      bannerSubAr: string;
+      bannerSubEn: string;
+      badgeAr: string;
+      badgeEn: string;
+      bogoToggle: string;
+      promoLinkLabel: string;
+      placementLabel: string;
+      animationLabel: string;
+      bgColorLabel: string;
+      textColorLabel: string;
+      saveOffersBtn: string;
+      savedToast: string;
+      promosHeading: string;
+      addPromoBtn: string;
+      codeLabel: string;
+      promoTypeLabel: string;
+      promoValueLabel: string;
+      minOrderLabel: string;
+      typePercent: string;
+      typeFixed: string;
+      typeFreeDelivery: string;
+      typeWaiveService: string;
     };
     themes: {
       title: string;
@@ -309,7 +344,18 @@ export interface TranslationStrings {
       currencyLabel: string;
       taxRateLabel: string;
       serviceChargeLabel: string;
+      deliveryFeeLabel: string;
       primaryColorLabel: string;
+      columnsLabel: string;
+      colorModeLabel: string;
+      colorModeAuto: string;
+      colorModeLight: string;
+      colorModeDark: string;
+      customTypographyTitle: string;
+      headingColorLabel: string;
+      descColorLabel: string;
+      priceColorLabel: string;
+      resetColorsBtn: string;
       isOpenLabel: string;
       isOpenYes: string;
       isOpenNo: string;
@@ -334,6 +380,12 @@ export interface TranslationStrings {
       tip2: string;
       tip3: string;
     };
+  };
+  signOutConfirm: {
+    title: string;
+    desc: string;
+    confirmBtn: string;
+    cancelBtn: string;
   };
   superAdmin: {
     title: string;
@@ -513,6 +565,20 @@ export interface TranslationStrings {
     currencyLabel: string;
     taxNoticePrefix: string;
     serviceNoticePrefix: string;
+    sortLabel: string;
+    sortDefault: string;
+    sortBestSelling: string;
+    sortChefChoice: string;
+    sortLowestPrice: string;
+    bogoBadge: string;
+    bogoIncluded: string;
+    promoPlaceholder: string;
+    applyPromo: string;
+    removePromo: string;
+    discountLabel: string;
+    deliveryFeeLabel: string;
+    clearCart: string;
+    pairingsHeading: string;
   };
 }
 
@@ -613,6 +679,7 @@ export const TRANSLATIONS: Record<AppLang, TranslationStrings> = {
       tabs: {
         orders: 'الطلبات الحية',
         menu: 'إدارة المنيو',
+        offers: 'العروض والخصومات',
         themes: 'المظهر والإعدادات',
         qr: 'كود QR والطباعة',
       },
@@ -692,6 +759,40 @@ export const TRANSLATIONS: Record<AppLang, TranslationStrings> = {
         caloriesUnit: 'سعرة',
         editCategoryTitle: 'تعديل القسم',
         saveCategoryBtn: 'حفظ القسم',
+        badgeLabel: 'شارة التميز والترويج',
+        bogoToggle: 'عرض اشترِ 1 واحصل على 1 مجاناً (1+1)',
+        suggestedItemsHeading: 'مقترحات مصاحبة (تظهر مع الصنف وفي السلة)',
+        quickAddonsLabel: 'إضافات سريعة بضغطة واحدة:',
+      },
+      offers: {
+        title: 'العروض والبانرات وأكواد الخصم',
+        subtitle: 'أنشئ عروض 1+1 مجاناً، حدد مكان وحركة البانر في المنيو، وأنشئ كوبونات خصم أو إلغاء الخدمة والتوصيل.',
+        bannersHeading: 'البانرات الترويجية وعروض 1+1',
+        addBannerBtn: '+ إضافة بانر عرض',
+        bannerTitleAr: 'عنوان العرض (عربي) *',
+        bannerTitleEn: 'عنوان العرض (إنجليزي)',
+        bannerSubAr: 'تفاصيل العرض (عربي)',
+        bannerSubEn: 'تفاصيل العرض (إنجليزي)',
+        badgeAr: 'شارة صغيرة (مثال: عرض اليوم)',
+        badgeEn: 'Badge EN (e.g. 1+1 FREE)',
+        bogoToggle: 'عرض اشترِ 1 واحصل على 1 مجاناً (1+1)',
+        promoLinkLabel: 'ربط بكوبون خصم (اختياري)',
+        placementLabel: 'مكان ظهور العرض في المنيو',
+        animationLabel: 'طريقة حركة البانر',
+        bgColorLabel: 'لون الخلفية',
+        textColorLabel: 'لون النص',
+        saveOffersBtn: 'حفظ العروض والكوبونات',
+        savedToast: 'تم حفظ العروض والأكواد وتحديث المنيو فوراً!',
+        promosHeading: 'أكواد الخصم والكوبونات',
+        addPromoBtn: '+ إضافة كود خصم',
+        codeLabel: 'الكود (بالإنجليزية)',
+        promoTypeLabel: 'نوع الخصم',
+        promoValueLabel: 'القيمة',
+        minOrderLabel: 'الحد الأدنى للطلب',
+        typePercent: 'نسبة مئوية (%)',
+        typeFixed: 'مبلغ ثابت',
+        typeFreeDelivery: 'توصيل مجاني',
+        typeWaiveService: 'إعفاء من رسوم الخدمة',
       },
       themes: {
         title: 'مظهر المنيو وإعدادات المطعم',
@@ -712,7 +813,18 @@ export const TRANSLATIONS: Record<AppLang, TranslationStrings> = {
         currencyLabel: 'العملة',
         taxRateLabel: 'ضريبة القيمة المضافة (%)',
         serviceChargeLabel: 'رسوم الخدمة (%)',
+        deliveryFeeLabel: 'رسوم التوصيل الثابتة',
         primaryColorLabel: 'اللون الأساسي للعلامة',
+        columnsLabel: 'تخطيط عرض الأصناف (عدد الأعمدة)',
+        colorModeLabel: 'وضع ألوان المنيو',
+        colorModeAuto: 'تلقائي حسب الثيم',
+        colorModeLight: 'نهاري فاتح (تباين عالٍ)',
+        colorModeDark: 'ليلي داكن (تباين عالٍ)',
+        customTypographyTitle: 'ألوان النصوص المخصصة (تباين ذكي)',
+        headingColorLabel: 'لون عناوين الأطباق',
+        descColorLabel: 'لون الوصف',
+        priceColorLabel: 'لون الأسعار',
+        resetColorsBtn: 'استعادة التباين التلقائي',
         isOpenLabel: 'حالة استقبال الطلبات',
         isOpenYes: 'مفتوح ويستقبل الطلبات',
         isOpenNo: 'مغلق مؤقتاً',
@@ -737,6 +849,12 @@ export const TRANSLATIONS: Record<AppLang, TranslationStrings> = {
         tip2: 'يمكنك تغيير الثيم أو الأسعار في أي وقت دون الحاجة لإعادة طباعة الكود.',
         tip3: 'جرب مسح الكود بكاميرا هاتفك للتأكد من سرعة التحميل قبل الطباعة.',
       },
+    },
+    signOutConfirm: {
+      title: 'تأكيد تسجيل الخروج',
+      desc: 'هل تريد حقاً تسجيل الخروج من لوحة التحكم الآن؟ يمكنك العودة في أي وقت بتسجيل الدخول مجدداً.',
+      confirmBtn: 'نعم، تسجيل الخروج',
+      cancelBtn: 'البقاء في اللوحة',
     },
     superAdmin: {
       title: 'لوحة الإدارة العليا (Super Admin)',
@@ -916,6 +1034,20 @@ export const TRANSLATIONS: Record<AppLang, TranslationStrings> = {
       currencyLabel: 'ج.م',
       taxNoticePrefix: 'ضريبة',
       serviceNoticePrefix: 'خدمة',
+      sortLabel: 'ترتيب:',
+      sortDefault: 'الافتراضي',
+      sortBestSelling: 'الأكثر طلباً هذا الأسبوع',
+      sortChefChoice: 'الأعلى جودة (اختيار الشيف)',
+      sortLowestPrice: 'الأقل سعراً',
+      bogoBadge: '1+1 مجاناً',
+      bogoIncluded: 'يشمل قطعة مجانية (1+1)',
+      promoPlaceholder: 'أدخل كود الخصم...',
+      applyPromo: 'تطبيق',
+      removePromo: 'إزالة',
+      discountLabel: 'الخصم',
+      deliveryFeeLabel: 'رسوم التوصيل',
+      clearCart: 'إفراغ السلة',
+      pairingsHeading: 'أضف مع طلبك (مقترحات الشيف)',
     },
   },
   en: {
@@ -1014,6 +1146,7 @@ export const TRANSLATIONS: Record<AppLang, TranslationStrings> = {
       tabs: {
         orders: 'Live Orders',
         menu: 'Menu Builder',
+        offers: 'Offers & Promos',
         themes: 'Themes & Settings',
         qr: 'QR Code & Print',
       },
@@ -1093,6 +1226,40 @@ export const TRANSLATIONS: Record<AppLang, TranslationStrings> = {
         caloriesUnit: 'kcal',
         editCategoryTitle: 'Edit Category',
         saveCategoryBtn: 'Save Category',
+        badgeLabel: 'Highlight Badge',
+        bogoToggle: 'Buy 1 Get 1 Free (1+1 Deal)',
+        suggestedItemsHeading: 'Suggested Pairings (Upsell Items)',
+        quickAddonsLabel: '1-Click Quick Add-ons:',
+      },
+      offers: {
+        title: 'Offers, Banners & Promo Codes',
+        subtitle: 'Create 1+1 BOGO banners, control menu placement & motion style, and configure discount/fee-waiver promo codes.',
+        bannersHeading: 'Promotional Banners & BOGO Deals',
+        addBannerBtn: '+ Add Offer Banner',
+        bannerTitleAr: 'Offer Title (Arabic) *',
+        bannerTitleEn: 'Offer Title (English)',
+        bannerSubAr: 'Details (Arabic)',
+        bannerSubEn: 'Details (English)',
+        badgeAr: 'Tag Label (Arabic)',
+        badgeEn: 'Tag Label (English)',
+        bogoToggle: 'Buy 1 Get 1 Free (1+1)',
+        promoLinkLabel: 'Link Promo Code (Optional)',
+        placementLabel: 'Banner Placement in Menu',
+        animationLabel: 'Animation Style',
+        bgColorLabel: 'Background Color',
+        textColorLabel: 'Text Color',
+        saveOffersBtn: 'Save Offers & Promos',
+        savedToast: 'Offers & promo codes saved live!',
+        promosHeading: 'Promo & Discount Codes',
+        addPromoBtn: '+ Add Promo Code',
+        codeLabel: 'Promo Code',
+        promoTypeLabel: 'Discount Type',
+        promoValueLabel: 'Value',
+        minOrderLabel: 'Minimum Order',
+        typePercent: 'Percentage (%)',
+        typeFixed: 'Fixed Amount',
+        typeFreeDelivery: 'Free Delivery',
+        typeWaiveService: 'Waive Service Charge',
       },
       themes: {
         title: 'Menu Themes & Store Settings',
@@ -1113,7 +1280,18 @@ export const TRANSLATIONS: Record<AppLang, TranslationStrings> = {
         currencyLabel: 'Currency',
         taxRateLabel: 'VAT / Tax Rate (%)',
         serviceChargeLabel: 'Service Charge (%)',
+        deliveryFeeLabel: 'Delivery Fee',
         primaryColorLabel: 'Brand Primary Color',
+        columnsLabel: 'Dish Grid Columns',
+        colorModeLabel: 'Menu Color Mode',
+        colorModeAuto: 'Theme Default (Auto)',
+        colorModeLight: 'Light High-Contrast',
+        colorModeDark: 'Dark High-Contrast',
+        customTypographyTitle: 'Custom Typography Colors',
+        headingColorLabel: 'Dish Title Color',
+        descColorLabel: 'Description Color',
+        priceColorLabel: 'Price Color',
+        resetColorsBtn: 'Reset to Auto Contrast',
         isOpenLabel: 'Store Status',
         isOpenYes: 'Open & Accepting Orders',
         isOpenNo: 'Temporarily Closed',
@@ -1138,6 +1316,12 @@ export const TRANSLATIONS: Record<AppLang, TranslationStrings> = {
         tip2: 'You can change themes, prices, and dishes anytime without reprinting QR codes.',
         tip3: 'Always test scanning with your phone camera before bulk printing.',
       },
+    },
+    signOutConfirm: {
+      title: 'Confirm Sign Out',
+      desc: 'Are you sure you want to sign out of your dashboard? You can sign back in anytime.',
+      confirmBtn: 'Yes, Sign Out',
+      cancelBtn: 'Stay Signed In',
     },
     superAdmin: {
       title: 'Super Admin Control Center',
@@ -1317,6 +1501,20 @@ export const TRANSLATIONS: Record<AppLang, TranslationStrings> = {
       currencyLabel: 'EGP',
       taxNoticePrefix: 'VAT',
       serviceNoticePrefix: 'Service',
+      sortLabel: 'Sort:',
+      sortDefault: 'Default',
+      sortBestSelling: 'Most Ordered This Week',
+      sortChefChoice: 'Highest Quality / Chef Picks',
+      sortLowestPrice: 'Lowest Price',
+      bogoBadge: '1+1 FREE',
+      bogoIncluded: 'Includes 1 Free (BOGO)',
+      promoPlaceholder: 'Enter promo code...',
+      applyPromo: 'Apply',
+      removePromo: 'Remove',
+      discountLabel: 'Discount',
+      deliveryFeeLabel: 'Delivery Fee',
+      clearCart: 'Clear Cart',
+      pairingsHeading: 'Frequently Paired With',
     },
   },
 };

@@ -464,6 +464,13 @@ export function buildCustomThemeSrcDoc(params: {
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet" />
     <style>
       *, *::before, *::after { box-sizing: border-box; }
+      :root {
+        --menu-accent: ${params.restaurant.primaryColor || '#A61C1C'};
+        --menu-heading: ${params.restaurant.headingColor || ''};
+        --menu-desc: ${params.restaurant.descriptionColor || ''};
+        --menu-price: ${params.restaurant.priceColor || ''};
+        --menu-cols: ${params.restaurant.menuColumns || 2};
+      }
       ${compiledCss}
     </style>
   </head>
@@ -474,6 +481,7 @@ export function buildCustomThemeSrcDoc(params: {
         restaurant: ${restJson},
         categories: ${catsJson},
         items: ${itemsJson},
+        offers: ${safeJsonForInlineScript(params.restaurant.offers || [])},
         currentLang: "${currentLang}"
       };
       window.openItemModal = function(itemOrId) {

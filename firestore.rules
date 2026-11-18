@@ -75,6 +75,10 @@ service cloud.firestore {
         data.createdAt is timestamp;
     }
 
+    function isValidHexOrEmpty(val) {
+      return val == '' || (val is string && val.size() >= 4 && val.size() <= 16 && val.matches('^#[0-9a-fA-F]{6}$'));
+    }
+
     function isValidRestaurantShape(data, restId) {
       return data.keys().hasAll([
           'id', 'ownerId', 'slug', 'name', 'whatsappNumber', 'activeTheme',
@@ -84,8 +88,9 @@ service cloud.firestore {
         data.keys().hasOnly([
           'id', 'ownerId', 'slug', 'name', 'name_en', 'tagline', 'tagline_en',
           'whatsappNumber', 'logoUrl', 'activeTheme', 'primaryColor',
-          'taxRate', 'serviceCharge', 'currency',
-          'isOpen', 'isSuspended', 'createdAt', 'updatedAt'
+          'colorMode', 'headingColor', 'descriptionColor', 'priceColor', 'menuColumns',
+          'taxRate', 'serviceCharge', 'deliveryFee', 'currency',
+          'isOpen', 'isSuspended', 'offers', 'promoCodes', 'createdAt', 'updatedAt'
         ]) &&
         isValidId(data.id) &&
         data.id == restId &&
@@ -99,11 +104,19 @@ service cloud.firestore {
         (!('logoUrl' in data) || (data.logoUrl is string && data.logoUrl.size() <= 300000)) &&
         isValidThemeId(data.activeTheme) &&
         data.primaryColor is string && data.primaryColor.size() >= 4 && data.primaryColor.size() <= 16 && data.primaryColor.matches('^#[0-9a-fA-F]{6}$') &&
+        (!('colorMode' in data) || (data.colorMode in ['auto', 'light', 'dark'])) &&
+        (!('headingColor' in data) || isValidHexOrEmpty(data.headingColor)) &&
+        (!('descriptionColor' in data) || isValidHexOrEmpty(data.descriptionColor)) &&
+        (!('priceColor' in data) || isValidHexOrEmpty(data.priceColor)) &&
+        (!('menuColumns' in data) || (data.menuColumns in [1, 2, 3])) &&
         data.taxRate is number && data.taxRate >= 0 && data.taxRate <= 100 &&
         data.serviceCharge is number && data.serviceCharge >= 0 && data.serviceCharge <= 100 &&
+        (!('deliveryFee' in data) || (data.deliveryFee is number && data.deliveryFee >= 0 && data.deliveryFee <= 100000)) &&
         data.currency is string && data.currency.size() >= 1 && data.currency.size() <= 16 &&
         data.isOpen is bool &&
         (!('isSuspended' in data) || data.isSuspended is bool) &&
+        (!('offers' in data) || (data.offers is list && data.offers.size() <= 12 && (data.offers.size() == 0 || data.offers[0] is map))) &&
+        (!('promoCodes' in data) || (data.promoCodes is list && data.promoCodes.size() <= 20 && (data.promoCodes.size() == 0 || data.promoCodes[0] is map))) &&
         data.createdAt is timestamp &&
         data.updatedAt is timestamp;
     }
@@ -133,7 +146,8 @@ service cloud.firestore {
           'id', 'restaurantId', 'ownerId', 'categoryId', 'name', 'name_en',
           'description', 'description_en', 'basePrice', 'imageUrl', 'calories',
           'isSpicy', 'isAvailable', 'ordersCount',
-          'sizes', 'addons', 'sortOrder', 'createdAt', 'updatedAt'
+          'sizes', 'addons', 'badge', 'isBogo', 'suggestedItemIds',
+          'sortOrder', 'createdAt', 'updatedAt'
         ]) &&
         isValidId(data.id) &&
         data.id == itemId &&
@@ -152,6 +166,9 @@ service cloud.firestore {
         data.ordersCount is number && data.ordersCount >= 0 && data.ordersCount <= 1000000 &&
         data.sizes is list && data.sizes.size() <= 10 && (data.sizes.size() == 0 || data.sizes[0] is map) &&
         data.addons is list && data.addons.size() <= 20 && (data.addons.size() == 0 || data.addons[0] is map) &&
+        (!('badge' in data) || (data.badge in ['', 'none', 'best_seller', 'trending_week', 'chef_choice', 'bogo', 'new'])) &&
+        (!('isBogo' in data) || data.isBogo is bool) &&
+        (!('suggestedItemIds' in data) || (data.suggestedItemIds is list && data.suggestedItemIds.size() <= 8 && (data.suggestedItemIds.size() == 0 || data.suggestedItemIds[0] is string))) &&
         data.sortOrder is number && data.sortOrder >= 0 && data.sortOrder <= 10000 &&
         data.createdAt is timestamp &&
         data.updatedAt is timestamp;
@@ -166,7 +183,8 @@ service cloud.firestore {
         data.keys().hasOnly([
           'id', 'restaurantId', 'ownerId', 'orderNumber', 'customerName',
           'customerPhone', 'orderType', 'tableNumber', 'deliveryAddress',
-          'notes', 'items', 'subtotal', 'serviceCharge', 'taxAmount', 'total',
+          'notes', 'items', 'subtotal', 'serviceCharge', 'deliveryFee',
+          'discountAmount', 'promoCode', 'taxAmount', 'total',
           'status', 'createdAt', 'updatedAt'
         ]) &&
         isValidId(data.id) &&
@@ -183,6 +201,9 @@ service cloud.firestore {
         data.items is list && data.items.size() >= 1 && data.items.size() <= 50 && data.items[0] is map &&
         data.subtotal is number && data.subtotal >= 0 && data.subtotal <= 1000000 &&
         data.serviceCharge is number && data.serviceCharge >= 0 && data.serviceCharge <= 1000000 &&
+        (!('deliveryFee' in data) || (data.deliveryFee is number && data.deliveryFee >= 0 && data.deliveryFee <= 100000)) &&
+        (!('discountAmount' in data) || (data.discountAmount is number && data.discountAmount >= 0 && data.discountAmount <= 1000000)) &&
+        (!('promoCode' in data) || (data.promoCode is string && data.promoCode.size() <= 32)) &&
         data.taxAmount is number && data.taxAmount >= 0 && data.taxAmount <= 1000000 &&
         data.total is number && data.total >= 0 && data.total <= 1000000 &&
         data.status in ['pending', 'preparing', 'completed', 'cancelled'] &&
@@ -294,14 +315,34 @@ service cloud.firestore {
             isVerifiedAccount() &&
             existing().ownerId == request.auth.uid && (
               incoming().diff(existing()).affectedKeys().hasOnly(['activeTheme', 'updatedAt']) ||
-              incoming().diff(existing()).affectedKeys().hasOnly(['activeTheme', 'primaryColor', 'taxRate', 'serviceCharge', 'updatedAt']) ||
-              incoming().diff(existing()).affectedKeys().hasOnly(['name', 'name_en', 'tagline', 'tagline_en', 'slug', 'whatsappNumber', 'logoUrl', 'currency', 'isOpen', 'activeTheme', 'taxRate', 'serviceCharge', 'primaryColor', 'updatedAt'])
+              incoming().diff(existing()).affectedKeys().hasOnly(['offers', 'promoCodes', 'updatedAt']) ||
+              incoming().diff(existing()).affectedKeys().hasOnly([
+                'activeTheme', 'primaryColor', 'taxRate', 'serviceCharge',
+                'colorMode', 'headingColor', 'descriptionColor', 'priceColor', 'menuColumns',
+                'updatedAt'
+              ]) ||
+              incoming().diff(existing()).affectedKeys().hasOnly([
+                'name', 'name_en', 'tagline', 'tagline_en', 'slug', 'whatsappNumber', 'logoUrl',
+                'currency', 'isOpen', 'activeTheme', 'taxRate', 'serviceCharge', 'deliveryFee',
+                'primaryColor', 'colorMode', 'headingColor', 'descriptionColor', 'priceColor',
+                'menuColumns', 'updatedAt'
+              ])
             )
           ) || (
             isSuperAdmin() && (
               incoming().diff(existing()).affectedKeys().hasOnly(['isSuspended', 'updatedAt']) ||
-              incoming().diff(existing()).affectedKeys().hasOnly(['activeTheme', 'primaryColor', 'taxRate', 'serviceCharge', 'updatedAt']) ||
-              incoming().diff(existing()).affectedKeys().hasOnly(['name', 'name_en', 'tagline', 'tagline_en', 'slug', 'whatsappNumber', 'logoUrl', 'currency', 'isOpen', 'isSuspended', 'activeTheme', 'taxRate', 'serviceCharge', 'primaryColor', 'updatedAt'])
+              incoming().diff(existing()).affectedKeys().hasOnly(['offers', 'promoCodes', 'updatedAt']) ||
+              incoming().diff(existing()).affectedKeys().hasOnly([
+                'activeTheme', 'primaryColor', 'taxRate', 'serviceCharge',
+                'colorMode', 'headingColor', 'descriptionColor', 'priceColor', 'menuColumns',
+                'updatedAt'
+              ]) ||
+              incoming().diff(existing()).affectedKeys().hasOnly([
+                'name', 'name_en', 'tagline', 'tagline_en', 'slug', 'whatsappNumber', 'logoUrl',
+                'currency', 'isOpen', 'isSuspended', 'activeTheme', 'taxRate', 'serviceCharge', 'deliveryFee',
+                'primaryColor', 'colorMode', 'headingColor', 'descriptionColor', 'priceColor',
+                'menuColumns', 'updatedAt'
+              ])
             )
           )
         );
@@ -417,7 +458,8 @@ service cloud.firestore {
               incoming().diff(existing()).affectedKeys().hasOnly(['sortOrder', 'updatedAt']) ||
               incoming().diff(existing()).affectedKeys().hasOnly([
                 'categoryId', 'name', 'name_en', 'description', 'description_en', 'basePrice', 'imageUrl', 'calories',
-                'isSpicy', 'isAvailable', 'ordersCount', 'sizes', 'addons', 'sortOrder', 'updatedAt'
+                'isSpicy', 'isAvailable', 'ordersCount', 'sizes', 'addons', 'badge', 'isBogo', 'suggestedItemIds',
+                'sortOrder', 'updatedAt'
               ])
             )
           ) || (

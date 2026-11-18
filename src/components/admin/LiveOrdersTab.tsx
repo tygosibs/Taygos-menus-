@@ -284,13 +284,32 @@ export function LiveOrdersTab({ restaurant }: LiveOrdersTabProps) {
                 </div>
 
                 <div className="pt-3 border-t border-zinc-100 space-y-3">
-                  <div className="flex items-center justify-between text-xs text-zinc-600">
-                    <span>
-                      {t.admin.orders.tax}:{' '}
-                      <span className="font-mono-num">{formatMoney(order.taxAmount)}</span>
-                      {order.serviceCharge > 0 &&
-                        ` · ${t.admin.orders.service}: ${formatMoney(order.serviceCharge)}`}
-                    </span>
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-600">
+                    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                      <span>
+                        {t.admin.orders.tax}:{' '}
+                        <span className="font-mono-num">{formatMoney(order.taxAmount)}</span>
+                      </span>
+                      {order.serviceCharge > 0 && (
+                        <span>
+                          · {t.admin.orders.service}:{' '}
+                          <span className="font-mono-num">{formatMoney(order.serviceCharge)}</span>
+                        </span>
+                      )}
+                      {typeof order.deliveryFee === 'number' && order.deliveryFee > 0 && (
+                        <span>
+                          · {t.menu.deliveryFeeLabel}:{' '}
+                          <span className="font-mono-num">{formatMoney(order.deliveryFee)}</span>
+                        </span>
+                      )}
+                      {typeof order.discountAmount === 'number' && order.discountAmount > 0 && (
+                        <span className="text-emerald-700 font-bold">
+                          · {t.menu.discountLabel}
+                          {order.promoCode ? ` (${order.promoCode})` : ''}:{' '}
+                          <span className="font-mono-num">-{formatMoney(order.discountAmount)}</span>
+                        </span>
+                      )}
+                    </div>
                     <span className="text-sm font-extrabold text-zinc-950 font-mono-num">
                       {t.admin.orders.total}: {formatMoney(order.total)}
                     </span>

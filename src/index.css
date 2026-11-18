@@ -8,9 +8,10 @@
     --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
   }
 
-  body {
+  html, body {
     font-family: var(--font-body);
-    overflow-x: hidden;
+    overflow-x: clip;
+    max-width: 100%;
   }
 
   h1, h2, h3, h4, .font-display {
@@ -29,6 +30,51 @@
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+@keyframes sufra-marquee-x {
+  0% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(-12px, 0, 0); }
+  100% { transform: translate3d(0, 0, 0); }
+}
+
+@keyframes sufra-orbit-float {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  25% { transform: translate3d(4px, -3px, 0); }
+  50% { transform: translate3d(0, -5px, 0); }
+  75% { transform: translate3d(-4px, -3px, 0); }
+}
+
+@keyframes sufra-soft-bounce {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(0, -4px, 0); }
+}
+
+@keyframes sufra-pulse-fade {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.9; transform: scale(0.992); }
+}
+
+.offer-anim-marquee {
+  animation: sufra-marquee-x 4.5s ease-in-out infinite;
+}
+.offer-anim-orbit {
+  animation: sufra-orbit-float 5.2s ease-in-out infinite;
+}
+.offer-anim-bounce {
+  animation: sufra-soft-bounce 2.6s ease-in-out infinite;
+}
+.offer-anim-fade {
+  animation: sufra-pulse-fade 3.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .offer-anim-marquee,
+  .offer-anim-orbit,
+  .offer-anim-bounce,
+  .offer-anim-fade {
+    animation: none !important;
+  }
 }
 
 @media print {

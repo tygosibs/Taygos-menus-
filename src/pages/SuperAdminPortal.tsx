@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { LanguageToggleButton } from '../components/LanguageToggleButton';
+import { ConfirmSignOutModal } from '../components/ConfirmSignOutModal';
 import { OwnerAuthCard } from '../components/auth/OwnerAuthCard';
 import { LandingCmsTab } from '../components/superadmin/LandingCmsTab';
 import { TenantsManagerTab } from '../components/superadmin/TenantsManagerTab';
@@ -40,6 +41,7 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [testingConn, setTestingConn] = useState(false);
   const [connResult, setConnResult] = useState<'idle' | 'ok' | 'error'>('idle');
+  const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
@@ -159,13 +161,21 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
             </button>
             <button
               type="button"
-              onClick={() => signOut(auth)}
+              onClick={() => setSignOutConfirmOpen(true)}
               className="px-4 py-2.5 rounded-xl border border-rose-200 text-xs font-bold text-rose-700 hover:bg-rose-50 cursor-pointer"
             >
               {t.admin.signOut}
             </button>
           </div>
         </div>
+        <ConfirmSignOutModal
+          open={signOutConfirmOpen}
+          onCancel={() => setSignOutConfirmOpen(false)}
+          onConfirm={() => {
+            setSignOutConfirmOpen(false);
+            void signOut(auth);
+          }}
+        />
       </div>
     );
   }
@@ -185,7 +195,7 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
   const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://suofra.vercel.app';
 
   return (
-    <div dir={dir} className="min-h-screen bg-[#F5F6F8] text-zinc-900 flex flex-col lg:flex-row">
+    <div dir={dir} className="min-h-screen bg-[#F5F6F8] text-zinc-900 flex flex-col lg:flex-row overflow-x-clip max-w-full">
       {/* Sidebar */}
       <aside className="lg:w-68 bg-zinc-950 text-white shrink-0 flex flex-col justify-between">
         <div className="p-5 space-y-6">
@@ -202,7 +212,7 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
               <LanguageToggleButton variant="dark" compact />
               <button
                 type="button"
-                onClick={() => signOut(auth)}
+                onClick={() => setSignOutConfirmOpen(true)}
                 aria-label={t.admin.signOut}
                 className="p-2 rounded-lg text-zinc-400 hover:bg-zinc-800 cursor-pointer"
               >
@@ -279,7 +289,7 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
           </button>
           <button
             type="button"
-            onClick={() => signOut(auth)}
+            onClick={() => setSignOutConfirmOpen(true)}
             className="w-full py-2 px-3 rounded-xl text-xs font-semibold text-zinc-400 hover:text-rose-400 hover:bg-zinc-900 flex items-center justify-center gap-1.5 cursor-pointer"
           >
             <LogOut className="w-3.5 h-3.5" />
@@ -461,6 +471,14 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
           )}
         </main>
       </div>
+      <ConfirmSignOutModal
+        open={signOutConfirmOpen}
+        onCancel={() => setSignOutConfirmOpen(false)}
+        onConfirm={() => {
+          setSignOutConfirmOpen(false);
+          void signOut(auth);
+        }}
+      />
     </div>
   );
 }

@@ -1,23 +1,44 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
+  ArrowUpDown,
   BookOpen,
   Check,
   ChevronLeft,
   ChevronRight,
   Flame,
+  Gift,
   Minus,
+  Moon,
   Plus,
   Search,
   ShoppingBag,
+  Sun,
   UtensilsCrossed,
   X,
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { resolveMenuSurfacePalette } from '../../lib/contrastUtils';
 import { buildCategoryHierarchy, doesItemMatchHierarchy } from '../../lib/menuHierarchy';
-import { CartItem, Category, ItemAddon, ItemSize, MenuItem, Restaurant } from '../../types/menu';
+import {
+  cycleColorMode,
+  getPrimaryItemBadge,
+  getResponsiveGridClass,
+  sortMenuItems,
+} from '../../lib/menuMerchandising';
+import {
+  CartItem,
+  Category,
+  ItemAddon,
+  ItemSize,
+  MenuColorMode,
+  MenuItem,
+  MenuSortMode,
+  Restaurant,
+} from '../../types/menu';
 import { LanguageToggleButton } from '../LanguageToggleButton';
 import { SafeImage } from '../SafeImage';
+import { OffersBannerZone } from './OffersBannerZone';
 
 interface Flipbook3DThemeProps {
   restaurant: Restaurant;
@@ -25,6 +46,9 @@ interface Flipbook3DThemeProps {
   items: MenuItem[];
   cartCount: number;
   cartTotal: number;
+  colorModeOverride?: MenuColorMode;
+  onChangeColorMode?: (mode: MenuColorMode) => void;
+  onApplyPromoCode?: (code: string) => void;
   onAddToCart: (cartItem: CartItem) => void;
   onOpenCart: () => void;
 }
@@ -37,6 +61,9 @@ export function Flipbook3DTheme({
   items,
   cartCount,
   cartTotal,
+  colorModeOverride,
+  onChangeColorMode,
+  onApplyPromoCode,
   onAddToCart,
   onOpenCart,
 }: Flipbook3DThemeProps) {
@@ -44,8 +71,44 @@ export function Flipbook3DTheme({
   const [selectedMainCatId, setSelectedMainCatId] = useState<string>('all');
   const [selectedSubCatId, setSelectedSubCatId] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortMode, setSortMode] = useState<MenuSortMode>('default');
   const [pageIndex, setPageIndex] = useState(0);
   const [flipDir, setFlipDir] = useState<1 | -1>(1);
+  const [localColorMode, setLocalColorMode] = useState<MenuColorMode>('auto');
+
+  const activeColorOverride =
+    colorModeOverride && colorModeOverride !== 'auto'
+      ? colorModeOverride
+      : localColorMode !== 'auto'
+        ? localColorMode
+        : restaurant.colorMode || 'auto';
+
+  const palette = useMemo(
+    () =>
+      resolveMenuSurfacePalette({
+        themeIsDark: false,
+        colorMode: activeColorOverride,
+        primaryColor: restaurant.primaryColor,
+        headingColor: restaurant.headingColor,
+        descriptionColor: restaurant.descriptionColor,
+        priceColor: restaurant.priceColor,
+      }),
+    [
+      activeColorOverride,
+      restaurant.primaryColor,
+      restaurant.headingColor,
+      restaurant.descriptionColor,
+      restaurant.priceColor,
+    ]
+  );
+
+  const isBookDarkPage = palette.isDarkSurface;
+
+  const handleToggleContrastMode = () => {
+    const next = cycleColorMode(activeColorOverride, false);
+    setLocalColorMode(next);
+    onChangeColorMode?.(next);
+  };
 
   // Interactive 3D Dish Transition State
   const [focusedItem, setFocusedItem] = useState<MenuItem | null>(null);
@@ -54,6 +117,7 @@ export function Flipbook3DTheme({
   const [quantity, setQuantity] = useState(1);
   const [notes, setNotes] = useState('');
   const [addedToast, setAddedToast] = useState<string | null>(null);
+  const [addedSugId, setAddedSugId] = useState<string | null>(null);
 
   const accent = restaurant.primaryColor || '#A61C1C';
   const displayCurrency = formatCurrency(restaurant.currency);
@@ -77,7 +141,7 @@ export function Flipbook3DTheme({
 
   const filteredItems = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return availableItems.filter((item) => {
+    const matched = availableItems.filter((item) => {
       const catMatch = doesItemMatchHierarchy(item, selectedMainCatId, selectedSubCatId, hierarchy);
       const textMatch =
         !q ||
@@ -87,7 +151,8 @@ export function Flipbook3DTheme({
         (item.description_en || '').toLowerCase().includes(q);
       return catMatch && textMatch;
     });
-  }, [availableItems, selectedMainCatId, selectedSubCatId, hierarchy, searchQuery]);
+    return sortMenuItems(matched, sortMode);
+  }, [availableItems, selectedMainCatId, selectedSubCatId, hierarchy, searchQuery, sortMode]);
 
   const pages = useMemo(() => {
     const chunks: MenuItem[][] = [];
@@ -99,7 +164,7 @@ export function Flipbook3DTheme({
 
   useEffect(() => {
     setPageIndex(0);
-  }, [selectedMainCatId, selectedSubCatId, searchQuery]);
+  }, [selectedMainCatId, selectedSubCatId, searchQuery, sortMode]);
 
   useEffect(() => {
     if (focusedItem) {
@@ -109,6 +174,7 @@ export function Flipbook3DTheme({
       setSelectedAddons([]);
       setQuantity(1);
       setNotes('');
+      setAddedSugId(null);
     }
   }, [focusedItem]);
 
@@ -125,6 +191,7 @@ export function Flipbook3DTheme({
     setSelectedMainCatId('all');
     setSelectedSubCatId('all');
     setSearchQuery('');
+    setSortMode('default');
     setPageIndex(0);
     setFocusedItem(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -136,6 +203,18 @@ export function Flipbook3DTheme({
     const addonsSum = selectedAddons.reduce((sum, a) => sum + a.price, 0);
     return Math.max(0, base + addonsSum);
   }, [focusedItem, selectedSize, selectedAddons]);
+
+  const focusedPairings = useMemo(() => {
+    if (!focusedItem) return [];
+    const pool = availableItems.filter((i) => i.id !== focusedItem.id);
+    if (focusedItem.suggestedItemIds && focusedItem.suggestedItemIds.length > 0) {
+      const explicit = focusedItem.suggestedItemIds
+        .map((id) => pool.find((i) => i.id === id))
+        .filter((x): x is MenuItem => Boolean(x));
+      if (explicit.length > 0) return explicit.slice(0, 6);
+    }
+    return pool.slice(0, 3);
+  }, [focusedItem, availableItems]);
 
   const safePageIndex = Math.min(pageIndex, pages.length - 1);
   const currentItems = pages[safePageIndex] || [];
@@ -152,6 +231,21 @@ export function Flipbook3DTheme({
         ? prev.filter((a) => a.name !== addon.name)
         : [...prev, addon]
     );
+  };
+
+  const handleQuickAddPairing = (sug: MenuItem) => {
+    const defaultSize = sug.sizes && sug.sizes.length > 0 ? sug.sizes[0] : undefined;
+    const sugUnitPrice = defaultSize ? defaultSize.price : sug.basePrice;
+    onAddToCart({
+      cartKey: `${sug.id}__${defaultSize?.name || 'std'}____`,
+      menuItem: sug,
+      selectedSize: defaultSize,
+      selectedAddons: [],
+      quantity: 1,
+      unitPrice: sugUnitPrice,
+    });
+    setAddedSugId(sug.id);
+    setTimeout(() => setAddedSugId((p) => (p === sug.id ? null : p)), 1400);
   };
 
   const handleConfirmAdd = () => {
@@ -187,10 +281,26 @@ export function Flipbook3DTheme({
   const restName = loc(restaurant.name, restaurant.name_en);
   const restTagline = loc(restaurant.tagline, restaurant.tagline_en);
 
+  const pageSurfaceBg = isBookDarkPage ? '#141923' : '#FAF5EE';
+  const pageCardBg = isBookDarkPage ? '#1E2534' : '#FFFDF9';
+  const pageBorder = isBookDarkPage ? 'rgba(198,164,108,0.28)' : '#E2D4C0';
+  const pageHeadingColor =
+    restaurant.headingColor || (isBookDarkPage ? '#F8FAFC' : '#231911');
+  const pageDescColor =
+    restaurant.descriptionColor || (isBookDarkPage ? '#CBD5E1' : '#6B5848');
+  const pagePriceColor = restaurant.priceColor || accent;
+
+  const pageGridClass =
+    restaurant.menuColumns === 1
+      ? 'grid grid-cols-1 gap-4 sm:gap-5'
+      : restaurant.menuColumns === 3
+        ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5'
+        : getResponsiveGridClass(2, false) + ' sm:gap-7';
+
   return (
     <div
       dir={dir}
-      className="min-h-screen bg-[#171310] text-[#2A2018] pb-24 relative overflow-x-hidden"
+      className="min-h-screen bg-[#171310] text-[#2A2018] pb-24 relative overflow-x-clip max-w-full"
     >
       {!restaurant.isOpen && (
         <div className="bg-red-950/95 text-red-100 text-xs font-bold text-center py-2.5 px-4 border-b border-red-800">
@@ -198,8 +308,16 @@ export function Flipbook3DTheme({
         </div>
       )}
 
+      <OffersBannerZone
+        offers={restaurant.offers}
+        placement="top"
+        accentColor={accent}
+        isDarkSurface={true}
+        onApplyPromoCode={onApplyPromoCode}
+      />
+
       {/* Top Luxury Cover Header */}
-      <header className="max-w-6xl mx-auto px-4 pt-6 pb-4 text-[#F7EFE4]">
+      <header className="max-w-6xl mx-auto px-3 sm:px-4 pt-5 pb-4 text-[#F7EFE4]">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#C6A46C]/25 pb-5">
           <button
             type="button"
@@ -228,8 +346,8 @@ export function Flipbook3DTheme({
             </div>
           </button>
 
-          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-            <div className="relative flex-1 sm:w-52">
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <div className="relative flex-1 min-w-[140px] sm:w-48">
               <Search className="w-4 h-4 text-[#C6A46C] absolute start-3 top-1/2 -translate-y-1/2" />
               <input
                 type="search"
@@ -239,15 +357,26 @@ export function Flipbook3DTheme({
                 className="w-full ps-9 pe-3 py-2.5 rounded-xl bg-[#241D18] border border-[#C6A46C]/30 text-sm text-[#F7EFE4] placeholder:text-[#A39382] focus:outline-none focus:border-[#C6A46C]"
               />
             </div>
+
+            <button
+              type="button"
+              onClick={handleToggleContrastMode}
+              aria-label={isBookDarkPage ? 'Light page' : 'Dark page'}
+              className="w-10 h-10 rounded-xl bg-[#241D18] border border-[#C6A46C]/30 text-[#F7EFE4] flex items-center justify-center hover:border-[#C6A46C] cursor-pointer shrink-0"
+            >
+              {isBookDarkPage ? <Sun className="w-4 h-4 text-amber-300" /> : <Moon className="w-4 h-4 text-[#C6A46C]" />}
+            </button>
+
             <LanguageToggleButton variant="dark" compact />
+
             <button
               type="button"
               onClick={onOpenCart}
               style={{ backgroundColor: accent }}
-              className="min-h-[44px] px-4 py-2.5 rounded-xl text-white text-xs font-bold flex items-center gap-2 shadow-lg hover:opacity-95 cursor-pointer shrink-0"
+              className="min-h-[42px] px-3.5 py-2 rounded-xl text-white text-xs font-bold flex items-center gap-2 shadow-lg hover:opacity-95 cursor-pointer shrink-0"
             >
               <ShoppingBag className="w-4 h-4" />
-              <span>{lang === 'en' ? 'Cart' : 'السلة'}</span>
+              <span className="hidden xs:inline">{lang === 'en' ? 'Cart' : 'السلة'}</span>
               <span className="font-mono-num bg-black/25 px-2 py-0.5 rounded-md">{cartCount}</span>
             </button>
           </div>
@@ -281,58 +410,99 @@ export function Flipbook3DTheme({
                   ? { backgroundColor: accent, borderColor: accent, color: '#fff' }
                   : undefined
               }
-              className={`min-h-[40px] px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 border transition-colors cursor-pointer ${
+              className={`min-h-[40px] px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 border transition-colors cursor-pointer flex items-center gap-2 ${
                 selectedMainCatId === cat.id
                   ? ''
                   : 'bg-[#241D18] border-[#C6A46C]/25 text-[#E8DDD0] hover:border-[#C6A46C]/60'
               }`}
             >
-              {loc(cat.name, cat.name_en)}
+              {cat.imageUrl && (
+                <SafeImage
+                  src={cat.imageUrl}
+                  alt={loc(cat.name, cat.name_en)}
+                  className="w-5 h-5 rounded-md object-cover shrink-0"
+                />
+              )}
+              <span>{loc(cat.name, cat.name_en)}</span>
             </button>
           ))}
         </div>
 
-        {/* Subcategories Bar (Visible when selected Main Category has subcategories) */}
-        {activeSubcategories.length > 0 && (
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-2.5">
-            <button
-              type="button"
-              onClick={() => setSelectedSubCatId('all')}
-              className={`px-3 py-1.5 rounded-lg text-[11px] font-bold whitespace-nowrap shrink-0 border transition-colors cursor-pointer ${
-                selectedSubCatId === 'all'
-                  ? 'bg-[#C6A46C] border-[#C6A46C] text-[#171310]'
-                  : 'bg-[#241D18]/80 border-[#C6A46C]/25 text-[#D6C8B8] hover:border-[#C6A46C]/60'
-              }`}
-            >
-              {lang === 'en' ? 'All Sections' : 'كل الأقسام الفرعية'}
-            </button>
-            {activeSubcategories.map((sub) => (
+        {/* Subcategories Bar + Sort Selector */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-2.5">
+          {activeSubcategories.length > 0 ? (
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar flex-1 min-w-0">
               <button
-                key={sub.id}
                 type="button"
-                onClick={() => setSelectedSubCatId(sub.id)}
+                onClick={() => setSelectedSubCatId('all')}
                 className={`px-3 py-1.5 rounded-lg text-[11px] font-bold whitespace-nowrap shrink-0 border transition-colors cursor-pointer ${
-                  selectedSubCatId === sub.id
+                  selectedSubCatId === 'all'
                     ? 'bg-[#C6A46C] border-[#C6A46C] text-[#171310]'
                     : 'bg-[#241D18]/80 border-[#C6A46C]/25 text-[#D6C8B8] hover:border-[#C6A46C]/60'
                 }`}
               >
-                {loc(sub.name, sub.name_en)}
+                {lang === 'en' ? 'All Sections' : 'كل الأقسام الفرعية'}
               </button>
-            ))}
+              {activeSubcategories.map((sub) => (
+                <button
+                  key={sub.id}
+                  type="button"
+                  onClick={() => setSelectedSubCatId(sub.id)}
+                  className={`px-3 py-1.5 rounded-lg text-[11px] font-bold whitespace-nowrap shrink-0 border transition-colors cursor-pointer flex items-center gap-1.5 ${
+                    selectedSubCatId === sub.id
+                      ? 'bg-[#C6A46C] border-[#C6A46C] text-[#171310]'
+                      : 'bg-[#241D18]/80 border-[#C6A46C]/25 text-[#D6C8B8] hover:border-[#C6A46C]/60'
+                  }`}
+                >
+                  {sub.imageUrl && (
+                    <SafeImage
+                      src={sub.imageUrl}
+                      alt={loc(sub.name, sub.name_en)}
+                      className="w-4 h-4 rounded object-cover shrink-0"
+                    />
+                  )}
+                  <span>{loc(sub.name, sub.name_en)}</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <span className="text-[11px] text-[#C6A46C] font-bold">{t.menu.sortLabel}</span>
+          )}
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            <ArrowUpDown className="w-3.5 h-3.5 text-[#C6A46C]" />
+            <select
+              value={sortMode}
+              onChange={(e) => setSortMode(e.target.value as MenuSortMode)}
+              aria-label={t.menu.sortLabel}
+              className="px-2.5 py-1.5 rounded-lg bg-[#241D18] border border-[#C6A46C]/30 text-[11px] font-bold text-[#F7EFE4] focus:outline-none cursor-pointer"
+            >
+              <option value="default">{t.menu.sortDefault}</option>
+              <option value="best_selling">{t.menu.sortBestSelling}</option>
+              <option value="chef_quality">{t.menu.sortChefChoice}</option>
+              <option value="lowest_price">{t.menu.sortLowestPrice}</option>
+            </select>
           </div>
-        )}
+        </div>
       </header>
 
+      <OffersBannerZone
+        offers={restaurant.offers}
+        placement="above_grid"
+        accentColor={accent}
+        isDarkSurface={true}
+        onApplyPromoCode={onApplyPromoCode}
+      />
+
       {/* 3D Luxury Flipbook Container */}
-      <main className="max-w-6xl mx-auto px-4 pt-2">
+      <main className="max-w-6xl mx-auto px-3 sm:px-4 pt-2">
         <div
           className="rounded-3xl p-2 sm:p-4 bg-[#2C211A] border border-[#C6A46C]/30 shadow-[0_30px_70px_rgba(0,0,0,0.65)]"
           style={{ perspective: '1200px' }}
         >
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
-              key={`${selectedMainCatId}-${selectedSubCatId}-${searchQuery}-${safePageIndex}-${lang}`}
+              key={`${selectedMainCatId}-${selectedSubCatId}-${searchQuery}-${sortMode}-${safePageIndex}-${lang}-${isBookDarkPage}`}
               initial={{
                 rotateY: isRtl ? (flipDir > 0 ? -24 : 24) : flipDir > 0 ? 24 : -24,
                 opacity: 0,
@@ -368,6 +538,8 @@ export function Flipbook3DTheme({
                 }
               }}
               style={{
+                backgroundColor: pageSurfaceBg,
+                borderColor: pageBorder,
                 transformStyle: 'preserve-3d',
                 transformOrigin: isRtl
                   ? flipDir > 0
@@ -377,14 +549,17 @@ export function Flipbook3DTheme({
                     ? 'left center'
                     : 'right center',
               }}
-              className="rounded-2xl bg-[#FAF5EE] border border-[#E2D4C0] shadow-inner p-4 sm:p-8 relative overflow-hidden"
+              className="rounded-2xl border shadow-inner p-3.5 sm:p-8 relative overflow-hidden"
             >
               {/* Subtle Book Spine Center Shadow on Desktop */}
               <div className="hidden lg:block pointer-events-none absolute inset-y-0 left-1/2 -translate-x-1/2 w-8 bg-gradient-to-r from-transparent via-[#C6A46C]/15 to-transparent" />
 
               {/* Page Header */}
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#E2D4C0] pb-3.5 mb-6 relative z-10">
-                <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-[#7A6552]">
+              <div
+                style={{ borderColor: pageBorder, color: pageDescColor }}
+                className="flex flex-wrap items-center justify-between gap-2 border-b pb-3.5 mb-6 relative z-10"
+              >
+                <div className="flex flex-wrap items-center gap-2 text-xs font-bold">
                   <span>
                     {selectedMainCatId === 'all'
                       ? lang === 'en'
@@ -394,7 +569,9 @@ export function Flipbook3DTheme({
                         ? `${categoryNameMap.get(selectedMainCatId) || ''} › ${categoryNameMap.get(selectedSubCatId) || ''}`
                         : categoryNameMap.get(selectedMainCatId) || t.menu.allCategories}
                   </span>
-                  {(selectedMainCatId !== 'all' || selectedSubCatId !== 'all' || searchQuery.trim() !== '') && (
+                  {(selectedMainCatId !== 'all' ||
+                    selectedSubCatId !== 'all' ||
+                    searchQuery.trim() !== '') && (
                     <button
                       type="button"
                       onClick={resetToMainMenu}
@@ -404,13 +581,13 @@ export function Flipbook3DTheme({
                     </button>
                   )}
                 </div>
-                <div className="font-mono-num text-xs font-bold text-[#7A6552]">
+                <div className="font-mono-num text-xs font-bold">
                   {t.menu.pageLabel} {safePageIndex + 1} / {pages.length}
                 </div>
               </div>
 
               {filteredItems.length === 0 ? (
-                <div className="py-16 text-center space-y-3 text-[#7A6552]">
+                <div style={{ color: pageDescColor }} className="py-16 text-center space-y-3">
                   <UtensilsCrossed className="w-9 h-9 mx-auto opacity-40" />
                   <p className="text-base font-bold">{t.menu.noResults}</p>
                   <button
@@ -423,19 +600,35 @@ export function Flipbook3DTheme({
                 </div>
               ) : (
                 <div
-                  className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 relative z-10"
+                  className={`${pageGridClass} relative z-10`}
                   style={{ perspective: '1200px' }}
                 >
                   {currentItems.map((item) => {
                     const itemName = loc(item.name, item.name_en);
                     const itemDesc = loc(item.description, item.description_en);
+                    const primaryBadge = getPrimaryItemBadge(item, lang, accent);
                     return (
                       <article
                         key={item.id}
                         onClick={() => setFocusedItem(item)}
-                        className="group rounded-2xl bg-[#FFFDF9] border border-[#E6DAC8] p-4 sm:p-5 flex flex-col sm:flex-row items-center gap-4 shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer"
-                        style={{ transformStyle: 'preserve-3d' }}
+                        style={{
+                          backgroundColor: pageCardBg,
+                          borderColor: primaryBadge?.isHighlight ? accent : pageBorder,
+                          transformStyle: 'preserve-3d',
+                        }}
+                        className={`group rounded-2xl border p-4 sm:p-5 flex flex-col sm:flex-row items-center gap-4 shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer relative ${
+                          primaryBadge?.isHighlight ? 'border-s-4' : ''
+                        }`}
                       >
+                        {primaryBadge && (
+                          <span
+                            style={{ backgroundColor: primaryBadge.bg, color: primaryBadge.fg }}
+                            className="absolute top-2.5 end-2.5 px-2 py-0.5 rounded-md text-[10px] font-extrabold shadow-xs z-10"
+                          >
+                            {primaryBadge.text}
+                          </span>
+                        )}
+
                         {/* Floating 3D Dish Image */}
                         <motion.div
                           layoutId={`dish-img-${item.id}`}
@@ -443,7 +636,7 @@ export function Flipbook3DTheme({
                             transform: 'translateZ(30px)',
                             transformStyle: 'preserve-3d',
                           }}
-                          className="w-32 h-32 sm:w-28 sm:h-28 rounded-2xl overflow-hidden shrink-0 bg-stone-200 shadow-[0_18px_32px_-8px_rgba(42,32,24,0.45)] group-hover:-translate-y-1.5 group-hover:rotate-1 transition-transform duration-300 border-2 border-white"
+                          className="w-28 h-28 rounded-2xl overflow-hidden shrink-0 bg-stone-200 shadow-[0_18px_32px_-8px_rgba(42,32,24,0.45)] group-hover:-translate-y-1.5 group-hover:rotate-1 transition-transform duration-300 border-2 border-white"
                         >
                           <SafeImage
                             src={item.imageUrl}
@@ -454,33 +647,39 @@ export function Flipbook3DTheme({
 
                         <div className="flex-1 min-w-0 w-full space-y-2 text-center sm:text-start">
                           <div className="flex items-center justify-center sm:justify-between gap-2">
-                            <h3 className="text-base sm:text-lg font-extrabold text-[#231911] flex items-center gap-1.5 truncate">
+                            <h3
+                              style={{ color: pageHeadingColor }}
+                              className="text-base sm:text-lg font-extrabold flex items-center gap-1.5 truncate"
+                            >
                               <span className="truncate">{itemName}</span>
-                              {item.isSpicy && <Flame className="w-4 h-4 text-red-600 shrink-0" />}
+                              {item.isSpicy && <Flame className="w-4 h-4 text-red-500 shrink-0" />}
                             </h3>
                           </div>
 
                           {itemDesc && (
-                            <p className="text-xs text-[#6B5848] line-clamp-2 leading-relaxed">
+                            <p
+                              style={{ color: pageDescColor }}
+                              className="text-xs line-clamp-2 leading-relaxed"
+                            >
                               {itemDesc}
                             </p>
                           )}
 
                           <div className="pt-1 flex flex-wrap items-center justify-center sm:justify-between gap-2 text-xs">
-                            <div className="flex items-center gap-2 text-[#7A6552]">
+                            <div className="flex items-center gap-2">
                               <span
                                 className="font-mono-num text-base font-extrabold"
-                                style={{ color: accent }}
+                                style={{ color: pagePriceColor }}
                               >
                                 {formatPrice(item.basePrice)}
                               </span>
                               {item.ordersCount > 0 && (
-                                <>
-                                  <span aria-hidden="true">·</span>
-                                  <span className="font-mono-num font-semibold text-amber-800">
-                                    🔥 +{item.ordersCount}
-                                  </span>
-                                </>
+                                <span
+                                  style={{ color: pageDescColor }}
+                                  className="font-mono-num text-[11px] font-semibold opacity-80"
+                                >
+                                  · +{item.ordersCount}
+                                </span>
                               )}
                             </div>
 
@@ -499,12 +698,15 @@ export function Flipbook3DTheme({
               )}
 
               {/* Book Bottom Flipper Navigation */}
-              <div className="mt-8 pt-4 border-t border-[#E2D4C0] flex items-center justify-between gap-3 relative z-10">
+              <div
+                style={{ borderColor: pageBorder }}
+                className="mt-8 pt-4 border-t flex items-center justify-between gap-2 relative z-10"
+              >
                 <button
                   type="button"
                   disabled={safePageIndex === 0}
                   onClick={() => goToPage(safePageIndex - 1)}
-                  className="min-h-[44px] px-4 py-2 rounded-xl border border-[#D4C3AA] bg-white text-[#2A2018] text-xs font-bold flex items-center gap-1.5 hover:bg-[#F3EADF] disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+                  className="min-h-[44px] px-3 sm:px-4 py-2 rounded-xl border border-[#D4C3AA] bg-white text-[#2A2018] text-xs font-bold flex items-center gap-1.5 hover:bg-[#F3EADF] disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
                 >
                   {isRtl ? (
                     <ChevronRight className="w-4 h-4" />
@@ -514,7 +716,7 @@ export function Flipbook3DTheme({
                   <span>{t.menu.prevPage}</span>
                 </button>
 
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
                   {pages.map((_, idx) => (
                     <button
                       key={idx}
@@ -524,7 +726,7 @@ export function Flipbook3DTheme({
                       style={
                         idx === safePageIndex ? { backgroundColor: accent } : undefined
                       }
-                      className={`h-2.5 rounded-full transition-all cursor-pointer ${
+                      className={`h-2.5 rounded-full transition-all cursor-pointer shrink-0 ${
                         idx === safePageIndex ? 'w-7' : 'w-2.5 bg-[#D4C3AA] hover:bg-[#B8A183]'
                       }`}
                     />
@@ -535,7 +737,7 @@ export function Flipbook3DTheme({
                   type="button"
                   disabled={safePageIndex >= pages.length - 1}
                   onClick={() => goToPage(safePageIndex + 1)}
-                  className="min-h-[44px] px-4 py-2 rounded-xl border border-[#D4C3AA] bg-white text-[#2A2018] text-xs font-bold flex items-center gap-1.5 hover:bg-[#F3EADF] disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+                  className="min-h-[44px] px-3 sm:px-4 py-2 rounded-xl border border-[#D4C3AA] bg-white text-[#2A2018] text-xs font-bold flex items-center gap-1.5 hover:bg-[#F3EADF] disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
                 >
                   <span>{t.menu.nextPage}</span>
                   {isRtl ? (
@@ -554,6 +756,22 @@ export function Flipbook3DTheme({
         </p>
       </main>
 
+      <OffersBannerZone
+        offers={restaurant.offers}
+        placement="below_grid"
+        accentColor={accent}
+        isDarkSurface={true}
+        onApplyPromoCode={onApplyPromoCode}
+      />
+
+      <OffersBannerZone
+        offers={restaurant.offers}
+        placement="floating"
+        accentColor={accent}
+        isDarkSurface={true}
+        onApplyPromoCode={onApplyPromoCode}
+      />
+
       {/* Interactive 3D Dish Fly-To-Top-Center Transition Overlay */}
       <AnimatePresence>
         {focusedItem && (
@@ -569,7 +787,6 @@ export function Flipbook3DTheme({
               onClick={(e) => e.stopPropagation()}
               className="w-full max-w-lg flex flex-col items-center my-auto"
             >
-              {/* Docked Top-Center Clean Dish Image */}
               <div className="relative w-full flex justify-center z-20">
                 <button
                   type="button"
@@ -583,7 +800,7 @@ export function Flipbook3DTheme({
                 <motion.div
                   layoutId={`dish-img-${focusedItem.id}`}
                   transition={{ type: 'spring', stiffness: 280, damping: 26 }}
-                  className="w-52 h-52 sm:w-60 sm:h-60 rounded-3xl overflow-hidden shadow-[0_25px_55px_rgba(0,0,0,0.65)] border-4 border-white bg-stone-900 -mb-10"
+                  className="w-48 h-48 sm:w-56 sm:h-56 rounded-3xl overflow-hidden shadow-[0_25px_55px_rgba(0,0,0,0.65)] border-4 border-white bg-stone-900 -mb-10"
                 >
                   <SafeImage
                     src={focusedItem.imageUrl}
@@ -593,20 +810,26 @@ export function Flipbook3DTheme({
                 </motion.div>
               </div>
 
-              {/* Expanding Detailed Panel Underneath */}
               <motion.div
                 initial={{ opacity: 0, y: 28, scale: 0.96 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 20, scale: 0.96 }}
                 transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-                className="w-full bg-[#FAF5EE] text-[#231911] rounded-3xl pt-14 pb-5 px-5 sm:px-7 shadow-2xl border border-[#E2D4C0] space-y-5"
+                className="w-full bg-[#FAF5EE] text-[#231911] rounded-3xl pt-14 pb-5 px-5 sm:px-7 shadow-2xl border border-[#E2D4C0] space-y-4"
               >
                 <div className="text-center space-y-2">
+                  {(focusedItem.isBogo || focusedItem.badge === 'bogo') && (
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-600 text-white text-xs font-extrabold">
+                      <Gift className="w-3.5 h-3.5" />
+                      <span>{t.menu.bogoIncluded}</span>
+                    </div>
+                  )}
+
                   <div className="flex items-center justify-center gap-2 text-xs font-bold">
                     <span className="font-mono-num text-amber-800">
                       {lang === 'en'
-                        ? `🔥 +${focusedItem.ordersCount || 25} ${t.menu.ordersCountLabel}`
-                        : `🔥 طُلب +${focusedItem.ordersCount || 25} مرة`}
+                        ? `+${focusedItem.ordersCount || 25} ${t.menu.ordersCountLabel}`
+                        : `طُلب +${focusedItem.ordersCount || 25} مرة`}
                     </span>
                     {typeof focusedItem.calories === 'number' && focusedItem.calories > 0 && (
                       <>
@@ -630,7 +853,6 @@ export function Flipbook3DTheme({
                   )}
                 </div>
 
-                {/* Interactive Size Selector */}
                 {focusedItem.sizes && focusedItem.sizes.length > 0 && (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-xs font-bold text-[#7A6552]">
@@ -665,14 +887,13 @@ export function Flipbook3DTheme({
                   </div>
                 )}
 
-                {/* Interactive Add-ons Checkboxes */}
                 {focusedItem.addons && focusedItem.addons.length > 0 && (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-xs font-bold text-[#7A6552]">
                       <span>{t.menu.chooseAddons}</span>
                       <span>{t.menu.optionalAddons}</span>
                     </div>
-                    <div className="space-y-2 max-h-40 overflow-y-auto pe-1">
+                    <div className="space-y-2 max-h-36 overflow-y-auto pe-1">
                       {focusedItem.addons.map((addon) => {
                         const checked = selectedAddons.some((a) => a.name === addon.name);
                         return (
@@ -710,7 +931,6 @@ export function Flipbook3DTheme({
                   </div>
                 )}
 
-                {/* Kitchen Notes */}
                 <input
                   type="text"
                   maxLength={140}
@@ -720,7 +940,63 @@ export function Flipbook3DTheme({
                   className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#E2D4C0] text-xs text-[#231911] placeholder:text-[#9A8570] focus:outline-none focus:border-[#7A6552]"
                 />
 
-                {/* Stepper + Instant Add Button */}
+                {focusedPairings.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-extrabold text-[#5B483A]">
+                      {t.menu.pairingsHeading}
+                    </p>
+                    <div className="flex items-stretch gap-2 overflow-x-auto no-scrollbar pb-1">
+                      {focusedPairings.map((sug) => {
+                        const sugName = loc(sug.name, sug.name_en);
+                        const justAdded = addedSugId === sug.id;
+                        return (
+                          <div
+                            key={sug.id}
+                            className="w-36 shrink-0 rounded-xl border border-[#E2D4C0] bg-white p-2 flex flex-col justify-between gap-2"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <SafeImage
+                                src={sug.imageUrl}
+                                alt={sugName}
+                                className="w-9 h-9 rounded-lg object-cover shrink-0"
+                              />
+                              <div className="min-w-0">
+                                <p className="text-[11px] font-bold text-[#231911] truncate">
+                                  {sugName}
+                                </p>
+                                <p className="text-[11px] font-mono-num font-bold text-[#7A6552]">
+                                  {formatPrice(sug.basePrice)}
+                                </p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleQuickAddPairing(sug)}
+                              style={!justAdded ? { backgroundColor: accent } : undefined}
+                              className={`w-full min-h-[32px] rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 cursor-pointer ${
+                                justAdded ? 'bg-emerald-600 text-white' : 'text-white'
+                              }`}
+                            >
+                              {justAdded ? (
+                                <Check className="w-3.5 h-3.5" />
+                              ) : (
+                                <Plus className="w-3.5 h-3.5" />
+                              )}
+                              <span>
+                                {justAdded
+                                  ? lang === 'en'
+                                    ? 'Added'
+                                    : 'أُضيف'
+                                  : t.menu.quickAdd}
+                              </span>
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 <div className="pt-2 flex items-center gap-3">
                   <div className="flex items-center gap-2 bg-white border border-[#E2D4C0] rounded-xl px-2 py-1.5">
                     <button

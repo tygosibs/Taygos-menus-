@@ -32,8 +32,16 @@ import {
 } from '../../lib/firestoreService';
 import { CURATED_FOOD_IMAGES, uploadRestaurantAsset } from '../../lib/imageUtils';
 import { buildCategoryHierarchy, doesItemMatchHierarchy } from '../../lib/menuHierarchy';
-import { Category, ItemAddon, ItemSize, MenuItem, Restaurant } from '../../types/menu';
+import { Category, ItemAddon, ItemBadge, ItemSize, MenuItem, Restaurant } from '../../types/menu';
 import { SafeImage } from '../SafeImage';
+
+const QUICK_ADDON_PRESETS: Array<{ name: string; name_en: string; price: number }> = [
+  { name: 'بصل إضافي', name_en: 'Extra Onion', price: 5 },
+  { name: 'جبنة شيدر', name_en: 'Cheddar Cheese', price: 20 },
+  { name: 'صوص خاص', name_en: 'House Sauce', price: 15 },
+  { name: 'هالبينو', name_en: 'Jalapeno', price: 10 },
+  { name: 'بطاطس مقلية', name_en: 'French Fries', price: 35 },
+];
 
 interface MenuBuilderTabProps {
   restaurant: Restaurant;
@@ -88,6 +96,9 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
   const [itemOrdersCount, setItemOrdersCount] = useState(25);
   const [itemSizes, setItemSizes] = useState<ItemSize[]>([]);
   const [itemAddons, setItemAddons] = useState<ItemAddon[]>([]);
+  const [itemBadge, setItemBadge] = useState<ItemBadge>('none');
+  const [itemIsBogo, setItemIsBogo] = useState(false);
+  const [itemSuggestedIds, setItemSuggestedIds] = useState<string[]>([]);
   const [itemSortOrder, setItemSortOrder] = useState(1);
   const [uploadingImg, setUploadingImg] = useState(false);
   const [savingItem, setSavingItem] = useState(false);
@@ -497,6 +508,9 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
       { name: 'كبير', name_en: 'Large', price: 195 },
     ]);
     setItemAddons([{ name: 'جبنة إضافية', name_en: 'Extra Cheese', price: 25 }]);
+    setItemBadge('none');
+    setItemIsBogo(false);
+    setItemSuggestedIds([]);
     setItemSortOrder(items.length + 1);
     setItemModalOpen(true);
   };
@@ -517,6 +531,9 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
     setItemOrdersCount(item.ordersCount ?? 25);
     setItemSizes(item.sizes || []);
     setItemAddons(item.addons || []);
+    setItemBadge(item.badge || 'none');
+    setItemIsBogo(Boolean(item.isBogo));
+    setItemSuggestedIds(item.suggestedItemIds || []);
     setItemSortOrder(item.sortOrder);
     setItemModalOpen(true);
   };
@@ -571,6 +588,9 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
         ordersCount: itemOrdersCount,
         sizes: itemSizes.filter((s) => s.name.trim()),
         addons: itemAddons.filter((a) => a.name.trim()),
+        badge: itemBadge,
+        isBogo: itemIsBogo,
+        suggestedItemIds: itemSuggestedIds,
         sortOrder: itemSortOrder,
       });
       setItemModalOpen(false);
@@ -1076,6 +1096,25 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
                       <GripVertical className="w-4 h-4" />
                       <span className="text-[11px] font-mono-num font-extrabold">#{idx + 1}</span>
                     </button>
+                    {(item.isBogo || (item.badge && item.badge !== 'none')) && (
+                      <span className="absolute top-2.5 end-2.5 px-2 py-1 rounded-lg bg-zinc-950/90 text-white text-[10px] font-extrabold shadow-sm">
+                        {item.isBogo || item.badge === 'bogo'
+                          ? t.menu.bogoBadge
+                          : item.badge === 'trending_week'
+                            ? isEn
+                              ? 'Top Weekly'
+                              : 'الأكثر طلباً'
+                            : item.badge === 'chef_choice'
+                              ? isEn
+                                ? 'Chef Choice'
+                                : 'اختيار الشيف'
+                              : item.badge === 'new'
+                                ? isEn
+                                  ? 'New'
+                                  : 'جديد'
+                                : t.menu.popularBadge}
+                      </span>
+                    )}
                   </div>
                   <div className="p-4 flex-1 flex flex-col justify-between gap-3">
                     <div>
@@ -1664,7 +1703,7 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
               ))}
             </div>
 
-            {/* Bilingual Addons Array Builder */}
+            {/* Bilingual Addons Array Builder + Quick Presets */}
             <div className="space-y-2.5 border-t border-zinc-100 pt-4">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-zinc-900">{t.admin.menu.addonsHeading}</span>
@@ -1679,6 +1718,27 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
                   <span>{t.admin.menu.addAddonBtn}</span>
                 </button>
               </div>
+
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[11px] font-semibold text-zinc-500">
+                  {t.admin.menu.quickAddonsLabel}
+                </span>
+                {QUICK_ADDON_PRESETS.map((preset) => {
+                  const exists = itemAddons.some((a) => a.name.trim() === preset.name);
+                  return (
+                    <button
+                      key={preset.name}
+                      type="button"
+                      disabled={exists}
+                      onClick={() => setItemAddons((prev) => [...prev, { ...preset }])}
+                      className="px-2.5 py-1 rounded-lg border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-[11px] font-bold text-zinc-800 cursor-pointer disabled:opacity-40"
+                    >
+                      + {isEn ? preset.name_en : preset.name} ({preset.price})
+                    </button>
+                  );
+                })}
+              </div>
+
               {itemAddons.map((ad, idx) => (
                 <div
                   key={`ad_${idx}`}
@@ -1730,6 +1790,79 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
                   </button>
                 </div>
               ))}
+            </div>
+
+            {/* Merchandising Badge, BOGO 1+1 & Suggested Pairings */}
+            <div className="space-y-3 border-t border-zinc-100 pt-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+                <div>
+                  <label className="block text-xs font-bold mb-1">{t.admin.menu.badgeLabel}</label>
+                  <select
+                    value={itemBadge}
+                    onChange={(e) => setItemBadge(e.target.value as ItemBadge)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-xs font-semibold bg-white"
+                  >
+                    <option value="none">{isEn ? 'None (Default)' : 'بدون شارة'}</option>
+                    <option value="trending_week">
+                      {isEn ? 'Most Ordered This Week' : 'الأكثر طلباً هذا الأسبوع'}
+                    </option>
+                    <option value="best_seller">{isEn ? 'Best Seller' : 'الأكثر مبيعاً'}</option>
+                    <option value="chef_choice">{isEn ? "Chef's Choice" : 'اختيار الشيف'}</option>
+                    <option value="bogo">{isEn ? 'Buy 1 Get 1 (1+1)' : 'عرض 1+1 مجاناً'}</option>
+                    <option value="new">{isEn ? 'New Arrival' : 'جديد المنيو'}</option>
+                  </select>
+                </div>
+
+                <label className="flex items-center gap-2 text-xs font-bold bg-amber-50 border border-amber-200 text-amber-950 px-3.5 py-2.5 rounded-xl cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={itemIsBogo}
+                    onChange={(e) => setItemIsBogo(e.target.checked)}
+                    className="w-4 h-4 accent-amber-600"
+                  />
+                  <span>{t.admin.menu.bogoToggle}</span>
+                </label>
+              </div>
+
+              {items.filter((cand) => cand.id !== editingItem?.id).length > 0 && (
+                <div className="space-y-2">
+                  <label className="block text-xs font-bold text-zinc-900">
+                    {t.admin.menu.suggestedItemsHeading}
+                  </label>
+                  <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto p-2 rounded-xl border border-zinc-200 bg-zinc-50/70">
+                    {items
+                      .filter((cand) => cand.id !== editingItem?.id)
+                      .map((cand) => {
+                        const selected = itemSuggestedIds.includes(cand.id);
+                        return (
+                          <button
+                            key={cand.id}
+                            type="button"
+                            onClick={() => {
+                              setItemSuggestedIds((prev) =>
+                                prev.includes(cand.id)
+                                  ? prev.filter((id) => id !== cand.id)
+                                  : prev.length < 6
+                                    ? [...prev, cand.id]
+                                    : prev
+                              );
+                            }}
+                            className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition-colors cursor-pointer flex items-center gap-1.5 ${
+                              selected
+                                ? 'bg-zinc-950 text-white border-zinc-950'
+                                : 'bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-100'
+                            }`}
+                          >
+                            {selected && <Check className="w-3 h-3" />}
+                            <span className="truncate max-w-[140px]">
+                              {loc(cand.name, cand.name_en)}
+                            </span>
+                          </button>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
             </div>
 
             {itemError && (

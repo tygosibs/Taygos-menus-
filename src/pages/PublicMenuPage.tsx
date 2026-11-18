@@ -22,7 +22,15 @@ import {
   fetchCustomThemeById,
   fetchRestaurantBySlug,
 } from '../lib/firestoreService';
-import { ActiveTheme, CartItem, Category, CustomTheme, MenuItem, Restaurant } from '../types/menu';
+import {
+  ActiveTheme,
+  CartItem,
+  Category,
+  CustomTheme,
+  MenuColorMode,
+  MenuItem,
+  Restaurant,
+} from '../types/menu';
 
 interface PublicMenuPageProps {
   slug: string;
@@ -47,8 +55,11 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
   const [resolvedCustomTheme, setResolvedCustomTheme] = useState<CustomTheme | null>(null);
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [cartHydratedSlug, setCartHydratedSlug] = useState<string | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
   const [topBarDismissed, setTopBarDismissed] = useState(false);
+  const [colorModeOverride, setColorModeOverride] = useState<MenuColorMode>('auto');
+  const [prefillPromoCode, setPrefillPromoCode] = useState<string | null>(null);
 
   const urlThemeMode = useMemo(() => {
     if (isDemoMode) return true;
@@ -72,7 +83,27 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
     let active = true;
     setLoading(true);
     setError(null);
-    setCart([]);
+    setColorModeOverride('auto');
+    setPrefillPromoCode(null);
+
+    let restoredCart: CartItem[] = [];
+    if (typeof window !== 'undefined' && slug) {
+      try {
+        const raw = window.localStorage.getItem(`sufra_cart_v1_${slug}`);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            restoredCart = parsed.filter(
+              (c) => c && typeof c.cartKey === 'string' && c.menuItem && c.quantity > 0
+            );
+          }
+        }
+      } catch {
+        restoredCart = [];
+      }
+    }
+    setCart(restoredCart);
+    setCartHydratedSlug(slug);
 
     const urlThemeParam =
       typeof window !== 'undefined'
@@ -132,6 +163,15 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
       active = false;
     };
   }, [slug, t.auth.errGeneric]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !slug || cartHydratedSlug !== slug) return;
+    try {
+      window.localStorage.setItem(`sufra_cart_v1_${slug}`, JSON.stringify(cart));
+    } catch {
+      // Ignore storage quota errors
+    }
+  }, [cart, slug, cartHydratedSlug]);
 
   const handleAddToCart = (incoming: CartItem) => {
     setCart((prev) => {
@@ -329,12 +369,22 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
     ? customThemes.find((t) => t.id === effectiveTheme) ||
       (resolvedCustomTheme?.id === effectiveTheme ? resolvedCustomTheme : null)
     : null;
-  const isDarkSurface = getThemeMeta(effectiveTheme).isDark;
+  const themeDefaultDark = getThemeMeta(effectiveTheme).isDark;
+  const isDarkSurface =
+    colorModeOverride === 'dark'
+      ? true
+      : colorModeOverride === 'light'
+        ? false
+        : restaurant.colorMode === 'dark'
+          ? true
+          : restaurant.colorMode === 'light'
+            ? false
+            : themeDefaultDark;
 
   const dashboardTarget = isSuperAdmin && !isOwner ? '/super-admin' : '/admin';
 
   return (
-    <div className="relative min-h-screen">
+    <div className="relative min-h-screen overflow-x-clip max-w-full">
       {/* Owner / Preview Quick Navigation & Theme Bar (Dismissible to a compact pill, never traps anyone) */}
       {showControlBar && !topBarDismissed && (
         <div
@@ -452,6 +502,12 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
         cart={cart}
         cartCount={cartCount}
         cartTotal={cartTotal}
+        colorModeOverride={colorModeOverride}
+        onChangeColorMode={setColorModeOverride}
+        onApplyPromoCode={(code) => {
+          setPrefillPromoCode(code);
+          setCartOpen(true);
+        }}
         onSelectItem={(item) => setSelectedItem(item)}
         onAddToCart={handleAddToCart}
         onQuickStepItem={handleQuickStepItem}
@@ -460,6 +516,7 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
 
       <ItemModal
         item={selectedItem}
+        allItems={items}
         currency={restaurant.currency}
         primaryColor={restaurant.primaryColor}
         taxRate={restaurant.taxRate}
@@ -467,17 +524,32 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
         isDarkSurface={isDarkSurface}
         onClose={() => setSelectedItem(null)}
         onAddToCart={handleAddToCart}
+        onQuickAddSuggested={(sug) => handleQuickStepItem(sug, 1)}
       />
 
       <CartDrawer
         open={cartOpen}
         restaurant={restaurant}
         cart={cart}
+        allItems={items}
         isDemoMode={isDemoMode}
+        prefillPromoCode={prefillPromoCode}
         onClose={() => setCartOpen(false)}
         onUpdateQty={handleUpdateQty}
         onRemoveItem={handleRemoveItem}
-        onClearCart={() => setCart([])}
+        onQuickAddItem={(it) => handleQuickStepItem(it, 1)}
+        onClearCart={() => {
+          setCart([]);
+          setPrefillPromoCode(null);
+          if (typeof window !== 'undefined' && slug) {
+            try {
+              window.localStorage.removeItem(`sufra_cart_v1_${slug}`);
+              window.localStorage.removeItem(`sufra_draft_v1_${slug}`);
+            } catch {
+              // ignore
+            }
+          }
+        }}
       />
     </div>
   );

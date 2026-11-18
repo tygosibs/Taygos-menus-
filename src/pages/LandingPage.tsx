@@ -79,17 +79,17 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
   const flagshipTheme = MENU_THEMES[0];
 
   return (
-    <div dir={dir} className="min-h-screen bg-[#FAFAFA] text-zinc-900 flex flex-col">
+    <div dir={dir} className="min-h-screen bg-[#FAFAFA] text-zinc-900 flex flex-col overflow-x-clip max-w-full">
       {/* 3-Zone Top Bar Contract */}
       <header className="border-b border-zinc-200 bg-white/95 backdrop-blur-sm sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3.5 sm:py-4 flex items-center justify-between gap-2 sm:gap-8">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-2 sm:gap-8">
           <a
             href="/"
             onClick={(e) => {
               e.preventDefault();
               onNavigate('/');
             }}
-            className="text-xl font-extrabold tracking-tight text-zinc-950 whitespace-nowrap shrink-0"
+            className="text-lg sm:text-xl font-extrabold tracking-tight text-zinc-950 whitespace-nowrap shrink-0"
           >
             {t.brandName}
           </a>
@@ -121,13 +121,13 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             </a>
           </nav>
 
-          <div className="flex items-center gap-2 shrink-0">
-            <LanguageToggleButton />
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <LanguageToggleButton compact />
             {isSuperAdmin && (
               <button
                 type="button"
                 onClick={() => onNavigate('/super-admin')}
-                className="px-3.5 py-2 rounded-lg bg-amber-500 text-zinc-950 text-xs sm:text-sm font-extrabold hover:bg-amber-400 transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
+                className="px-2.5 sm:px-3.5 py-2 rounded-lg bg-amber-500 text-zinc-950 text-xs sm:text-sm font-extrabold hover:bg-amber-400 transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
               >
                 <ShieldCheck className="w-4 h-4" />
                 <span className="hidden sm:inline">{t.nav.superAdmin}</span>
@@ -136,27 +136,32 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             <button
               type="button"
               onClick={() => onNavigate('/admin')}
-              className="px-4 py-2 rounded-lg bg-zinc-950 text-white text-xs sm:text-sm font-bold hover:bg-zinc-800 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              className="px-3 sm:px-4 py-2 rounded-lg bg-zinc-950 text-white text-xs sm:text-sm font-bold hover:bg-zinc-800 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
-              {currentUser ? t.nav.ownerDashboard : t.nav.createMenuFree}
+              <span className="sm:hidden">
+                {currentUser ? (lang === 'en' ? 'Dashboard' : 'لوحة التحكم') : lang === 'en' ? 'Start Free' : 'ابدأ مجاناً'}
+              </span>
+              <span className="hidden sm:inline">
+                {currentUser ? t.nav.ownerDashboard : t.nav.createMenuFree}
+              </span>
             </button>
           </div>
         </div>
       </header>
 
       {/* Hero Split */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 py-10 sm:py-12 lg:py-16 grid grid-cols-1 lg:grid-cols-12 gap-8 sm:gap-10 items-stretch w-full">
-        <div className="lg:col-span-6 flex flex-col justify-center space-y-6">
+      <section className="max-w-7xl mx-auto px-3 sm:px-6 py-8 sm:py-12 lg:py-16 grid grid-cols-1 lg:grid-cols-12 gap-7 sm:gap-10 items-stretch w-full">
+        <div className="lg:col-span-6 min-w-0 flex flex-col justify-center space-y-5 sm:space-y-6">
           <p className="text-xs font-semibold text-amber-700 tracking-wide">
             {t.landing.badge}
           </p>
-          <h1 className="text-3xl sm:text-5xl font-extrabold text-zinc-950 leading-[1.2] [text-wrap:balance]">
+          <h1 className="text-2xl sm:text-5xl font-extrabold text-zinc-950 leading-[1.2] [text-wrap:balance]">
             {loc(cms.heroTitle, cms.heroTitle_en)}
           </h1>
-          <p className="text-base text-zinc-600 leading-relaxed max-w-xl">
+          <p className="text-sm sm:text-base text-zinc-600 leading-relaxed max-w-xl">
             {loc(cms.heroSubtitle, cms.heroSubtitle_en)}
           </p>
-          <div className="flex flex-wrap items-center gap-3 pt-2">
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 pt-1">
             <button
               type="button"
               onClick={() => onNavigate('/admin')}

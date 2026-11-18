@@ -3,6 +3,7 @@ import {
   AlertCircle,
   ArrowLeft,
   ArrowRight,
+  Check,
   CheckCircle2,
   Copy,
   Info,
@@ -11,23 +12,44 @@ import {
   Plus,
   Send,
   ShoppingBag,
+  Tag,
   Trash2,
   X,
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { submitPublicOrder } from '../../lib/firestoreService';
-import { CartItem, OrderItemPayload, OrderType, Restaurant } from '../../types/menu';
+import {
+  CartItem,
+  MenuItem,
+  OrderItemPayload,
+  OrderType,
+  PromoCode,
+  Restaurant,
+} from '../../types/menu';
 import { SafeImage } from '../SafeImage';
 
 interface CartDrawerProps {
   open: boolean;
   restaurant: Restaurant;
   cart: CartItem[];
+  allItems?: MenuItem[];
   isDemoMode: boolean;
+  prefillPromoCode?: string | null;
   onClose: () => void;
   onUpdateQty: (cartKey: string, delta: number) => void;
   onRemoveItem: (cartKey: string) => void;
   onClearCart: () => void;
+  onQuickAddItem?: (item: MenuItem) => void;
+}
+
+interface CartDraftState {
+  customerName: string;
+  customerPhone: string;
+  orderType: OrderType;
+  tableNumber: string;
+  deliveryAddress: string;
+  notes: string;
+  appliedPromoCode: string;
 }
 
 function normalizeWhatsappNumber(raw: string): string {
@@ -36,38 +58,83 @@ function normalizeWhatsappNumber(raw: string): string {
   if (digits.startsWith('00')) {
     digits = digits.slice(2);
   }
-  // Local Egyptian mobile (010/011/012/015...) -> prefix 20
   if (digits.length === 11 && digits.startsWith('01')) {
     digits = `2${digits}`;
-  }
-  // Local Saudi mobile (05xxxxxxxx) -> prefix 966
-  else if (digits.length === 10 && digits.startsWith('05')) {
+  } else if (digits.length === 10 && digits.startsWith('05')) {
     digits = `966${digits.slice(1)}`;
   }
   return digits;
+}
+
+function readDraft(slug: string, initialTable: string): CartDraftState {
+  const fallback: CartDraftState = {
+    customerName: '',
+    customerPhone: '',
+    orderType: 'dine_in',
+    tableNumber: initialTable,
+    deliveryAddress: '',
+    notes: '',
+    appliedPromoCode: '',
+  };
+  if (typeof window === 'undefined' || !slug) return fallback;
+  try {
+    const raw = window.localStorage.getItem(`sufra_draft_v1_${slug}`);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw) as Partial<CartDraftState>;
+    return {
+      customerName: typeof parsed.customerName === 'string' ? parsed.customerName : '',
+      customerPhone: typeof parsed.customerPhone === 'string' ? parsed.customerPhone : '',
+      orderType:
+        parsed.orderType === 'delivery' || parsed.orderType === 'pickup'
+          ? parsed.orderType
+          : 'dine_in',
+      tableNumber:
+        initialTable || (typeof parsed.tableNumber === 'string' ? parsed.tableNumber : ''),
+      deliveryAddress: typeof parsed.deliveryAddress === 'string' ? parsed.deliveryAddress : '',
+      notes: typeof parsed.notes === 'string' ? parsed.notes : '',
+      appliedPromoCode:
+        typeof parsed.appliedPromoCode === 'string' ? parsed.appliedPromoCode : '',
+    };
+  } catch {
+    return fallback;
+  }
 }
 
 export function CartDrawer({
   open,
   restaurant,
   cart,
+  allItems,
   isDemoMode,
+  prefillPromoCode,
   onClose,
   onUpdateQty,
   onRemoveItem,
   onClearCart,
+  onQuickAddItem,
 }: CartDrawerProps) {
   const { lang, dir, isRtl, t, loc, formatCurrency } = useLanguage();
   const initialTable =
     typeof window !== 'undefined'
       ? new URLSearchParams(window.location.search).get('table') || ''
       : '';
-  const [customerName, setCustomerName] = useState('');
-  const [customerPhone, setCustomerPhone] = useState('');
-  const [orderType, setOrderType] = useState<OrderType>('dine_in');
-  const [tableNumber, setTableNumber] = useState(initialTable);
-  const [deliveryAddress, setDeliveryAddress] = useState('');
-  const [notes, setNotes] = useState('');
+
+  const draft = useMemo(
+    () => readDraft(restaurant.slug, initialTable),
+    [restaurant.slug, initialTable]
+  );
+
+  const [customerName, setCustomerName] = useState(draft.customerName);
+  const [customerPhone, setCustomerPhone] = useState(draft.customerPhone);
+  const [orderType, setOrderType] = useState<OrderType>(draft.orderType);
+  const [tableNumber, setTableNumber] = useState(draft.tableNumber);
+  const [deliveryAddress, setDeliveryAddress] = useState(draft.deliveryAddress);
+  const [notes, setNotes] = useState(draft.notes);
+
+  const [promoInput, setPromoInput] = useState(draft.appliedPromoCode);
+  const [appliedPromoCode, setAppliedPromoCode] = useState(draft.appliedPromoCode);
+  const [promoError, setPromoError] = useState<string | null>(null);
+  const [addedSugId, setAddedSugId] = useState<string | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -82,6 +149,58 @@ export function CartDrawer({
   const nameInputRef = useRef<HTMLInputElement | null>(null);
   const phoneInputRef = useRef<HTMLInputElement | null>(null);
   const addressInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    setCustomerName(draft.customerName);
+    setCustomerPhone(draft.customerPhone);
+    setOrderType(draft.orderType);
+    setTableNumber(draft.tableNumber);
+    setDeliveryAddress(draft.deliveryAddress);
+    setNotes(draft.notes);
+    setAppliedPromoCode(draft.appliedPromoCode);
+    setPromoInput(draft.appliedPromoCode);
+  }, [draft]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !restaurant.slug) return;
+    try {
+      const payload: CartDraftState = {
+        customerName,
+        customerPhone,
+        orderType,
+        tableNumber,
+        deliveryAddress,
+        notes,
+        appliedPromoCode,
+      };
+      window.localStorage.setItem(`sufra_draft_v1_${restaurant.slug}`, JSON.stringify(payload));
+    } catch {
+      // Ignore storage quota errors
+    }
+  }, [
+    restaurant.slug,
+    customerName,
+    customerPhone,
+    orderType,
+    tableNumber,
+    deliveryAddress,
+    notes,
+    appliedPromoCode,
+  ]);
+
+  useEffect(() => {
+    if (!prefillPromoCode) return;
+    const clean = prefillPromoCode.trim().toUpperCase();
+    if (!clean) return;
+    setPromoInput(clean);
+    const match = (restaurant.promoCodes || []).find(
+      (p) => p.isActive && p.code.toUpperCase() === clean
+    );
+    if (match) {
+      setAppliedPromoCode(match.code.toUpperCase());
+      setPromoError(null);
+    }
+  }, [prefillPromoCode, restaurant.promoCodes]);
 
   useEffect(() => {
     if (cart.length > 0 && confirmedOrder) {
@@ -106,20 +225,119 @@ export function CartDrawer({
     [cart]
   );
 
-  const serviceCharge = useMemo(
-    () => (subtotal * (restaurant.serviceCharge || 0)) / 100,
-    [subtotal, restaurant.serviceCharge]
+  const activePromoList = useMemo(
+    () => (restaurant.promoCodes || []).filter((p) => p.isActive),
+    [restaurant.promoCodes]
   );
+
+  const matchedPromo: PromoCode | null = useMemo(() => {
+    if (!appliedPromoCode) return null;
+    const clean = appliedPromoCode.trim().toUpperCase();
+    return activePromoList.find((p) => p.code.toUpperCase() === clean) || null;
+  }, [activePromoList, appliedPromoCode]);
+
+  const promoEligible = useMemo(() => {
+    if (!matchedPromo) return false;
+    if (matchedPromo.minOrder && subtotal < matchedPromo.minOrder) return false;
+    return true;
+  }, [matchedPromo, subtotal]);
+
+  const discountAmount = useMemo(() => {
+    if (!matchedPromo || !promoEligible) return 0;
+    if (matchedPromo.type === 'percent') {
+      return Math.min(subtotal, (subtotal * (matchedPromo.value || 0)) / 100);
+    }
+    if (matchedPromo.type === 'fixed') {
+      return Math.min(subtotal, Math.max(0, matchedPromo.value || 0));
+    }
+    return 0;
+  }, [matchedPromo, promoEligible, subtotal]);
+
+  const serviceCharge = useMemo(() => {
+    if (matchedPromo && promoEligible && matchedPromo.type === 'waive_service') {
+      return 0;
+    }
+    return (subtotal * (restaurant.serviceCharge || 0)) / 100;
+  }, [matchedPromo, promoEligible, subtotal, restaurant.serviceCharge]);
+
+  const rawDeliveryFee = orderType === 'delivery' ? Math.max(0, restaurant.deliveryFee || 0) : 0;
+  const deliveryFee =
+    matchedPromo && promoEligible && matchedPromo.type === 'free_delivery' ? 0 : rawDeliveryFee;
+
+  const discountedSubtotal = Math.max(0, subtotal - discountAmount);
 
   const taxAmount = useMemo(
-    () => ((subtotal + serviceCharge) * (restaurant.taxRate || 0)) / 100,
-    [subtotal, serviceCharge, restaurant.taxRate]
+    () => ((discountedSubtotal + serviceCharge) * (restaurant.taxRate || 0)) / 100,
+    [discountedSubtotal, serviceCharge, restaurant.taxRate]
   );
 
-  const total = subtotal + serviceCharge + taxAmount;
+  const total = discountedSubtotal + serviceCharge + taxAmount + deliveryFee;
   const displayCurrency = formatCurrency(restaurant.currency);
 
   const formatPrice = (val: number) => `${val.toFixed(2).replace(/\.00$/, '')} ${displayCurrency}`;
+
+  const suggestedInCart = useMemo(() => {
+    if (!allItems || allItems.length === 0 || cart.length === 0) return [];
+    const inCartIds = new Set(cart.map((c) => c.menuItem.id));
+    const wantedIds: string[] = [];
+    cart.forEach((c) => {
+      (c.menuItem.suggestedItemIds || []).forEach((id) => {
+        if (!inCartIds.has(id) && !wantedIds.includes(id)) {
+          wantedIds.push(id);
+        }
+      });
+    });
+    const matched = wantedIds
+      .map((id) => allItems.find((i) => i.isAvailable && i.id === id))
+      .filter((x): x is MenuItem => Boolean(x));
+    return matched.slice(0, 4);
+  }, [allItems, cart]);
+
+  const handleApplyPromo = (codeOverride?: string) => {
+    const clean = (codeOverride ?? promoInput).trim().toUpperCase();
+    if (!clean) {
+      setPromoError(lang === 'en' ? 'Enter a promo code first.' : 'اكتب كود الخصم أولاً.');
+      return;
+    }
+    const found = activePromoList.find((p) => p.code.toUpperCase() === clean);
+    if (!found) {
+      setPromoError(
+        lang === 'en' ? 'Invalid or expired promo code.' : 'كود الخصم غير صحيح أو منتهي.'
+      );
+      return;
+    }
+    setPromoInput(found.code.toUpperCase());
+    setAppliedPromoCode(found.code.toUpperCase());
+    if (found.minOrder && subtotal < found.minOrder) {
+      setPromoError(
+        lang === 'en'
+          ? `Requires minimum order of ${formatPrice(found.minOrder)}`
+          : `يتطلب حد أدنى للطلب ${formatPrice(found.minOrder)}`
+      );
+    } else {
+      setPromoError(null);
+    }
+  };
+
+  const handleRemovePromo = () => {
+    setAppliedPromoCode('');
+    setPromoInput('');
+    setPromoError(null);
+  };
+
+  const handleClearWithDraftReset = () => {
+    onClearCart();
+    setAppliedPromoCode('');
+    setPromoInput('');
+    setPromoError(null);
+    if (typeof window !== 'undefined' && restaurant.slug) {
+      try {
+        window.localStorage.removeItem(`sufra_cart_v1_${restaurant.slug}`);
+      } catch {
+        // ignore
+      }
+    }
+  };
 
   const buildOrderItems = (): OrderItemPayload[] =>
     cart.map((c) => {
@@ -175,8 +393,18 @@ export function CartDrawer({
         `Subtotal: ${formatPrice(subtotal)}`,
       ];
 
+      if (discountAmount > 0 && matchedPromo) {
+        lines.push(`Promo (${matchedPromo.code}): -${formatPrice(discountAmount)}`);
+      }
       if (serviceCharge > 0) {
         lines.push(`Service Charge (${restaurant.serviceCharge}%): ${formatPrice(serviceCharge)}`);
+      }
+      if (orderType === 'delivery' && rawDeliveryFee > 0) {
+        lines.push(
+          deliveryFee === 0
+            ? `Delivery Fee: FREE (${matchedPromo?.code})`
+            : `Delivery Fee: ${formatPrice(deliveryFee)}`
+        );
       }
       if (taxAmount > 0) {
         lines.push(`Tax (${restaurant.taxRate}%): ${formatPrice(taxAmount)}`);
@@ -219,8 +447,18 @@ export function CartDrawer({
       `المجموع الفرعي: ${formatPrice(subtotal)}`,
     ];
 
+    if (discountAmount > 0 && matchedPromo) {
+      lines.push(`خصم (${matchedPromo.code}): -${formatPrice(discountAmount)}`);
+    }
     if (serviceCharge > 0) {
       lines.push(`رسوم الخدمة (${restaurant.serviceCharge}%): ${formatPrice(serviceCharge)}`);
+    }
+    if (orderType === 'delivery' && rawDeliveryFee > 0) {
+      lines.push(
+        deliveryFee === 0
+          ? `رسوم التوصيل: مجاناً (${matchedPromo?.code})`
+          : `رسوم التوصيل: ${formatPrice(deliveryFee)}`
+      );
     }
     if (taxAmount > 0) {
       lines.push(`الضريبة (${restaurant.taxRate}%): ${formatPrice(taxAmount)}`);
@@ -296,6 +534,9 @@ export function CartDrawer({
           items: buildOrderItems(),
           subtotal,
           serviceCharge,
+          deliveryFee: deliveryFee > 0 ? deliveryFee : undefined,
+          discountAmount: discountAmount > 0 ? discountAmount : undefined,
+          promoCode: matchedPromo && promoEligible ? matchedPromo.code : undefined,
           taxAmount,
           total,
         });
@@ -321,6 +562,9 @@ export function CartDrawer({
         whatsappMessage,
         whatsappLaunched: launchWhatsapp,
       });
+      setAppliedPromoCode('');
+      setPromoInput('');
+      setNotes('');
       onClearCart();
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : t.menu.errOrderFailed);
@@ -368,7 +612,7 @@ export function CartDrawer({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md bg-white text-stone-900 h-full flex flex-col shadow-2xl"
+        className="w-full max-w-md bg-white text-stone-900 h-full flex flex-col shadow-2xl overflow-x-clip"
       >
         <div className="px-4 sm:px-5 py-3.5 border-b border-stone-200 flex items-center justify-between gap-2 shrink-0">
           <div className="flex items-center gap-2 min-w-0">
@@ -388,21 +632,34 @@ export function CartDrawer({
               </span>
             )}
           </div>
-          <button
-            type="button"
-            onClick={handleCloseDrawer}
-            aria-label={lang === 'en' ? 'Close cart' : 'إغلاق السلة'}
-            className="w-11 h-11 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 flex items-center justify-center cursor-pointer shrink-0"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {cart.length > 0 && !confirmedOrder && (
+              <button
+                type="button"
+                onClick={handleClearWithDraftReset}
+                title={t.menu.clearCart}
+                className="px-2.5 h-9 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">{t.menu.clearCart}</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleCloseDrawer}
+              aria-label={lang === 'en' ? 'Close cart' : 'إغلاق السلة'}
+              className="w-11 h-11 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 flex items-center justify-center cursor-pointer shrink-0"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-5">
+        <div className="flex-1 overflow-y-auto overflow-x-clip p-4 sm:p-5 space-y-5">
           {isDemoMode && !confirmedOrder && (
             <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-950 text-xs flex items-start gap-2.5">
               <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-              <div className="space-y-0.5">
+              <div className="space-y-0.5 min-w-0">
                 <p className="font-bold">
                   {lang === 'en' ? 'Demo Preview Mode' : 'وضع المعاينة التجريبي'}
                 </p>
@@ -578,6 +835,56 @@ export function CartDrawer({
                 })}
               </div>
 
+              {suggestedInCart.length > 0 && onQuickAddItem && (
+                <div className="space-y-2 pt-1">
+                  <p className="text-xs font-extrabold text-stone-800">{t.menu.pairingsHeading}</p>
+                  <div className="flex items-stretch gap-2 overflow-x-auto no-scrollbar pb-1">
+                    {suggestedInCart.map((sug) => {
+                      const sugName = loc(sug.name, sug.name_en);
+                      const justAdded = addedSugId === sug.id;
+                      return (
+                        <div
+                          key={sug.id}
+                          className="w-40 shrink-0 rounded-xl border border-stone-200 bg-stone-50 p-2 flex items-center gap-2"
+                        >
+                          <SafeImage
+                            src={sug.imageUrl}
+                            alt={sugName}
+                            className="w-10 h-10 rounded-lg object-cover shrink-0"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[11px] font-bold text-stone-900 truncate">
+                              {sugName}
+                            </p>
+                            <p className="text-[11px] font-mono-num text-stone-600">
+                              {formatPrice(sug.basePrice)}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onQuickAddItem(sug);
+                              setAddedSugId(sug.id);
+                              setTimeout(
+                                () => setAddedSugId((p) => (p === sug.id ? null : p)),
+                                1200
+                              );
+                            }}
+                            style={!justAdded ? { backgroundColor: restaurant.primaryColor } : undefined}
+                            aria-label={sugName}
+                            className={`w-8 h-8 rounded-lg flex items-center justify-center text-white shrink-0 cursor-pointer ${
+                              justAdded ? 'bg-emerald-600' : 'hover:opacity-90'
+                            }`}
+                          >
+                            {justAdded ? <Check className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-2.5">
                 <label className="block text-sm font-bold">{t.menu.orderTypeLabel}</label>
                 <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-stone-100">
@@ -713,17 +1020,113 @@ export function CartDrawer({
                 </div>
               </div>
 
+              {/* Promo Code Box */}
+              {activePromoList.length > 0 && (
+                <div className="p-3.5 rounded-xl border border-stone-200 bg-stone-50/70 space-y-2.5">
+                  <div className="flex items-center gap-1.5">
+                    <Tag className="w-3.5 h-3.5 text-stone-500 shrink-0" />
+                    <input
+                      type="text"
+                      dir="ltr"
+                      value={promoInput}
+                      onChange={(e) => {
+                        setPromoInput(e.target.value.toUpperCase());
+                        setPromoError(null);
+                      }}
+                      placeholder={t.menu.promoPlaceholder}
+                      className="flex-1 min-w-0 px-2.5 py-2 rounded-lg bg-white border border-stone-200 text-xs font-mono-num font-bold uppercase focus:outline-none focus:border-stone-400"
+                    />
+                    {matchedPromo ? (
+                      <button
+                        type="button"
+                        onClick={handleRemovePromo}
+                        className="px-3 py-2 rounded-lg border border-red-200 bg-red-50 text-red-700 text-xs font-bold cursor-pointer shrink-0"
+                      >
+                        {t.menu.removePromo}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleApplyPromo()}
+                        className="px-3.5 py-2 rounded-lg bg-stone-900 text-white text-xs font-bold hover:bg-stone-800 cursor-pointer shrink-0"
+                      >
+                        {t.menu.applyPromo}
+                      </button>
+                    )}
+                  </div>
+
+                  {!matchedPromo && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {activePromoList.slice(0, 3).map((p) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => handleApplyPromo(p.code)}
+                          className="px-2 py-1 rounded-md bg-white border border-stone-200 text-[11px] font-mono-num font-bold text-stone-700 hover:border-stone-400 cursor-pointer"
+                        >
+                          {p.code}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {matchedPromo && promoEligible && (
+                    <p className="text-[11px] font-bold text-emerald-700 flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5 shrink-0" />
+                      <span>
+                        {loc(matchedPromo.description, matchedPromo.description_en) ||
+                          (lang === 'en'
+                            ? `Code ${matchedPromo.code} applied!`
+                            : `تم تفعيل كود ${matchedPromo.code}`)}
+                      </span>
+                    </p>
+                  )}
+
+                  {matchedPromo && !promoEligible && matchedPromo.minOrder && (
+                    <p className="text-[11px] font-bold text-amber-700">
+                      {lang === 'en'
+                        ? `Add ${formatPrice(matchedPromo.minOrder - subtotal)} more to use ${matchedPromo.code}`
+                        : `أضف ${formatPrice(matchedPromo.minOrder - subtotal)} لتفعيل كود ${matchedPromo.code}`}
+                    </p>
+                  )}
+
+                  {promoError && <p className="text-[11px] font-bold text-red-600">{promoError}</p>}
+                </div>
+              )}
+
               <div className="p-4 rounded-xl bg-stone-50 border border-stone-200 space-y-2 text-sm">
                 <div className="flex items-center justify-between text-stone-600">
                   <span>{t.menu.subtotal}</span>
                   <span className="font-mono-num">{formatPrice(subtotal)}</span>
                 </div>
+                {discountAmount > 0 && (
+                  <div className="flex items-center justify-between text-emerald-700 font-bold">
+                    <span>
+                      {t.menu.discountLabel} ({matchedPromo?.code})
+                    </span>
+                    <span className="font-mono-num">-{formatPrice(discountAmount)}</span>
+                  </div>
+                )}
                 {restaurant.serviceCharge > 0 && (
                   <div className="flex items-center justify-between text-stone-600">
                     <span>
                       {t.menu.serviceCharge} ({restaurant.serviceCharge}%)
                     </span>
-                    <span className="font-mono-num">{formatPrice(serviceCharge)}</span>
+                    <span className="font-mono-num">
+                      {serviceCharge === 0 && matchedPromo?.type === 'waive_service'
+                        ? lang === 'en'
+                          ? 'FREE'
+                          : 'مجاناً'
+                        : formatPrice(serviceCharge)}
+                    </span>
+                  </div>
+                )}
+                {orderType === 'delivery' && rawDeliveryFee > 0 && (
+                  <div className="flex items-center justify-between text-stone-600">
+                    <span>{t.menu.deliveryFeeLabel}</span>
+                    <span className="font-mono-num">
+                      {deliveryFee === 0 ? (lang === 'en' ? 'FREE' : 'مجاناً') : formatPrice(deliveryFee)}
+                    </span>
                   </div>
                 )}
                 {restaurant.taxRate > 0 && (

@@ -322,7 +322,7 @@ export function OnboardingForm({ ownerId, ownerDisplayName, onCreated }: Onboard
   }, [previewCart, serviceCharge, taxRate]);
 
   return (
-    <div dir={dir} className={`${step === 2 ? 'max-w-5xl' : 'max-w-3xl'} mx-auto py-4 sm:py-8 px-3 sm:px-4 transition-all`}>
+    <div dir={dir} className={`${step === 2 ? 'max-w-5xl' : 'max-w-3xl'} mx-auto py-4 sm:py-8 px-3 sm:px-4 transition-all overflow-x-clip max-w-full`}>
       {/* 2-Step Progress Stepper (Responsive Grid — zero horizontal overflow on 360px phones) */}
       <div className="mb-5 sm:mb-6 bg-white border border-zinc-200 rounded-2xl p-2 sm:p-3.5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1.5 sm:gap-3">
         <button
@@ -913,7 +913,7 @@ export function OnboardingForm({ ownerId, ownerDisplayName, onCreated }: Onboard
                     : 'w-full h-[460px] sm:h-[560px] rounded-2xl border border-zinc-300 shadow-md'
                 }`}
               >
-                <div className="w-full h-full overflow-y-auto overflow-x-hidden">
+                <div className="w-full h-full overflow-y-auto overflow-x-clip">
                   <ThemeRenderer
                     key={`${activeTheme}_${primaryColor}`}
                     restaurant={virtualRestaurant}
@@ -985,6 +985,7 @@ export function OnboardingForm({ ownerId, ownerDisplayName, onCreated }: Onboard
           {/* Preview Sandbox Modals */}
           <ItemModal
             item={previewSelectedItem}
+            allItems={demoBundle.items}
             currency={virtualRestaurant.currency}
             primaryColor={primaryColor}
             taxRate={taxRate}
@@ -992,12 +993,14 @@ export function OnboardingForm({ ownerId, ownerDisplayName, onCreated }: Onboard
             isDarkSurface={selectedThemeMeta.isDark}
             onClose={() => setPreviewSelectedItem(null)}
             onAddToCart={handlePreviewAddToCart}
+            onQuickAddSuggested={(sug) => handlePreviewQuickStep(sug, 1)}
           />
 
           <CartDrawer
             open={previewCartOpen}
             restaurant={virtualRestaurant}
             cart={previewCart}
+            allItems={demoBundle.items}
             isDemoMode={true}
             onClose={() => setPreviewCartOpen(false)}
             onUpdateQty={(cartKey, delta) => {
@@ -1010,6 +1013,7 @@ export function OnboardingForm({ ownerId, ownerDisplayName, onCreated }: Onboard
             onRemoveItem={(cartKey) => {
               setPreviewCart((prev) => prev.filter((c) => c.cartKey !== cartKey));
             }}
+            onQuickAddItem={(sug) => handlePreviewQuickStep(sug, 1)}
             onClearCart={() => setPreviewCart([])}
           />
         </div>

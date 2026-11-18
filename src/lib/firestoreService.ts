@@ -21,13 +21,17 @@ import {
   Category,
   CustomTheme,
   ItemAddon,
+  ItemBadge,
   ItemSize,
+  MenuColorMode,
   MenuItem,
+  MenuOffer,
   Order,
   OrderItemPayload,
   OrderStatus,
   OrderType,
   PlatformLandingSettings,
+  PromoCode,
   Restaurant,
   UserProfile,
 } from '../types/menu';
@@ -139,8 +143,13 @@ export async function createRestaurant(input: CreateRestaurantInput): Promise<Re
       primaryColor: validColor,
       taxRate: safeTaxRate,
       serviceCharge: safeServiceCharge,
+      deliveryFee: 0,
+      colorMode: 'auto',
+      menuColumns: 2,
       currency: input.currency.trim().slice(0, 16) || 'ج.م',
       isOpen: input.isOpen ?? true,
+      offers: [],
+      promoCodes: [],
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
@@ -201,17 +210,99 @@ export async function updateRestaurantThemeAndTaxes(
     primaryColor: string;
     taxRate: number;
     serviceCharge: number;
+    colorMode?: MenuColorMode;
+    headingColor?: string;
+    descriptionColor?: string;
+    priceColor?: string;
+    menuColumns?: 1 | 2 | 3;
   }
 ): Promise<void> {
   const path = `restaurants/${restaurantId}`;
+  const cleanHex = (val?: string) =>
+    val && /^#[0-9a-fA-F]{6}$/.test(val.trim()) ? val.trim() : '';
+  const payload: Record<string, unknown> = {
+    activeTheme: updates.activeTheme,
+    primaryColor: updates.primaryColor,
+    taxRate: Number(updates.taxRate) || 0,
+    serviceCharge: Number(updates.serviceCharge) || 0,
+    updatedAt: serverTimestamp(),
+  };
+  if (updates.colorMode !== undefined) {
+    payload.colorMode = updates.colorMode;
+  }
+  if (updates.headingColor !== undefined) {
+    payload.headingColor = cleanHex(updates.headingColor);
+  }
+  if (updates.descriptionColor !== undefined) {
+    payload.descriptionColor = cleanHex(updates.descriptionColor);
+  }
+  if (updates.priceColor !== undefined) {
+    payload.priceColor = cleanHex(updates.priceColor);
+  }
+  if (updates.menuColumns !== undefined) {
+    payload.menuColumns = [1, 2, 3].includes(updates.menuColumns) ? updates.menuColumns : 2;
+  }
+  try {
+    await updateDoc(doc(db, 'restaurants', restaurantId), payload);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function updateRestaurantOffersAndPromos(
+  restaurantId: string,
+  offers: MenuOffer[],
+  promoCodes: PromoCode[]
+): Promise<{ offers: MenuOffer[]; promoCodes: PromoCode[] }> {
+  const path = `restaurants/${restaurantId}`;
+  const cleanOffers: MenuOffer[] = (offers || []).slice(0, 12).map((o, idx) => {
+    const clean: MenuOffer = {
+      id: (o.id || makeId('offer')).slice(0, 64),
+      title: (o.title || '').trim().slice(0, 120),
+      title_en: (o.title_en || '').trim().slice(0, 120),
+      subtitle: (o.subtitle || '').trim().slice(0, 200),
+      subtitle_en: (o.subtitle_en || '').trim().slice(0, 200),
+      badgeText: (o.badgeText || '').trim().slice(0, 40),
+      badgeText_en: (o.badgeText_en || '').trim().slice(0, 40),
+      isBogo: Boolean(o.isBogo),
+      promoCode: (o.promoCode || '').trim().toUpperCase().slice(0, 24),
+      placement: (['top', 'above_grid', 'below_grid', 'floating'].includes(o.placement)
+        ? o.placement
+        : 'above_grid') as MenuOffer['placement'],
+      animation: (['static', 'marquee', 'orbit', 'bounce', 'fade'].includes(o.animation)
+        ? o.animation
+        : 'static') as MenuOffer['animation'],
+      bgColor: o.bgColor && /^#[0-9a-fA-F]{6}$/.test(o.bgColor.trim()) ? o.bgColor.trim() : '',
+      textColor: o.textColor && /^#[0-9a-fA-F]{6}$/.test(o.textColor.trim()) ? o.textColor.trim() : '',
+      isActive: Boolean(o.isActive),
+      sortOrder: idx + 1,
+    };
+    return clean;
+  });
+
+  const cleanPromos: PromoCode[] = (promoCodes || [])
+    .slice(0, 20)
+    .map((p) => ({
+      id: (p.id || makeId('promo')).slice(0, 64),
+      code: (p.code || '').trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 24),
+      type: (['percent', 'fixed', 'free_delivery', 'waive_service'].includes(p.type)
+        ? p.type
+        : 'percent') as PromoCode['type'],
+      value: Math.max(0, Math.min(100000, Number(p.value) || 0)),
+      minOrder: Math.max(0, Math.min(100000, Number(p.minOrder) || 0)),
+      description: (p.description || '').trim().slice(0, 120),
+      description_en: (p.description_en || '').trim().slice(0, 120),
+      isActive: Boolean(p.isActive),
+    }))
+    .filter((p) => p.code.length >= 2);
+
   try {
     await updateDoc(doc(db, 'restaurants', restaurantId), {
-      activeTheme: updates.activeTheme,
-      primaryColor: updates.primaryColor,
-      taxRate: Number(updates.taxRate) || 0,
-      serviceCharge: Number(updates.serviceCharge) || 0,
+      offers: cleanOffers,
+      promoCodes: cleanPromos,
       updatedAt: serverTimestamp(),
     });
+    return { offers: cleanOffers, promoCodes: cleanPromos };
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
   }
@@ -231,11 +322,36 @@ export async function updateRestaurantSettings(
     isOpen: boolean;
     taxRate: number;
     serviceCharge: number;
+    deliveryFee?: number;
     primaryColor: string;
+    colorMode?: MenuColorMode;
+    headingColor?: string;
+    descriptionColor?: string;
+    priceColor?: string;
+    menuColumns?: 1 | 2 | 3;
   }
 ): Promise<Restaurant> {
   const cleanSlug = sanitizeSlug(updates.slug);
   const path = `restaurants/${restaurant.id}`;
+  const cleanHex = (val?: string) =>
+    val && /^#[0-9a-fA-F]{6}$/.test(val.trim()) ? val.trim() : '';
+  const safeDeliveryFee = Math.max(0, Math.min(100000, Number(updates.deliveryFee ?? restaurant.deliveryFee ?? 0) || 0));
+  const safeColorMode: MenuColorMode = updates.colorMode || restaurant.colorMode || 'auto';
+  const safeMenuColumns: 1 | 2 | 3 =
+    updates.menuColumns && [1, 2, 3].includes(updates.menuColumns)
+      ? updates.menuColumns
+      : restaurant.menuColumns && [1, 2, 3].includes(restaurant.menuColumns)
+        ? restaurant.menuColumns
+        : 2;
+  const safeHeadingColor =
+    updates.headingColor !== undefined ? cleanHex(updates.headingColor) : cleanHex(restaurant.headingColor);
+  const safeDescColor =
+    updates.descriptionColor !== undefined
+      ? cleanHex(updates.descriptionColor)
+      : cleanHex(restaurant.descriptionColor);
+  const safePriceColor =
+    updates.priceColor !== undefined ? cleanHex(updates.priceColor) : cleanHex(restaurant.priceColor);
+
   try {
     const batch = writeBatch(db);
     if (cleanSlug !== restaurant.slug) {
@@ -263,7 +379,13 @@ export async function updateRestaurantSettings(
       isOpen: Boolean(updates.isOpen),
       taxRate: Number(updates.taxRate) || 0,
       serviceCharge: Number(updates.serviceCharge) || 0,
+      deliveryFee: safeDeliveryFee,
       primaryColor: updates.primaryColor,
+      colorMode: safeColorMode,
+      headingColor: safeHeadingColor,
+      descriptionColor: safeDescColor,
+      priceColor: safePriceColor,
+      menuColumns: safeMenuColumns,
       updatedAt: serverTimestamp(),
     });
 
@@ -274,6 +396,12 @@ export async function updateRestaurantSettings(
       name_en: cleanNameEn,
       tagline_en: cleanTaglineEn,
       slug: cleanSlug,
+      deliveryFee: safeDeliveryFee,
+      colorMode: safeColorMode,
+      headingColor: safeHeadingColor,
+      descriptionColor: safeDescColor,
+      priceColor: safePriceColor,
+      menuColumns: safeMenuColumns,
     };
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
@@ -483,6 +611,9 @@ export async function saveMenuItem(
     ordersCount?: number;
     sizes: ItemSize[];
     addons: ItemAddon[];
+    badge?: ItemBadge;
+    isBogo?: boolean;
+    suggestedItemIds?: string[];
     sortOrder: number;
   }
 ): Promise<void> {
@@ -502,6 +633,15 @@ export async function saveMenuItem(
   }));
   const cleanNameEn = (data.name_en || '').trim().slice(0, 120);
   const cleanDescEn = (data.description_en || '').trim().slice(0, 500);
+  const cleanBadge: ItemBadge =
+    data.badge &&
+    ['none', 'best_seller', 'trending_week', 'chef_choice', 'bogo', 'new'].includes(data.badge)
+      ? data.badge
+      : 'none';
+  const cleanIsBogo = Boolean(data.isBogo);
+  const cleanSuggestedIds = (data.suggestedItemIds || [])
+    .filter((id) => typeof id === 'string' && id.trim().length > 0 && id !== itemId)
+    .slice(0, 8);
 
   try {
     if (isNew) {
@@ -517,6 +657,9 @@ export async function saveMenuItem(
         ordersCount: Math.max(0, Math.round(Number(data.ordersCount ?? 25))),
         sizes: cleanSizes,
         addons: cleanAddons,
+        badge: cleanBadge,
+        isBogo: cleanIsBogo,
+        suggestedItemIds: cleanSuggestedIds,
         sortOrder: Number(data.sortOrder) || 0,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -555,6 +698,9 @@ export async function saveMenuItem(
         ordersCount: Math.max(0, Math.round(Number(data.ordersCount ?? 25))),
         sizes: cleanSizes,
         addons: cleanAddons,
+        badge: cleanBadge,
+        isBogo: cleanIsBogo,
+        suggestedItemIds: cleanSuggestedIds,
         sortOrder: Number(data.sortOrder) || 0,
         updatedAt: serverTimestamp(),
       });
@@ -600,6 +746,9 @@ export interface SubmitOrderInput {
   items: OrderItemPayload[];
   subtotal: number;
   serviceCharge: number;
+  deliveryFee?: number;
+  discountAmount?: number;
+  promoCode?: string;
   taxAmount: number;
   total: number;
 }
@@ -627,6 +776,15 @@ export async function submitPublicOrder(input: SubmitOrderInput): Promise<{ id: 
     updatedAt: serverTimestamp(),
   };
 
+  if (typeof input.deliveryFee === 'number' && input.deliveryFee > 0) {
+    payload.deliveryFee = Number(input.deliveryFee.toFixed(2));
+  }
+  if (typeof input.discountAmount === 'number' && input.discountAmount > 0) {
+    payload.discountAmount = Number(input.discountAmount.toFixed(2));
+  }
+  if (input.promoCode?.trim()) {
+    payload.promoCode = input.promoCode.trim().toUpperCase().slice(0, 32);
+  }
   if (input.tableNumber?.trim()) {
     payload.tableNumber = input.tableNumber.trim().slice(0, 20);
   }
@@ -778,6 +936,9 @@ export async function seedStarterMenuForRestaurant(
             ordersCount: item.ordersCount,
             sizes: item.sizes,
             addons: item.addons,
+            badge: item.badge || 'none',
+            isBogo: Boolean(item.isBogo),
+            suggestedItemIds: [],
             sortOrder: item.sortOrder,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),

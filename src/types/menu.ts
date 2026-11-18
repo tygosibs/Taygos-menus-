@@ -37,6 +37,48 @@ export interface ItemAddon {
   price: number;
 }
 
+export type MenuColorMode = 'auto' | 'light' | 'dark';
+export type OfferAnimation = 'static' | 'marquee' | 'orbit' | 'bounce' | 'fade';
+export type OfferPlacement = 'top' | 'above_grid' | 'below_grid' | 'floating';
+export type PromoType = 'percent' | 'fixed' | 'free_delivery' | 'waive_service';
+export type ItemBadge =
+  | 'none'
+  | 'best_seller'
+  | 'trending_week'
+  | 'chef_choice'
+  | 'bogo'
+  | 'new';
+export type MenuSortMode = 'default' | 'best_selling' | 'chef_quality' | 'lowest_price';
+
+export interface MenuOffer {
+  id: string;
+  title: string;
+  title_en?: string;
+  subtitle?: string;
+  subtitle_en?: string;
+  badgeText?: string;
+  badgeText_en?: string;
+  isBogo?: boolean;
+  promoCode?: string;
+  placement: OfferPlacement;
+  animation: OfferAnimation;
+  bgColor?: string;
+  textColor?: string;
+  isActive: boolean;
+  sortOrder: number;
+}
+
+export interface PromoCode {
+  id: string;
+  code: string;
+  type: PromoType;
+  value: number;
+  minOrder?: number;
+  description?: string;
+  description_en?: string;
+  isActive: boolean;
+}
+
 export interface Restaurant {
   id: string;
   ownerId: string;
@@ -49,11 +91,19 @@ export interface Restaurant {
   logoUrl?: string;
   activeTheme: ActiveTheme;
   primaryColor: string;
+  colorMode?: MenuColorMode;
+  headingColor?: string;
+  descriptionColor?: string;
+  priceColor?: string;
+  menuColumns?: 1 | 2 | 3;
   taxRate: number;
   serviceCharge: number;
+  deliveryFee?: number;
   currency: string;
   isOpen: boolean;
   isSuspended?: boolean;
+  offers?: MenuOffer[];
+  promoCodes?: PromoCode[];
   createdAt?: unknown;
   updatedAt?: unknown;
 }
@@ -94,6 +144,9 @@ export interface MenuItem {
   ordersCount: number;
   sizes: ItemSize[];
   addons: ItemAddon[];
+  badge?: ItemBadge;
+  isBogo?: boolean;
+  suggestedItemIds?: string[];
   sortOrder: number;
   createdAt?: unknown;
   updatedAt?: unknown;
@@ -137,6 +190,9 @@ export interface Order {
   items: OrderItemPayload[];
   subtotal: number;
   serviceCharge: number;
+  deliveryFee?: number;
+  discountAmount?: number;
+  promoCode?: string;
   taxAmount: number;
   total: number;
   status: OrderStatus;

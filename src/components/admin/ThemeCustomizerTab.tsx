@@ -2,14 +2,18 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Check,
   Code2,
+  Columns,
   ExternalLink,
   Eye,
   Loader2,
   Monitor,
+  Moon,
   Palette,
+  RotateCcw,
   Save,
   Smartphone,
   Sparkles,
+  Sun,
   Upload,
   Wand2,
 } from 'lucide-react';
@@ -17,6 +21,7 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import { DEMO_RESTAURANTS } from '../../data/demoRestaurants';
 import { COLOR_PRESETS, getThemeMeta, isCustomThemeId, MENU_THEMES } from '../../data/themes';
 import { autoSuggestEnglish } from '../../data/translations';
+import { CONTRAST_TYPOGRAPHY_PRESETS } from '../../lib/contrastUtils';
 import {
   fetchActiveCustomThemes,
   isSlugAvailable,
@@ -32,6 +37,7 @@ import {
   CartItem,
   Category,
   CustomTheme,
+  MenuColorMode,
   MenuItem,
   Restaurant,
 } from '../../types/menu';
@@ -60,8 +66,14 @@ export function ThemeCustomizerTab({
     restaurant.activeTheme
   );
   const [primaryColor, setPrimaryColor] = useState(restaurant.primaryColor);
+  const [colorMode, setColorMode] = useState<MenuColorMode>(restaurant.colorMode || 'auto');
+  const [headingColor, setHeadingColor] = useState(restaurant.headingColor || '');
+  const [descriptionColor, setDescriptionColor] = useState(restaurant.descriptionColor || '');
+  const [priceColor, setPriceColor] = useState(restaurant.priceColor || '');
+  const [menuColumns, setMenuColumns] = useState<1 | 2 | 3>(restaurant.menuColumns || 2);
   const [taxRate, setTaxRate] = useState(restaurant.taxRate);
   const [serviceCharge, setServiceCharge] = useState(restaurant.serviceCharge);
+  const [deliveryFee, setDeliveryFee] = useState(restaurant.deliveryFee ?? 0);
 
   const [activatingTheme, setActivatingTheme] = useState(false);
   const [themeSavedMsg, setThemeSavedMsg] = useState<string | null>(null);
@@ -108,8 +120,14 @@ export function ThemeCustomizerTab({
   useEffect(() => {
     setSelectedPreviewTheme(restaurant.activeTheme);
     setPrimaryColor(restaurant.primaryColor);
+    setColorMode(restaurant.colorMode || 'auto');
+    setHeadingColor(restaurant.headingColor || '');
+    setDescriptionColor(restaurant.descriptionColor || '');
+    setPriceColor(restaurant.priceColor || '');
+    setMenuColumns(restaurant.menuColumns || 2);
     setTaxRate(restaurant.taxRate);
     setServiceCharge(restaurant.serviceCharge);
+    setDeliveryFee(restaurant.deliveryFee ?? 0);
     setName(restaurant.name);
     setNameEn(restaurant.name_en || '');
     setSlug(restaurant.slug);
@@ -127,8 +145,14 @@ export function ThemeCustomizerTab({
     restaurant.id,
     restaurant.activeTheme,
     restaurant.primaryColor,
+    restaurant.colorMode,
+    restaurant.headingColor,
+    restaurant.descriptionColor,
+    restaurant.priceColor,
+    restaurant.menuColumns,
     restaurant.taxRate,
     restaurant.serviceCharge,
+    restaurant.deliveryFee,
     restaurant.name,
     restaurant.name_en,
     restaurant.slug,
@@ -161,8 +185,14 @@ export function ThemeCustomizerTab({
       isOpen,
       taxRate,
       serviceCharge,
+      deliveryFee,
       activeTheme: selectedPreviewTheme,
       primaryColor,
+      colorMode,
+      headingColor,
+      descriptionColor,
+      priceColor,
+      menuColumns,
     }),
     [
       restaurant,
@@ -175,8 +205,14 @@ export function ThemeCustomizerTab({
       isOpen,
       taxRate,
       serviceCharge,
+      deliveryFee,
       selectedPreviewTheme,
       primaryColor,
+      colorMode,
+      headingColor,
+      descriptionColor,
+      priceColor,
+      menuColumns,
     ]
   );
 
@@ -204,7 +240,12 @@ export function ThemeCustomizerTab({
 
   const isSelectedAlreadyActive =
     restaurant.activeTheme === selectedPreviewTheme &&
-    restaurant.primaryColor.toLowerCase() === primaryColor.toLowerCase();
+    restaurant.primaryColor.toLowerCase() === primaryColor.toLowerCase() &&
+    (restaurant.colorMode || 'auto') === colorMode &&
+    (restaurant.menuColumns || 2) === menuColumns &&
+    (restaurant.headingColor || '').toLowerCase() === headingColor.toLowerCase() &&
+    (restaurant.descriptionColor || '').toLowerCase() === descriptionColor.toLowerCase() &&
+    (restaurant.priceColor || '').toLowerCase() === priceColor.toLowerCase();
 
   const handleSelectIconForPreview = (nextThemeId: ActiveTheme) => {
     setSelectedPreviewTheme(nextThemeId);
@@ -225,6 +266,11 @@ export function ThemeCustomizerTab({
         primaryColor,
         taxRate,
         serviceCharge,
+        colorMode,
+        headingColor,
+        descriptionColor,
+        priceColor,
+        menuColumns,
       });
       onRestaurantUpdated({
         ...restaurant,
@@ -232,11 +278,16 @@ export function ThemeCustomizerTab({
         primaryColor,
         taxRate,
         serviceCharge,
+        colorMode,
+        headingColor,
+        descriptionColor,
+        priceColor,
+        menuColumns,
       });
       setThemeSavedMsg(
         isEn
           ? `"${selectedThemeFullName}" is now live on your customer menu!`
-          : `تم تفعيل ثيم "${selectedThemeFullName}" لمطعمك وحفظه بنجاح.`
+          : `تم تفعيل ثيم "${selectedThemeFullName}" وحفظ الألوان وتخطيط العرض بنجاح.`
       );
       setTimeout(() => setThemeSavedMsg(null), 4000);
     } catch (err) {
@@ -355,7 +406,13 @@ export function ThemeCustomizerTab({
         isOpen,
         taxRate,
         serviceCharge,
+        deliveryFee,
         primaryColor,
+        colorMode,
+        headingColor,
+        descriptionColor,
+        priceColor,
+        menuColumns,
       });
       onRestaurantUpdated(updated);
       setSlug(updated.slug);
@@ -665,6 +722,160 @@ export function ThemeCustomizerTab({
           </div>
         </div>
 
+        {/* Appearance Studio Controls: Columns, Light/Dark Contrast Mode & Typography Colors */}
+        <div className="px-4 sm:px-5 py-4 border-b border-zinc-200 bg-white space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Grid Columns Switcher */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-extrabold text-zinc-900 flex items-center gap-1.5">
+                <Columns className="w-3.5 h-3.5 text-zinc-500" />
+                <span>{t.admin.themes.columnsLabel}</span>
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {([1, 2, 3] as const).map((cols) => (
+                  <button
+                    key={cols}
+                    type="button"
+                    onClick={() => setMenuColumns(cols)}
+                    className={`min-h-[40px] px-3 py-2 rounded-xl border text-xs font-bold cursor-pointer transition-colors ${
+                      menuColumns === cols
+                        ? 'bg-zinc-950 text-white border-zinc-950'
+                        : 'bg-zinc-50 text-zinc-700 border-zinc-200 hover:bg-zinc-100'
+                    }`}
+                  >
+                    {cols === 1
+                      ? isEn
+                        ? '1 Col'
+                        : 'عمود 1'
+                      : cols === 2
+                        ? isEn
+                          ? '2 Cols'
+                          : 'عمودان 2'
+                        : isEn
+                          ? '3 Cols'
+                          : '3 أعمدة'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Color Mode (Auto / High-Contrast Light / High-Contrast Dark) */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-extrabold text-zinc-900 flex items-center gap-1.5">
+                <Sun className="w-3.5 h-3.5 text-amber-600" />
+                <span>{t.admin.themes.colorModeLabel}</span>
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {(
+                  [
+                    { id: 'auto', label: t.admin.themes.colorModeAuto, icon: Sparkles },
+                    { id: 'light', label: isEn ? 'Light' : 'نهاري', icon: Sun },
+                    { id: 'dark', label: isEn ? 'Dark' : 'ليلي', icon: Moon },
+                  ] as const
+                ).map((m) => {
+                  const ModeIcon = m.icon;
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setColorMode(m.id)}
+                      className={`min-h-[40px] px-2.5 py-2 rounded-xl border text-xs font-bold flex items-center justify-center gap-1 cursor-pointer transition-colors ${
+                        colorMode === m.id
+                          ? 'bg-zinc-950 text-white border-zinc-950'
+                          : 'bg-zinc-50 text-zinc-700 border-zinc-200 hover:bg-zinc-100'
+                      }`}
+                    >
+                      <ModeIcon className="w-3.5 h-3.5 shrink-0" />
+                      <span className="truncate">{m.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Curated Contrast Typography Presets + Custom Color Pickers */}
+          <div className="pt-3 border-t border-zinc-100 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs font-extrabold text-zinc-900">
+                {t.admin.themes.customTypographyTitle}
+              </span>
+              {(headingColor || descriptionColor || priceColor) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setHeadingColor('');
+                    setDescriptionColor('');
+                    setPriceColor('');
+                  }}
+                  className="text-[11px] font-bold text-zinc-600 hover:text-zinc-950 flex items-center gap-1 cursor-pointer"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  <span>{t.admin.themes.resetColorsBtn}</span>
+                </button>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {CONTRAST_TYPOGRAPHY_PRESETS.map((preset) => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => {
+                    setColorMode(preset.mode);
+                    setHeadingColor(preset.headingColor);
+                    setDescriptionColor(preset.descriptionColor);
+                    setPriceColor(preset.priceColor);
+                  }}
+                  className="px-3 py-1.5 rounded-xl border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-[11px] font-bold flex items-center gap-2 cursor-pointer"
+                >
+                  <span
+                    className="w-3.5 h-3.5 rounded-full border border-black/15"
+                    style={{
+                      backgroundColor: preset.mode === 'dark' ? '#090D16' : '#FAF9F6',
+                    }}
+                  />
+                  <span
+                    className="w-3.5 h-3.5 rounded-full border border-black/15 -ms-3"
+                    style={{ backgroundColor: preset.priceColor }}
+                  />
+                  <span>{isEn ? preset.labelEn : preset.labelAr}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <label className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-zinc-200 bg-zinc-50/70 text-xs font-bold cursor-pointer">
+                <span className="truncate">{t.admin.themes.headingColorLabel}</span>
+                <input
+                  type="color"
+                  value={headingColor || '#0B132B'}
+                  onChange={(e) => setHeadingColor(e.target.value)}
+                  className="w-7 h-7 rounded cursor-pointer border-0 bg-transparent shrink-0"
+                />
+              </label>
+              <label className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-zinc-200 bg-zinc-50/70 text-xs font-bold cursor-pointer">
+                <span className="truncate">{t.admin.themes.descColorLabel}</span>
+                <input
+                  type="color"
+                  value={descriptionColor || '#334155'}
+                  onChange={(e) => setDescriptionColor(e.target.value)}
+                  className="w-7 h-7 rounded cursor-pointer border-0 bg-transparent shrink-0"
+                />
+              </label>
+              <label className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-zinc-200 bg-zinc-50/70 text-xs font-bold cursor-pointer">
+                <span className="truncate">{t.admin.themes.priceColorLabel}</span>
+                <input
+                  type="color"
+                  value={priceColor || primaryColor}
+                  onChange={(e) => setPriceColor(e.target.value)}
+                  className="w-7 h-7 rounded cursor-pointer border-0 bg-transparent shrink-0"
+                />
+              </label>
+            </div>
+          </div>
+        </div>
+
         {/* Live Interactive Preview Viewport */}
         <div className="p-4 sm:p-6 bg-zinc-100/80 border-b border-zinc-200">
           <div
@@ -675,9 +886,9 @@ export function ThemeCustomizerTab({
                 : 'w-full h-[460px] sm:h-[580px] rounded-2xl border border-zinc-300 shadow-md'
             }`}
           >
-            <div className="w-full h-full overflow-y-auto overflow-x-hidden">
+            <div className="w-full h-full overflow-y-auto overflow-x-clip">
               <ThemeRenderer
-                key={`${selectedPreviewTheme}_${primaryColor}`}
+                key={`${selectedPreviewTheme}_${primaryColor}_${colorMode}_${menuColumns}`}
                 restaurant={previewRestaurant}
                 categories={previewCategories}
                 items={previewItems}
@@ -917,9 +1128,9 @@ export function ThemeCustomizerTab({
               className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm"
             />
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2 sm:col-span-2">
             <div>
-              <label className="block text-xs font-bold mb-1">
+              <label className="block text-[11px] font-bold mb-1">
                 {isEn ? 'Tax %' : 'الضريبة %'}
               </label>
               <input
@@ -933,7 +1144,7 @@ export function ThemeCustomizerTab({
               />
             </div>
             <div>
-              <label className="block text-xs font-bold mb-1">
+              <label className="block text-[11px] font-bold mb-1">
                 {isEn ? 'Svc %' : 'الخدمة %'}
               </label>
               <input
@@ -943,6 +1154,19 @@ export function ThemeCustomizerTab({
                 step="0.5"
                 value={serviceCharge}
                 onChange={(e) => setServiceCharge(Number(e.target.value))}
+                className="w-full px-2.5 py-2.5 rounded-xl border border-zinc-200 text-sm font-mono-num"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-bold mb-1 truncate">
+                {t.admin.themes.deliveryFeeLabel}
+              </label>
+              <input
+                type="number"
+                min={0}
+                step="1"
+                value={deliveryFee}
+                onChange={(e) => setDeliveryFee(Number(e.target.value))}
                 className="w-full px-2.5 py-2.5 rounded-xl border border-zinc-200 text-sm font-mono-num"
               />
             </div>
@@ -1016,19 +1240,24 @@ export function ThemeCustomizerTab({
       {/* Interactive Preview Modals (sandboxed, never write real orders) */}
       <ItemModal
         item={previewSelectedItem}
+        allItems={previewItems}
         currency={previewRestaurant.currency}
         primaryColor={primaryColor}
         taxRate={taxRate}
         serviceCharge={serviceCharge}
-        isDarkSurface={selectedThemeMeta.isDark}
+        isDarkSurface={
+          colorMode === 'dark' ? true : colorMode === 'light' ? false : selectedThemeMeta.isDark
+        }
         onClose={() => setPreviewSelectedItem(null)}
         onAddToCart={handlePreviewAddToCart}
+        onQuickAddSuggested={(sug) => handlePreviewQuickStep(sug, 1)}
       />
 
       <CartDrawer
         open={previewCartOpen}
         restaurant={previewRestaurant}
         cart={previewCart}
+        allItems={previewItems}
         isDemoMode={true}
         onClose={() => setPreviewCartOpen(false)}
         onUpdateQty={(cartKey, delta) => {
@@ -1041,6 +1270,7 @@ export function ThemeCustomizerTab({
         onRemoveItem={(cartKey) => {
           setPreviewCart((prev) => prev.filter((c) => c.cartKey !== cartKey));
         }}
+        onQuickAddItem={(sug) => handlePreviewQuickStep(sug, 1)}
         onClearCart={() => setPreviewCart([])}
       />
     </div>

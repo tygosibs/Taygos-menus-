@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Check, Flame, Minus, Plus, X } from 'lucide-react';
+import { Check, Flame, Gift, Minus, Plus, X } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { CartItem, ItemAddon, ItemSize, MenuItem } from '../../types/menu';
 import { SafeImage } from '../SafeImage';
 
 interface ItemModalProps {
   item: MenuItem | null;
+  allItems?: MenuItem[];
   currency: string;
   primaryColor: string;
   taxRate: number;
@@ -13,10 +14,12 @@ interface ItemModalProps {
   isDarkSurface: boolean;
   onClose: () => void;
   onAddToCart: (cartItem: CartItem) => void;
+  onQuickAddSuggested?: (item: MenuItem) => void;
 }
 
 export function ItemModal({
   item,
+  allItems,
   currency,
   primaryColor,
   taxRate,
@@ -24,12 +27,14 @@ export function ItemModal({
   isDarkSurface,
   onClose,
   onAddToCart,
+  onQuickAddSuggested,
 }: ItemModalProps) {
   const { lang, dir, t, loc, formatCurrency } = useLanguage();
   const [selectedSize, setSelectedSize] = useState<ItemSize | undefined>(undefined);
   const [selectedAddons, setSelectedAddons] = useState<ItemAddon[]>([]);
   const [quantity, setQuantity] = useState(1);
   const [notes, setNotes] = useState('');
+  const [addedSuggestedId, setAddedSuggestedId] = useState<string | null>(null);
 
   useEffect(() => {
     if (item) {
@@ -37,6 +42,7 @@ export function ItemModal({
       setSelectedAddons([]);
       setQuantity(1);
       setNotes('');
+      setAddedSuggestedId(null);
     }
   }, [item]);
 
@@ -56,6 +62,18 @@ export function ItemModal({
     return Math.max(0, baseForSize + addonsSum);
   }, [item, selectedSize, selectedAddons]);
 
+  const suggestedPairings = useMemo(() => {
+    if (!item || !allItems || allItems.length === 0) return [];
+    const availablePool = allItems.filter((i) => i.isAvailable && i.id !== item.id);
+    if (item.suggestedItemIds && item.suggestedItemIds.length > 0) {
+      const explicit = item.suggestedItemIds
+        .map((id) => availablePool.find((i) => i.id === id))
+        .filter((x): x is MenuItem => Boolean(x));
+      if (explicit.length > 0) return explicit.slice(0, 6);
+    }
+    return availablePool.slice(0, 3);
+  }, [item, allItems]);
+
   if (!item) return null;
 
   const toggleAddon = (addon: ItemAddon) => {
@@ -64,6 +82,25 @@ export function ItemModal({
         ? prev.filter((a) => a.name !== addon.name)
         : [...prev, addon]
     );
+  };
+
+  const handleQuickAddPairing = (sug: MenuItem) => {
+    if (onQuickAddSuggested) {
+      onQuickAddSuggested(sug);
+    } else {
+      const defaultSize = sug.sizes && sug.sizes.length > 0 ? sug.sizes[0] : undefined;
+      const sugUnitPrice = defaultSize ? defaultSize.price : sug.basePrice;
+      onAddToCart({
+        cartKey: `${sug.id}__${defaultSize?.name || 'std'}____`,
+        menuItem: sug,
+        selectedSize: defaultSize,
+        selectedAddons: [],
+        quantity: 1,
+        unitPrice: sugUnitPrice,
+      });
+    }
+    setAddedSuggestedId(sug.id);
+    setTimeout(() => setAddedSuggestedId((prev) => (prev === sug.id ? null : prev)), 1400);
   };
 
   const handleConfirm = () => {
@@ -90,6 +127,7 @@ export function ItemModal({
   const itemDesc = loc(item.description, item.description_en);
   const totalPrice = unitPrice * quantity;
   const hasCharges = taxRate > 0 || serviceCharge > 0;
+  const isBogo = Boolean(item.isBogo || item.badge === 'bogo');
 
   return (
     <div
@@ -119,6 +157,15 @@ export function ItemModal({
         <div className="relative h-56 sm:h-64 shrink-0 overflow-hidden bg-zinc-800">
           <SafeImage src={item.imageUrl} alt={itemName} className="w-full h-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent" />
+          {isBogo && (
+            <span
+              style={{ backgroundColor: primaryColor }}
+              className="absolute top-3 start-3 px-3 py-1 rounded-lg text-white text-xs font-extrabold flex items-center gap-1.5 shadow-md"
+            >
+              <Gift className="w-3.5 h-3.5" />
+              <span>{t.menu.bogoBadge}</span>
+            </span>
+          )}
           <button
             type="button"
             onClick={onClose}
@@ -162,6 +209,19 @@ export function ItemModal({
         </div>
 
         <div className="p-5 overflow-y-auto space-y-5 flex-1">
+          {isBogo && (
+            <div
+              className={`rounded-xl px-3.5 py-2.5 text-xs font-bold flex items-center gap-2 border ${
+                isDarkSurface
+                  ? 'bg-emerald-950/60 border-emerald-700/60 text-emerald-200'
+                  : 'bg-emerald-50 border-emerald-200 text-emerald-900'
+              }`}
+            >
+              <Gift className="w-4 h-4 shrink-0" />
+              <span>{t.menu.bogoIncluded}</span>
+            </div>
+          )}
+
           {itemDesc && (
             <p
               className={`text-sm leading-relaxed ${
@@ -284,6 +344,55 @@ export function ItemModal({
               }`}
             />
           </div>
+
+          {suggestedPairings.length > 0 && (
+            <div className="space-y-2.5 pt-1">
+              <p className="text-xs font-extrabold">{t.menu.pairingsHeading}</p>
+              <div className="flex items-stretch gap-2.5 overflow-x-auto no-scrollbar pb-1">
+                {suggestedPairings.map((sug) => {
+                  const sugName = loc(sug.name, sug.name_en);
+                  const justAdded = addedSuggestedId === sug.id;
+                  return (
+                    <div
+                      key={sug.id}
+                      className={`w-36 shrink-0 rounded-xl border p-2 flex flex-col justify-between gap-2 ${
+                        isDarkSurface
+                          ? 'bg-zinc-950 border-zinc-800'
+                          : 'bg-stone-50 border-stone-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <SafeImage
+                          src={sug.imageUrl}
+                          alt={sugName}
+                          className="w-10 h-10 rounded-lg object-cover shrink-0"
+                        />
+                        <div className="min-w-0">
+                          <p className="text-[11px] font-bold truncate">{sugName}</p>
+                          <p className="text-[11px] font-mono-num font-bold opacity-80">
+                            {sug.basePrice} {displayCurrency}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleQuickAddPairing(sug)}
+                        style={!justAdded ? { backgroundColor: primaryColor } : undefined}
+                        className={`w-full min-h-[34px] rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 cursor-pointer transition-colors ${
+                          justAdded
+                            ? 'bg-emerald-600 text-white'
+                            : 'text-white hover:opacity-90'
+                        }`}
+                      >
+                        {justAdded ? <Check className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                        <span>{justAdded ? (lang === 'en' ? 'Added' : 'أُضيف') : t.menu.quickAdd}</span>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {hasCharges && (
             <p

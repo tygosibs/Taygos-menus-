@@ -15,6 +15,7 @@ import {
   Save,
   Search,
   Store,
+  Tag,
   Trash2,
   User as UserIcon,
   UtensilsCrossed,
@@ -30,6 +31,7 @@ import {
 } from '../../lib/firestoreService';
 import { Restaurant, UserProfile } from '../../types/menu';
 import { MenuBuilderTab } from '../admin/MenuBuilderTab';
+import { OffersPromosTab } from '../admin/OffersPromosTab';
 import { ThemeCustomizerTab } from '../admin/ThemeCustomizerTab';
 
 interface TenantsManagerTabProps {
@@ -50,7 +52,7 @@ export function TenantsManagerTab({ onOpenPublicMenu }: TenantsManagerTabProps) 
 
   const [busyId, setBusyId] = useState<string | null>(null);
   const [conciergeRestaurant, setConciergeRestaurant] = useState<Restaurant | null>(null);
-  const [conciergeTab, setConciergeTab] = useState<'menu' | 'theme'>('menu');
+  const [conciergeTab, setConciergeTab] = useState<'menu' | 'offers' | 'theme'>('menu');
   const [bilingualOpen, setBilingualOpen] = useState(false);
   const [editRestName, setEditRestName] = useState('');
   const [editRestNameEn, setEditRestNameEn] = useState('');
@@ -624,6 +626,18 @@ export function TenantsManagerTab({ onOpenPublicMenu }: TenantsManagerTabProps) 
                 </button>
                 <button
                   type="button"
+                  onClick={() => setConciergeTab('offers')}
+                  className={`flex-1 sm:flex-initial px-4 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-colors ${
+                    conciergeTab === 'offers'
+                      ? 'bg-zinc-950 text-white'
+                      : 'text-zinc-600 hover:bg-zinc-100'
+                  }`}
+                >
+                  <Tag className="w-3.5 h-3.5" />
+                  <span>{t.admin.tabs.offers}</span>
+                </button>
+                <button
+                  type="button"
                   onClick={() => setConciergeTab('theme')}
                   className={`flex-1 sm:flex-initial px-4 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-colors ${
                     conciergeTab === 'theme'
@@ -638,6 +652,16 @@ export function TenantsManagerTab({ onOpenPublicMenu }: TenantsManagerTabProps) 
 
               {conciergeTab === 'menu' ? (
                 <MenuBuilderTab restaurant={conciergeRestaurant} />
+              ) : conciergeTab === 'offers' ? (
+                <OffersPromosTab
+                  restaurant={conciergeRestaurant}
+                  onRestaurantUpdated={(updated) => {
+                    setConciergeRestaurant(updated);
+                    setRestaurants((prev) =>
+                      prev.map((r) => (r.id === updated.id ? updated : r))
+                    );
+                  }}
+                />
               ) : (
                 <ThemeCustomizerTab
                   restaurant={conciergeRestaurant}

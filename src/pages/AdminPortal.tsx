@@ -9,11 +9,14 @@ import {
   Palette,
   QrCode,
   ShieldCheck,
+  Tag,
   X,
 } from 'lucide-react';
+import { ConfirmSignOutModal } from '../components/ConfirmSignOutModal';
 import { LanguageToggleButton } from '../components/LanguageToggleButton';
 import { LiveOrdersTab } from '../components/admin/LiveOrdersTab';
 import { MenuBuilderTab } from '../components/admin/MenuBuilderTab';
+import { OffersPromosTab } from '../components/admin/OffersPromosTab';
 import { OnboardingForm } from '../components/admin/OnboardingForm';
 import { QrGeneratorTab } from '../components/admin/QrGeneratorTab';
 import { ThemeCustomizerTab } from '../components/admin/ThemeCustomizerTab';
@@ -32,7 +35,7 @@ interface AdminPortalProps {
   onNavigate: (path: string) => void;
 }
 
-type AdminTab = 'orders' | 'menu' | 'theme' | 'qr';
+type AdminTab = 'orders' | 'menu' | 'offers' | 'theme' | 'qr';
 
 export function AdminPortal({ onNavigate }: AdminPortalProps) {
   const { lang, t, dir, loc } = useLanguage();
@@ -45,6 +48,7 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
   const [loadingRestaurant, setLoadingRestaurant] = useState(false);
   const [activeTab, setActiveTab] = useState<AdminTab>('orders');
   const [justCreatedBanner, setJustCreatedBanner] = useState(false);
+  const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
 
   const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
   const [newOrderToast, setNewOrderToast] = useState<string | null>(null);
@@ -192,7 +196,7 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
   // First-time Onboarding if owner has no restaurant yet
   if (!restaurant) {
     return (
-      <div dir={dir} className="min-h-screen bg-[#FAFAFA]">
+      <div dir={dir} className="min-h-screen bg-[#FAFAFA] overflow-x-clip max-w-full">
         <header className="bg-white border-b border-zinc-200 px-3 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-2.5">
           <button
             type="button"
@@ -216,7 +220,7 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
             )}
             <button
               type="button"
-              onClick={() => signOut(auth)}
+              onClick={() => setSignOutConfirmOpen(true)}
               className="px-2.5 py-2 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-600 hover:text-zinc-950 hover:bg-zinc-50 flex items-center gap-1.5 cursor-pointer"
             >
               <LogOut className="w-4 h-4" />
@@ -243,6 +247,14 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
         />
+        <ConfirmSignOutModal
+          open={signOutConfirmOpen}
+          onCancel={() => setSignOutConfirmOpen(false)}
+          onConfirm={() => {
+            setSignOutConfirmOpen(false);
+            void signOut(auth);
+          }}
+        />
       </div>
     );
   }
@@ -262,6 +274,12 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
       icon: LayoutGrid,
     },
     {
+      id: 'offers',
+      label: t.admin.tabs.offers,
+      shortLabel: isEn ? 'Offers & Codes' : 'العروض والأكواد',
+      icon: Tag,
+    },
+    {
       id: 'theme',
       label: isEn ? 'Themes, Logo & Info' : 'الثيم واللوجو والإعدادات',
       shortLabel: isEn ? 'Theme & Logo' : 'الثيم واللوجو',
@@ -276,7 +294,7 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
   ];
 
   return (
-    <div dir={dir} className="min-h-screen bg-[#F5F6F8] text-zinc-900 flex flex-col lg:flex-row">
+    <div dir={dir} className="min-h-screen bg-[#F5F6F8] text-zinc-900 flex flex-col lg:flex-row overflow-x-clip max-w-full">
       {/* Sidebar */}
       <aside className="lg:w-68 bg-white border-b lg:border-b-0 lg:border-e border-zinc-200 shrink-0 flex flex-col justify-between">
         <div className="p-4 sm:p-5 space-y-4 sm:space-y-5">
@@ -302,7 +320,7 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
               </button>
               <button
                 type="button"
-                onClick={() => signOut(auth)}
+                onClick={() => setSignOutConfirmOpen(true)}
                 aria-label={t.admin.signOut}
                 className="px-2.5 py-1.5 rounded-lg border border-red-200 bg-red-50/70 text-red-700 hover:bg-red-100 text-xs font-bold flex items-center gap-1 cursor-pointer"
               >
@@ -332,8 +350,8 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
             </p>
           </div>
 
-          {/* 2-column grid on mobile so ALL 4 dashboard sections are immediately visible without horizontal scrolling */}
-          <nav className="grid grid-cols-2 sm:grid-cols-4 lg:flex lg:flex-col gap-2">
+          {/* 2-column grid on mobile so ALL 5 dashboard sections fit cleanly without horizontal overflow */}
+          <nav className="grid grid-cols-2 sm:grid-cols-5 lg:flex lg:flex-col gap-2">
             {navItems.map((item) => {
               const Icon = item.icon;
               const active = activeTab === item.id;
@@ -397,7 +415,7 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
           </button>
           <button
             type="button"
-            onClick={() => signOut(auth)}
+            onClick={() => setSignOutConfirmOpen(true)}
             className="w-full py-2 px-3 rounded-xl text-xs font-semibold text-red-600 hover:bg-red-50 flex items-center justify-center gap-1.5 cursor-pointer"
           >
             <LogOut className="w-3.5 h-3.5" />
@@ -516,6 +534,12 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
           )}
           {activeTab === 'orders' && <LiveOrdersTab restaurant={restaurant} />}
           {activeTab === 'menu' && <MenuBuilderTab restaurant={restaurant} />}
+          {activeTab === 'offers' && (
+            <OffersPromosTab
+              restaurant={restaurant}
+              onRestaurantUpdated={(updated) => setRestaurant(updated)}
+            />
+          )}
           {activeTab === 'theme' && (
             <ThemeCustomizerTab
               restaurant={restaurant}
@@ -526,6 +550,14 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
           {activeTab === 'qr' && <QrGeneratorTab restaurant={restaurant} />}
         </main>
       </div>
+      <ConfirmSignOutModal
+        open={signOutConfirmOpen}
+        onCancel={() => setSignOutConfirmOpen(false)}
+        onConfirm={() => {
+          setSignOutConfirmOpen(false);
+          void signOut(auth);
+        }}
+      />
     </div>
   );
 }
