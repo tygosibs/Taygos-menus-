@@ -55,13 +55,13 @@ export const DEFAULT_PLATFORM_LANDING: PlatformLandingSettings = {
       description_en: 'Ideal for boutique cafes and emerging restaurants launching digitally.',
       features: [
         'منيو QR غير محدود الأصناف',
-        'الوصول إلى جميع الثيمات التسعة',
+        'الوصول إلى جميع الثيمات التفاعلية',
         'استقبال طلبات واتساب منسقة',
         'مولد QR جاهز للطباعة PNG',
       ],
       features_en: [
         'Unlimited categories & menu items',
-        'Access to all 9 built-in themes',
+        'Access to all built-in interactive themes',
         'Formatted bilingual WhatsApp orders',
         'Print-ready PNG QR code generator',
       ],

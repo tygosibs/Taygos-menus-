@@ -47,11 +47,11 @@ export const TEMPLATE_VARIABLE_DOCS = [
     hint_en: 'Auto-populated { restaurant, categories, items, currentLang } in JS runtime',
   },
   {
-    token: "window.parent.postMessage({ type: 'OPEN_ITEM_MODAL', itemId }, '*')",
+    token: "window.parent.postMessage({ type: 'OPEN_ITEM_MODAL', itemId: item.id, payload: item }, '*')",
     label: 'جسر فتح تفاصيل الصنف',
     label_en: 'Open Dish Modal Bridge',
-    hint: 'فتح نافذة اختيار الأحجام والإضافات الأصلية للمنصة',
-    hint_en: 'Triggers native platform modal for portion sizes & add-ons',
+    hint: 'فتح نافذة اختيار الأحجام والإضافات مع تمرير كائن الصنف الكامل (payload)',
+    hint_en: 'Triggers native platform modal with full dish payload object',
   },
 ];
 
@@ -210,6 +210,7 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.28s ease;
 }
 
 .card img {
@@ -391,6 +392,7 @@ function renderItems() {
     const itemDesc = locText(item.description, item.description_en);
     const card = document.createElement('article');
     card.className = 'card';
+    card.setAttribute('data-item-id', item.id);
     card.innerHTML = \`
       <div>
         \${item.imageUrl ? \`<img src="\${item.imageUrl}" alt="\${itemName}" class="js-open" />\` : ''}
@@ -408,12 +410,22 @@ function renderItems() {
       </div>
     \`;
     card.querySelectorAll('.js-open').forEach((el) => {
-      el.addEventListener('click', () => {
-        window.parent.postMessage({ type: 'OPEN_ITEM_MODAL', itemId: item.id }, '*');
+      el.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        if (typeof window.openItemModal === 'function') {
+          window.openItemModal(item, card);
+        } else {
+          window.parent.postMessage({ type: 'OPEN_ITEM_MODAL', itemId: item.id, payload: item }, '*');
+        }
       });
     });
-    card.querySelector('.js-add').addEventListener('click', () => {
-      window.parent.postMessage({ type: 'ADD_TO_CART', itemId: item.id, quantity: 1 }, '*');
+    card.querySelector('.js-add').addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      if (typeof window.addToCart === 'function') {
+        window.addToCart(item, 1);
+      } else {
+        window.parent.postMessage({ type: 'ADD_TO_CART', itemId: item.id, payload: item, quantity: 1 }, '*');
+      }
     });
     grid.appendChild(card);
   });
@@ -464,6 +476,11 @@ export function buildCustomThemeSrcDoc(params: {
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet" />
     <style>
       *, *::before, *::after { box-sizing: border-box; }
+      html, body {
+        max-width: 100%;
+        overflow-x: hidden;
+        -webkit-tap-highlight-color: transparent;
+      }
       :root {
         --menu-accent: ${params.restaurant.primaryColor || '#A61C1C'};
         --menu-heading: ${params.restaurant.headingColor || ''};
@@ -471,35 +488,286 @@ export function buildCustomThemeSrcDoc(params: {
         --menu-price: ${params.restaurant.priceColor || ''};
         --menu-cols: ${params.restaurant.menuColumns || 2};
       }
+      .sufra-interactive-dish {
+        cursor: pointer;
+        touch-action: manipulation;
+        transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.28s ease !important;
+        will-change: transform;
+      }
+      .sufra-interactive-dish img {
+        cursor: pointer;
+        touch-action: manipulation;
+        transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      @media (hover: hover) {
+        .sufra-interactive-dish:hover {
+          transform: translateY(-6px) scale(1.02);
+          box-shadow: 0 18px 34px rgba(0, 0, 0, 0.28);
+        }
+        .sufra-interactive-dish:hover img {
+          transform: scale(1.04);
+        }
+      }
+      .sufra-interactive-dish.sufra-dish-elevated,
+      .sufra-interactive-dish:active {
+        transform: translateY(-10px) scale(1.035) !important;
+        box-shadow: 0 24px 48px rgba(0, 0, 0, 0.42), 0 0 0 2px var(--menu-accent, #f59e0b) !important;
+        z-index: 25 !important;
+        position: relative;
+      }
+      .sufra-interactive-dish.sufra-dish-elevated img {
+        transform: scale(1.06);
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .sufra-interactive-dish, .sufra-interactive-dish img {
+          transition: none !important;
+        }
+        .sufra-interactive-dish:hover,
+        .sufra-interactive-dish.sufra-dish-elevated {
+          transform: none !important;
+        }
+      }
       ${compiledCss}
     </style>
   </head>
   <body>
     ${compiledHtml}
     <script>
-      window.MENU_DATA = {
-        restaurant: ${restJson},
-        categories: ${catsJson},
-        items: ${itemsJson},
-        offers: ${safeJsonForInlineScript(params.restaurant.offers || [])},
-        currentLang: "${currentLang}"
-      };
-      window.openItemModal = function(itemOrId) {
-        var itemId = typeof itemOrId === 'string' ? itemOrId : (itemOrId && itemOrId.id);
-        window.parent.postMessage({ type: 'OPEN_ITEM_MODAL', itemId: itemId }, '*');
-      };
-      window.addToCart = function(itemOrId, quantity) {
-        var itemId = typeof itemOrId === 'string' ? itemOrId : (itemOrId && itemOrId.id);
-        window.parent.postMessage({ type: 'ADD_TO_CART', itemId: itemId, quantity: quantity || 1 }, '*');
-      };
-      window.openCart = function() {
-        window.parent.postMessage({ type: 'OPEN_CART' }, '*');
-      };
-      try {
-        ${compiledJs}
-      } catch (err) {
-        console.error('Custom Theme Runtime Error:', err);
-      }
+      (function() {
+        var menuItems = ${itemsJson};
+        window.MENU_DATA = {
+          restaurant: ${restJson},
+          categories: ${catsJson},
+          items: menuItems,
+          offers: ${safeJsonForInlineScript(params.restaurant.offers || [])},
+          currentLang: "${currentLang}"
+        };
+
+        var CARD_SELECTOR = '[data-item-id], [data-id], .card, .dish-card, .menu-card, .item-card, .product-card';
+        var IGNORE_SELECTOR = 'input, select, textarea, .cat-btn, .sub-btn, [data-category], [data-subcat]';
+        var ADD_SELECTOR = '.js-add, .btn-add, [data-action="add"], [data-add-to-cart]';
+        var lastModalPostAt = 0;
+        var lastAddPostAt = 0;
+        var lastClickedEl = null;
+        var elevateTimer = null;
+
+        function resolveDish(itemOrId) {
+          if (!itemOrId) return null;
+          if (typeof itemOrId === 'object') {
+            if (itemOrId.id) {
+              var foundByObjId = menuItems.find(function(i) { return i.id === itemOrId.id; });
+              if (foundByObjId) return foundByObjId;
+            }
+            if (itemOrId.itemId) {
+              var foundByInnerId = menuItems.find(function(i) { return i.id === itemOrId.itemId; });
+              if (foundByInnerId) return foundByInnerId;
+            }
+            if (itemOrId.name || itemOrId.title) {
+              return itemOrId;
+            }
+            return null;
+          }
+          var sid = String(itemOrId).trim();
+          if (!sid) return null;
+          return (
+            menuItems.find(function(i) { return i.id === sid; }) ||
+            menuItems.find(function(i) { return i.id.toLowerCase() === sid.toLowerCase(); }) ||
+            menuItems.find(function(i) {
+              return i.name.trim().toLowerCase() === sid.toLowerCase() ||
+                (i.name_en && i.name_en.trim().toLowerCase() === sid.toLowerCase());
+            }) ||
+            null
+          );
+        }
+
+        function findCardElement(target) {
+          if (!target || !target.closest) return null;
+          var card = target.closest(CARD_SELECTOR);
+          if (card) return card;
+          var img = target.tagName === 'IMG' ? target : target.closest('img');
+          if (img && img.parentElement && !img.closest('header, nav')) {
+            return img.closest('article, li, div') || img;
+          }
+          return null;
+        }
+
+        function elevateDishCard(el) {
+          var card = findCardElement(el) || el;
+          if (!card || !card.classList) return;
+          document.querySelectorAll('.sufra-dish-elevated').forEach(function(prev) {
+            if (prev !== card) prev.classList.remove('sufra-dish-elevated');
+          });
+          card.classList.add('sufra-interactive-dish');
+          card.classList.add('sufra-dish-elevated');
+          if (elevateTimer) clearTimeout(elevateTimer);
+          elevateTimer = setTimeout(function() {
+            card.classList.remove('sufra-dish-elevated');
+          }, 720);
+        }
+
+        function resolveDishFromDom(el) {
+          var card = findCardElement(el);
+          if (!card) return null;
+          var attrId = card.getAttribute('data-item-id') || card.getAttribute('data-id') ||
+            (el.getAttribute && (el.getAttribute('data-item-id') || el.getAttribute('data-id')));
+          if (attrId) {
+            var byAttr = resolveDish(attrId);
+            if (byAttr) return byAttr;
+          }
+          var img = card.querySelector('img') || (el.tagName === 'IMG' ? el : null);
+          if (img) {
+            var src = img.getAttribute('src') || '';
+            var alt = (img.getAttribute('alt') || '').trim().toLowerCase();
+            if (src) {
+              var byImgSrc = menuItems.find(function(i) { return i.imageUrl && src.indexOf(i.imageUrl) !== -1; });
+              if (byImgSrc) return byImgSrc;
+            }
+            if (alt) {
+              var byAlt = menuItems.find(function(i) {
+                return i.name.trim().toLowerCase() === alt ||
+                  (i.name_en && i.name_en.trim().toLowerCase() === alt);
+              });
+              if (byAlt) return byAlt;
+            }
+          }
+          var titleEl = card.querySelector('h1, h2, h3, h4, .card-title, .dish-title, .title, .name');
+          if (titleEl && titleEl.textContent) {
+            var titleText = titleEl.textContent.trim().toLowerCase();
+            var byTitle = menuItems.find(function(i) {
+              return titleText.indexOf(i.name.trim().toLowerCase()) !== -1 ||
+                (i.name_en && titleText.indexOf(i.name_en.trim().toLowerCase()) !== -1);
+            });
+            if (byTitle) return byTitle;
+          }
+          return null;
+        }
+
+        // Intercept parent.postMessage cleanly so payload is always populated and animations stay synced
+        try {
+          var nativePostMessage = window.parent.postMessage.bind(window.parent);
+          window.parent.postMessage = function(msg, targetOrigin) {
+            if (msg && typeof msg === 'object') {
+              var msgType = String(msg.type || msg.action || '').toUpperCase();
+              if (msgType === 'OPEN_ITEM_MODAL' || msgType === 'OPEN_ITEM' || msgType === 'SELECT_ITEM' || msgType === 'VIEW_ITEM') {
+                lastModalPostAt = Date.now();
+                var resolved = resolveDish(msg.payload || msg.item || msg.itemId || msg.menuItemId || msg.id);
+                if (resolved) {
+                  msg = Object.assign({}, msg, {
+                    itemId: msg.itemId || resolved.id,
+                    payload: msg.payload || resolved
+                  });
+                }
+                if (lastClickedEl) elevateDishCard(lastClickedEl);
+              } else if (msgType === 'ADD_TO_CART' || msgType === 'QUICK_ADD') {
+                lastAddPostAt = Date.now();
+                var addedDish = resolveDish(msg.payload || msg.item || msg.itemId || msg.menuItemId || msg.id);
+                if (addedDish && !msg.payload) {
+                  msg = Object.assign({}, msg, { itemId: msg.itemId || addedDish.id, payload: addedDish });
+                }
+              }
+            }
+            return nativePostMessage(msg, targetOrigin || '*');
+          };
+        } catch (e) {}
+
+        window.openItemModal = function(itemOrId, sourceEl) {
+          var resolved = resolveDish(itemOrId);
+          var itemId = resolved ? resolved.id : (typeof itemOrId === 'string' ? itemOrId : (itemOrId && itemOrId.id));
+          if (sourceEl) elevateDishCard(sourceEl);
+          else if (lastClickedEl) elevateDishCard(lastClickedEl);
+          lastModalPostAt = Date.now();
+          window.parent.postMessage({
+            type: 'OPEN_ITEM_MODAL',
+            itemId: itemId,
+            payload: resolved || (typeof itemOrId === 'object' ? itemOrId : undefined)
+          }, '*');
+        };
+
+        window.addToCart = function(itemOrId, quantity, extra) {
+          var resolved = resolveDish(itemOrId);
+          var itemId = resolved ? resolved.id : (typeof itemOrId === 'string' ? itemOrId : (itemOrId && itemOrId.id));
+          lastAddPostAt = Date.now();
+          window.parent.postMessage(Object.assign({
+            type: 'ADD_TO_CART',
+            itemId: itemId,
+            payload: resolved || (typeof itemOrId === 'object' ? itemOrId : undefined),
+            quantity: quantity || 1
+          }, extra || {}), '*');
+        };
+
+        window.openCart = function() {
+          window.parent.postMessage({ type: 'OPEN_CART' }, '*');
+        };
+
+        function tagInteractiveCards() {
+          document.querySelectorAll(CARD_SELECTOR).forEach(function(el) {
+            if (!el.closest('header, nav')) {
+              el.classList.add('sufra-interactive-dish');
+            }
+          });
+        }
+
+        function postIframeHeight() {
+          var h = Math.max(
+            document.documentElement ? document.documentElement.scrollHeight : 0,
+            document.body ? document.body.scrollHeight : 0
+          );
+          if (h > 0) {
+            window.parent.postMessage({ type: 'RESIZE_IFRAME', height: h }, '*');
+          }
+        }
+
+        try {
+          ${compiledJs}
+        } catch (err) {
+          console.error('Custom Theme Runtime Error:', err);
+        }
+
+        tagInteractiveCards();
+        postIframeHeight();
+        setTimeout(postIframeHeight, 250);
+        setTimeout(postIframeHeight, 900);
+
+        if (typeof MutationObserver !== 'undefined' && document.body) {
+          var mo = new MutationObserver(function() {
+            tagInteractiveCards();
+            postIframeHeight();
+          });
+          mo.observe(document.body, { childList: true, subtree: true });
+        }
+        window.addEventListener('resize', postIframeHeight);
+
+        document.addEventListener('click', function(ev) {
+          var target = ev.target;
+          if (!target || target.closest(IGNORE_SELECTOR)) return;
+          lastClickedEl = target;
+
+          var isAddBtn = Boolean(target.closest(ADD_SELECTOR));
+          var card = findCardElement(target);
+          if (card && !isAddBtn) {
+            elevateDishCard(card);
+          }
+
+          setTimeout(function() {
+            if (isAddBtn) {
+              if (Date.now() - lastAddPostAt > 120) {
+                var addDish = resolveDishFromDom(target);
+                if (addDish) window.addToCart(addDish, 1);
+              }
+              return;
+            }
+            if (Date.now() - lastModalPostAt <= 140 || Date.now() - lastAddPostAt <= 140) {
+              return;
+            }
+            if (card) {
+              var dish = resolveDishFromDom(target);
+              if (dish) {
+                window.openItemModal(dish, card);
+              }
+            }
+          }, 0);
+        }, false);
+      })();
     </script>
   </body>
 </html>`;

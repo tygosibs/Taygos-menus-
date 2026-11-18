@@ -290,8 +290,8 @@ export function OffersPromosTab({ restaurant, onRestaurantUpdated }: OffersPromo
             </h3>
             <p className="text-[11px] text-zinc-500 mt-0.5">
               {isEn
-                ? 'Drag via grip handle or use arrows to reorder banners. Works across all 9 themes.'
-                : 'اسحب البانر من المقبض لإعادة ترتيبه أو غيّر مكانه وحركته ليظهر في جميع الثيمات التسعة.'}
+                ? 'Drag via grip handle or use arrows to reorder banners. Works across all themes.'
+                : 'اسحب البانر من المقبض لإعادة ترتيبه أو غيّر مكانه وحركته ليظهر في جميع الثيمات.'}
             </p>
           </div>
           <button

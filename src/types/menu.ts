@@ -7,7 +7,8 @@ export type BuiltinTheme =
   | 'theme-6'
   | 'theme-7'
   | 'theme-8'
-  | 'theme-9';
+  | 'theme-9'
+  | 'theme-11';
 
 export type ActiveTheme = BuiltinTheme | `custom_${string}`;
 
@@ -216,6 +217,8 @@ export interface ThemeMeta {
   textPreview: string;
   isDark: boolean;
   isFlagship?: boolean;
+  badge?: string;
+  badge_en?: string;
 }
 
 export interface LandingFeature {

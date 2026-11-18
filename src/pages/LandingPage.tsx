@@ -232,7 +232,9 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                 onClick={(e) => e.stopPropagation()}
                 className="text-xs font-extrabold text-zinc-950 whitespace-nowrap shrink-0 underline underline-offset-4"
               >
-                {lang === 'en' ? 'Browse All 9 Themes' : 'استعرض الـ 9 ثيمات'}
+                {lang === 'en'
+                  ? `Browse All ${MENU_THEMES.length} Themes`
+                  : `استعرض الـ ${MENU_THEMES.length} ثيمات`}
               </a>
             </div>
           </article>
@@ -278,13 +280,25 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                     <div className="absolute top-2.5 start-2.5 px-2 py-0.5 rounded-md bg-black/65 backdrop-blur-xs text-white text-[11px] font-mono-num font-bold">
                       {String(themeItem.number).padStart(2, '0')}
                     </div>
-                    {themeItem.isFlagship && (
-                      <div className="absolute top-2.5 end-2.5 px-2 py-0.5 rounded-md bg-amber-400 text-zinc-950 text-[10px] font-extrabold flex items-center gap-1">
-                        <Sparkles className="w-3 h-3" />
-                        <span className="hidden sm:inline">
-                          {lang === 'en' ? 'Flagship' : 'الأكثر تميزاً'}
-                        </span>
+                    {themeItem.badge ? (
+                      <div
+                        className={`absolute top-2.5 end-2.5 px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-extrabold shadow-md flex items-center gap-1 ${
+                          themeItem.badge.includes('VIP')
+                            ? 'bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 text-zinc-950 border border-amber-200'
+                            : 'bg-gradient-to-r from-orange-500 to-rose-600 text-white'
+                        }`}
+                      >
+                        <span>{loc(themeItem.badge, themeItem.badge_en)}</span>
                       </div>
+                    ) : (
+                      themeItem.isFlagship && (
+                        <div className="absolute top-2.5 end-2.5 px-2 py-0.5 rounded-md bg-amber-400 text-zinc-950 text-[10px] font-extrabold flex items-center gap-1">
+                          <Sparkles className="w-3 h-3" />
+                          <span className="hidden sm:inline">
+                            {lang === 'en' ? 'Flagship' : 'الأكثر تميزاً'}
+                          </span>
+                        </div>
+                      )
                     )}
                   </div>
 

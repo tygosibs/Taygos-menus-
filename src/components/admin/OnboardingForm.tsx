@@ -663,7 +663,7 @@ export function OnboardingForm({ ownerId, ownerDisplayName, onCreated }: Onboard
               <p className="text-xs sm:text-sm text-zinc-600 mt-1">
                 {isEn
                   ? 'Browse every built-in and custom theme, test them live with your restaurant name and logo, and approve the one you love.'
-                  : 'استعرض جميع الثيمات التسعة والثيمات المخصصة، جرّب التصفح والطلب مباشرة، ثم اعتمد الثيم المناسب لإنشاء لوحة التحكم.'}
+                  : 'استعرض جميع الثيمات الاحترافية والثيمات المخصصة، جرّب التصفح والطلب مباشرة، ثم اعتمد الثيم المناسب لإنشاء لوحة التحكم.'}
               </p>
             </div>
             <button
@@ -703,12 +703,26 @@ export function OnboardingForm({ ownerId, ownerDisplayName, onCreated }: Onboard
                       <span className="absolute top-2.5 start-2.5 px-2 py-0.5 rounded-md bg-black/65 backdrop-blur-xs text-white text-[11px] font-mono-num font-bold">
                         {String(themeItem.number).padStart(2, '0')}
                       </span>
-                      {isSelected ? (
+                      {isSelected && (
                         <span className="absolute top-2.5 end-2.5 px-2 py-0.5 rounded-md bg-emerald-600 text-white text-[10px] font-extrabold flex items-center gap-1 shadow-sm">
                           <Check className="w-3 h-3 stroke-[3]" />
                           <span>{isEn ? 'Selected' : 'مختار'}</span>
                         </span>
+                      )}
+                      {themeItem.badge ? (
+                        <span
+                          className={`absolute ${
+                            isSelected ? 'bottom-2.5 start-2.5' : 'top-2.5 end-2.5'
+                          } px-2.5 py-0.5 rounded-lg text-[10px] sm:text-[11px] font-extrabold shadow-md ${
+                            themeItem.badge.includes('VIP')
+                              ? 'bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 text-zinc-950 border border-amber-200'
+                              : 'bg-gradient-to-r from-orange-500 to-rose-600 text-white'
+                          }`}
+                        >
+                          {loc(themeItem.badge, themeItem.badge_en)}
+                        </span>
                       ) : (
+                        !isSelected &&
                         themeItem.isFlagship && (
                           <span className="absolute top-2.5 end-2.5 px-2 py-0.5 rounded-md bg-amber-400 text-zinc-950 text-[10px] font-extrabold flex items-center gap-1 shadow-sm">
                             <Sparkles className="w-3 h-3" />

@@ -43,6 +43,7 @@ import { SafeImage } from '../SafeImage';
 import { CustomThemeIframe } from './CustomThemeIframe';
 import { Flipbook3DTheme } from './Flipbook3DTheme';
 import { OffersBannerZone } from './OffersBannerZone';
+import { WhatsAppChatTheme } from './WhatsAppChatTheme';
 
 interface ThemeRendererProps {
   restaurant: Restaurant;
@@ -214,6 +215,29 @@ export function ThemeRenderer({
         cartTotal={cartTotal}
         onSelectItem={onSelectItem}
         onAddToCart={onAddToCart}
+        onOpenCart={onOpenCart}
+      />
+    );
+  }
+
+  // THEME 11 (VIP): WHATSAPP INTERACTIVE CHAT
+  if (activeTheme === 'theme-11') {
+    return (
+      <WhatsAppChatTheme
+        restaurant={restaurant}
+        categories={categories}
+        items={items}
+        cart={cart}
+        cartCount={cartCount}
+        cartTotal={cartTotal}
+        colorModeOverride={activeColorMode}
+        onChangeColorMode={(m) => {
+          setLocalColorMode(m);
+          onChangeColorMode?.(m);
+        }}
+        onApplyPromoCode={onApplyPromoCode}
+        onSelectItem={onSelectItem}
+        onQuickStepItem={onQuickStepItem}
         onOpenCart={onOpenCart}
       />
     );

@@ -19,6 +19,8 @@ export const MENU_THEMES: ThemeMeta[] = [
     textPreview: '#F7EFE4',
     isDark: true,
     isFlagship: true,
+    badge: 'الأكثر طلباً 🔥',
+    badge_en: 'Most Popular 🔥',
   },
   {
     id: 'theme-2',
@@ -163,6 +165,27 @@ export const MENU_THEMES: ThemeMeta[] = [
     cardPreview: '#F8FAFC',
     textPreview: '#0F172A',
     isDark: false,
+  },
+  {
+    id: 'theme-11',
+    number: 11,
+    name: 'شات واتساب التفاعلي',
+    shortName: 'شات واتساب',
+    englishName: 'WhatsApp Interactive Chat',
+    shortName_en: 'WhatsApp Chat',
+    badge: 'VIP 👑',
+    badge_en: 'VIP 👑',
+    description:
+      'تجربة طلب ثورية تشبه محادثة واتساب الحقيقية مع ردود فورية، أزرار أقسام سريعة، واقتراحات ذكية لزيادة المبيعات.',
+    description_en:
+      'Conversational WhatsApp-style ordering chat with instant replies, quick-reply categories, and smart upsell suggestions.',
+    coverImage: '/src/assets/images/theme_whatsapp_chat_menu_1795014325145.jpg',
+    recommendedColor: '#25D366',
+    bgPreview: '#EFEAE2',
+    cardPreview: '#FFFFFF',
+    textPreview: '#111B21',
+    isDark: false,
+    isFlagship: true,
   },
 ];
 

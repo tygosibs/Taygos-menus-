@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ShoppingBag } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { buildCustomThemeSrcDoc } from '../../lib/customThemeEngine';
@@ -17,6 +17,12 @@ interface CustomThemeIframeProps {
   onOpenCart: () => void;
 }
 
+function asObject(val: unknown): Record<string, unknown> | null {
+  return val && typeof val === 'object' && !Array.isArray(val)
+    ? (val as Record<string, unknown>)
+    : null;
+}
+
 export function CustomThemeIframe({
   customTheme,
   restaurant,
@@ -31,6 +37,7 @@ export function CustomThemeIframe({
   const { lang, dir, t, loc, formatCurrency } = useLanguage();
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [iframeHeight, setIframeHeight] = useState<number | null>(null);
 
   const srcDoc = useMemo(
     () =>
@@ -47,50 +54,185 @@ export function CustomThemeIframe({
   );
 
   useEffect(() => {
+    setIframeHeight(null);
+  }, [customTheme.id, lang]);
+
+  const resolveMenuItemFromMessage = useCallback(
+    (data: Record<string, unknown>): MenuItem | null => {
+      const payloadObj = asObject(data.payload);
+      const itemObj = asObject(data.item);
+      const nestedDataObj = asObject(data.data);
+      const nestedPayloadItem = payloadObj ? asObject(payloadObj.item) : null;
+
+      const candidateObj =
+        nestedPayloadItem || payloadObj || itemObj || nestedDataObj || null;
+
+      const idCandidates = [
+        data.itemId,
+        data.menuItemId,
+        data.id,
+        payloadObj?.id,
+        payloadObj?.itemId,
+        payloadObj?.menuItemId,
+        nestedPayloadItem?.id,
+        itemObj?.id,
+        nestedDataObj?.id,
+      ]
+        .filter((v): v is string | number => typeof v === 'string' || typeof v === 'number')
+        .map((v) => String(v).trim())
+        .filter(Boolean);
+
+      for (const cid of idCandidates) {
+        const exact = items.find((i) => i.id === cid);
+        if (exact) return exact;
+        const ci = items.find((i) => i.id.toLowerCase() === cid.toLowerCase());
+        if (ci) return ci;
+      }
+
+      const nameCandidates = [
+        data.itemName,
+        data.name,
+        data.title,
+        payloadObj?.name,
+        payloadObj?.name_en,
+        payloadObj?.title,
+        nestedPayloadItem?.name,
+        nestedPayloadItem?.name_en,
+        itemObj?.name,
+        itemObj?.name_en,
+        nestedDataObj?.name,
+      ]
+        .filter((v): v is string => typeof v === 'string')
+        .map((v) => v.trim().toLowerCase())
+        .filter(Boolean);
+
+      for (const cname of nameCandidates) {
+        const byName = items.find(
+          (i) =>
+            i.name.trim().toLowerCase() === cname ||
+            (i.name_en || '').trim().toLowerCase() === cname
+        );
+        if (byName) return byName;
+      }
+
+      // If the custom theme sent a complete dish payload not directly matched by ID, normalize it safely
+      if (
+        candidateObj &&
+        (typeof candidateObj.name === 'string' || typeof candidateObj.title === 'string')
+      ) {
+        const rawPrice = Number(candidateObj.basePrice ?? candidateObj.price ?? 0);
+        return {
+          id: String(candidateObj.id || idCandidates[0] || `custom_item_${Date.now()}`),
+          restaurantId: restaurant.id,
+          ownerId: restaurant.ownerId,
+          categoryId: String(candidateObj.categoryId || categories[0]?.id || 'default'),
+          name: String(candidateObj.name || candidateObj.title || ''),
+          name_en:
+            typeof candidateObj.name_en === 'string' ? candidateObj.name_en : undefined,
+          description:
+            typeof candidateObj.description === 'string' ? candidateObj.description : undefined,
+          description_en:
+            typeof candidateObj.description_en === 'string'
+              ? candidateObj.description_en
+              : undefined,
+          basePrice: Number.isFinite(rawPrice) ? rawPrice : 0,
+          imageUrl: typeof candidateObj.imageUrl === 'string' ? candidateObj.imageUrl : undefined,
+          calories:
+            typeof candidateObj.calories === 'number' ? candidateObj.calories : undefined,
+          isSpicy: Boolean(candidateObj.isSpicy),
+          isAvailable: candidateObj.isAvailable !== false,
+          ordersCount: Number(candidateObj.ordersCount || 0),
+          sizes: Array.isArray(candidateObj.sizes) ? (candidateObj.sizes as MenuItem['sizes']) : [],
+          addons: Array.isArray(candidateObj.addons)
+            ? (candidateObj.addons as MenuItem['addons'])
+            : [],
+          sortOrder: Number(candidateObj.sortOrder || 0),
+        };
+      }
+
+      return null;
+    },
+    [items, restaurant.id, restaurant.ownerId, categories]
+  );
+
+  useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (!iframeRef.current || event.source !== iframeRef.current.contentWindow) {
         return;
       }
-      const data = event.data as Record<string, unknown> | null;
-      if (!data || typeof data !== 'object') return;
 
-      const type = String(data.type || '');
-      const rawId =
-        (typeof data.itemId === 'string' && data.itemId) ||
-        (typeof data.menuItemId === 'string' && data.menuItemId) ||
-        (typeof data.id === 'string' && data.id) ||
-        (typeof (data.item as { id?: string } | undefined)?.id === 'string' &&
-          (data.item as { id: string }).id) ||
-        '';
+      let data: Record<string, unknown> | null = null;
+      if (typeof event.data === 'string') {
+        try {
+          const parsed = JSON.parse(event.data);
+          data = asObject(parsed);
+        } catch {
+          return;
+        }
+      } else {
+        data = asObject(event.data);
+      }
 
-      if (type === 'OPEN_CART') {
+      if (!data) return;
+
+      const type = String(data.type || data.action || '')
+        .trim()
+        .toUpperCase();
+
+      if (type === 'RESIZE_IFRAME' || type === 'IFRAME_HEIGHT') {
+        const nextH = Number(data.height);
+        if (Number.isFinite(nextH) && nextH >= 320 && nextH <= 16000) {
+          setIframeHeight(Math.ceil(nextH));
+        }
+        return;
+      }
+
+      if (type === 'OPEN_CART' || type === 'VIEW_CART') {
         onOpenCart();
         return;
       }
 
-      if (type === 'OPEN_ITEM_MODAL') {
-        const found = items.find((i) => i.id === rawId);
+      if (
+        type === 'OPEN_ITEM_MODAL' ||
+        type === 'OPEN_ITEM' ||
+        type === 'SELECT_ITEM' ||
+        type === 'VIEW_ITEM' ||
+        type === 'SHOW_ITEM_DETAILS'
+      ) {
+        const found = resolveMenuItemFromMessage(data);
         if (found) {
           onSelectItem(found);
         }
         return;
       }
 
-      if (type === 'ADD_TO_CART') {
-        const found = items.find((i) => i.id === rawId);
+      if (type === 'ADD_TO_CART' || type === 'QUICK_ADD' || type === 'ADD_ITEM') {
+        const found = resolveMenuItemFromMessage(data);
         if (!found) return;
 
-        const qty = Math.max(1, Math.min(50, Math.round(Number(data.quantity) || 1)));
-        const requestedSizeName = typeof data.sizeName === 'string' ? data.sizeName : '';
+        const payloadObj = asObject(data.payload);
+        const qtyRaw = data.quantity ?? payloadObj?.quantity ?? 1;
+        const qty = Math.max(1, Math.min(50, Math.round(Number(qtyRaw) || 1)));
+        const requestedSizeName =
+          typeof data.sizeName === 'string'
+            ? data.sizeName
+            : typeof payloadObj?.sizeName === 'string'
+              ? payloadObj.sizeName
+              : '';
         const selectedSize = requestedSizeName
           ? found.sizes?.find((s) => s.name === requestedSizeName) || found.sizes?.[0]
           : found.sizes && found.sizes.length > 0
             ? found.sizes[0]
             : undefined;
 
-        const requestedAddonNames = Array.isArray(data.addonNames)
-          ? data.addonNames.filter((n): n is string => typeof n === 'string')
-          : [];
+        const rawAddonNames = Array.isArray(data.addonNames)
+          ? data.addonNames
+          : Array.isArray(payloadObj?.addonNames)
+            ? payloadObj.addonNames
+            : [];
+        const requestedAddonNames = rawAddonNames.filter(
+          (n): n is string => typeof n === 'string'
+        );
         const selectedAddons = (found.addons || []).filter((a) =>
           requestedAddonNames.includes(a.name)
         );
@@ -103,7 +245,13 @@ export function CustomThemeIframe({
           .map((a) => a.name)
           .sort()
           .join(',');
-        const notes = typeof data.notes === 'string' ? data.notes.trim().slice(0, 200) : '';
+        const notesRaw =
+          typeof data.notes === 'string'
+            ? data.notes
+            : typeof payloadObj?.notes === 'string'
+              ? payloadObj.notes
+              : '';
+        const notes = notesRaw.trim().slice(0, 200);
         const cartKey = `${found.id}__${selectedSize?.name || 'std'}__${addonKey}__${notes}`;
 
         onAddToCart({
@@ -123,16 +271,16 @@ export function CustomThemeIframe({
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [items, onSelectItem, onAddToCart, onOpenCart, t.menu.addedToCart, loc]);
+  }, [resolveMenuItemFromMessage, onSelectItem, onAddToCart, onOpenCart, t.menu.addedToCart, loc]);
 
   const accent = restaurant.primaryColor || '#A61C1C';
   const currencyLabel = formatCurrency(restaurant.currency);
   const formattedTotal = `${cartTotal.toFixed(2).replace(/\.00$/, '')} ${currencyLabel}`;
 
   return (
-    <div dir={dir} className="relative w-full min-h-screen bg-zinc-950">
+    <div dir={dir} className="relative w-full min-h-screen bg-zinc-950 overflow-x-clip max-w-full">
       <div className="fixed top-3 end-3 z-40">
-        <LanguageToggleButton variant="glass" />
+        <LanguageToggleButton variant="glass" compact />
       </div>
 
       <iframe
@@ -141,6 +289,7 @@ export function CustomThemeIframe({
         title={loc(customTheme.name, customTheme.name_en)}
         sandbox="allow-scripts"
         srcDoc={srcDoc}
+        style={iframeHeight ? { height: `${iframeHeight}px`, minHeight: '100vh' } : undefined}
         className="w-full min-h-screen border-0 block bg-white"
       />
 
