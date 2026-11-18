@@ -69,6 +69,7 @@ export interface Category {
   id: string;
   restaurantId: string;
   ownerId: string;
+  parentId?: string;
   name: string;
   name_en?: string;
   imageUrl?: string;

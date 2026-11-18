@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { isCustomThemeId } from '../../data/themes';
+import { buildCategoryHierarchy, doesItemMatchHierarchy } from '../../lib/menuHierarchy';
 import { ActiveTheme, CartItem, Category, CustomTheme, MenuItem, Restaurant } from '../../types/menu';
 import { LanguageToggleButton } from '../LanguageToggleButton';
 import { SafeImage } from '../SafeImage';
@@ -53,7 +54,8 @@ export function ThemeRenderer({
   onOpenCart,
 }: ThemeRendererProps) {
   const { lang, dir, isRtl, t, loc, formatCurrency } = useLanguage();
-  const [selectedCatId, setSelectedCatId] = useState<string>('all');
+  const [selectedMainCatId, setSelectedMainCatId] = useState<string>('all');
+  const [selectedSubCatId, setSelectedSubCatId] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [carouselIdx, setCarouselIdx] = useState(0);
   const [infoModalOpen, setInfoModalOpen] = useState(false);
@@ -62,12 +64,27 @@ export function ThemeRenderer({
   const [reelsToast, setReelsToast] = useState<string | null>(null);
   const categoryScrollRef = useRef<HTMLDivElement | null>(null);
 
+  const hierarchy = useMemo(() => buildCategoryHierarchy(categories), [categories]);
+  const activeSubcategories = useMemo(
+    () =>
+      selectedMainCatId === 'all'
+        ? []
+        : hierarchy.subCategoriesByParent.get(selectedMainCatId) || [],
+    [selectedMainCatId, hierarchy]
+  );
+
+  const selectMainCategory = (mainId: string) => {
+    setSelectedMainCatId(mainId);
+    setSelectedSubCatId('all');
+    setCarouselIdx(0);
+  };
+
   const availableItems = useMemo(() => items.filter((i) => i.isAvailable), [items]);
 
   const filteredItems = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return availableItems.filter((item) => {
-      const catMatch = selectedCatId === 'all' || item.categoryId === selectedCatId;
+      const catMatch = doesItemMatchHierarchy(item, selectedMainCatId, selectedSubCatId, hierarchy);
       const textMatch =
         !q ||
         item.name.toLowerCase().includes(q) ||
@@ -76,7 +93,7 @@ export function ThemeRenderer({
         (item.description_en || '').toLowerCase().includes(q);
       return catMatch && textMatch;
     });
-  }, [availableItems, selectedCatId, searchQuery]);
+  }, [availableItems, selectedMainCatId, selectedSubCatId, hierarchy, searchQuery]);
 
   const itemQtyMap = useMemo(() => {
     const map = new Map<string, number>();
@@ -169,7 +186,7 @@ export function ThemeRenderer({
   if (activeTheme === 'theme-2') {
     const activeCatIndex = Math.max(
       0,
-      categories.findIndex((c) => c.id === selectedCatId)
+      hierarchy.mainCategories.findIndex((c) => c.id === selectedMainCatId)
     );
     const wheelDisplayItems = filteredItems.length > 0 ? filteredItems : availableItems;
     const safeSlideIdx =
@@ -223,19 +240,16 @@ export function ThemeRenderer({
               </div>
             </header>
 
-            {/* Circular Category Icons Along the Curve */}
+            {/* Circular Main Category Icons Along the Curve */}
             <div className="flex items-center justify-start sm:justify-center gap-4 overflow-x-auto no-scrollbar pb-2 pt-1">
               <button
                 type="button"
-                onClick={() => {
-                  setSelectedCatId('all');
-                  setCarouselIdx(0);
-                }}
+                onClick={() => selectMainCategory('all')}
                 className="flex flex-col items-center gap-1.5 shrink-0 cursor-pointer group"
               >
                 <div
                   className={`w-14 h-14 rounded-full border-2 flex items-center justify-center transition-all ${
-                    selectedCatId === 'all'
+                    selectedMainCatId === 'all'
                       ? 'bg-white text-stone-950 border-white scale-105 shadow-md'
                       : 'bg-white/15 text-white border-white/40 group-hover:bg-white/25'
                   }`}
@@ -247,18 +261,15 @@ export function ThemeRenderer({
                 </span>
               </button>
 
-              {categories.map((cat, idx) => {
-                const isActive = selectedCatId === cat.id;
+              {hierarchy.mainCategories.map((cat, idx) => {
+                const isActive = selectedMainCatId === cat.id;
                 const arcDrop = Math.abs(idx - activeCatIndex) === 0 ? 'translate-y-1' : '';
                 const catName = loc(cat.name, cat.name_en);
                 return (
                   <button
                     key={cat.id}
                     type="button"
-                    onClick={() => {
-                      setSelectedCatId(cat.id);
-                      setCarouselIdx(0);
-                    }}
+                    onClick={() => selectMainCategory(cat.id)}
                     className={`flex flex-col items-center gap-1.5 shrink-0 cursor-pointer transition-transform ${arcDrop}`}
                   >
                     <div
@@ -376,6 +387,44 @@ export function ThemeRenderer({
 
         {/* Search & Full List Below */}
         <main className="max-w-5xl mx-auto px-4 pt-10 space-y-5">
+          {activeSubcategories.length > 0 && (
+            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedSubCatId('all');
+                  setCarouselIdx(0);
+                }}
+                style={selectedSubCatId === 'all' ? { backgroundColor: accent, color: '#fff' } : undefined}
+                className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
+                  selectedSubCatId === 'all'
+                    ? 'shadow-sm'
+                    : 'bg-white border border-stone-200 text-stone-700 hover:bg-stone-50'
+                }`}
+              >
+                {lang === 'en' ? 'All Sections' : 'كل الأقسام الفرعية'}
+              </button>
+              {activeSubcategories.map((sub) => (
+                <button
+                  key={sub.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedSubCatId(sub.id);
+                    setCarouselIdx(0);
+                  }}
+                  style={selectedSubCatId === sub.id ? { backgroundColor: accent, color: '#fff' } : undefined}
+                  className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
+                    selectedSubCatId === sub.id
+                      ? 'shadow-sm'
+                      : 'bg-white border border-stone-200 text-stone-700 hover:bg-stone-50'
+                  }`}
+                >
+                  {loc(sub.name, sub.name_en)}
+                </button>
+              ))}
+            </div>
+          )}
+
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <h3 className="text-base font-extrabold text-stone-900">
               {lang === 'en' ? 'All Available Dishes' : 'كل الأطباق المتاحة'}
@@ -486,19 +535,19 @@ export function ThemeRenderer({
             </div>
           </header>
 
-          {/* Circular Category Bar with Active Dark Ring */}
+          {/* Circular Main Category Bar with Active Dark Ring */}
           <div
             ref={categoryScrollRef}
             className="flex items-center gap-4 overflow-x-auto no-scrollbar py-2"
           >
             <button
               type="button"
-              onClick={() => setSelectedCatId('all')}
+              onClick={() => selectMainCategory('all')}
               className="flex flex-col items-center gap-1.5 shrink-0 cursor-pointer"
             >
               <div
                 className={`w-16 h-16 rounded-full bg-white flex items-center justify-center transition-all ${
-                  selectedCatId === 'all'
+                  selectedMainCatId === 'all'
                     ? 'ring-2 ring-zinc-950 ring-offset-2 ring-offset-[#F5F5F5]'
                     : 'border border-zinc-200'
                 }`}
@@ -507,21 +556,21 @@ export function ThemeRenderer({
               </div>
               <span
                 className={`text-xs whitespace-nowrap ${
-                  selectedCatId === 'all' ? 'font-extrabold text-zinc-950' : 'text-zinc-500 font-medium'
+                  selectedMainCatId === 'all' ? 'font-extrabold text-zinc-950' : 'text-zinc-500 font-medium'
                 }`}
               >
                 {t.menu.allCategories}
               </span>
             </button>
 
-            {categories.map((cat) => {
-              const active = selectedCatId === cat.id;
+            {hierarchy.mainCategories.map((cat) => {
+              const active = selectedMainCatId === cat.id;
               const catName = loc(cat.name, cat.name_en);
               return (
                 <button
                   key={cat.id}
                   type="button"
-                  onClick={() => setSelectedCatId(cat.id)}
+                  onClick={() => selectMainCategory(cat.id)}
                   className="flex flex-col items-center gap-1.5 shrink-0 cursor-pointer"
                 >
                   <div
@@ -548,6 +597,37 @@ export function ThemeRenderer({
               );
             })}
           </div>
+
+          {/* Subcategory Chips Bar (Theme 3) */}
+          {activeSubcategories.length > 0 && (
+            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+              <button
+                type="button"
+                onClick={() => setSelectedSubCatId('all')}
+                className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
+                  selectedSubCatId === 'all'
+                    ? 'bg-zinc-950 text-white'
+                    : 'bg-white border border-zinc-200 text-zinc-700 hover:bg-zinc-100'
+                }`}
+              >
+                {lang === 'en' ? 'All Sections' : 'كل الأقسام الفرعية'}
+              </button>
+              {activeSubcategories.map((sub) => (
+                <button
+                  key={sub.id}
+                  type="button"
+                  onClick={() => setSelectedSubCatId(sub.id)}
+                  className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
+                    selectedSubCatId === sub.id
+                      ? 'bg-zinc-950 text-white'
+                      : 'bg-white border border-zinc-200 text-zinc-700 hover:bg-zinc-100'
+                  }`}
+                >
+                  {loc(sub.name, sub.name_en)}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* 2-Column Clean White Cards */}
           {filteredItems.length === 0 ? (
@@ -617,7 +697,7 @@ export function ThemeRenderer({
             <button
               type="button"
               onClick={() => {
-                setSelectedCatId('all');
+                selectMainCategory('all');
                 setSearchQuery('');
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
@@ -670,7 +750,7 @@ export function ThemeRenderer({
           </nav>
         </div>
 
-        {/* Quick Categories Sheet */}
+        {/* Quick Categories Sheet (2-Level Main & Subcategories) */}
         {quickCatsOpen && (
           <div
             onClick={() => setQuickCatsOpen(false)}
@@ -678,7 +758,7 @@ export function ThemeRenderer({
           >
             <div
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-md bg-white rounded-2xl p-5 space-y-3 shadow-2xl"
+              className="w-full max-w-md bg-white rounded-2xl p-5 space-y-3 shadow-2xl max-h-[75vh] overflow-y-auto"
             >
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-extrabold">
@@ -692,30 +772,52 @@ export function ThemeRenderer({
                   <X className="w-4 h-4" />
                 </button>
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedCatId('all');
-                    setQuickCatsOpen(false);
-                  }}
-                  className="py-2.5 px-3 rounded-xl border border-zinc-200 text-xs font-bold hover:bg-zinc-50 cursor-pointer"
-                >
-                  {t.menu.allCategories}
-                </button>
-                {categories.map((cat) => (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedCatId(cat.id);
-                      setQuickCatsOpen(false);
-                    }}
-                    className="py-2.5 px-3 rounded-xl border border-zinc-200 text-xs font-bold hover:bg-zinc-50 cursor-pointer truncate"
-                  >
-                    {loc(cat.name, cat.name_en)}
-                  </button>
-                ))}
+              <button
+                type="button"
+                onClick={() => {
+                  selectMainCategory('all');
+                  setQuickCatsOpen(false);
+                }}
+                className="w-full py-2.5 px-3 rounded-xl border border-zinc-200 text-xs font-bold hover:bg-zinc-50 cursor-pointer text-start"
+              >
+                {t.menu.allCategories}
+              </button>
+              <div className="space-y-2.5">
+                {hierarchy.mainCategories.map((main) => {
+                  const subs = hierarchy.subCategoriesByParent.get(main.id) || [];
+                  return (
+                    <div key={main.id} className="rounded-xl border border-zinc-200 p-2.5 space-y-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          selectMainCategory(main.id);
+                          setQuickCatsOpen(false);
+                        }}
+                        className="w-full text-start text-xs font-extrabold text-zinc-950 hover:text-amber-700 cursor-pointer"
+                      >
+                        {loc(main.name, main.name_en)}
+                      </button>
+                      {subs.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {subs.map((sub) => (
+                            <button
+                              key={sub.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedMainCatId(main.id);
+                                setSelectedSubCatId(sub.id);
+                                setQuickCatsOpen(false);
+                              }}
+                              className="px-2.5 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-[11px] font-bold text-zinc-800 cursor-pointer"
+                            >
+                              {loc(sub.name, sub.name_en)}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -804,45 +906,77 @@ export function ThemeRenderer({
             </div>
           </header>
 
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
-              <button
-                type="button"
-                onClick={() => setSelectedCatId('all')}
-                className={`min-h-[40px] px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 cursor-pointer ${
-                  selectedCatId === 'all'
-                    ? 'bg-[#F59E0B] text-zinc-950'
-                    : 'bg-[#1A1A1A] border border-zinc-800 text-zinc-300 hover:border-amber-500/40'
-                }`}
-              >
-                {t.menu.allCategories}
-              </button>
-              {categories.map((cat) => (
+          <div className="space-y-3">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
                 <button
-                  key={cat.id}
                   type="button"
-                  onClick={() => setSelectedCatId(cat.id)}
+                  onClick={() => selectMainCategory('all')}
                   className={`min-h-[40px] px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 cursor-pointer ${
-                    selectedCatId === cat.id
+                    selectedMainCatId === 'all'
                       ? 'bg-[#F59E0B] text-zinc-950'
                       : 'bg-[#1A1A1A] border border-zinc-800 text-zinc-300 hover:border-amber-500/40'
                   }`}
                 >
-                  {loc(cat.name, cat.name_en)}
+                  {t.menu.allCategories}
                 </button>
-              ))}
+                {hierarchy.mainCategories.map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => selectMainCategory(cat.id)}
+                    className={`min-h-[40px] px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 cursor-pointer ${
+                      selectedMainCatId === cat.id
+                        ? 'bg-[#F59E0B] text-zinc-950'
+                        : 'bg-[#1A1A1A] border border-zinc-800 text-zinc-300 hover:border-amber-500/40'
+                    }`}
+                  >
+                    {loc(cat.name, cat.name_en)}
+                  </button>
+                ))}
+              </div>
+
+              <div className="relative w-full md:w-64">
+                <Search className="w-4 h-4 text-zinc-500 absolute start-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={t.menu.searchPlaceholder}
+                  className="w-full ps-9 pe-3 py-2.5 rounded-xl bg-[#1A1A1A] border border-zinc-800 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-amber-500"
+                />
+              </div>
             </div>
 
-            <div className="relative w-full md:w-64">
-              <Search className="w-4 h-4 text-zinc-500 absolute start-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="search"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={t.menu.searchPlaceholder}
-                className="w-full ps-9 pe-3 py-2.5 rounded-xl bg-[#1A1A1A] border border-zinc-800 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-amber-500"
-              />
-            </div>
+            {activeSubcategories.length > 0 && (
+              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+                <button
+                  type="button"
+                  onClick={() => setSelectedSubCatId('all')}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap shrink-0 cursor-pointer ${
+                    selectedSubCatId === 'all'
+                      ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50'
+                      : 'bg-[#1A1A1A] border border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  {lang === 'en' ? 'All Sections' : 'كل الأقسام الفرعية'}
+                </button>
+                {activeSubcategories.map((sub) => (
+                  <button
+                    key={sub.id}
+                    type="button"
+                    onClick={() => setSelectedSubCatId(sub.id)}
+                    className={`px-3.5 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap shrink-0 cursor-pointer ${
+                      selectedSubCatId === sub.id
+                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50'
+                        : 'bg-[#1A1A1A] border border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    {loc(sub.name, sub.name_en)}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {filteredItems.length === 0 ? (
@@ -925,45 +1059,77 @@ export function ThemeRenderer({
             )}
           </header>
 
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-2.5 overflow-x-auto no-scrollbar pb-1">
-              <button
-                type="button"
-                onClick={() => setSelectedCatId('all')}
-                className={`min-h-[40px] px-4 py-2 rounded-full border text-xs font-bold whitespace-nowrap cursor-pointer transition-colors ${
-                  selectedCatId === 'all'
-                    ? 'border-[#D4AF37] bg-[#D4AF37] text-[#12151C]'
-                    : 'border-[#D4AF37]/30 text-zinc-300 hover:border-[#D4AF37]'
-                }`}
-              >
-                {t.menu.allCategories}
-              </button>
-              {categories.map((cat) => (
+          <div className="space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-2.5 overflow-x-auto no-scrollbar pb-1">
                 <button
-                  key={cat.id}
                   type="button"
-                  onClick={() => setSelectedCatId(cat.id)}
+                  onClick={() => selectMainCategory('all')}
                   className={`min-h-[40px] px-4 py-2 rounded-full border text-xs font-bold whitespace-nowrap cursor-pointer transition-colors ${
-                    selectedCatId === cat.id
+                    selectedMainCatId === 'all'
                       ? 'border-[#D4AF37] bg-[#D4AF37] text-[#12151C]'
                       : 'border-[#D4AF37]/30 text-zinc-300 hover:border-[#D4AF37]'
                   }`}
                 >
-                  {loc(cat.name, cat.name_en)}
+                  {t.menu.allCategories}
                 </button>
-              ))}
+                {hierarchy.mainCategories.map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => selectMainCategory(cat.id)}
+                    className={`min-h-[40px] px-4 py-2 rounded-full border text-xs font-bold whitespace-nowrap cursor-pointer transition-colors ${
+                      selectedMainCatId === cat.id
+                        ? 'border-[#D4AF37] bg-[#D4AF37] text-[#12151C]'
+                        : 'border-[#D4AF37]/30 text-zinc-300 hover:border-[#D4AF37]'
+                    }`}
+                  >
+                    {loc(cat.name, cat.name_en)}
+                  </button>
+                ))}
+              </div>
+
+              <div className="relative w-full sm:w-60">
+                <Search className="w-4 h-4 text-[#D4AF37] absolute start-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={t.menu.searchPlaceholder}
+                  className="w-full ps-9 pe-3 py-2 rounded-full bg-[#181C25] border border-[#D4AF37]/30 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#D4AF37]"
+                />
+              </div>
             </div>
 
-            <div className="relative w-full sm:w-60">
-              <Search className="w-4 h-4 text-[#D4AF37] absolute start-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="search"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={t.menu.searchPlaceholder}
-                className="w-full ps-9 pe-3 py-2 rounded-full bg-[#181C25] border border-[#D4AF37]/30 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#D4AF37]"
-              />
-            </div>
+            {activeSubcategories.length > 0 && (
+              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+                <button
+                  type="button"
+                  onClick={() => setSelectedSubCatId('all')}
+                  className={`px-3.5 py-1.5 rounded-full border text-xs font-bold whitespace-nowrap cursor-pointer transition-colors ${
+                    selectedSubCatId === 'all'
+                      ? 'border-[#D4AF37] bg-[#D4AF37]/20 text-[#D4AF37]'
+                      : 'border-[#D4AF37]/20 text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  {lang === 'en' ? 'All Sections' : 'كل الأقسام الفرعية'}
+                </button>
+                {activeSubcategories.map((sub) => (
+                  <button
+                    key={sub.id}
+                    type="button"
+                    onClick={() => setSelectedSubCatId(sub.id)}
+                    className={`px-3.5 py-1.5 rounded-full border text-xs font-bold whitespace-nowrap cursor-pointer transition-colors ${
+                      selectedSubCatId === sub.id
+                        ? 'border-[#D4AF37] bg-[#D4AF37]/20 text-[#D4AF37]'
+                        : 'border-[#D4AF37]/20 text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    {loc(sub.name, sub.name_en)}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {filteredItems.length === 0 ? (
@@ -1110,24 +1276,24 @@ export function ThemeRenderer({
           <div className="max-w-3xl mx-auto flex items-center gap-2 overflow-x-auto no-scrollbar pointer-events-auto">
             <button
               type="button"
-              onClick={() => setSelectedCatId('all')}
-              style={selectedCatId === 'all' ? { backgroundColor: accent } : undefined}
+              onClick={() => selectMainCategory('all')}
+              style={selectedMainCatId === 'all' ? { backgroundColor: accent } : undefined}
               className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap shrink-0 cursor-pointer ${
-                selectedCatId === 'all'
+                selectedMainCatId === 'all'
                   ? 'text-white'
                   : 'bg-black/45 backdrop-blur-md border border-white/20 text-white/85'
               }`}
             >
               {t.menu.allCategories}
             </button>
-            {categories.map((cat) => (
+            {hierarchy.mainCategories.map((cat) => (
               <button
                 key={cat.id}
                 type="button"
-                onClick={() => setSelectedCatId(cat.id)}
-                style={selectedCatId === cat.id ? { backgroundColor: accent } : undefined}
+                onClick={() => selectMainCategory(cat.id)}
+                style={selectedMainCatId === cat.id ? { backgroundColor: accent } : undefined}
                 className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap shrink-0 cursor-pointer ${
-                  selectedCatId === cat.id
+                  selectedMainCatId === cat.id
                     ? 'text-white'
                     : 'bg-black/45 backdrop-blur-md border border-white/20 text-white/85'
                 }`}
@@ -1136,6 +1302,36 @@ export function ThemeRenderer({
               </button>
             ))}
           </div>
+
+          {activeSubcategories.length > 0 && (
+            <div className="max-w-3xl mx-auto flex items-center gap-1.5 overflow-x-auto no-scrollbar pointer-events-auto">
+              <button
+                type="button"
+                onClick={() => setSelectedSubCatId('all')}
+                className={`px-3 py-1 rounded-full text-[11px] font-bold whitespace-nowrap shrink-0 cursor-pointer ${
+                  selectedSubCatId === 'all'
+                    ? 'bg-white text-black'
+                    : 'bg-black/40 backdrop-blur-md border border-white/20 text-white/80'
+                }`}
+              >
+                {lang === 'en' ? 'All Sections' : 'كل الأقسام الفرعية'}
+              </button>
+              {activeSubcategories.map((sub) => (
+                <button
+                  key={sub.id}
+                  type="button"
+                  onClick={() => setSelectedSubCatId(sub.id)}
+                  className={`px-3 py-1 rounded-full text-[11px] font-bold whitespace-nowrap shrink-0 cursor-pointer ${
+                    selectedSubCatId === sub.id
+                      ? 'bg-white text-black'
+                      : 'bg-black/40 backdrop-blur-md border border-white/20 text-white/80'
+                  }`}
+                >
+                  {loc(sub.name, sub.name_en)}
+                </button>
+              ))}
+            </div>
+          )}
         </header>
 
         {/* Vertical Snap-Scroll Feed */}
@@ -1284,43 +1480,89 @@ export function ThemeRenderer({
             )}
           </header>
 
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-5 overflow-x-auto no-scrollbar border-b border-[#E5DDD0] sm:border-b-0">
-              <button
-                type="button"
-                onClick={() => setSelectedCatId('all')}
-                style={selectedCatId === 'all' ? { color: espresso, borderColor: espresso } : undefined}
-                className={`pb-2 text-sm font-bold whitespace-nowrap border-b-2 transition-colors cursor-pointer ${
-                  selectedCatId === 'all' ? '' : 'border-transparent text-[#8F776A]'
-                }`}
-              >
-                {t.menu.allCategories}
-              </button>
-              {categories.map((cat) => (
+          <div className="space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-5 overflow-x-auto no-scrollbar border-b border-[#E5DDD0] sm:border-b-0">
                 <button
-                  key={cat.id}
                   type="button"
-                  onClick={() => setSelectedCatId(cat.id)}
-                  style={selectedCatId === cat.id ? { color: espresso, borderColor: espresso } : undefined}
+                  onClick={() => selectMainCategory('all')}
+                  style={
+                    selectedMainCatId === 'all' ? { color: espresso, borderColor: espresso } : undefined
+                  }
                   className={`pb-2 text-sm font-bold whitespace-nowrap border-b-2 transition-colors cursor-pointer ${
-                    selectedCatId === cat.id ? '' : 'border-transparent text-[#8F776A]'
+                    selectedMainCatId === 'all' ? '' : 'border-transparent text-[#8F776A]'
                   }`}
                 >
-                  {loc(cat.name, cat.name_en)}
+                  {t.menu.allCategories}
                 </button>
-              ))}
+                {hierarchy.mainCategories.map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => selectMainCategory(cat.id)}
+                    style={
+                      selectedMainCatId === cat.id ? { color: espresso, borderColor: espresso } : undefined
+                    }
+                    className={`pb-2 text-sm font-bold whitespace-nowrap border-b-2 transition-colors cursor-pointer ${
+                      selectedMainCatId === cat.id ? '' : 'border-transparent text-[#8F776A]'
+                    }`}
+                  >
+                    {loc(cat.name, cat.name_en)}
+                  </button>
+                ))}
+              </div>
+
+              <div className="relative w-full sm:w-56">
+                <Search className="w-4 h-4 text-[#8F776A] absolute start-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={t.menu.searchPlaceholder}
+                  className="w-full ps-9 pe-3 py-2 rounded-xl bg-white border border-[#E5DDD0] text-sm focus:outline-none"
+                />
+              </div>
             </div>
 
-            <div className="relative w-full sm:w-56">
-              <Search className="w-4 h-4 text-[#8F776A] absolute start-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="search"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={t.menu.searchPlaceholder}
-                className="w-full ps-9 pe-3 py-2 rounded-xl bg-white border border-[#E5DDD0] text-sm focus:outline-none"
-              />
-            </div>
+            {activeSubcategories.length > 0 && (
+              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+                <button
+                  type="button"
+                  onClick={() => setSelectedSubCatId('all')}
+                  style={
+                    selectedSubCatId === 'all'
+                      ? { backgroundColor: espresso, color: '#fff', borderColor: espresso }
+                      : undefined
+                  }
+                  className={`px-3.5 py-1.5 rounded-xl border text-xs font-bold whitespace-nowrap cursor-pointer ${
+                    selectedSubCatId === 'all'
+                      ? ''
+                      : 'bg-white border-[#E5DDD0] text-[#7A6154] hover:border-[#5C4033]'
+                  }`}
+                >
+                  {lang === 'en' ? 'All Sections' : 'كل الأقسام الفرعية'}
+                </button>
+                {activeSubcategories.map((sub) => (
+                  <button
+                    key={sub.id}
+                    type="button"
+                    onClick={() => setSelectedSubCatId(sub.id)}
+                    style={
+                      selectedSubCatId === sub.id
+                        ? { backgroundColor: espresso, color: '#fff', borderColor: espresso }
+                        : undefined
+                    }
+                    className={`px-3.5 py-1.5 rounded-xl border text-xs font-bold whitespace-nowrap cursor-pointer ${
+                      selectedSubCatId === sub.id
+                        ? ''
+                        : 'bg-white border-[#E5DDD0] text-[#7A6154] hover:border-[#5C4033]'
+                    }`}
+                  >
+                    {loc(sub.name, sub.name_en)}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {filteredItems.length === 0 ? (
@@ -1428,43 +1670,73 @@ export function ThemeRenderer({
             </div>
           </header>
 
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
-              <button
-                type="button"
-                onClick={() => setSelectedCatId('all')}
-                style={selectedCatId === 'all' ? { backgroundColor: accent, color: '#fff' } : undefined}
-                className={`min-h-[40px] px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 cursor-pointer ${
-                  selectedCatId === 'all' ? '' : 'bg-white border border-slate-200 text-slate-700'
-                }`}
-              >
-                {t.menu.allCategories}
-              </button>
-              {categories.map((cat) => (
+          <div className="space-y-3">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
                 <button
-                  key={cat.id}
                   type="button"
-                  onClick={() => setSelectedCatId(cat.id)}
-                  style={selectedCatId === cat.id ? { backgroundColor: accent, color: '#fff' } : undefined}
+                  onClick={() => selectMainCategory('all')}
+                  style={selectedMainCatId === 'all' ? { backgroundColor: accent, color: '#fff' } : undefined}
                   className={`min-h-[40px] px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 cursor-pointer ${
-                    selectedCatId === cat.id ? '' : 'bg-white border border-slate-200 text-slate-700'
+                    selectedMainCatId === 'all' ? '' : 'bg-white border border-slate-200 text-slate-700'
                   }`}
                 >
-                  {loc(cat.name, cat.name_en)}
+                  {t.menu.allCategories}
                 </button>
-              ))}
+                {hierarchy.mainCategories.map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => selectMainCategory(cat.id)}
+                    style={selectedMainCatId === cat.id ? { backgroundColor: accent, color: '#fff' } : undefined}
+                    className={`min-h-[40px] px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 cursor-pointer ${
+                      selectedMainCatId === cat.id ? '' : 'bg-white border border-slate-200 text-slate-700'
+                    }`}
+                  >
+                    {loc(cat.name, cat.name_en)}
+                  </button>
+                ))}
+              </div>
+
+              <div className="relative w-full md:w-64">
+                <Search className="w-4 h-4 text-slate-400 absolute start-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={t.menu.searchPlaceholder}
+                  className="w-full ps-9 pe-3 py-2.5 rounded-xl bg-white border border-slate-200 text-sm focus:outline-none"
+                />
+              </div>
             </div>
 
-            <div className="relative w-full md:w-64">
-              <Search className="w-4 h-4 text-slate-400 absolute start-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="search"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={t.menu.searchPlaceholder}
-                className="w-full ps-9 pe-3 py-2.5 rounded-xl bg-white border border-slate-200 text-sm focus:outline-none"
-              />
-            </div>
+            {activeSubcategories.length > 0 && (
+              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+                <button
+                  type="button"
+                  onClick={() => setSelectedSubCatId('all')}
+                  style={selectedSubCatId === 'all' ? { backgroundColor: accent, color: '#fff' } : undefined}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 cursor-pointer ${
+                    selectedSubCatId === 'all' ? '' : 'bg-white border border-slate-200 text-slate-600'
+                  }`}
+                >
+                  {lang === 'en' ? 'All Sections' : 'كل الأقسام الفرعية'}
+                </button>
+                {activeSubcategories.map((sub) => (
+                  <button
+                    key={sub.id}
+                    type="button"
+                    onClick={() => setSelectedSubCatId(sub.id)}
+                    style={selectedSubCatId === sub.id ? { backgroundColor: accent, color: '#fff' } : undefined}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 cursor-pointer ${
+                      selectedSubCatId === sub.id ? '' : 'bg-white border border-slate-200 text-slate-600'
+                    }`}
+                  >
+                    {loc(sub.name, sub.name_en)}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {filteredItems.length === 0 ? (
@@ -1585,27 +1857,27 @@ export function ThemeRenderer({
         <div className="max-w-7xl mx-auto px-4 pb-3 flex items-center gap-2.5 overflow-x-auto no-scrollbar">
           <button
             type="button"
-            onClick={() => setSelectedCatId('all')}
-            style={selectedCatId === 'all' ? { backgroundColor: accent, color: '#fff' } : undefined}
+            onClick={() => selectMainCategory('all')}
+            style={selectedMainCatId === 'all' ? { backgroundColor: accent, color: '#fff' } : undefined}
             className={`min-h-[48px] px-4 py-2 rounded-2xl text-xs font-extrabold flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer ${
-              selectedCatId === 'all' ? 'shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              selectedMainCatId === 'all' ? 'shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
             }`}
           >
             <LayoutGrid className="w-4 h-4" />
             <span>{t.menu.allCategories}</span>
           </button>
-          {categories.map((cat) => {
+          {hierarchy.mainCategories.map((cat) => {
             const catName = loc(cat.name, cat.name_en);
             return (
               <button
                 key={cat.id}
                 type="button"
-                onClick={() => setSelectedCatId(cat.id)}
+                onClick={() => selectMainCategory(cat.id)}
                 style={
-                  selectedCatId === cat.id ? { backgroundColor: accent, color: '#fff' } : undefined
+                  selectedMainCatId === cat.id ? { backgroundColor: accent, color: '#fff' } : undefined
                 }
                 className={`min-h-[48px] px-3 py-1.5 rounded-2xl text-xs font-extrabold flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer ${
-                  selectedCatId === cat.id
+                  selectedMainCatId === cat.id
                     ? 'shadow-sm'
                     : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                 }`}
@@ -1620,6 +1892,46 @@ export function ThemeRenderer({
             );
           })}
         </div>
+
+        {activeSubcategories.length > 0 && (
+          <div className="max-w-7xl mx-auto px-4 pb-3 flex items-center gap-2 overflow-x-auto no-scrollbar">
+            <button
+              type="button"
+              onClick={() => setSelectedSubCatId('all')}
+              style={
+                selectedSubCatId === 'all'
+                  ? { borderColor: accent, color: accent, backgroundColor: `${accent}12` }
+                  : undefined
+              }
+              className={`px-3.5 py-1.5 rounded-xl border text-xs font-bold whitespace-nowrap shrink-0 cursor-pointer ${
+                selectedSubCatId === 'all'
+                  ? ''
+                  : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              {lang === 'en' ? 'All Sections' : 'كل الأقسام الفرعية'}
+            </button>
+            {activeSubcategories.map((sub) => (
+              <button
+                key={sub.id}
+                type="button"
+                onClick={() => setSelectedSubCatId(sub.id)}
+                style={
+                  selectedSubCatId === sub.id
+                    ? { borderColor: accent, color: accent, backgroundColor: `${accent}12` }
+                    : undefined
+                }
+                className={`px-3.5 py-1.5 rounded-xl border text-xs font-bold whitespace-nowrap shrink-0 cursor-pointer ${
+                  selectedSubCatId === sub.id
+                    ? ''
+                    : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                {loc(sub.name, sub.name_en)}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Ultra-Clean Kiosk Cards with Instant +/- Quantity Controls */}

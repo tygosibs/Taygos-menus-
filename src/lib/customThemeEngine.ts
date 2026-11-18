@@ -22,8 +22,8 @@ export const TEMPLATE_VARIABLE_DOCS = [
     token: '{{CATEGORIES_JSON}}',
     label: 'مصفوفة الأقسام (JSON)',
     label_en: 'Categories Array (JSON)',
-    hint: 'قائمة الأقسام النشطة بالترتيب (id, name, name_en, imageUrl)',
-    hint_en: 'Sorted categories array (id, name, name_en, imageUrl)',
+    hint: 'قائمة الأقسام بالترتيب (id, parentId, name, name_en, imageUrl)',
+    hint_en: 'Sorted categories array (id, parentId, name, name_en, imageUrl)',
   },
   {
     token: '{{ITEMS_JSON}}',
@@ -70,6 +70,7 @@ export const STARTER_CUSTOM_HTML = `<div class="app-shell">
   </header>
 
   <nav id="cat-bar" class="cat-bar"></nav>
+  <nav id="subcat-bar" class="subcat-bar" style="display:none"></nav>
   <main id="items-grid" class="items-grid"></main>
 </div>`;
 
@@ -148,7 +149,14 @@ body {
   display: flex;
   gap: 8px;
   overflow-x: auto;
-  padding: 16px 0;
+  padding: 16px 0 8px;
+}
+
+.subcat-bar {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 4px 0 14px;
 }
 
 .cat-btn {
@@ -169,10 +177,29 @@ body {
   color: #fff;
 }
 
+.sub-btn {
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04);
+  color: var(--muted);
+  padding: 6px 14px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.sub-btn.active {
+  border-color: var(--accent);
+  color: #fff;
+  background: rgba(255,255,255,0.12);
+}
+
 .items-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 16px;
+  margin-top: 8px;
 }
 
 .card {
@@ -283,32 +310,74 @@ if (searchEl) {
   searchEl.placeholder = isEn ? 'Search your favorite dish...' : 'ابحث عن وجبتك المفضلة...';
 }
 
-let selectedCat = 'all';
+const catById = new Map(categories.map((c) => [c.id, c]));
+const mainCategories = categories.filter((c) => !c.parentId || !catById.has(c.parentId));
+const subsByParent = new Map();
+categories.forEach((c) => {
+  if (c.parentId && catById.has(c.parentId)) {
+    const arr = subsByParent.get(c.parentId) || [];
+    arr.push(c);
+    subsByParent.set(c.parentId, arr);
+  }
+});
+
+let selectedMainCat = 'all';
+let selectedSubCat = 'all';
 let query = '';
 
 function renderCategories() {
   const bar = document.getElementById('cat-bar');
+  const subBar = document.getElementById('subcat-bar');
+
   const allBtn = document.createElement('button');
-  allBtn.className = 'cat-btn ' + (selectedCat === 'all' ? 'active' : '');
+  allBtn.className = 'cat-btn ' + (selectedMainCat === 'all' ? 'active' : '');
   allBtn.textContent = (isEn ? 'All' : 'الكل') + ' (' + items.length + ')';
-  allBtn.onclick = () => { selectedCat = 'all'; renderCategories(); renderItems(); };
+  allBtn.onclick = () => { selectedMainCat = 'all'; selectedSubCat = 'all'; renderCategories(); renderItems(); };
   bar.innerHTML = '';
   bar.appendChild(allBtn);
 
-  categories.forEach((cat) => {
+  mainCategories.forEach((cat) => {
     const btn = document.createElement('button');
-    btn.className = 'cat-btn ' + (selectedCat === cat.id ? 'active' : '');
+    btn.className = 'cat-btn ' + (selectedMainCat === cat.id ? 'active' : '');
     btn.textContent = locText(cat.name, cat.name_en);
-    btn.onclick = () => { selectedCat = cat.id; renderCategories(); renderItems(); };
+    btn.onclick = () => { selectedMainCat = cat.id; selectedSubCat = 'all'; renderCategories(); renderItems(); };
     bar.appendChild(btn);
   });
+
+  const activeSubs = selectedMainCat === 'all' ? [] : (subsByParent.get(selectedMainCat) || []);
+  if (activeSubs.length === 0) {
+    subBar.style.display = 'none';
+    subBar.innerHTML = '';
+  } else {
+    subBar.style.display = 'flex';
+    subBar.innerHTML = '';
+    const allSubBtn = document.createElement('button');
+    allSubBtn.className = 'sub-btn ' + (selectedSubCat === 'all' ? 'active' : '');
+    allSubBtn.textContent = isEn ? 'All Sections' : 'كل الأقسام';
+    allSubBtn.onclick = () => { selectedSubCat = 'all'; renderCategories(); renderItems(); };
+    subBar.appendChild(allSubBtn);
+
+    activeSubs.forEach((sub) => {
+      const btn = document.createElement('button');
+      btn.className = 'sub-btn ' + (selectedSubCat === sub.id ? 'active' : '');
+      btn.textContent = locText(sub.name, sub.name_en);
+      btn.onclick = () => { selectedSubCat = sub.id; renderCategories(); renderItems(); };
+      subBar.appendChild(btn);
+    });
+  }
 }
 
 function renderItems() {
   const grid = document.getElementById('items-grid');
   grid.innerHTML = '';
+  const childIds = selectedMainCat === 'all' ? [] : (subsByParent.get(selectedMainCat) || []).map((s) => s.id);
   const list = items.filter((item) => {
-    const catOk = selectedCat === 'all' || item.categoryId === selectedCat;
+    let catOk = true;
+    if (selectedMainCat !== 'all') {
+      catOk = selectedSubCat !== 'all'
+        ? item.categoryId === selectedSubCat
+        : item.categoryId === selectedMainCat || childIds.includes(item.categoryId);
+    }
     const displayTitle = locText(item.name, item.name_en).toLowerCase();
     const displayDesc = locText(item.description, item.description_en).toLowerCase();
     const textOk = !query || displayTitle.includes(query) || displayDesc.includes(query);

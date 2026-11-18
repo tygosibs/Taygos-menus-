@@ -27,40 +27,62 @@ export const DEMO_RESTAURANTS: Record<string, DemoRestaurantBundle> = {
     },
     categories: [
       {
+        id: 'cat_main_kitchen',
+        restaurantId: 'demo_buns_lab',
+        ownerId: 'demo_owner',
+        name: 'المطبخ',
+        name_en: 'Kitchen',
+        imageUrl: '/src/assets/images/burger_smash_signature_1794967836686.jpg',
+        sortOrder: 1,
+      },
+      {
         id: 'cat_smash',
         restaurantId: 'demo_buns_lab',
         ownerId: 'demo_owner',
+        parentId: 'cat_main_kitchen',
         name: 'برجر السماش',
         name_en: 'Smash Burgers',
         imageUrl: '/src/assets/images/burger_smash_signature_1794967836686.jpg',
-        sortOrder: 1,
+        sortOrder: 2,
       },
       {
         id: 'cat_pizza',
         restaurantId: 'demo_buns_lab',
         ownerId: 'demo_owner',
+        parentId: 'cat_main_kitchen',
         name: 'أطباق الحطب',
         name_en: 'Woodfire Oven',
         imageUrl: '/src/assets/images/pizza_neapolitan_story_1794967838282.jpg',
-        sortOrder: 2,
+        sortOrder: 3,
       },
       {
         id: 'cat_pasta',
         restaurantId: 'demo_buns_lab',
         ownerId: 'demo_owner',
+        parentId: 'cat_main_kitchen',
         name: 'الباستا',
         name_en: 'Artisan Pasta',
         imageUrl: '/src/assets/images/pasta_truffle_modern_1794967837266.jpg',
-        sortOrder: 3,
+        sortOrder: 4,
+      },
+      {
+        id: 'cat_main_bar',
+        restaurantId: 'demo_buns_lab',
+        ownerId: 'demo_owner',
+        name: 'البار والمشروبات',
+        name_en: 'Bar & Drinks',
+        imageUrl: '/src/assets/images/coffee_latte_croissant_1794967837713.jpg',
+        sortOrder: 5,
       },
       {
         id: 'cat_drinks',
         restaurantId: 'demo_buns_lab',
         ownerId: 'demo_owner',
-        name: 'المشروبات',
-        name_en: 'Craft Drinks',
+        parentId: 'cat_main_bar',
+        name: 'القهوة والمشروبات الباردة',
+        name_en: 'Coffee & Cold Brews',
         imageUrl: '/src/assets/images/coffee_latte_croissant_1794967837713.jpg',
-        sortOrder: 4,
+        sortOrder: 6,
       },
     ],
     items: [
@@ -207,31 +229,52 @@ export const DEMO_RESTAURANTS: Record<string, DemoRestaurantBundle> = {
     },
     categories: [
       {
+        id: 'cat_main_saffron_grill',
+        restaurantId: 'demo_saffron_lounge',
+        ownerId: 'demo_owner',
+        name: 'المطبخ الرئيسي',
+        name_en: 'Fine Kitchen',
+        imageUrl: '/src/assets/images/steak_wagyu_luxury_1794967837741.jpg',
+        sortOrder: 1,
+      },
+      {
         id: 'cat_steaks',
         restaurantId: 'demo_saffron_lounge',
         ownerId: 'demo_owner',
+        parentId: 'cat_main_saffron_grill',
         name: 'شرائح اللحوم الفاخرة',
         name_en: 'Prime Dry-Aged Cuts',
         imageUrl: '/src/assets/images/steak_wagyu_luxury_1794967837741.jpg',
-        sortOrder: 1,
+        sortOrder: 2,
       },
       {
         id: 'cat_artisan_pasta',
         restaurantId: 'demo_saffron_lounge',
         ownerId: 'demo_owner',
+        parentId: 'cat_main_saffron_grill',
         name: 'الباستا اليدوية',
         name_en: 'Handmade Pasta',
         imageUrl: '/src/assets/images/pasta_truffle_modern_1794967837266.jpg',
-        sortOrder: 2,
+        sortOrder: 3,
+      },
+      {
+        id: 'cat_main_saffron_oven',
+        restaurantId: 'demo_saffron_lounge',
+        ownerId: 'demo_owner',
+        name: 'الفرن والمخبوزات',
+        name_en: 'Woodfire Oven',
+        imageUrl: '/src/assets/images/pizza_neapolitan_story_1794967838282.jpg',
+        sortOrder: 4,
       },
       {
         id: 'cat_woodfire',
         restaurantId: 'demo_saffron_lounge',
         ownerId: 'demo_owner',
-        name: 'فرن الحطب',
+        parentId: 'cat_main_saffron_oven',
+        name: 'بيتزا نابولي الفاخرة',
         name_en: 'Woodfire Signatures',
         imageUrl: '/src/assets/images/pizza_neapolitan_story_1794967838282.jpg',
-        sortOrder: 3,
+        sortOrder: 5,
       },
     ],
     items: [
@@ -320,22 +363,42 @@ export const DEMO_RESTAURANTS: Record<string, DemoRestaurantBundle> = {
     },
     categories: [
       {
+        id: 'cat_main_velvet_bar',
+        restaurantId: 'demo_velvet_roast',
+        ownerId: 'demo_owner',
+        name: 'البار والقهوة',
+        name_en: 'Coffee Bar',
+        imageUrl: '/src/assets/images/coffee_latte_croissant_1794967837713.jpg',
+        sortOrder: 1,
+      },
+      {
         id: 'cat_coffee',
         restaurantId: 'demo_velvet_roast',
         ownerId: 'demo_owner',
+        parentId: 'cat_main_velvet_bar',
         name: 'القهوة المختصة',
         name_en: 'Specialty Coffee',
         imageUrl: '/src/assets/images/coffee_latte_croissant_1794967837713.jpg',
-        sortOrder: 1,
+        sortOrder: 2,
+      },
+      {
+        id: 'cat_main_velvet_bakery',
+        restaurantId: 'demo_velvet_roast',
+        ownerId: 'demo_owner',
+        name: 'المخبز والحلويات',
+        name_en: 'Bakery & Pastries',
+        imageUrl: '/src/assets/images/coffee_latte_croissant_1794967837713.jpg',
+        sortOrder: 3,
       },
       {
         id: 'cat_bakery',
         restaurantId: 'demo_velvet_roast',
         ownerId: 'demo_owner',
+        parentId: 'cat_main_velvet_bakery',
         name: 'المخبوزات الطازجة',
         name_en: 'Artisan Bakery',
         imageUrl: '/src/assets/images/coffee_latte_croissant_1794967837713.jpg',
-        sortOrder: 2,
+        sortOrder: 4,
       },
     ],
     items: [
@@ -387,121 +450,189 @@ export const DEMO_RESTAURANTS: Record<string, DemoRestaurantBundle> = {
   },
 };
 
-export function getStarterSeedData() {
+export interface StarterSeedItem {
+  name: string;
+  name_en: string;
+  description: string;
+  description_en: string;
+  basePrice: number;
+  calories: number;
+  isSpicy: boolean;
+  ordersCount: number;
+  imageUrl: string;
+  sizes: { name: string; name_en: string; price: number }[];
+  addons: { name: string; name_en: string; price: number }[];
+  sortOrder: number;
+}
+
+export interface StarterSeedMainCategory {
+  name: string;
+  name_en: string;
+  imageUrl: string;
+  sortOrder: number;
+  subcategories: {
+    name: string;
+    name_en: string;
+    imageUrl: string;
+    sortOrder: number;
+    items: StarterSeedItem[];
+  }[];
+}
+
+export function getStarterSeedData(): { mainCategories: StarterSeedMainCategory[] } {
   return {
-    categories: [
+    mainCategories: [
       {
-        name: 'الأطباق الرئيسية',
-        name_en: 'Main Courses',
+        name: 'المطبخ',
+        name_en: 'Kitchen',
         imageUrl: '/src/assets/images/burger_smash_signature_1794967836686.jpg',
         sortOrder: 1,
+        subcategories: [
+          {
+            name: 'المشويات والبرجر',
+            name_en: 'Grills & Burgers',
+            imageUrl: '/src/assets/images/burger_smash_signature_1794967836686.jpg',
+            sortOrder: 2,
+            items: [
+              {
+                name: 'دبل سماش برجر بالكمأة',
+                name_en: 'Double Truffle Smash Burger',
+                description: 'لحم طازج مشوي على الصاج مع جبنة شيدر معتقة وصوص الترافل.',
+                description_en: 'Fresh seared beef patties topped with aged cheddar and black truffle sauce.',
+                basePrice: 220,
+                calories: 740,
+                isSpicy: false,
+                ordersCount: 25,
+                imageUrl: '/src/assets/images/burger_smash_signature_1794967836686.jpg',
+                sizes: [
+                  { name: 'سنجل', name_en: 'Single', price: 175 },
+                  { name: 'دبل', name_en: 'Double', price: 220 },
+                  { name: 'تريبل', name_en: 'Triple', price: 280 },
+                ],
+                addons: [
+                  { name: 'جبنة إضافية', name_en: 'Extra Cheese', price: 25 },
+                  { name: 'بطاطس مقلية', name_en: 'French Fries', price: 45 },
+                ],
+                sortOrder: 1,
+              },
+              {
+                name: 'ستيك ريب آي مشوي',
+                name_en: 'Grilled Ribeye Steak',
+                description: 'شريحة ستيك طرية مع إكليل الجبل وصوص الديمي جلاس.',
+                description_en: 'Tender flame-grilled ribeye steak served with rosemary and demi-glace.',
+                basePrice: 540,
+                calories: 820,
+                isSpicy: false,
+                ordersCount: 25,
+                imageUrl: '/src/assets/images/steak_wagyu_luxury_1794967837741.jpg',
+                sizes: [
+                  { name: '250 جرام', name_en: '250g', price: 540 },
+                  { name: '350 جرام', name_en: '350g', price: 720 },
+                ],
+                addons: [{ name: 'صوص مشروم', name_en: 'Mushroom Sauce', price: 40 }],
+                sortOrder: 2,
+              },
+            ],
+          },
+          {
+            name: 'البيتزا والباستا',
+            name_en: 'Pizza & Pasta',
+            imageUrl: '/src/assets/images/pizza_neapolitan_story_1794967838282.jpg',
+            sortOrder: 3,
+            items: [
+              {
+                name: 'بيتزا مارغريتا نابولي',
+                name_en: 'Neapolitan Margherita Pizza',
+                description: 'عجينة مخمرة على الحطب مع موزاريلا طازجة وريحان.',
+                description_en: 'Wood-fired sourdough crust topped with fresh mozzarella and sweet basil.',
+                basePrice: 240,
+                calories: 790,
+                isSpicy: false,
+                ordersCount: 25,
+                imageUrl: '/src/assets/images/pizza_neapolitan_story_1794967838282.jpg',
+                sizes: [
+                  { name: 'وسط', name_en: 'Medium', price: 240 },
+                  { name: 'كبير', name_en: 'Large', price: 320 },
+                ],
+                addons: [{ name: 'زيتون كالاماتا', name_en: 'Kalamata Olives', price: 25 }],
+                sortOrder: 3,
+              },
+              {
+                name: 'باستا تالياتيلي بالكمأة',
+                name_en: 'Truffle Tagliatelle Pasta',
+                description: 'باستا طازجة مع كريمة البارميزان وشرائح الترافل.',
+                description_en: 'Fresh pasta tossed in creamy Parmesan sauce and black truffle.',
+                basePrice: 270,
+                calories: 680,
+                isSpicy: false,
+                ordersCount: 25,
+                imageUrl: '/src/assets/images/pasta_truffle_modern_1794967837266.jpg',
+                sizes: [{ name: 'طبق قياسي', name_en: 'Standard Bowl', price: 270 }],
+                addons: [{ name: 'دجاج مشوي', name_en: 'Grilled Chicken', price: 60 }],
+                sortOrder: 4,
+              },
+            ],
+          },
+          {
+            name: 'السلطات والمقبلات',
+            name_en: 'Salads & Starters',
+            imageUrl: '/src/assets/images/pasta_truffle_modern_1794967837266.jpg',
+            sortOrder: 4,
+            items: [
+              {
+                name: 'سلطة سيزر بالدجاج المشوي',
+                name_en: 'Grilled Chicken Caesar Salad',
+                description: 'خس مقرمش مع صدور دجاج مشوية، جبنة بارميزان، وخبز محمص بصوص السيزر.',
+                description_en: 'Crisp romaine lettuce with flame-grilled chicken, aged Parmesan, croutons, and Caesar dressing.',
+                basePrice: 155,
+                calories: 380,
+                isSpicy: false,
+                ordersCount: 25,
+                imageUrl: '/src/assets/images/pasta_truffle_modern_1794967837266.jpg',
+                sizes: [
+                  { name: 'فردي', name_en: 'Single', price: 155 },
+                  { name: 'للمشاركة', name_en: 'Sharing', price: 225 },
+                ],
+                addons: [{ name: 'دجاج إضافي', name_en: 'Extra Chicken', price: 50 }],
+                sortOrder: 5,
+              },
+            ],
+          },
+        ],
       },
       {
-        name: 'البيتزا والباستا',
-        name_en: 'Pizza & Pasta',
-        imageUrl: '/src/assets/images/pizza_neapolitan_story_1794967838282.jpg',
-        sortOrder: 2,
-      },
-      {
-        name: 'المشروبات والقهوة',
-        name_en: 'Drinks & Coffee',
+        name: 'البار والمشروبات',
+        name_en: 'Bar & Drinks',
         imageUrl: '/src/assets/images/coffee_latte_croissant_1794967837713.jpg',
-        sortOrder: 3,
+        sortOrder: 5,
+        subcategories: [
+          {
+            name: 'القهوة والمشروبات الباردة',
+            name_en: 'Coffee & Cold Brews',
+            imageUrl: '/src/assets/images/coffee_latte_croissant_1794967837713.jpg',
+            sortOrder: 6,
+            items: [
+              {
+                name: 'سبانش لاتيه بارد',
+                name_en: 'Iced Spanish Latte',
+                description: 'إسبريسو مختص مع حليب بارد ولمسة حليب مكثف.',
+                description_en: 'Specialty espresso over chilled milk with a touch of condensed cream.',
+                basePrice: 95,
+                calories: 205,
+                isSpicy: false,
+                ordersCount: 25,
+                imageUrl: '/src/assets/images/coffee_latte_croissant_1794967837713.jpg',
+                sizes: [
+                  { name: 'صغير', name_en: 'Small', price: 95 },
+                  { name: 'كبير', name_en: 'Large', price: 120 },
+                ],
+                addons: [{ name: 'حليب شوفان', name_en: 'Oat Milk', price: 25 }],
+                sortOrder: 6,
+              },
+            ],
+          },
+        ],
       },
-    ],
-    itemsByCategoryIndex: [
-      [
-        {
-          name: 'دبل سماش برجر بالكمأة',
-          name_en: 'Double Truffle Smash Burger',
-          description: 'لحم طازج مشوي على الصاج مع جبنة شيدر معتقة وصوص الترافل.',
-          description_en: 'Fresh seared beef patties topped with aged cheddar and black truffle sauce.',
-          basePrice: 220,
-          calories: 740,
-          isSpicy: false,
-          ordersCount: 25,
-          imageUrl: '/src/assets/images/burger_smash_signature_1794967836686.jpg',
-          sizes: [
-            { name: 'سنجل', name_en: 'Single', price: 175 },
-            { name: 'دبل', name_en: 'Double', price: 220 },
-            { name: 'تريبل', name_en: 'Triple', price: 280 },
-          ],
-          addons: [
-            { name: 'جبنة إضافية', name_en: 'Extra Cheese', price: 25 },
-            { name: 'بطاطس مقلية', name_en: 'French Fries', price: 45 },
-          ],
-          sortOrder: 1,
-        },
-        {
-          name: 'ستيك ريب آي مشوي',
-          name_en: 'Grilled Ribeye Steak',
-          description: 'شريحة ستيك طرية مع إكليل الجبل وصوص الديمي جلاس.',
-          description_en: 'Tender flame-grilled ribeye steak served with rosemary and demi-glace.',
-          basePrice: 540,
-          calories: 820,
-          isSpicy: false,
-          ordersCount: 25,
-          imageUrl: '/src/assets/images/steak_wagyu_luxury_1794967837741.jpg',
-          sizes: [
-            { name: '250 جرام', name_en: '250g', price: 540 },
-            { name: '350 جرام', name_en: '350g', price: 720 },
-          ],
-          addons: [{ name: 'صوص مشروم', name_en: 'Mushroom Sauce', price: 40 }],
-          sortOrder: 2,
-        },
-      ],
-      [
-        {
-          name: 'بيتزا مارغريتا نابولي',
-          name_en: 'Neapolitan Margherita Pizza',
-          description: 'عجينة مخمرة على الحطب مع موزاريلا طازجة وريحان.',
-          description_en: 'Wood-fired sourdough crust topped with fresh mozzarella and sweet basil.',
-          basePrice: 240,
-          calories: 790,
-          isSpicy: false,
-          ordersCount: 25,
-          imageUrl: '/src/assets/images/pizza_neapolitan_story_1794967838282.jpg',
-          sizes: [
-            { name: 'وسط', name_en: 'Medium', price: 240 },
-            { name: 'كبير', name_en: 'Large', price: 320 },
-          ],
-          addons: [{ name: 'زيتون كالاماتا', name_en: 'Kalamata Olives', price: 25 }],
-          sortOrder: 3,
-        },
-        {
-          name: 'باستا تالياتيلي بالكمأة',
-          name_en: 'Truffle Tagliatelle Pasta',
-          description: 'باستا طازجة مع كريمة البارميزان وشرائح الترافل.',
-          description_en: 'Fresh pasta tossed in creamy Parmesan sauce and black truffle.',
-          basePrice: 270,
-          calories: 680,
-          isSpicy: false,
-          ordersCount: 25,
-          imageUrl: '/src/assets/images/pasta_truffle_modern_1794967837266.jpg',
-          sizes: [{ name: 'طبق قياسي', name_en: 'Standard Bowl', price: 270 }],
-          addons: [{ name: 'دجاج مشوي', name_en: 'Grilled Chicken', price: 60 }],
-          sortOrder: 4,
-        },
-      ],
-      [
-        {
-          name: 'سبانش لاتيه بارد',
-          name_en: 'Iced Spanish Latte',
-          description: 'إسبريسو مختص مع حليب بارد ولمسة حليب مكثف.',
-          description_en: 'Specialty espresso over chilled milk with a touch of condensed cream.',
-          basePrice: 95,
-          calories: 205,
-          isSpicy: false,
-          ordersCount: 25,
-          imageUrl: '/src/assets/images/coffee_latte_croissant_1794967837713.jpg',
-          sizes: [
-            { name: 'صغير', name_en: 'Small', price: 95 },
-            { name: 'كبير', name_en: 'Large', price: 120 },
-          ],
-          addons: [{ name: 'حليب شوفان', name_en: 'Oat Milk', price: 20 }],
-          sortOrder: 5,
-        },
-      ],
     ],
   };
 }

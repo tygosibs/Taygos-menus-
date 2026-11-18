@@ -66,12 +66,13 @@
     },
     "Category": {
       "title": "Category",
-      "description": "Menu category linked to a restaurant via restaurantId.",
+      "description": "Menu category (main or subcategory via parentId) linked to a restaurant via restaurantId.",
       "type": "object",
       "properties": {
         "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
         "restaurantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
         "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "parentId": { "type": "string", "maxLength": 128 },
         "name": { "type": "string", "minLength": 1, "maxLength": 80 },
         "name_en": { "type": "string", "maxLength": 80 },
         "imageUrl": { "type": "string", "maxLength": 300000 },

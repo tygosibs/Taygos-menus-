@@ -14,6 +14,7 @@ import {
   X,
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { buildCategoryHierarchy, doesItemMatchHierarchy } from '../../lib/menuHierarchy';
 import { CartItem, Category, ItemAddon, ItemSize, MenuItem, Restaurant } from '../../types/menu';
 import { LanguageToggleButton } from '../LanguageToggleButton';
 import { SafeImage } from '../SafeImage';
@@ -40,7 +41,8 @@ export function Flipbook3DTheme({
   onOpenCart,
 }: Flipbook3DThemeProps) {
   const { lang, dir, isRtl, t, loc, formatCurrency } = useLanguage();
-  const [selectedCatId, setSelectedCatId] = useState<string>('all');
+  const [selectedMainCatId, setSelectedMainCatId] = useState<string>('all');
+  const [selectedSubCatId, setSelectedSubCatId] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [pageIndex, setPageIndex] = useState(0);
   const [flipDir, setFlipDir] = useState<1 | -1>(1);
@@ -57,12 +59,26 @@ export function Flipbook3DTheme({
   const displayCurrency = formatCurrency(restaurant.currency);
   const formatPrice = (p: number) => `${p.toFixed(2).replace(/\.00$/, '')} ${displayCurrency}`;
 
+  const hierarchy = useMemo(() => buildCategoryHierarchy(categories), [categories]);
+  const activeSubcategories = useMemo(
+    () =>
+      selectedMainCatId === 'all'
+        ? []
+        : hierarchy.subCategoriesByParent.get(selectedMainCatId) || [],
+    [selectedMainCatId, hierarchy]
+  );
+
+  const selectMainCategory = (mainId: string) => {
+    setSelectedMainCatId(mainId);
+    setSelectedSubCatId('all');
+  };
+
   const availableItems = useMemo(() => items.filter((i) => i.isAvailable), [items]);
 
   const filteredItems = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return availableItems.filter((item) => {
-      const catMatch = selectedCatId === 'all' || item.categoryId === selectedCatId;
+      const catMatch = doesItemMatchHierarchy(item, selectedMainCatId, selectedSubCatId, hierarchy);
       const textMatch =
         !q ||
         item.name.toLowerCase().includes(q) ||
@@ -71,7 +87,7 @@ export function Flipbook3DTheme({
         (item.description_en || '').toLowerCase().includes(q);
       return catMatch && textMatch;
     });
-  }, [availableItems, selectedCatId, searchQuery]);
+  }, [availableItems, selectedMainCatId, selectedSubCatId, hierarchy, searchQuery]);
 
   const pages = useMemo(() => {
     const chunks: MenuItem[][] = [];
@@ -83,7 +99,7 @@ export function Flipbook3DTheme({
 
   useEffect(() => {
     setPageIndex(0);
-  }, [selectedCatId, searchQuery]);
+  }, [selectedMainCatId, selectedSubCatId, searchQuery]);
 
   useEffect(() => {
     if (focusedItem) {
@@ -214,36 +230,36 @@ export function Flipbook3DTheme({
           </div>
         </div>
 
-        {/* Chapter / Category Bookmarks */}
+        {/* Main Chapter / Category Bookmarks */}
         <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pt-4">
           <button
             type="button"
-            onClick={() => setSelectedCatId('all')}
+            onClick={() => selectMainCategory('all')}
             style={
-              selectedCatId === 'all'
+              selectedMainCatId === 'all'
                 ? { backgroundColor: accent, borderColor: accent, color: '#fff' }
                 : undefined
             }
             className={`min-h-[40px] px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 border transition-colors cursor-pointer ${
-              selectedCatId === 'all'
+              selectedMainCatId === 'all'
                 ? ''
                 : 'bg-[#241D18] border-[#C6A46C]/25 text-[#E8DDD0] hover:border-[#C6A46C]/60'
             }`}
           >
             {t.menu.allCategories}
           </button>
-          {categories.map((cat) => (
+          {hierarchy.mainCategories.map((cat) => (
             <button
               key={cat.id}
               type="button"
-              onClick={() => setSelectedCatId(cat.id)}
+              onClick={() => selectMainCategory(cat.id)}
               style={
-                selectedCatId === cat.id
+                selectedMainCatId === cat.id
                   ? { backgroundColor: accent, borderColor: accent, color: '#fff' }
                   : undefined
               }
               className={`min-h-[40px] px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 border transition-colors cursor-pointer ${
-                selectedCatId === cat.id
+                selectedMainCatId === cat.id
                   ? ''
                   : 'bg-[#241D18] border-[#C6A46C]/25 text-[#E8DDD0] hover:border-[#C6A46C]/60'
               }`}
@@ -252,6 +268,37 @@ export function Flipbook3DTheme({
             </button>
           ))}
         </div>
+
+        {/* Subcategories Bar (Visible when selected Main Category has subcategories) */}
+        {activeSubcategories.length > 0 && (
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-2.5">
+            <button
+              type="button"
+              onClick={() => setSelectedSubCatId('all')}
+              className={`px-3 py-1.5 rounded-lg text-[11px] font-bold whitespace-nowrap shrink-0 border transition-colors cursor-pointer ${
+                selectedSubCatId === 'all'
+                  ? 'bg-[#C6A46C] border-[#C6A46C] text-[#171310]'
+                  : 'bg-[#241D18]/80 border-[#C6A46C]/25 text-[#D6C8B8] hover:border-[#C6A46C]/60'
+              }`}
+            >
+              {lang === 'en' ? 'All Sections' : 'كل الأقسام الفرعية'}
+            </button>
+            {activeSubcategories.map((sub) => (
+              <button
+                key={sub.id}
+                type="button"
+                onClick={() => setSelectedSubCatId(sub.id)}
+                className={`px-3 py-1.5 rounded-lg text-[11px] font-bold whitespace-nowrap shrink-0 border transition-colors cursor-pointer ${
+                  selectedSubCatId === sub.id
+                    ? 'bg-[#C6A46C] border-[#C6A46C] text-[#171310]'
+                    : 'bg-[#241D18]/80 border-[#C6A46C]/25 text-[#D6C8B8] hover:border-[#C6A46C]/60'
+                }`}
+              >
+                {loc(sub.name, sub.name_en)}
+              </button>
+            ))}
+          </div>
+        )}
       </header>
 
       {/* 3D Luxury Flipbook Container */}
@@ -262,7 +309,7 @@ export function Flipbook3DTheme({
         >
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
-              key={`${selectedCatId}-${searchQuery}-${safePageIndex}-${lang}`}
+              key={`${selectedMainCatId}-${selectedSubCatId}-${searchQuery}-${safePageIndex}-${lang}`}
               initial={{
                 rotateY: isRtl ? (flipDir > 0 ? -24 : 24) : flipDir > 0 ? 24 : -24,
                 opacity: 0,
@@ -315,11 +362,13 @@ export function Flipbook3DTheme({
               {/* Page Header */}
               <div className="flex items-center justify-between gap-4 border-b border-[#E2D4C0] pb-3.5 mb-6 relative z-10">
                 <div className="text-xs font-bold text-[#7A6552]">
-                  {selectedCatId === 'all'
+                  {selectedMainCatId === 'all'
                     ? lang === 'en'
                       ? "Chef's Curated Menu"
                       : 'قائمة الشيف المختارة'
-                    : categoryNameMap.get(selectedCatId) || t.menu.allCategories}
+                    : selectedSubCatId !== 'all'
+                      ? `${categoryNameMap.get(selectedMainCatId) || ''} › ${categoryNameMap.get(selectedSubCatId) || ''}`
+                      : categoryNameMap.get(selectedMainCatId) || t.menu.allCategories}
                 </div>
                 <div className="font-mono-num text-xs font-bold text-[#7A6552]">
                   {t.menu.pageLabel} {safePageIndex + 1} / {pages.length}

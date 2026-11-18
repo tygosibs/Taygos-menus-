@@ -7,6 +7,7 @@ import {
   Languages,
   Loader2,
   Mail,
+  Palette,
   PauseCircle,
   Phone,
   PlayCircle,
@@ -29,6 +30,7 @@ import {
 } from '../../lib/firestoreService';
 import { Restaurant, UserProfile } from '../../types/menu';
 import { MenuBuilderTab } from '../admin/MenuBuilderTab';
+import { ThemeCustomizerTab } from '../admin/ThemeCustomizerTab';
 
 interface TenantsManagerTabProps {
   onOpenPublicMenu: (path: string) => void;
@@ -48,6 +50,7 @@ export function TenantsManagerTab({ onOpenPublicMenu }: TenantsManagerTabProps) 
 
   const [busyId, setBusyId] = useState<string | null>(null);
   const [conciergeRestaurant, setConciergeRestaurant] = useState<Restaurant | null>(null);
+  const [conciergeTab, setConciergeTab] = useState<'menu' | 'theme'>('menu');
   const [bilingualOpen, setBilingualOpen] = useState(false);
   const [editRestName, setEditRestName] = useState('');
   const [editRestNameEn, setEditRestNameEn] = useState('');
@@ -126,6 +129,7 @@ export function TenantsManagerTab({ onOpenPublicMenu }: TenantsManagerTabProps) 
 
   const openConcierge = (rest: Restaurant) => {
     setConciergeRestaurant(rest);
+    setConciergeTab('menu');
     setEditRestName(rest.name);
     setEditRestNameEn(rest.name_en || '');
     setEditRestTagline(rest.tagline || '');
@@ -579,7 +583,48 @@ export function TenantsManagerTab({ onOpenPublicMenu }: TenantsManagerTabProps) 
                 </form>
               )}
 
-              <MenuBuilderTab restaurant={conciergeRestaurant} />
+              {/* Concierge Inner Mode Tabs */}
+              <div className="flex items-center gap-2 bg-white border border-zinc-200 rounded-2xl p-1.5 w-fit">
+                <button
+                  type="button"
+                  onClick={() => setConciergeTab('menu')}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors ${
+                    conciergeTab === 'menu'
+                      ? 'bg-zinc-950 text-white'
+                      : 'text-zinc-600 hover:bg-zinc-100'
+                  }`}
+                >
+                  <UtensilsCrossed className="w-3.5 h-3.5" />
+                  <span>{lang === 'en' ? 'Menu & Categories' : 'الأقسام والأصناف'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConciergeTab('theme')}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors ${
+                    conciergeTab === 'theme'
+                      ? 'bg-zinc-950 text-white'
+                      : 'text-zinc-600 hover:bg-zinc-100'
+                  }`}
+                >
+                  <Palette className="w-3.5 h-3.5" />
+                  <span>{lang === 'en' ? 'Themes & Store Settings' : 'الثيم وإعدادات المطعم'}</span>
+                </button>
+              </div>
+
+              {conciergeTab === 'menu' ? (
+                <MenuBuilderTab restaurant={conciergeRestaurant} />
+              ) : (
+                <ThemeCustomizerTab
+                  restaurant={conciergeRestaurant}
+                  onRestaurantUpdated={(updated) => {
+                    setConciergeRestaurant(updated);
+                    setRestaurants((prev) =>
+                      prev.map((r) => (r.id === updated.id ? updated : r))
+                    );
+                  }}
+                  onOpenPublicMenu={onOpenPublicMenu}
+                />
+              )}
             </div>
           </div>
         </div>

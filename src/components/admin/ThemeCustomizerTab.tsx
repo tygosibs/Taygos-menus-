@@ -104,13 +104,41 @@ export function ThemeCustomizerTab({
     };
   }, [restaurant.id]);
 
-  // Keep local state aligned if parent restaurant updates externally
+  // Keep local state aligned if parent restaurant updates or Concierge switches tenants
   useEffect(() => {
     setSelectedPreviewTheme(restaurant.activeTheme);
     setPrimaryColor(restaurant.primaryColor);
     setTaxRate(restaurant.taxRate);
     setServiceCharge(restaurant.serviceCharge);
-  }, [restaurant.id, restaurant.activeTheme, restaurant.primaryColor, restaurant.taxRate, restaurant.serviceCharge]);
+    setName(restaurant.name);
+    setNameEn(restaurant.name_en || '');
+    setSlug(restaurant.slug);
+    setTagline(restaurant.tagline || '');
+    setTaglineEn(restaurant.tagline_en || '');
+    setWhatsappNumber(restaurant.whatsappNumber);
+    setCurrency(restaurant.currency);
+    setLogoUrl(restaurant.logoUrl || '');
+    setIsOpen(restaurant.isOpen);
+    setThemeSavedMsg(null);
+    setThemeErrorMsg(null);
+    setSettingsMsg(null);
+    setSettingsError(null);
+  }, [
+    restaurant.id,
+    restaurant.activeTheme,
+    restaurant.primaryColor,
+    restaurant.taxRate,
+    restaurant.serviceCharge,
+    restaurant.name,
+    restaurant.name_en,
+    restaurant.slug,
+    restaurant.tagline,
+    restaurant.tagline_en,
+    restaurant.whatsappNumber,
+    restaurant.currency,
+    restaurant.logoUrl,
+    restaurant.isOpen,
+  ]);
 
   const demoBundle = DEMO_RESTAURANTS['buns-lab'];
   const hasRealDishes = useMemo(

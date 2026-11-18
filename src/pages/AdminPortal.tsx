@@ -192,10 +192,21 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
             </div>
           </div>
 
-          <div className="p-3.5 rounded-xl bg-zinc-50 border border-zinc-200 space-y-1">
-            <p className="text-xs font-bold text-zinc-950 truncate">
-              {loc(restaurant.name, restaurant.name_en)}
-            </p>
+          <div className="p-3.5 rounded-xl bg-zinc-50 border border-zinc-200 space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-bold text-zinc-950 truncate">
+                {loc(restaurant.name, restaurant.name_en)}
+              </p>
+              <span
+                className={`text-[10px] font-bold px-2 py-0.5 rounded-md shrink-0 ${
+                  restaurant.isOpen
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : 'bg-rose-100 text-rose-800'
+                }`}
+              >
+                {restaurant.isOpen ? t.menu.openNow : t.menu.closedNow}
+              </span>
+            </div>
             <p className="text-[11px] font-mono-num text-zinc-500 truncate" dir="ltr">
               /menu/{restaurant.slug}
             </p>

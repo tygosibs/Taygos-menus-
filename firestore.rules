@@ -71,7 +71,7 @@ service cloud.firestore {
         isValidSlug(data.slug) &&
         isValidId(data.restaurantId) &&
         isValidId(data.ownerId) &&
-        data.ownerId == request.auth.uid &&
+        (isSuperAdmin() || data.ownerId == request.auth.uid) &&
         data.createdAt is timestamp;
     }
 
@@ -110,11 +110,12 @@ service cloud.firestore {
 
     function isValidCategoryShape(data, catId) {
       return data.keys().hasAll(['id', 'restaurantId', 'ownerId', 'name', 'sortOrder', 'createdAt']) &&
-        data.keys().hasOnly(['id', 'restaurantId', 'ownerId', 'name', 'name_en', 'imageUrl', 'sortOrder', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'restaurantId', 'ownerId', 'parentId', 'name', 'name_en', 'imageUrl', 'sortOrder', 'createdAt']) &&
         isValidId(data.id) &&
         data.id == catId &&
         isValidId(data.restaurantId) &&
         isValidId(data.ownerId) &&
+        (!('parentId' in data) || data.parentId == '' || isValidId(data.parentId)) &&
         data.name is string && data.name.size() >= 1 && data.name.size() <= 80 &&
         (!('name_en' in data) || (data.name_en is string && data.name_en.size() <= 80)) &&
         (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 300000)) &&
@@ -260,12 +261,14 @@ service cloud.firestore {
       allow create: if isVerifiedAccount() && isValidSlug(slug) &&
         isValidSlugMapping(incoming(), slug) &&
         incoming().createdAt == request.time;
-      allow update: if isVerifiedAccount() && isValidSlug(slug) &&
+      allow update: if isValidSlug(slug) &&
         isValidSlugMapping(incoming(), slug) &&
-        existing().ownerId == request.auth.uid &&
         incoming().ownerId == existing().ownerId &&
         incoming().createdAt == existing().createdAt &&
-        incoming().diff(existing()).affectedKeys().hasOnly(['restaurantId']);
+        incoming().diff(existing()).affectedKeys().hasOnly(['restaurantId']) && (
+          isSuperAdmin() ||
+          (isVerifiedAccount() && existing().ownerId == request.auth.uid)
+        );
       allow delete: if isValidSlug(slug) && (
         isSuperAdmin() ||
         (isVerifiedAccount() && existing().ownerId == request.auth.uid)
@@ -292,13 +295,13 @@ service cloud.firestore {
             existing().ownerId == request.auth.uid && (
               incoming().diff(existing()).affectedKeys().hasOnly(['activeTheme', 'updatedAt']) ||
               incoming().diff(existing()).affectedKeys().hasOnly(['activeTheme', 'primaryColor', 'taxRate', 'serviceCharge', 'updatedAt']) ||
-              incoming().diff(existing()).affectedKeys().hasOnly(['name', 'name_en', 'tagline', 'tagline_en', 'slug', 'whatsappNumber', 'logoUrl', 'currency', 'isOpen', 'taxRate', 'serviceCharge', 'primaryColor', 'updatedAt'])
+              incoming().diff(existing()).affectedKeys().hasOnly(['name', 'name_en', 'tagline', 'tagline_en', 'slug', 'whatsappNumber', 'logoUrl', 'currency', 'isOpen', 'activeTheme', 'taxRate', 'serviceCharge', 'primaryColor', 'updatedAt'])
             )
           ) || (
             isSuperAdmin() && (
               incoming().diff(existing()).affectedKeys().hasOnly(['isSuspended', 'updatedAt']) ||
               incoming().diff(existing()).affectedKeys().hasOnly(['activeTheme', 'primaryColor', 'taxRate', 'serviceCharge', 'updatedAt']) ||
-              incoming().diff(existing()).affectedKeys().hasOnly(['name', 'name_en', 'tagline', 'tagline_en', 'whatsappNumber', 'logoUrl', 'currency', 'isOpen', 'isSuspended', 'taxRate', 'serviceCharge', 'primaryColor', 'updatedAt'])
+              incoming().diff(existing()).affectedKeys().hasOnly(['name', 'name_en', 'tagline', 'tagline_en', 'slug', 'whatsappNumber', 'logoUrl', 'currency', 'isOpen', 'isSuspended', 'activeTheme', 'taxRate', 'serviceCharge', 'primaryColor', 'updatedAt'])
             )
           )
         );
@@ -314,15 +317,29 @@ service cloud.firestore {
       allow list: if true;
       allow create: if isValidId(categoryId) &&
         isValidCategoryShape(incoming(), categoryId) &&
-        incoming().createdAt == request.time &&
-        exists(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)) && (
+        incoming().createdAt == request.time && (
           (
-            isVerifiedAccount() &&
-            incoming().ownerId == request.auth.uid &&
-            get(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)).data.ownerId == request.auth.uid
+            exists(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)) && (
+              (
+                isVerifiedAccount() &&
+                incoming().ownerId == request.auth.uid &&
+                get(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)).data.ownerId == request.auth.uid
+              ) || (
+                isSuperAdmin() &&
+                get(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)).data.ownerId == incoming().ownerId
+              )
+            )
           ) || (
-            isSuperAdmin() &&
-            get(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)).data.ownerId == incoming().ownerId
+            existsAfter(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)) && (
+              (
+                isVerifiedAccount() &&
+                incoming().ownerId == request.auth.uid &&
+                getAfter(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)).data.ownerId == request.auth.uid
+              ) || (
+                isSuperAdmin() &&
+                getAfter(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)).data.ownerId == incoming().ownerId
+              )
+            )
           )
         );
       allow update: if isValidId(categoryId) &&
@@ -331,7 +348,7 @@ service cloud.firestore {
         incoming().id == existing().id &&
         incoming().restaurantId == existing().restaurantId &&
         incoming().createdAt == existing().createdAt &&
-        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'name_en', 'imageUrl', 'sortOrder']) && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['parentId', 'name', 'name_en', 'imageUrl', 'sortOrder']) && (
           (
             isVerifiedAccount() &&
             existing().ownerId == request.auth.uid &&
@@ -355,15 +372,29 @@ service cloud.firestore {
       allow create: if isValidId(itemId) &&
         isValidMenuItemShape(incoming(), itemId) &&
         incoming().createdAt == request.time &&
-        incoming().updatedAt == request.time &&
-        exists(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)) && (
+        incoming().updatedAt == request.time && (
           (
-            isVerifiedAccount() &&
-            incoming().ownerId == request.auth.uid &&
-            get(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)).data.ownerId == request.auth.uid
+            exists(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)) && (
+              (
+                isVerifiedAccount() &&
+                incoming().ownerId == request.auth.uid &&
+                get(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)).data.ownerId == request.auth.uid
+              ) || (
+                isSuperAdmin() &&
+                get(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)).data.ownerId == incoming().ownerId
+              )
+            )
           ) || (
-            isSuperAdmin() &&
-            get(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)).data.ownerId == incoming().ownerId
+            existsAfter(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)) && (
+              (
+                isVerifiedAccount() &&
+                incoming().ownerId == request.auth.uid &&
+                getAfter(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)).data.ownerId == request.auth.uid
+              ) || (
+                isSuperAdmin() &&
+                getAfter(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)).data.ownerId == incoming().ownerId
+              )
+            )
           )
         );
       allow update: if isValidId(itemId) &&
@@ -383,6 +414,7 @@ service cloud.firestore {
               )
             ) && (
               incoming().diff(existing()).affectedKeys().hasOnly(['isAvailable', 'updatedAt']) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['sortOrder', 'updatedAt']) ||
               incoming().diff(existing()).affectedKeys().hasOnly([
                 'categoryId', 'name', 'name_en', 'description', 'description_en', 'basePrice', 'imageUrl', 'calories',
                 'isSpicy', 'isAvailable', 'ordersCount', 'sizes', 'addons', 'sortOrder', 'updatedAt'

@@ -1,11 +1,21 @@
 import { FormEvent, useState } from 'react';
 import {
   createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
   updateProfile,
 } from 'firebase/auth';
-import { AlertCircle, KeyRound, Loader2, Lock, Mail, ShieldCheck, User as UserIcon } from 'lucide-react';
+import {
+  AlertCircle,
+  CheckCircle2,
+  KeyRound,
+  Loader2,
+  Lock,
+  Mail,
+  ShieldCheck,
+  User as UserIcon,
+} from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { AppLang } from '../../data/translations';
 import { auth, googleAuthProvider } from '../../lib/firebase';
@@ -21,12 +31,13 @@ type AuthMode = 'login' | 'register';
 function mapFirebaseAuthError(
   err: unknown,
   lang: AppLang
-): { message: string; isProviderDisabled?: boolean } {
+): { message: string; isProviderDisabled?: boolean; isDomainError?: boolean } {
   const code =
     typeof err === 'object' && err !== null && 'code' in err
       ? String((err as { code?: string }).code)
       : '';
   const isEn = lang === 'en';
+  const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'suofra.vercel.app';
 
   switch (code) {
     case 'auth/operation-not-allowed':
@@ -35,6 +46,26 @@ function mapFirebaseAuthError(
         message: isEn
           ? 'Email/Password sign-in is not currently enabled in Firebase Console. Enable it under Authentication → Sign-in method, or use Continue with Google below.'
           : 'تسجيل الدخول بالبريد الإلكتروني وكلمة المرور غير مفعّل حالياً في مشروع Firebase. يرجى تفعيله من Firebase Console ← Authentication ← Sign-in method ← Email/Password، أو استخدام زر الدخول عبر Google أدناه.',
+      };
+    case 'auth/unauthorized-domain':
+      return {
+        isDomainError: true,
+        message: isEn
+          ? `Domain "${currentHost}" is not yet added to Firebase Authorized Domains. Add it in Firebase Console → Authentication → Settings → Authorized domains.`
+          : `النطاق "${currentHost}" غير مضاف بعد إلى النطاقات المصرح بها في Firebase. يرجى إضافته من Firebase Console ← Authentication ← Settings ← Authorized domains.`,
+      };
+    case 'auth/popup-blocked':
+      return {
+        message: isEn
+          ? 'Your browser blocked the Google sign-in popup. Please allow popups for this site or sign in with email & password.'
+          : 'قام المتصفح بحظر نافذة تسجيل الدخول عبر Google. يرجى السماح بالنوافذ المنبثقة لهذا الموقع أو تسجيل الدخول بالبريد الإلكتروني.',
+      };
+    case 'auth/cancelled-popup-request':
+    case 'auth/popup-closed-by-user':
+      return {
+        message: isEn
+          ? 'Sign-in window was closed before completing. Please try again.'
+          : 'تم إغلاق نافذة تسجيل الدخول قبل إتمام العملية. يمكنك المحاولة مرة أخرى.',
       };
     case 'auth/email-already-in-use':
       return {
@@ -66,20 +97,14 @@ function mapFirebaseAuthError(
           ? 'Too many attempts. Please wait a moment and try again.'
           : 'تم إجراء محاولات متكررة. انتظر قليلاً ثم أعد المحاولة.',
       };
-    case 'auth/popup-closed-by-user':
-      return {
-        message: isEn
-          ? 'Sign-in window was closed before completing.'
-          : 'تم إغلاق نافذة تسجيل الدخول قبل إتمام العملية.',
-      };
     default:
       return {
         message:
           err instanceof Error && err.message
             ? err.message
             : isEn
-            ? 'Authentication error occurred. Please check your connection and try again.'
-            : 'حدث خطأ أثناء المصادقة. تأكد من الاتصال بالإنترنت وحاول مجدداً.',
+              ? 'Authentication error occurred. Please check your connection and try again.'
+              : 'حدث خطأ أثناء المصادقة. تأكد من الاتصال بالإنترنت وحاول مجدداً.',
       };
   }
 }
@@ -93,13 +118,18 @@ export function OwnerAuthCard({ onSuccess, compact = false }: OwnerAuthCardProps
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
-  const [errorInfo, setErrorInfo] = useState<{ message: string; isProviderDisabled?: boolean } | null>(
-    null
-  );
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetMessage, setResetMessage] = useState<string | null>(null);
+  const [errorInfo, setErrorInfo] = useState<{
+    message: string;
+    isProviderDisabled?: boolean;
+    isDomainError?: boolean;
+  } | null>(null);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setErrorInfo(null);
+    setResetMessage(null);
 
     const cleanEmail = email.trim();
     if (!cleanEmail || !password) {
@@ -142,6 +172,7 @@ export function OwnerAuthCard({ onSuccess, compact = false }: OwnerAuthCardProps
 
   const handleGoogleSignIn = async () => {
     setErrorInfo(null);
+    setResetMessage(null);
     setGoogleLoading(true);
     try {
       const cred = await signInWithPopup(auth, googleAuthProvider);
@@ -157,6 +188,27 @@ export function OwnerAuthCard({ onSuccess, compact = false }: OwnerAuthCardProps
       setGoogleLoading(false);
     }
   };
+
+  const handleForgotPassword = async () => {
+    setErrorInfo(null);
+    setResetMessage(null);
+    const cleanEmail = email.trim();
+    if (!cleanEmail) {
+      setErrorInfo({ message: t.auth.enterEmailFirst });
+      return;
+    }
+    setResetLoading(true);
+    try {
+      await sendPasswordResetEmail(auth, cleanEmail);
+      setResetMessage(t.auth.resetSent);
+    } catch (err) {
+      setErrorInfo(mapFirebaseAuthError(err, lang));
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'suofra.vercel.app';
 
   return (
     <div
@@ -176,6 +228,7 @@ export function OwnerAuthCard({ onSuccess, compact = false }: OwnerAuthCardProps
               onClick={() => {
                 setMode('login');
                 setErrorInfo(null);
+                setResetMessage(null);
               }}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
                 mode === 'login'
@@ -190,6 +243,7 @@ export function OwnerAuthCard({ onSuccess, compact = false }: OwnerAuthCardProps
               onClick={() => {
                 setMode('register');
                 setErrorInfo(null);
+                setResetMessage(null);
               }}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
                 mode === 'register'
@@ -206,7 +260,19 @@ export function OwnerAuthCard({ onSuccess, compact = false }: OwnerAuthCardProps
           {mode === 'login' ? t.auth.ownerLoginHeading : t.auth.ownerRegisterHeading}
         </h2>
         <p className="text-xs text-zinc-600 leading-relaxed">{t.auth.ownerHeadingDesc}</p>
+        <p className="text-[11px] font-semibold text-emerald-700 pt-0.5">
+          {isEn
+            ? 'Open for all restaurant & cafe owners — register and build your menu in 2 steps.'
+            : 'التسجيل متاح لجميع أصحاب المطاعم والكافيهات — أنشئ مطعمك واختر الثيم في خطوتين.'}
+        </p>
       </div>
+
+      {resetMessage && (
+        <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-start gap-2">
+          <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600" />
+          <p className="font-medium leading-relaxed">{resetMessage}</p>
+        </div>
+      )}
 
       {errorInfo && (
         <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-xs text-red-800 space-y-1.5">
@@ -217,6 +283,11 @@ export function OwnerAuthCard({ onSuccess, compact = false }: OwnerAuthCardProps
           {errorInfo.isProviderDisabled && (
             <p className="text-[11px] text-red-700 font-mono-num ps-6" dir="ltr">
               Project: gen-lang-client-0179420211 → Authentication → Sign-in method → Email/Password
+            </p>
+          )}
+          {errorInfo.isDomainError && (
+            <p className="text-[11px] text-red-700 font-mono-num ps-6" dir="ltr">
+              Authorized domains: add "{currentHost}" &amp; "suofra.vercel.app"
             </p>
           )}
         </div>
@@ -260,9 +331,19 @@ export function OwnerAuthCard({ onSuccess, compact = false }: OwnerAuthCardProps
         </div>
 
         <div>
-          <label className="block text-xs font-bold text-zinc-700 mb-1.5">
-            {t.auth.passwordLabel}
-          </label>
+          <div className="flex items-center justify-between gap-2 mb-1.5">
+            <label className="block text-xs font-bold text-zinc-700">{t.auth.passwordLabel}</label>
+            {mode === 'login' && (
+              <button
+                type="button"
+                disabled={resetLoading}
+                onClick={handleForgotPassword}
+                className="text-[11px] font-bold text-zinc-600 hover:text-zinc-950 hover:underline cursor-pointer disabled:opacity-50"
+              >
+                {resetLoading ? '...' : t.auth.forgotPassword}
+              </button>
+            )}
+          </div>
           <div className="relative">
             <Lock className="w-4 h-4 text-zinc-400 absolute start-3.5 top-1/2 -translate-y-1/2" />
             <input
@@ -292,8 +373,8 @@ export function OwnerAuthCard({ onSuccess, compact = false }: OwnerAuthCardProps
                     ? 'Signing in...'
                     : 'جاري تسجيل الدخول...'
                   : isEn
-                  ? 'Creating account...'
-                  : 'جاري إنشاء الحساب...'}
+                    ? 'Creating account...'
+                    : 'جاري إنشاء الحساب...'}
               </span>
             </>
           ) : (

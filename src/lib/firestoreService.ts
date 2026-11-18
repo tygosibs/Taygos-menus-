@@ -121,6 +121,11 @@ export async function createRestaurant(input: CreateRestaurantInput): Promise<Re
   const cleanSlug = sanitizeSlug(input.slug);
   const restId = makeId('rest');
   const path = `restaurants/${restId}`;
+  const validColor = /^#[0-9a-fA-F]{6}$/.test((input.primaryColor || '').trim())
+    ? input.primaryColor.trim()
+    : '#A61C1C';
+  const safeTaxRate = Math.max(0, Math.min(100, Number(input.taxRate) || 0));
+  const safeServiceCharge = Math.max(0, Math.min(100, Number(input.serviceCharge) || 0));
 
   try {
     const batch = writeBatch(db);
@@ -131,9 +136,9 @@ export async function createRestaurant(input: CreateRestaurantInput): Promise<Re
       name: input.name.trim().slice(0, 120),
       whatsappNumber: input.whatsappNumber.trim().slice(0, 24),
       activeTheme: input.activeTheme || 'theme-1',
-      primaryColor: input.primaryColor || '#A61C1C',
-      taxRate: Number(input.taxRate ?? 14),
-      serviceCharge: Number(input.serviceCharge ?? 12),
+      primaryColor: validColor,
+      taxRate: safeTaxRate,
+      serviceCharge: safeServiceCharge,
       currency: input.currency.trim().slice(0, 16) || 'ج.م',
       isOpen: input.isOpen ?? true,
       createdAt: serverTimestamp(),
@@ -161,50 +166,12 @@ export async function createRestaurant(input: CreateRestaurantInput): Promise<Re
       createdAt: serverTimestamp(),
     });
 
-    if (input.seedStarterMenu) {
-      const seed = getStarterSeedData();
-      seed.categories.forEach((cat, catIdx) => {
-        const catId = makeId('cat');
-        batch.set(doc(db, 'categories', catId), {
-          id: catId,
-          restaurantId: restId,
-          ownerId: input.ownerId,
-          name: cat.name,
-          name_en: cat.name_en,
-          imageUrl: cat.imageUrl,
-          sortOrder: cat.sortOrder,
-          createdAt: serverTimestamp(),
-        });
+    await batch.commit();
 
-        const catItems = seed.itemsByCategoryIndex[catIdx] || [];
-        catItems.forEach((item) => {
-          const itemId = makeId('item');
-          batch.set(doc(db, 'menu_items', itemId), {
-            id: itemId,
-            restaurantId: restId,
-            ownerId: input.ownerId,
-            categoryId: catId,
-            name: item.name,
-            name_en: item.name_en,
-            description: item.description,
-            description_en: item.description_en,
-            basePrice: item.basePrice,
-            imageUrl: item.imageUrl,
-            calories: item.calories,
-            isSpicy: item.isSpicy,
-            isAvailable: true,
-            ordersCount: item.ordersCount,
-            sizes: item.sizes,
-            addons: item.addons,
-            sortOrder: item.sortOrder,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          });
-        });
-      });
+    if (input.seedStarterMenu) {
+      await seedStarterMenuForRestaurant(restId, input.ownerId);
     }
 
-    await batch.commit();
     const createdSnap = await getDoc(doc(db, 'restaurants', restId));
     return { ...(createdSnap.data() as Restaurant), id: restId };
   } catch (error) {
@@ -388,12 +355,20 @@ export function subscribeMenuItems(
 export async function saveCategory(
   restaurantId: string,
   ownerId: string,
-  data: { id?: string; name: string; name_en?: string; imageUrl?: string; sortOrder: number }
+  data: {
+    id?: string;
+    parentId?: string;
+    name: string;
+    name_en?: string;
+    imageUrl?: string;
+    sortOrder: number;
+  }
 ): Promise<void> {
   const isNew = !data.id;
   const catId = data.id || makeId('cat');
   const path = `categories/${catId}`;
   const cleanNameEn = (data.name_en || '').trim().slice(0, 80);
+  const cleanParentId = (data.parentId || '').trim().slice(0, 128);
   try {
     if (isNew) {
       const payload: Record<string, unknown> = {
@@ -404,6 +379,9 @@ export async function saveCategory(
         sortOrder: Number(data.sortOrder) || 0,
         createdAt: serverTimestamp(),
       };
+      if (cleanParentId && cleanParentId !== catId) {
+        payload.parentId = cleanParentId;
+      }
       if (cleanNameEn) {
         payload.name_en = cleanNameEn;
       }
@@ -413,6 +391,7 @@ export async function saveCategory(
       await setDoc(doc(db, 'categories', catId), payload);
     } else {
       await updateDoc(doc(db, 'categories', catId), {
+        parentId: cleanParentId && cleanParentId !== catId ? cleanParentId : '',
         name: data.name.trim().slice(0, 80),
         name_en: cleanNameEn,
         imageUrl: (data.imageUrl || '').trim().slice(0, 300000),
@@ -429,20 +408,58 @@ export async function reorderCategories(
 ): Promise<void> {
   const path = 'categories';
   try {
-    const batch = writeBatch(db);
-    orderedCategories.forEach((cat, idx) => {
-      batch.update(doc(db, 'categories', cat.id), { sortOrder: idx + 1 });
-    });
-    await batch.commit();
+    const CHUNK_SIZE = 450;
+    for (let i = 0; i < orderedCategories.length; i += CHUNK_SIZE) {
+      const chunk = orderedCategories.slice(i, i + CHUNK_SIZE);
+      const batch = writeBatch(db);
+      chunk.forEach((cat, idx) => {
+        batch.update(doc(db, 'categories', cat.id), { sortOrder: i + idx + 1 });
+      });
+      await batch.commit();
+    }
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
   }
 }
 
-export async function removeCategory(categoryId: string): Promise<void> {
+export async function reorderMenuItems(
+  orderedItems: MenuItem[]
+): Promise<void> {
+  const path = 'menu_items';
+  try {
+    const CHUNK_SIZE = 450;
+    for (let i = 0; i < orderedItems.length; i += CHUNK_SIZE) {
+      const chunk = orderedItems.slice(i, i + CHUNK_SIZE);
+      const batch = writeBatch(db);
+      chunk.forEach((item, idx) => {
+        batch.update(doc(db, 'menu_items', item.id), {
+          sortOrder: i + idx + 1,
+          updatedAt: serverTimestamp(),
+        });
+      });
+      await batch.commit();
+    }
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function removeCategory(
+  categoryId: string,
+  childCategories: Category[] = []
+): Promise<void> {
   const path = `categories/${categoryId}`;
   try {
-    await deleteDoc(doc(db, 'categories', categoryId));
+    if (childCategories.length > 0) {
+      const batch = writeBatch(db);
+      childCategories.forEach((child) => {
+        batch.update(doc(db, 'categories', child.id), { parentId: '' });
+      });
+      batch.delete(doc(db, 'categories', categoryId));
+      await batch.commit();
+    } else {
+      await deleteDoc(doc(db, 'categories', categoryId));
+    }
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
   }
@@ -701,41 +718,56 @@ export async function seedStarterMenuForRestaurant(
   try {
     const batch = writeBatch(db);
     const seed = getStarterSeedData();
-    seed.categories.forEach((cat, catIdx) => {
-      const catId = makeId('cat');
-      batch.set(doc(db, 'categories', catId), {
-        id: catId,
+    seed.mainCategories.forEach((mainCat) => {
+      const mainCatId = makeId('cat');
+      batch.set(doc(db, 'categories', mainCatId), {
+        id: mainCatId,
         restaurantId,
         ownerId,
-        name: cat.name,
-        name_en: cat.name_en,
-        imageUrl: cat.imageUrl,
-        sortOrder: cat.sortOrder,
+        name: mainCat.name,
+        name_en: mainCat.name_en,
+        imageUrl: mainCat.imageUrl,
+        sortOrder: mainCat.sortOrder,
         createdAt: serverTimestamp(),
       });
-      const catItems = seed.itemsByCategoryIndex[catIdx] || [];
-      catItems.forEach((item) => {
-        const itemId = makeId('item');
-        batch.set(doc(db, 'menu_items', itemId), {
-          id: itemId,
+
+      mainCat.subcategories.forEach((subCat) => {
+        const subCatId = makeId('cat');
+        batch.set(doc(db, 'categories', subCatId), {
+          id: subCatId,
           restaurantId,
           ownerId,
-          categoryId: catId,
-          name: item.name,
-          name_en: item.name_en,
-          description: item.description,
-          description_en: item.description_en,
-          basePrice: item.basePrice,
-          imageUrl: item.imageUrl,
-          calories: item.calories,
-          isSpicy: item.isSpicy,
-          isAvailable: true,
-          ordersCount: item.ordersCount,
-          sizes: item.sizes,
-          addons: item.addons,
-          sortOrder: item.sortOrder,
+          parentId: mainCatId,
+          name: subCat.name,
+          name_en: subCat.name_en,
+          imageUrl: subCat.imageUrl,
+          sortOrder: subCat.sortOrder,
           createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
+        });
+
+        subCat.items.forEach((item) => {
+          const itemId = makeId('item');
+          batch.set(doc(db, 'menu_items', itemId), {
+            id: itemId,
+            restaurantId,
+            ownerId,
+            categoryId: subCatId,
+            name: item.name,
+            name_en: item.name_en,
+            description: item.description,
+            description_en: item.description_en,
+            basePrice: item.basePrice,
+            imageUrl: item.imageUrl,
+            calories: item.calories,
+            isSpicy: item.isSpicy,
+            isAvailable: true,
+            ordersCount: item.ordersCount,
+            sizes: item.sizes,
+            addons: item.addons,
+            sortOrder: item.sortOrder,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
         });
       });
     });
