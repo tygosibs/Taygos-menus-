@@ -1,12 +1,19 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { Check, Loader2, Plus, RotateCcw, Save, Trash2 } from 'lucide-react';
+import { Check, Image as ImageIcon, Loader2, Plus, RotateCcw, Save, Trash2, Upload } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { DEFAULT_PLATFORM_LANDING } from '../../data/defaultLandingSettings';
 import {
   fetchPlatformLandingSettings,
   savePlatformLandingSettings,
 } from '../../lib/firestoreService';
+import { uploadRestaurantAsset } from '../../lib/imageUtils';
+import {
+  resolvePlatformShareDescription,
+  resolvePlatformShareTitle,
+} from '../../lib/seoHead';
 import { PlatformLandingSettings } from '../../types/menu';
+import { SafeImage } from '../SafeImage';
+import { SharePreviewCard } from '../SharePreviewCard';
 
 export function LandingCmsTab() {
   const { lang, t } = useLanguage();
@@ -14,6 +21,7 @@ export function LandingCmsTab() {
   const [form, setForm] = useState<PlatformLandingSettings>(DEFAULT_PLATFORM_LANDING);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [savedNotice, setSavedNotice] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,6 +62,19 @@ export function LandingCmsTab() {
   const handleResetDefaults = () => {
     setForm(DEFAULT_PLATFORM_LANDING);
     setSavedNotice(false);
+  };
+
+  const handlePlatformLogoUpload = async (file: File) => {
+    setUploadingLogo(true);
+    setError(null);
+    try {
+      const url = await uploadRestaurantAsset(file, 'platform', 'platform');
+      setForm((p) => ({ ...p, platformLogoUrl: url }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.auth.errGeneric);
+    } finally {
+      setUploadingLogo(false);
+    }
   };
 
   if (loading) {
@@ -255,6 +276,134 @@ export function LandingCmsTab() {
             />
           </div>
         </div>
+      </div>
+
+      {/* Platform Brand Logo & Root WhatsApp/Social Share Card */}
+      <div className="bg-white border border-zinc-200 rounded-2xl p-6 space-y-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 pb-3">
+          <div>
+            <h3 className="text-sm font-extrabold text-zinc-950 flex items-center gap-2">
+              <ImageIcon className="w-4 h-4 text-amber-600" />
+              <span>
+                {isEn
+                  ? 'Platform Logo & Root Link Share Card (WhatsApp / Social)'
+                  : 'لوجو المنصة وبطاقة مشاركة الرابط الرئيسي (واتساب والسوشيال)'}
+              </span>
+            </h3>
+            <p className="text-[11px] text-zinc-500 mt-0.5">
+              {isEn
+                ? 'Shown automatically whenever the main platform URL (/) is shared on WhatsApp or social apps.'
+                : 'تظهر هذه الصورة وهذا الترحيب تلقائياً عند إرسال الرابط الرئيسي للمنصة لأي عميل.'}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-4">
+          <SafeImage
+            src={form.platformLogoUrl || DEFAULT_PLATFORM_LANDING.platformLogoUrl}
+            alt="Sufra QR Platform Logo"
+            className="w-16 h-16 rounded-2xl object-cover border border-zinc-200 shadow-xs"
+          />
+          <label className="px-4 py-2.5 rounded-xl border border-zinc-300 text-xs font-bold cursor-pointer hover:bg-zinc-50 flex items-center gap-2">
+            {uploadingLogo ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Upload className="w-4 h-4" />
+            )}
+            <span>{isEn ? 'Upload Platform Logo' : 'رفع لوجو المنصة'}</span>
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handlePlatformLogoUpload(f);
+              }}
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() =>
+              setForm((p) => ({
+                ...p,
+                platformLogoUrl: DEFAULT_PLATFORM_LANDING.platformLogoUrl,
+              }))
+            }
+            className="px-3 py-2 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-700 hover:bg-zinc-50 cursor-pointer"
+          >
+            {isEn ? 'Restore Default Emblem' : 'استعادة شعار سُفرة الافتراضي'}
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-bold text-zinc-800 mb-1.5">
+              {isEn ? 'Root Share Title (Arabic)' : 'عنوان مشاركة رابط المنصة (عربي)'}
+            </label>
+            <input
+              type="text"
+              dir="rtl"
+              maxLength={140}
+              value={form.shareTitle || ''}
+              onChange={(e) => setForm((p) => ({ ...p, shareTitle: e.target.value }))}
+              placeholder={DEFAULT_PLATFORM_LANDING.shareTitle}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-zinc-800 mb-1.5">
+              {isEn ? 'Root Share Title (English)' : 'عنوان مشاركة رابط المنصة (إنجليزي)'}
+            </label>
+            <input
+              type="text"
+              dir="ltr"
+              maxLength={140}
+              value={form.shareTitle_en || ''}
+              onChange={(e) => setForm((p) => ({ ...p, shareTitle_en: e.target.value }))}
+              placeholder={DEFAULT_PLATFORM_LANDING.shareTitle_en}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-bold text-zinc-800 mb-1.5">
+              {isEn ? 'Root Share 2-Line Description (Arabic)' : 'وصف المشاركة أسفل العنوان (عربي)'}
+            </label>
+            <textarea
+              rows={2}
+              dir="rtl"
+              maxLength={300}
+              value={form.shareDescription || ''}
+              onChange={(e) => setForm((p) => ({ ...p, shareDescription: e.target.value }))}
+              placeholder={DEFAULT_PLATFORM_LANDING.shareDescription}
+              className="w-full px-3.5 py-2 rounded-xl border border-zinc-200 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-zinc-800 mb-1.5">
+              {isEn ? 'Root Share 2-Line Description (English)' : 'وصف المشاركة أسفل العنوان (إنجليزي)'}
+            </label>
+            <textarea
+              rows={2}
+              dir="ltr"
+              maxLength={300}
+              value={form.shareDescription_en || ''}
+              onChange={(e) => setForm((p) => ({ ...p, shareDescription_en: e.target.value }))}
+              placeholder={DEFAULT_PLATFORM_LANDING.shareDescription_en}
+              className="w-full px-3.5 py-2 rounded-xl border border-zinc-200 text-sm"
+            />
+          </div>
+        </div>
+
+        <SharePreviewCard
+          title={resolvePlatformShareTitle(form, lang)}
+          description={resolvePlatformShareDescription(form, lang)}
+          imageUrl={form.platformLogoUrl || DEFAULT_PLATFORM_LANDING.platformLogoUrl}
+          shareUrl={typeof window !== 'undefined' ? `${window.location.origin}/` : '/'}
+          isEn={isEn}
+        />
       </div>
 
       {/* Features List Builder (Dual AR / EN) */}

@@ -42,9 +42,14 @@ import {
   Restaurant,
 } from '../../types/menu';
 import { SafeImage } from '../SafeImage';
+import { SharePreviewCard } from '../SharePreviewCard';
 import { CartDrawer } from '../menu/CartDrawer';
 import { ItemModal } from '../menu/ItemModal';
 import { ThemeRenderer } from '../menu/ThemeRenderer';
+import {
+  resolveRestaurantShareDescription,
+  resolveRestaurantShareTitle,
+} from '../../lib/seoHead';
 
 interface ThemeCustomizerTabProps {
   restaurant: Restaurant;
@@ -97,6 +102,12 @@ export function ThemeCustomizerTab({
   const [whatsappNumber, setWhatsappNumber] = useState(restaurant.whatsappNumber);
   const [currency, setCurrency] = useState(restaurant.currency);
   const [logoUrl, setLogoUrl] = useState(restaurant.logoUrl || '');
+  const [shareTitle, setShareTitle] = useState(restaurant.shareTitle || '');
+  const [shareTitleEn, setShareTitleEn] = useState(restaurant.shareTitle_en || '');
+  const [shareDescription, setShareDescription] = useState(restaurant.shareDescription || '');
+  const [shareDescriptionEn, setShareDescriptionEn] = useState(
+    restaurant.shareDescription_en || ''
+  );
   const [isOpen, setIsOpen] = useState(restaurant.isOpen);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
@@ -136,6 +147,10 @@ export function ThemeCustomizerTab({
     setWhatsappNumber(restaurant.whatsappNumber);
     setCurrency(restaurant.currency);
     setLogoUrl(restaurant.logoUrl || '');
+    setShareTitle(restaurant.shareTitle || '');
+    setShareTitleEn(restaurant.shareTitle_en || '');
+    setShareDescription(restaurant.shareDescription || '');
+    setShareDescriptionEn(restaurant.shareDescription_en || '');
     setIsOpen(restaurant.isOpen);
     setThemeSavedMsg(null);
     setThemeErrorMsg(null);
@@ -161,6 +176,10 @@ export function ThemeCustomizerTab({
     restaurant.whatsappNumber,
     restaurant.currency,
     restaurant.logoUrl,
+    restaurant.shareTitle,
+    restaurant.shareTitle_en,
+    restaurant.shareDescription,
+    restaurant.shareDescription_en,
     restaurant.isOpen,
   ]);
 
@@ -372,6 +391,10 @@ export function ThemeCustomizerTab({
   const handleAutoFillEn = () => {
     if (name.trim() && !nameEn.trim()) setNameEn(autoSuggestEnglish(name));
     if (tagline.trim() && !taglineEn.trim()) setTaglineEn(autoSuggestEnglish(tagline));
+    if (shareTitle.trim() && !shareTitleEn.trim()) setShareTitleEn(autoSuggestEnglish(shareTitle));
+    if (shareDescription.trim() && !shareDescriptionEn.trim()) {
+      setShareDescriptionEn(autoSuggestEnglish(shareDescription));
+    }
   };
 
   const handleSaveSettings = async (e: FormEvent) => {
@@ -402,6 +425,10 @@ export function ThemeCustomizerTab({
         tagline_en: taglineEn,
         whatsappNumber,
         logoUrl,
+        shareTitle,
+        shareTitle_en: shareTitleEn,
+        shareDescription,
+        shareDescription_en: shareDescriptionEn,
         currency,
         isOpen,
         taxRate,
@@ -1237,6 +1264,121 @@ export function ThemeCustomizerTab({
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Social & WhatsApp Share Link Card Customization */}
+        <div className="pt-4 border-t border-zinc-200 space-y-4">
+          <div>
+            <h4 className="text-xs sm:text-sm font-extrabold text-zinc-950">
+              {isEn
+                ? 'WhatsApp & Social Link Preview Card'
+                : 'بطاقة مشاركة الرابط (واتساب ومنصات التواصل)'}
+            </h4>
+            <p className="text-[11px] text-zinc-500 mt-0.5">
+              {isEn
+                ? 'Customize the welcome title and 2-line greeting shown with your restaurant logo whenever you share your menu link. Leave blank for automatic defaults.'
+                : 'تحكم في العنوان الترحيبي والسطرين الظاهرين مع لوجو مطعمك عند إرسال رابط المنيو على واتساب. اتركهما فارغين للاستخدام التلقائي (مطعمك يرحب بكم).'}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold mb-1">
+                {isEn ? 'Share Card Title (Arabic)' : 'عنوان الترحيب عند المشاركة (عربي)'}
+              </label>
+              <input
+                type="text"
+                dir="rtl"
+                maxLength={140}
+                value={shareTitle}
+                onChange={(e) => setShareTitle(e.target.value)}
+                placeholder={
+                  name.trim()
+                    ? name.trim().startsWith('مطعم')
+                      ? `${name.trim()} يرحب بكم`
+                      : `مطعم ${name.trim()} يرحب بكم`
+                    : 'مثال: مطعم حورس يرحب بكم'
+                }
+                className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold mb-1">
+                {isEn ? 'Share Card Title (English)' : 'عنوان الترحيب عند المشاركة (إنجليزي)'}
+              </label>
+              <input
+                type="text"
+                dir="ltr"
+                maxLength={140}
+                value={shareTitleEn}
+                onChange={(e) => setShareTitleEn(e.target.value)}
+                placeholder={`${nameEn.trim() || name.trim() || 'Restaurant'} Welcomes You`}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm text-left"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold mb-1">
+                {isEn ? '2-Line Greeting (Arabic)' : 'سطران ترحيبيان أسفل العنوان (عربي)'}
+              </label>
+              <textarea
+                rows={2}
+                dir="rtl"
+                maxLength={300}
+                value={shareDescription}
+                onChange={(e) => setShareDescription(e.target.value)}
+                placeholder="تصفح المنيو الإلكتروني التفاعلي، اختر وجبتك المفضلة مع الإضافات، واطلب مباشرة بضغطة واحدة."
+                className="w-full px-3.5 py-2 rounded-xl border border-zinc-200 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold mb-1">
+                {isEn ? '2-Line Greeting (English)' : 'سطران ترحيبيان أسفل العنوان (إنجليزي)'}
+              </label>
+              <textarea
+                rows={2}
+                dir="ltr"
+                maxLength={300}
+                value={shareDescriptionEn}
+                onChange={(e) => setShareDescriptionEn(e.target.value)}
+                placeholder="Browse our interactive digital menu, customize sizes & add-ons, and place your order in seconds."
+                className="w-full px-3.5 py-2 rounded-xl border border-zinc-200 text-sm text-left"
+              />
+            </div>
+          </div>
+
+          <SharePreviewCard
+            title={resolveRestaurantShareTitle(
+              {
+                name: name || restaurant.name,
+                name_en: nameEn || restaurant.name_en,
+                shareTitle,
+                shareTitle_en: shareTitleEn,
+              },
+              lang
+            )}
+            description={resolveRestaurantShareDescription(
+              {
+                tagline,
+                tagline_en: taglineEn,
+                shareDescription,
+                shareDescription_en: shareDescriptionEn,
+              },
+              lang
+            )}
+            imageUrl={logoUrl || restaurant.logoUrl}
+            shareUrl={`${typeof window !== 'undefined' ? window.location.origin : ''}/menu/${sanitizeSlug(slug) || restaurant.slug}`}
+            isEn={isEn}
+            showResetAuto={Boolean(shareTitle || shareTitleEn || shareDescription || shareDescriptionEn)}
+            onResetAuto={() => {
+              setShareTitle('');
+              setShareTitleEn('');
+              setShareDescription('');
+              setShareDescriptionEn('');
+            }}
+          />
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-4 pt-3 border-t border-zinc-100">

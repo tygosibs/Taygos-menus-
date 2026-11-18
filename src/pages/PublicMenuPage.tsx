@@ -22,6 +22,7 @@ import {
   fetchCustomThemeById,
   fetchRestaurantBySlug,
 } from '../lib/firestoreService';
+import { applySeoMetadata, getRestaurantShareMetadata } from '../lib/seoHead';
 import {
   ActiveTheme,
   CartItem,
@@ -172,6 +173,11 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
       // Ignore storage quota errors
     }
   }, [cart, slug, cartHydratedSlug]);
+
+  useEffect(() => {
+    if (!restaurant || typeof window === 'undefined') return;
+    applySeoMetadata(getRestaurantShareMetadata(restaurant, lang, window.location.origin));
+  }, [restaurant, lang]);
 
   const handleAddToCart = (incoming: CartItem) => {
     setCart((prev) => {

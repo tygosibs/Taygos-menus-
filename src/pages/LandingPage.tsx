@@ -26,6 +26,7 @@ import {
   fetchActiveCustomThemes,
   fetchPlatformLandingSettings,
 } from '../lib/firestoreService';
+import { applySeoMetadata, getPlatformShareMetadata } from '../lib/seoHead';
 import { CustomTheme, PlatformLandingSettings } from '../types/menu';
 
 interface LandingPageProps {
@@ -52,6 +53,11 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
     fetchActiveCustomThemes().then(setCustomThemes);
     return () => unsub();
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    applySeoMetadata(getPlatformShareMetadata(cms, lang, window.location.origin));
+  }, [cms, lang]);
 
   const cleanWhatsappDigits = (cms.supportWhatsapp || '').replace(/[^\d]/g, '');
 
@@ -89,9 +95,14 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
               e.preventDefault();
               onNavigate('/');
             }}
-            className="text-lg sm:text-xl font-extrabold tracking-tight text-zinc-950 whitespace-nowrap shrink-0"
+            className="flex items-center gap-2 text-lg sm:text-xl font-extrabold tracking-tight text-zinc-950 whitespace-nowrap shrink-0"
           >
-            {t.brandName}
+            <SafeImage
+              src={cms.platformLogoUrl || DEFAULT_PLATFORM_LANDING.platformLogoUrl}
+              alt={t.brandName}
+              className="w-8 h-8 rounded-xl object-cover border border-zinc-200 shadow-xs shrink-0"
+            />
+            <span>{t.brandName}</span>
           </a>
 
           <nav className="hidden md:flex items-center gap-7 text-sm font-medium text-zinc-600">

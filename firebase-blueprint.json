@@ -38,6 +38,10 @@
         "tagline_en": { "type": "string", "maxLength": 500 },
         "whatsappNumber": { "type": "string", "minLength": 7, "maxLength": 24 },
         "logoUrl": { "type": "string", "maxLength": 300000 },
+        "shareTitle": { "type": "string", "maxLength": 140 },
+        "shareTitle_en": { "type": "string", "maxLength": 140 },
+        "shareDescription": { "type": "string", "maxLength": 300 },
+        "shareDescription_en": { "type": "string", "maxLength": 300 },
         "activeTheme": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^(theme-(?:[1-9]|1[0-1])|custom_[a-zA-Z0-9_\\-]+)$" },
         "primaryColor": { "type": "string", "minLength": 4, "maxLength": 16, "pattern": "^#[0-9a-fA-F]{6}$" },
         "colorMode": { "type": "string", "enum": ["auto", "light", "dark"] },
@@ -195,6 +199,11 @@
         "supportWhatsapp": { "type": "string", "maxLength": 32 },
         "footerText": { "type": "string", "minLength": 1, "maxLength": 200 },
         "footerText_en": { "type": "string", "maxLength": 200 },
+        "platformLogoUrl": { "type": "string", "maxLength": 300000 },
+        "shareTitle": { "type": "string", "maxLength": 140 },
+        "shareTitle_en": { "type": "string", "maxLength": 140 },
+        "shareDescription": { "type": "string", "maxLength": 300 },
+        "shareDescription_en": { "type": "string", "maxLength": 300 },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": [

@@ -87,7 +87,8 @@ service cloud.firestore {
         ]) &&
         data.keys().hasOnly([
           'id', 'ownerId', 'slug', 'name', 'name_en', 'tagline', 'tagline_en',
-          'whatsappNumber', 'logoUrl', 'activeTheme', 'primaryColor',
+          'whatsappNumber', 'logoUrl', 'shareTitle', 'shareTitle_en',
+          'shareDescription', 'shareDescription_en', 'activeTheme', 'primaryColor',
           'colorMode', 'headingColor', 'descriptionColor', 'priceColor', 'menuColumns',
           'taxRate', 'serviceCharge', 'deliveryFee', 'currency',
           'isOpen', 'isSuspended', 'offers', 'promoCodes', 'createdAt', 'updatedAt'
@@ -102,6 +103,10 @@ service cloud.firestore {
         (!('tagline_en' in data) || (data.tagline_en is string && data.tagline_en.size() <= 500)) &&
         data.whatsappNumber is string && data.whatsappNumber.size() >= 7 && data.whatsappNumber.size() <= 24 &&
         (!('logoUrl' in data) || (data.logoUrl is string && data.logoUrl.size() <= 300000)) &&
+        (!('shareTitle' in data) || (data.shareTitle is string && data.shareTitle.size() <= 140)) &&
+        (!('shareTitle_en' in data) || (data.shareTitle_en is string && data.shareTitle_en.size() <= 140)) &&
+        (!('shareDescription' in data) || (data.shareDescription is string && data.shareDescription.size() <= 300)) &&
+        (!('shareDescription_en' in data) || (data.shareDescription_en is string && data.shareDescription_en.size() <= 300)) &&
         isValidThemeId(data.activeTheme) &&
         data.primaryColor is string && data.primaryColor.size() >= 4 && data.primaryColor.size() <= 16 && data.primaryColor.matches('^#[0-9a-fA-F]{6}$') &&
         (!('colorMode' in data) || (data.colorMode in ['auto', 'light', 'dark'])) &&
@@ -219,7 +224,9 @@ service cloud.firestore {
         data.keys().hasOnly([
           'heroTitle', 'heroTitle_en', 'heroSubtitle', 'heroSubtitle_en',
           'ctaButtonText', 'ctaButtonText_en', 'features',
-          'pricingPlans', 'supportWhatsapp', 'footerText', 'footerText_en', 'updatedAt'
+          'pricingPlans', 'supportWhatsapp', 'footerText', 'footerText_en',
+          'platformLogoUrl', 'shareTitle', 'shareTitle_en',
+          'shareDescription', 'shareDescription_en', 'updatedAt'
         ]) &&
         data.heroTitle is string && data.heroTitle.size() >= 1 && data.heroTitle.size() <= 200 &&
         (!('heroTitle_en' in data) || (data.heroTitle_en is string && data.heroTitle_en.size() <= 200)) &&
@@ -232,6 +239,11 @@ service cloud.firestore {
         data.supportWhatsapp is string && data.supportWhatsapp.size() <= 32 &&
         data.footerText is string && data.footerText.size() >= 1 && data.footerText.size() <= 200 &&
         (!('footerText_en' in data) || (data.footerText_en is string && data.footerText_en.size() <= 200)) &&
+        (!('platformLogoUrl' in data) || (data.platformLogoUrl is string && data.platformLogoUrl.size() <= 300000)) &&
+        (!('shareTitle' in data) || (data.shareTitle is string && data.shareTitle.size() <= 140)) &&
+        (!('shareTitle_en' in data) || (data.shareTitle_en is string && data.shareTitle_en.size() <= 140)) &&
+        (!('shareDescription' in data) || (data.shareDescription is string && data.shareDescription.size() <= 300)) &&
+        (!('shareDescription_en' in data) || (data.shareDescription_en is string && data.shareDescription_en.size() <= 300)) &&
         data.updatedAt is timestamp;
     }
 
@@ -323,6 +335,7 @@ service cloud.firestore {
               ]) ||
               incoming().diff(existing()).affectedKeys().hasOnly([
                 'name', 'name_en', 'tagline', 'tagline_en', 'slug', 'whatsappNumber', 'logoUrl',
+                'shareTitle', 'shareTitle_en', 'shareDescription', 'shareDescription_en',
                 'currency', 'isOpen', 'activeTheme', 'taxRate', 'serviceCharge', 'deliveryFee',
                 'primaryColor', 'colorMode', 'headingColor', 'descriptionColor', 'priceColor',
                 'menuColumns', 'updatedAt'
@@ -339,6 +352,7 @@ service cloud.firestore {
               ]) ||
               incoming().diff(existing()).affectedKeys().hasOnly([
                 'name', 'name_en', 'tagline', 'tagline_en', 'slug', 'whatsappNumber', 'logoUrl',
+                'shareTitle', 'shareTitle_en', 'shareDescription', 'shareDescription_en',
                 'currency', 'isOpen', 'isSuspended', 'activeTheme', 'taxRate', 'serviceCharge', 'deliveryFee',
                 'primaryColor', 'colorMode', 'headingColor', 'descriptionColor', 'priceColor',
                 'menuColumns', 'updatedAt'

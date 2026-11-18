@@ -318,6 +318,10 @@ export async function updateRestaurantSettings(
     tagline_en?: string;
     whatsappNumber: string;
     logoUrl: string;
+    shareTitle?: string;
+    shareTitle_en?: string;
+    shareDescription?: string;
+    shareDescription_en?: string;
     currency: string;
     isOpen: boolean;
     taxRate: number;
@@ -366,6 +370,10 @@ export async function updateRestaurantSettings(
 
     const cleanNameEn = (updates.name_en || '').trim().slice(0, 120);
     const cleanTaglineEn = (updates.tagline_en || '').trim().slice(0, 500);
+    const cleanShareTitle = (updates.shareTitle ?? restaurant.shareTitle ?? '').trim().slice(0, 140);
+    const cleanShareTitleEn = (updates.shareTitle_en ?? restaurant.shareTitle_en ?? '').trim().slice(0, 140);
+    const cleanShareDesc = (updates.shareDescription ?? restaurant.shareDescription ?? '').trim().slice(0, 300);
+    const cleanShareDescEn = (updates.shareDescription_en ?? restaurant.shareDescription_en ?? '').trim().slice(0, 300);
 
     batch.update(doc(db, 'restaurants', restaurant.id), {
       name: updates.name.trim().slice(0, 120),
@@ -375,6 +383,10 @@ export async function updateRestaurantSettings(
       tagline_en: cleanTaglineEn,
       whatsappNumber: updates.whatsappNumber.trim().slice(0, 24),
       logoUrl: updates.logoUrl.trim().slice(0, 300000),
+      shareTitle: cleanShareTitle,
+      shareTitle_en: cleanShareTitleEn,
+      shareDescription: cleanShareDesc,
+      shareDescription_en: cleanShareDescEn,
       currency: updates.currency.trim().slice(0, 16) || 'ج.م',
       isOpen: Boolean(updates.isOpen),
       taxRate: Number(updates.taxRate) || 0,
@@ -395,6 +407,10 @@ export async function updateRestaurantSettings(
       ...updates,
       name_en: cleanNameEn,
       tagline_en: cleanTaglineEn,
+      shareTitle: cleanShareTitle,
+      shareTitle_en: cleanShareTitleEn,
+      shareDescription: cleanShareDesc,
+      shareDescription_en: cleanShareDescEn,
       slug: cleanSlug,
       deliveryFee: safeDeliveryFee,
       colorMode: safeColorMode,
@@ -1086,6 +1102,11 @@ export async function fetchPlatformLandingSettings(): Promise<PlatformLandingSet
       supportWhatsapp: data.supportWhatsapp ?? DEFAULT_PLATFORM_LANDING.supportWhatsapp,
       footerText: data.footerText || DEFAULT_PLATFORM_LANDING.footerText,
       footerText_en: data.footerText_en || DEFAULT_PLATFORM_LANDING.footerText_en,
+      platformLogoUrl: data.platformLogoUrl || DEFAULT_PLATFORM_LANDING.platformLogoUrl,
+      shareTitle: data.shareTitle || DEFAULT_PLATFORM_LANDING.shareTitle,
+      shareTitle_en: data.shareTitle_en || DEFAULT_PLATFORM_LANDING.shareTitle_en,
+      shareDescription: data.shareDescription || DEFAULT_PLATFORM_LANDING.shareDescription,
+      shareDescription_en: data.shareDescription_en || DEFAULT_PLATFORM_LANDING.shareDescription_en,
       updatedAt: data.updatedAt,
     };
   } catch {
@@ -1147,6 +1168,11 @@ export async function savePlatformLandingSettings(
       footerText:
         settings.footerText.trim().slice(0, 200) || DEFAULT_PLATFORM_LANDING.footerText,
       footerText_en: (settings.footerText_en || '').trim().slice(0, 200),
+      platformLogoUrl: (settings.platformLogoUrl || '').trim().slice(0, 300000),
+      shareTitle: (settings.shareTitle || '').trim().slice(0, 140),
+      shareTitle_en: (settings.shareTitle_en || '').trim().slice(0, 140),
+      shareDescription: (settings.shareDescription || '').trim().slice(0, 300),
+      shareDescription_en: (settings.shareDescription_en || '').trim().slice(0, 300),
       updatedAt: serverTimestamp(),
     });
   } catch (error) {

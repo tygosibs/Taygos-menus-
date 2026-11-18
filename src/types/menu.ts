@@ -90,6 +90,10 @@ export interface Restaurant {
   tagline_en?: string;
   whatsappNumber: string;
   logoUrl?: string;
+  shareTitle?: string;
+  shareTitle_en?: string;
+  shareDescription?: string;
+  shareDescription_en?: string;
   activeTheme: ActiveTheme;
   primaryColor: string;
   colorMode?: MenuColorMode;
@@ -254,5 +258,10 @@ export interface PlatformLandingSettings {
   supportWhatsapp: string;
   footerText: string;
   footerText_en?: string;
+  platformLogoUrl?: string;
+  shareTitle?: string;
+  shareTitle_en?: string;
+  shareDescription?: string;
+  shareDescription_en?: string;
   updatedAt?: unknown;
 }

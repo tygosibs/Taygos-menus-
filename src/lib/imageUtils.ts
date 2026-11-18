@@ -71,13 +71,15 @@ async function compressImageToDataUrl(file: File, maxDimension = 720, quality = 
 export async function uploadRestaurantAsset(
   file: File,
   ownerUid: string,
-  folder: 'logo' | 'categories' | 'items'
+  folder: 'logo' | 'categories' | 'items' | 'platform'
 ): Promise<string> {
   const safeName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
   const storagePath =
-    folder === 'logo'
-      ? `restaurants/${ownerUid}/logo`
-      : `restaurants/${ownerUid}/${folder}/${safeName}`;
+    folder === 'platform'
+      ? `platform/logo`
+      : folder === 'logo'
+        ? `restaurants/${ownerUid}/logo`
+        : `restaurants/${ownerUid}/${folder}/${safeName}`;
 
   try {
     const storageRef = ref(storage, storagePath);
@@ -87,7 +89,11 @@ export async function uploadRestaurantAsset(
     await Promise.race([uploadBytes(storageRef, file), timeoutPromise]);
     return await getDownloadURL(storageRef);
   } catch {
-    const compressed = await compressImageToDataUrl(file, folder === 'logo' ? 420 : 680, 0.76);
+    const compressed = await compressImageToDataUrl(
+      file,
+      folder === 'logo' || folder === 'platform' ? 420 : 680,
+      0.76
+    );
     if (compressed.length > 280000) {
       return compressImageToDataUrl(file, 480, 0.62);
     }

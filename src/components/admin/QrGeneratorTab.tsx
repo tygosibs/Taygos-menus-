@@ -2,8 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { Copy, Download, Printer } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
+import {
+  resolveRestaurantShareDescription,
+  resolveRestaurantShareTitle,
+} from '../../lib/seoHead';
 import { Restaurant } from '../../types/menu';
 import { SafeImage } from '../SafeImage';
+import { SharePreviewCard } from '../SharePreviewCard';
 
 interface QrGeneratorTabProps {
   restaurant: Restaurant;
@@ -190,6 +195,14 @@ export function QrGeneratorTab({ restaurant }: QrGeneratorTabProps) {
           </div>
         </div>
       </div>
+
+      <SharePreviewCard
+        title={resolveRestaurantShareTitle(restaurant, lang)}
+        description={resolveRestaurantShareDescription(restaurant, lang)}
+        imageUrl={restaurant.logoUrl}
+        shareUrl={targetUrl}
+        isEn={isEn}
+      />
     </div>
   );
 }
