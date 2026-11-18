@@ -1,0 +1,247 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated restaurant owner profile isolated from public storefront documents.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "format": "email", "maxLength": 254 },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "displayName", "createdAt"]
+    },
+    "SlugMapping": {
+      "title": "SlugMapping",
+      "description": "Unique URL slug index mapping slug to restaurantId and ownerId.",
+      "type": "object",
+      "properties": {
+        "slug": { "type": "string", "minLength": 2, "maxLength": 64, "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+        "restaurantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["slug", "restaurantId", "ownerId", "createdAt"]
+    },
+    "Restaurant": {
+      "title": "Restaurant",
+      "description": "Multi-tenant restaurant configuration document.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "slug": { "type": "string", "minLength": 2, "maxLength": 64, "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+        "name": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "tagline": { "type": "string", "maxLength": 500 },
+        "whatsappNumber": { "type": "string", "minLength": 7, "maxLength": 24 },
+        "logoUrl": { "type": "string", "maxLength": 300000 },
+        "activeTheme": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^(theme-[1-9]|custom_[a-zA-Z0-9_\\-]+)$" },
+        "primaryColor": { "type": "string", "minLength": 4, "maxLength": 16, "pattern": "^#[0-9a-fA-F]{6}$" },
+        "taxRate": { "type": "number" },
+        "serviceCharge": { "type": "number" },
+        "currency": { "type": "string", "minLength": 1, "maxLength": 16 },
+        "isOpen": { "type": "boolean" },
+        "isSuspended": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "id",
+        "ownerId",
+        "slug",
+        "name",
+        "whatsappNumber",
+        "activeTheme",
+        "primaryColor",
+        "taxRate",
+        "serviceCharge",
+        "currency",
+        "isOpen",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "Menu category linked to a restaurant via restaurantId.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "restaurantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "imageUrl": { "type": "string", "maxLength": 300000 },
+        "sortOrder": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "restaurantId", "ownerId", "name", "sortOrder", "createdAt"]
+    },
+    "MenuItem": {
+      "title": "MenuItem",
+      "description": "Menu item linked by restaurantId and categoryId.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "restaurantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "categoryId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "description": { "type": "string", "maxLength": 500 },
+        "basePrice": { "type": "number" },
+        "imageUrl": { "type": "string", "maxLength": 300000 },
+        "calories": { "type": "number" },
+        "isSpicy": { "type": "boolean" },
+        "isAvailable": { "type": "boolean" },
+        "ordersCount": { "type": "number" },
+        "sizes": { "type": "array" },
+        "addons": { "type": "array" },
+        "sortOrder": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "id",
+        "restaurantId",
+        "ownerId",
+        "categoryId",
+        "name",
+        "basePrice",
+        "isSpicy",
+        "isAvailable",
+        "ordersCount",
+        "sizes",
+        "addons",
+        "sortOrder",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Customer order linked to restaurantId with owner-only read isolation.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "restaurantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "orderNumber": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "customerName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "customerPhone": { "type": "string", "minLength": 5, "maxLength": 24 },
+        "orderType": { "type": "string", "enum": ["dine_in", "delivery", "pickup"] },
+        "tableNumber": { "type": "string", "maxLength": 20 },
+        "deliveryAddress": { "type": "string", "maxLength": 300 },
+        "notes": { "type": "string", "maxLength": 400 },
+        "items": { "type": "array" },
+        "subtotal": { "type": "number" },
+        "serviceCharge": { "type": "number" },
+        "taxAmount": { "type": "number" },
+        "total": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "preparing", "completed", "cancelled"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "id",
+        "restaurantId",
+        "ownerId",
+        "orderNumber",
+        "customerName",
+        "customerPhone",
+        "orderType",
+        "items",
+        "subtotal",
+        "serviceCharge",
+        "taxAmount",
+        "total",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "PlatformLandingSettings": {
+      "title": "PlatformLandingSettings",
+      "description": "Dynamic CMS content for the platform landing page managed by Super Admin.",
+      "type": "object",
+      "properties": {
+        "heroTitle": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "heroSubtitle": { "type": "string", "minLength": 1, "maxLength": 600 },
+        "ctaButtonText": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "features": { "type": "array" },
+        "pricingPlans": { "type": "array" },
+        "supportWhatsapp": { "type": "string", "maxLength": 32 },
+        "footerText": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "heroTitle",
+        "heroSubtitle",
+        "ctaButtonText",
+        "features",
+        "pricingPlans",
+        "supportWhatsapp",
+        "footerText",
+        "updatedAt"
+      ]
+    },
+    "CustomTheme": {
+      "title": "CustomTheme",
+      "description": "Dynamic custom HTML/CSS/JS theme injected by Super Admin.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 8, "maxLength": 128, "pattern": "^custom_[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "description": { "type": "string", "maxLength": 400 },
+        "previewImage": { "type": "string", "maxLength": 300000 },
+        "htmlCode": { "type": "string", "maxLength": 150000 },
+        "cssCode": { "type": "string", "maxLength": 100000 },
+        "jsCode": { "type": "string", "maxLength": 100000 },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "id",
+        "name",
+        "htmlCode",
+        "cssCode",
+        "jsCode",
+        "isActive",
+        "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Restaurant owner profiles strictly isolated per user."
+    },
+    "/slugs/{slug}": {
+      "schema": { "$ref": "#/entities/SlugMapping" },
+      "description": "Unique URL slug mapping to restaurantId."
+    },
+    "/restaurants/{restaurantId}": {
+      "schema": { "$ref": "#/entities/Restaurant" },
+      "description": "Restaurant configurations and branding settings."
+    },
+    "/categories/{categoryId}": {
+      "schema": { "$ref": "#/entities/Category" },
+      "description": "Menu categories linked via restaurantId."
+    },
+    "/menu_items/{itemId}": {
+      "schema": { "$ref": "#/entities/MenuItem" },
+      "description": "Menu items linked via restaurantId and categoryId."
+    },
+    "/orders/{orderId}": {
+      "schema": { "$ref": "#/entities/Order" },
+      "description": "Customer orders linked via restaurantId and isolated to the restaurant owner."
+    },
+    "/platform_settings/{settingId}": {
+      "schema": { "$ref": "#/entities/PlatformLandingSettings" },
+      "description": "Platform-wide landing page CMS settings managed by Super Admin."
+    },
+    "/custom_themes/{themeId}": {
+      "schema": { "$ref": "#/entities/CustomTheme" },
+      "description": "Dynamic custom HTML/CSS/JS themes injected by Super Admin."
+    }
+  }
+}

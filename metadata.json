@@ -1,0 +1,6 @@
+{
+  "name": "سُفرة QR — منصة المنيو الإلكتروني المتكاملة",
+  "description": "منصة متكاملة لإدارة المطاعم وقوائم الطعام الرقمية (QR Menu SaaS) مع 6 ثيمات تفاعلية، استقبال الطلبات لحظياً، والربط المباشر مع واتساب.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

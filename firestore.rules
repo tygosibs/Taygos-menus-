@@ -1,0 +1,453 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Core primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidSlug(slug) {
+      return slug is string && slug.size() >= 2 && slug.size() <= 64 && slug.matches('^[a-z0-9]+(?:-[a-z0-9]+)*$');
+    }
+
+    function isValidThemeId(themeId) {
+      return themeId in [
+        'theme-1', 'theme-2', 'theme-3', 'theme-4', 'theme-5',
+        'theme-6', 'theme-7', 'theme-8', 'theme-9'
+      ] || (
+        themeId is string &&
+        themeId.size() >= 8 &&
+        themeId.size() <= 128 &&
+        themeId.matches('^custom_[a-zA-Z0-9_\\-]+$')
+      );
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedAccount() {
+      return isSignedIn() && (
+        request.auth.token.email_verified == true ||
+        request.auth.token.firebase.sign_in_provider == 'password'
+      );
+    }
+
+    function isSuperAdmin() {
+      return isVerifiedAccount() &&
+        request.auth.token.email == 'tygosibs@gmail.com';
+    }
+
+    // Validation blueprints
+    function isValidUser(data, userId) {
+      return data.keys().hasAll(['uid', 'email', 'displayName', 'createdAt']) &&
+        data.keys().hasOnly(['uid', 'email', 'displayName', 'createdAt']) &&
+        isValidId(data.uid) &&
+        data.uid == userId &&
+        data.uid == request.auth.uid &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 254 &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120 &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidSlugMapping(data, slugId) {
+      return data.keys().hasAll(['slug', 'restaurantId', 'ownerId', 'createdAt']) &&
+        data.keys().hasOnly(['slug', 'restaurantId', 'ownerId', 'createdAt']) &&
+        data.slug == slugId &&
+        isValidSlug(data.slug) &&
+        isValidId(data.restaurantId) &&
+        isValidId(data.ownerId) &&
+        data.ownerId == request.auth.uid &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidRestaurantShape(data, restId) {
+      return data.keys().hasAll([
+          'id', 'ownerId', 'slug', 'name', 'whatsappNumber', 'activeTheme',
+          'primaryColor', 'taxRate', 'serviceCharge', 'currency',
+          'isOpen', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'ownerId', 'slug', 'name', 'tagline', 'whatsappNumber', 'logoUrl',
+          'activeTheme', 'primaryColor', 'taxRate', 'serviceCharge', 'currency',
+          'isOpen', 'isSuspended', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.id) &&
+        data.id == restId &&
+        isValidId(data.ownerId) &&
+        isValidSlug(data.slug) &&
+        data.name is string && data.name.size() >= 2 && data.name.size() <= 120 &&
+        (!('tagline' in data) || (data.tagline is string && data.tagline.size() <= 500)) &&
+        data.whatsappNumber is string && data.whatsappNumber.size() >= 7 && data.whatsappNumber.size() <= 24 &&
+        (!('logoUrl' in data) || (data.logoUrl is string && data.logoUrl.size() <= 300000)) &&
+        isValidThemeId(data.activeTheme) &&
+        data.primaryColor is string && data.primaryColor.size() >= 4 && data.primaryColor.size() <= 16 && data.primaryColor.matches('^#[0-9a-fA-F]{6}$') &&
+        data.taxRate is number && data.taxRate >= 0 && data.taxRate <= 100 &&
+        data.serviceCharge is number && data.serviceCharge >= 0 && data.serviceCharge <= 100 &&
+        data.currency is string && data.currency.size() >= 1 && data.currency.size() <= 16 &&
+        data.isOpen is bool &&
+        (!('isSuspended' in data) || data.isSuspended is bool) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidCategoryShape(data, catId) {
+      return data.keys().hasAll(['id', 'restaurantId', 'ownerId', 'name', 'sortOrder', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'restaurantId', 'ownerId', 'name', 'imageUrl', 'sortOrder', 'createdAt']) &&
+        isValidId(data.id) &&
+        data.id == catId &&
+        isValidId(data.restaurantId) &&
+        isValidId(data.ownerId) &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 80 &&
+        (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 300000)) &&
+        data.sortOrder is number && data.sortOrder >= 0 && data.sortOrder <= 10000 &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidMenuItemShape(data, itemId) {
+      return data.keys().hasAll([
+          'id', 'restaurantId', 'ownerId', 'categoryId', 'name',
+          'basePrice', 'isSpicy', 'isAvailable', 'ordersCount',
+          'sizes', 'addons', 'sortOrder', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'restaurantId', 'ownerId', 'categoryId', 'name', 'description',
+          'basePrice', 'imageUrl', 'calories', 'isSpicy', 'isAvailable', 'ordersCount',
+          'sizes', 'addons', 'sortOrder', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.id) &&
+        data.id == itemId &&
+        isValidId(data.restaurantId) &&
+        isValidId(data.ownerId) &&
+        isValidId(data.categoryId) &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
+        (!('description' in data) || (data.description is string && data.description.size() <= 500)) &&
+        data.basePrice is number && data.basePrice >= 0 && data.basePrice <= 100000 &&
+        (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 300000)) &&
+        (!('calories' in data) || (data.calories is number && data.calories >= 0 && data.calories <= 10000)) &&
+        data.isSpicy is bool &&
+        data.isAvailable is bool &&
+        data.ordersCount is number && data.ordersCount >= 0 && data.ordersCount <= 1000000 &&
+        data.sizes is list && data.sizes.size() <= 10 && (data.sizes.size() == 0 || data.sizes[0] is map) &&
+        data.addons is list && data.addons.size() <= 20 && (data.addons.size() == 0 || data.addons[0] is map) &&
+        data.sortOrder is number && data.sortOrder >= 0 && data.sortOrder <= 10000 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidOrder(data, orderId) {
+      return data.keys().hasAll([
+          'id', 'restaurantId', 'ownerId', 'orderNumber', 'customerName',
+          'customerPhone', 'orderType', 'items', 'subtotal', 'serviceCharge',
+          'taxAmount', 'total', 'status', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'restaurantId', 'ownerId', 'orderNumber', 'customerName',
+          'customerPhone', 'orderType', 'tableNumber', 'deliveryAddress',
+          'notes', 'items', 'subtotal', 'serviceCharge', 'taxAmount', 'total',
+          'status', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.id) &&
+        data.id == orderId &&
+        isValidId(data.restaurantId) &&
+        isValidId(data.ownerId) &&
+        data.orderNumber is string && data.orderNumber.size() >= 1 && data.orderNumber.size() <= 32 &&
+        data.customerName is string && data.customerName.size() >= 1 && data.customerName.size() <= 100 &&
+        data.customerPhone is string && data.customerPhone.size() >= 5 && data.customerPhone.size() <= 24 &&
+        data.orderType in ['dine_in', 'delivery', 'pickup'] &&
+        (!('tableNumber' in data) || (data.tableNumber is string && data.tableNumber.size() <= 20)) &&
+        (!('deliveryAddress' in data) || (data.deliveryAddress is string && data.deliveryAddress.size() <= 300)) &&
+        (!('notes' in data) || (data.notes is string && data.notes.size() <= 400)) &&
+        data.items is list && data.items.size() >= 1 && data.items.size() <= 50 && data.items[0] is map &&
+        data.subtotal is number && data.subtotal >= 0 && data.subtotal <= 1000000 &&
+        data.serviceCharge is number && data.serviceCharge >= 0 && data.serviceCharge <= 1000000 &&
+        data.taxAmount is number && data.taxAmount >= 0 && data.taxAmount <= 1000000 &&
+        data.total is number && data.total >= 0 && data.total <= 1000000 &&
+        data.status in ['pending', 'preparing', 'completed', 'cancelled'] &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidPlatformLanding(data) {
+      return data.keys().hasAll([
+          'heroTitle', 'heroSubtitle', 'ctaButtonText', 'features',
+          'pricingPlans', 'supportWhatsapp', 'footerText', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'heroTitle', 'heroSubtitle', 'ctaButtonText', 'features',
+          'pricingPlans', 'supportWhatsapp', 'footerText', 'updatedAt'
+        ]) &&
+        data.heroTitle is string && data.heroTitle.size() >= 1 && data.heroTitle.size() <= 200 &&
+        data.heroSubtitle is string && data.heroSubtitle.size() >= 1 && data.heroSubtitle.size() <= 600 &&
+        data.ctaButtonText is string && data.ctaButtonText.size() >= 1 && data.ctaButtonText.size() <= 80 &&
+        data.features is list && data.features.size() <= 12 && (data.features.size() == 0 || data.features[0] is map) &&
+        data.pricingPlans is list && data.pricingPlans.size() <= 6 && (data.pricingPlans.size() == 0 || data.pricingPlans[0] is map) &&
+        data.supportWhatsapp is string && data.supportWhatsapp.size() <= 32 &&
+        data.footerText is string && data.footerText.size() >= 1 && data.footerText.size() <= 200 &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidCustomTheme(data, themeId) {
+      return data.keys().hasAll([
+          'id', 'name', 'htmlCode', 'cssCode', 'jsCode', 'isActive', 'createdAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'name', 'description', 'previewImage',
+          'htmlCode', 'cssCode', 'jsCode', 'isActive', 'createdAt'
+        ]) &&
+        isValidId(data.id) &&
+        data.id == themeId &&
+        data.id.matches('^custom_[a-zA-Z0-9_\\-]+$') &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+        (!('description' in data) || (data.description is string && data.description.size() <= 400)) &&
+        (!('previewImage' in data) || (data.previewImage is string && data.previewImage.size() <= 300000)) &&
+        data.htmlCode is string && data.htmlCode.size() <= 150000 &&
+        data.cssCode is string && data.cssCode.size() <= 100000 &&
+        data.jsCode is string && data.jsCode.size() <= 100000 &&
+        data.isActive is bool &&
+        data.createdAt is timestamp;
+    }
+
+    // 1. Users collection (owner-only PII + Super Admin read)
+    match /users/{userId} {
+      allow get: if isSuperAdmin() || (isVerifiedAccount() && isValidId(userId) && request.auth.uid == userId);
+      allow list: if isSuperAdmin();
+      allow create: if isVerifiedAccount() && isValidId(userId) &&
+        request.auth.uid == userId &&
+        isValidUser(incoming(), userId) &&
+        incoming().createdAt == request.time;
+      allow update: if isVerifiedAccount() && isValidId(userId) &&
+        request.auth.uid == userId &&
+        isValidUser(incoming(), userId) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'email']);
+      allow delete: if isSuperAdmin() && isValidId(userId);
+    }
+
+    // 2. Slugs lookup collection
+    match /slugs/{slug} {
+      allow get: if isValidSlug(slug);
+      allow list: if isSuperAdmin();
+      allow create: if isVerifiedAccount() && isValidSlug(slug) &&
+        isValidSlugMapping(incoming(), slug) &&
+        incoming().createdAt == request.time;
+      allow update: if isVerifiedAccount() && isValidSlug(slug) &&
+        isValidSlugMapping(incoming(), slug) &&
+        existing().ownerId == request.auth.uid &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['restaurantId']);
+      allow delete: if isValidSlug(slug) && (
+        isSuperAdmin() ||
+        (isVerifiedAccount() && existing().ownerId == request.auth.uid)
+      );
+    }
+
+    // 3. Restaurants collection
+    match /restaurants/{restaurantId} {
+      allow get: if isValidId(restaurantId);
+      allow list: if isSuperAdmin() || (isVerifiedAccount() && resource.data.ownerId == request.auth.uid);
+      allow create: if isVerifiedAccount() && isValidId(restaurantId) &&
+        isValidRestaurantShape(incoming(), restaurantId) &&
+        incoming().ownerId == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isValidId(restaurantId) &&
+        isValidRestaurantShape(incoming(), restaurantId) &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().id == existing().id &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time && (
+          (
+            isVerifiedAccount() &&
+            existing().ownerId == request.auth.uid && (
+              incoming().diff(existing()).affectedKeys().hasOnly(['activeTheme', 'updatedAt']) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['activeTheme', 'primaryColor', 'taxRate', 'serviceCharge', 'updatedAt']) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['name', 'tagline', 'slug', 'whatsappNumber', 'logoUrl', 'currency', 'isOpen', 'taxRate', 'serviceCharge', 'primaryColor', 'updatedAt'])
+            )
+          ) || (
+            isSuperAdmin() && (
+              incoming().diff(existing()).affectedKeys().hasOnly(['isSuspended', 'updatedAt']) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['activeTheme', 'primaryColor', 'taxRate', 'serviceCharge', 'updatedAt']) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['name', 'tagline', 'whatsappNumber', 'logoUrl', 'currency', 'isOpen', 'isSuspended', 'taxRate', 'serviceCharge', 'primaryColor', 'updatedAt'])
+            )
+          )
+        );
+      allow delete: if isValidId(restaurantId) && (
+        isSuperAdmin() ||
+        (isVerifiedAccount() && existing().ownerId == request.auth.uid)
+      );
+    }
+
+    // 4. Categories collection (linked by restaurantId)
+    match /categories/{categoryId} {
+      allow get: if isValidId(categoryId);
+      allow list: if true;
+      allow create: if isValidId(categoryId) &&
+        isValidCategoryShape(incoming(), categoryId) &&
+        incoming().createdAt == request.time &&
+        exists(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)) && (
+          (
+            isVerifiedAccount() &&
+            incoming().ownerId == request.auth.uid &&
+            get(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)).data.ownerId == request.auth.uid
+          ) || (
+            isSuperAdmin() &&
+            get(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)).data.ownerId == incoming().ownerId
+          )
+        );
+      allow update: if isValidId(categoryId) &&
+        isValidCategoryShape(incoming(), categoryId) &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().id == existing().id &&
+        incoming().restaurantId == existing().restaurantId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'imageUrl', 'sortOrder']) && (
+          (
+            isVerifiedAccount() &&
+            existing().ownerId == request.auth.uid &&
+            get(/databases/$(database)/documents/restaurants/$(existing().restaurantId)).data.ownerId == request.auth.uid
+          ) ||
+          isSuperAdmin()
+        );
+      allow delete: if isValidId(categoryId) && (
+        isSuperAdmin() || (
+          isVerifiedAccount() &&
+          existing().ownerId == request.auth.uid &&
+          get(/databases/$(database)/documents/restaurants/$(existing().restaurantId)).data.ownerId == request.auth.uid
+        )
+      );
+    }
+
+    // 5. Menu Items collection (linked by restaurantId and categoryId)
+    match /menu_items/{itemId} {
+      allow get: if isValidId(itemId);
+      allow list: if true;
+      allow create: if isValidId(itemId) &&
+        isValidMenuItemShape(incoming(), itemId) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        exists(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)) && (
+          (
+            isVerifiedAccount() &&
+            incoming().ownerId == request.auth.uid &&
+            get(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)).data.ownerId == request.auth.uid
+          ) || (
+            isSuperAdmin() &&
+            get(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)).data.ownerId == incoming().ownerId
+          )
+        );
+      allow update: if isValidId(itemId) &&
+        isValidMenuItemShape(incoming(), itemId) &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().id == existing().id &&
+        incoming().restaurantId == existing().restaurantId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        exists(/databases/$(database)/documents/restaurants/$(existing().restaurantId)) && (
+          (
+            (
+              isSuperAdmin() || (
+                isVerifiedAccount() &&
+                existing().ownerId == request.auth.uid &&
+                get(/databases/$(database)/documents/restaurants/$(existing().restaurantId)).data.ownerId == request.auth.uid
+              )
+            ) && (
+              incoming().diff(existing()).affectedKeys().hasOnly(['isAvailable', 'updatedAt']) ||
+              incoming().diff(existing()).affectedKeys().hasOnly([
+                'categoryId', 'name', 'description', 'basePrice', 'imageUrl', 'calories',
+                'isSpicy', 'isAvailable', 'ordersCount', 'sizes', 'addons', 'sortOrder', 'updatedAt'
+              ])
+            )
+          ) || (
+            incoming().categoryId == existing().categoryId &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['ordersCount', 'updatedAt']) &&
+            incoming().ordersCount > existing().ordersCount &&
+            incoming().ordersCount <= existing().ordersCount + 50
+          )
+        );
+      allow delete: if isValidId(itemId) && (
+        isSuperAdmin() || (
+          isVerifiedAccount() &&
+          existing().ownerId == request.auth.uid &&
+          get(/databases/$(database)/documents/restaurants/$(existing().restaurantId)).data.ownerId == request.auth.uid
+        )
+      );
+    }
+
+    // 6. Orders collection (linked by restaurantId, strict owner-only + Super Admin read)
+    match /orders/{orderId} {
+      allow get: if isValidId(orderId) && (
+        isSuperAdmin() ||
+        (isVerifiedAccount() && existing().ownerId == request.auth.uid)
+      );
+      allow list: if isSuperAdmin() || (isVerifiedAccount() && resource.data.ownerId == request.auth.uid);
+      allow create: if isValidId(orderId) &&
+        isValidOrder(incoming(), orderId) &&
+        incoming().status == 'pending' &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        exists(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)) &&
+        get(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)).data.ownerId == incoming().ownerId;
+      allow update: if isVerifiedAccount() && isValidId(orderId) &&
+        isValidOrder(incoming(), orderId) &&
+        existing().ownerId == request.auth.uid &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().id == existing().id &&
+        incoming().restaurantId == existing().restaurantId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        !(existing().status in ['completed', 'cancelled']) &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']) &&
+        get(/databases/$(database)/documents/restaurants/$(existing().restaurantId)).data.ownerId == request.auth.uid;
+      allow delete: if isSuperAdmin() && isValidId(orderId);
+    }
+
+    // 7. Platform Settings CMS collection (public read for landing page, Super Admin write)
+    match /platform_settings/{settingId} {
+      allow get: if settingId == 'landing';
+      allow list: if isSuperAdmin();
+      allow create, update: if isSuperAdmin() &&
+        settingId == 'landing' &&
+        isValidPlatformLanding(incoming()) &&
+        incoming().updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    // 8. Custom Injected Themes collection (public read, Super Admin write only)
+    match /custom_themes/{themeId} {
+      allow get: if isValidId(themeId);
+      allow list: if isSuperAdmin() || resource.data.isActive == true;
+      allow create: if isSuperAdmin() &&
+        isValidId(themeId) &&
+        isValidCustomTheme(incoming(), themeId) &&
+        incoming().createdAt == request.time;
+      allow update: if isSuperAdmin() &&
+        isValidId(themeId) &&
+        isValidCustomTheme(incoming(), themeId) &&
+        incoming().id == existing().id &&
+        incoming().createdAt == existing().createdAt && (
+          incoming().diff(existing()).affectedKeys().hasOnly(['isActive']) ||
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'name', 'description', 'previewImage', 'htmlCode', 'cssCode', 'jsCode', 'isActive'
+          ])
+        );
+      allow delete: if isSuperAdmin() && isValidId(themeId);
+    }
+  }
+}

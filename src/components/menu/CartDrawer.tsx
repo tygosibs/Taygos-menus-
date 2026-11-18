@@ -1,0 +1,540 @@
+import { useMemo, useState } from 'react';
+import {
+  CheckCircle2,
+  Copy,
+  MessageCircle,
+  Minus,
+  Plus,
+  Send,
+  ShoppingBag,
+  Trash2,
+  X,
+} from 'lucide-react';
+import { submitPublicOrder } from '../../lib/firestoreService';
+import { CartItem, OrderItemPayload, OrderType, Restaurant } from '../../types/menu';
+import { SafeImage } from '../SafeImage';
+
+interface CartDrawerProps {
+  open: boolean;
+  restaurant: Restaurant;
+  cart: CartItem[];
+  isDemoMode: boolean;
+  onClose: () => void;
+  onUpdateQty: (cartKey: string, delta: number) => void;
+  onRemoveItem: (cartKey: string) => void;
+  onClearCart: () => void;
+}
+
+export function CartDrawer({
+  open,
+  restaurant,
+  cart,
+  isDemoMode,
+  onClose,
+  onUpdateQty,
+  onRemoveItem,
+  onClearCart,
+}: CartDrawerProps) {
+  const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [orderType, setOrderType] = useState<OrderType>('dine_in');
+  const [tableNumber, setTableNumber] = useState('');
+  const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [notes, setNotes] = useState('');
+
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [confirmedOrder, setConfirmedOrder] = useState<{
+    orderNumber: string;
+    whatsappMessage: string;
+  } | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const subtotal = useMemo(
+    () => cart.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0),
+    [cart]
+  );
+
+  const serviceCharge = useMemo(
+    () => (subtotal * (restaurant.serviceCharge || 0)) / 100,
+    [subtotal, restaurant.serviceCharge]
+  );
+
+  const taxAmount = useMemo(
+    () => ((subtotal + serviceCharge) * (restaurant.taxRate || 0)) / 100,
+    [subtotal, serviceCharge, restaurant.taxRate]
+  );
+
+  const total = subtotal + serviceCharge + taxAmount;
+
+  const formatPrice = (val: number) => `${val.toFixed(2).replace(/\.00$/, '')} ${restaurant.currency}`;
+
+  const buildOrderItems = (): OrderItemPayload[] =>
+    cart.map((c) => {
+      const payload: OrderItemPayload = {
+        menuItemId: c.menuItem.id,
+        name: c.menuItem.name,
+        addonNames: c.selectedAddons.map((a) => a.name),
+        quantity: c.quantity,
+        unitPrice: Number(c.unitPrice.toFixed(2)),
+        lineTotal: Number((c.unitPrice * c.quantity).toFixed(2)),
+      };
+      if (c.selectedSize?.name) payload.sizeName = c.selectedSize.name;
+      if (c.notes) payload.notes = c.notes;
+      return payload;
+    });
+
+  const buildWhatsappInvoice = (orderNumber: string): string => {
+    const typeLabel =
+      orderType === 'dine_in'
+        ? `صالة (طاولة: ${tableNumber || 'غير محدد'})`
+        : orderType === 'delivery'
+          ? `توصيل (${deliveryAddress || 'غير محدد'})`
+          : 'استلام من الفرع';
+
+    const lines = [
+      `*طلب جديد من ${restaurant.name}*`,
+      `رقم الطلب: ${orderNumber}`,
+      `نوع الطلب: ${typeLabel}`,
+      `العميل: ${customerName.trim()}`,
+      `الجوال: ${customerPhone.trim()}`,
+      `----------------`,
+      ...cart.map((c, idx) => {
+        const sizeTxt = c.selectedSize ? ` (${c.selectedSize.name})` : '';
+        const addonTxt =
+          c.selectedAddons.length > 0
+            ? `\n   + إضافات: ${c.selectedAddons.map((a) => a.name).join('، ')}`
+            : '';
+        const noteTxt = c.notes ? `\n   * ملاحظة: ${c.notes}` : '';
+        return `${idx + 1}. ${c.menuItem.name}${sizeTxt} × ${c.quantity} = ${formatPrice(
+          c.unitPrice * c.quantity
+        )}${addonTxt}${noteTxt}`;
+      }),
+      `----------------`,
+      `المجموع الفرعي: ${formatPrice(subtotal)}`,
+    ];
+
+    if (serviceCharge > 0) {
+      lines.push(`رسوم الخدمة (${restaurant.serviceCharge}%): ${formatPrice(serviceCharge)}`);
+    }
+    if (taxAmount > 0) {
+      lines.push(`الضريبة (${restaurant.taxRate}%): ${formatPrice(taxAmount)}`);
+    }
+    lines.push(`*الإجمالي النهائي: ${formatPrice(total)}*`);
+    if (notes.trim()) {
+      lines.push(`ملاحظات عامة: ${notes.trim()}`);
+    }
+    return lines.join('\n');
+  };
+
+  const validateForm = (): boolean => {
+    if (!restaurant.isOpen) {
+      setErrorMsg('عذراً، المطعم مغلق حالياً لاستقبال الطلبات.');
+      return false;
+    }
+    if (!customerName.trim()) {
+      setErrorMsg('يرجى إدخال اسم العميل');
+      return false;
+    }
+    if (customerPhone.trim().length < 5) {
+      setErrorMsg('يرجى إدخال رقم جوال صحيح');
+      return false;
+    }
+    if (orderType === 'dine_in' && !tableNumber.trim()) {
+      setErrorMsg('يرجى إدخال رقم الطاولة لطلبات الصالة');
+      return false;
+    }
+    if (orderType === 'delivery' && !deliveryAddress.trim()) {
+      setErrorMsg('يرجى إدخال عنوان التوصيل');
+      return false;
+    }
+    setErrorMsg(null);
+    return true;
+  };
+
+  const submitAndPrepareOrder = async (launchWhatsapp: boolean) => {
+    if (cart.length === 0) return;
+    if (!validateForm()) return;
+
+    setSubmitting(true);
+    setErrorMsg(null);
+    try {
+      let orderNumber = `DEMO-${Math.floor(1000 + Math.random() * 9000)}`;
+      if (!isDemoMode) {
+        const res = await submitPublicOrder({
+          restaurantId: restaurant.id,
+          ownerId: restaurant.ownerId,
+          customerName,
+          customerPhone,
+          orderType,
+          tableNumber: orderType === 'dine_in' ? tableNumber : undefined,
+          deliveryAddress: orderType === 'delivery' ? deliveryAddress : undefined,
+          notes: notes.trim() || undefined,
+          items: buildOrderItems(),
+          subtotal,
+          serviceCharge,
+          taxAmount,
+          total,
+        });
+        orderNumber = res.orderNumber;
+      }
+
+      const whatsappMessage = buildWhatsappInvoice(orderNumber);
+      setConfirmedOrder({ orderNumber, whatsappMessage });
+      onClearCart();
+
+      if (launchWhatsapp) {
+        const targetPhone = restaurant.whatsappNumber.replace(/[^0-9]/g, '');
+        const url = `https://wa.me/${targetPhone}?text=${encodeURIComponent(whatsappMessage)}`;
+        const link = document.createElement('a');
+        link.href = url;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+    } catch (err) {
+      setErrorMsg(
+        err instanceof Error ? err.message : 'تعذر إرسال الطلب حالياً. يرجى المحاولة مجدداً.'
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (!open) return null;
+
+  const cleanWhatsapp = restaurant.whatsappNumber.replace(/[^0-9]/g, '');
+  const activeMessage = confirmedOrder?.whatsappMessage || buildWhatsappInvoice('مسودة');
+  const whatsappHref = `https://wa.me/${cleanWhatsapp}?text=${encodeURIComponent(activeMessage)}`;
+
+  const handleCopyInvoice = async () => {
+    try {
+      await navigator.clipboard.writeText(activeMessage);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="سلة الطلبات"
+    >
+      <div
+        dir="rtl"
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-md bg-white text-stone-900 h-full flex flex-col shadow-2xl"
+      >
+        <div className="px-5 py-4 border-b border-stone-200 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2.5">
+            <ShoppingBag className="w-5 h-5" style={{ color: restaurant.primaryColor }} />
+            <h2 className="text-lg font-bold">سلة الطلبات</h2>
+            {cart.length > 0 && (
+              <span className="text-xs text-stone-500 font-mono-num">
+                ({cart.reduce((s, c) => s + c.quantity, 0)} أصناف)
+              </span>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setConfirmedOrder(null);
+              onClose();
+            }}
+            aria-label="إغلاق السلة"
+            className="w-9 h-9 rounded-lg hover:bg-stone-100 flex items-center justify-center cursor-pointer"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-5 space-y-6">
+          {confirmedOrder ? (
+            <div className="space-y-5 py-4">
+              <div className="p-5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-950 space-y-2">
+                <div className="flex items-center gap-2 font-bold text-base">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                  <span>تم استلام طلبك بنجاح</span>
+                </div>
+                <p className="text-sm text-emerald-800">
+                  رقم الطلب:{' '}
+                  <span className="font-mono-num font-bold">{confirmedOrder.orderNumber}</span>
+                  {isDemoMode && ' (وضع المعاينة التجريبي)'}
+                </p>
+                <p className="text-xs text-emerald-700 leading-relaxed">
+                  {isDemoMode
+                    ? 'في المطاعم المفعّلة، يظهر هذا الطلب فوراً مع تنبيه صوتي في لوحة تحكم المطعم.'
+                    : 'وصل طلبك الآن إلى شاشة المطبخ في لوحة تحكم المطعم.'}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-sm font-bold text-stone-800">ملخص الفاتورة المنسقة:</p>
+                <pre className="p-4 rounded-xl bg-stone-50 border border-stone-200 text-xs text-stone-700 whitespace-pre-wrap leading-relaxed font-sans">
+                  {confirmedOrder.whatsappMessage}
+                </pre>
+              </div>
+
+              <div className="space-y-2.5">
+                <a
+                  href={whatsappHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-3 px-4 rounded-xl bg-emerald-600 text-white font-bold text-sm flex items-center justify-center gap-2 hover:bg-emerald-700 transition-colors"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  <span>إرسال الفاتورة عبر واتساب المطعم</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={handleCopyInvoice}
+                  className="w-full py-2.5 px-4 rounded-xl border border-stone-300 text-stone-700 font-semibold text-sm flex items-center justify-center gap-2 hover:bg-stone-50 transition-colors cursor-pointer"
+                >
+                  <Copy className="w-4 h-4" />
+                  <span>{copied ? 'تم نسخ نص الفاتورة' : 'نسخ نص الفاتورة'}</span>
+                </button>
+              </div>
+            </div>
+          ) : cart.length === 0 ? (
+            <div className="py-16 text-center space-y-3 text-stone-500">
+              <ShoppingBag className="w-10 h-10 mx-auto opacity-30" />
+              <p className="text-base font-semibold text-stone-700">السلة فارغة حالياً</p>
+              <p className="text-sm">اختر وجباتك المفضلة من القائمة لإضافتها هنا.</p>
+            </div>
+          ) : (
+            <>
+              <div className="space-y-3">
+                {cart.map((c) => (
+                  <div
+                    key={c.cartKey}
+                    className="p-3 rounded-xl border border-stone-200 bg-stone-50/60 flex gap-3"
+                  >
+                    <SafeImage
+                      src={c.menuItem.imageUrl}
+                      alt={c.menuItem.name}
+                      className="w-16 h-16 rounded-lg object-cover shrink-0"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className="text-sm font-bold text-stone-900 truncate">
+                          {c.menuItem.name}
+                        </h3>
+                        <button
+                          type="button"
+                          onClick={() => onRemoveItem(c.cartKey)}
+                          aria-label="حذف الصنف"
+                          className="text-stone-400 hover:text-red-600 transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                      {(c.selectedSize || c.selectedAddons.length > 0) && (
+                        <p className="text-xs text-stone-500 mt-0.5 line-clamp-2">
+                          {c.selectedSize?.name}
+                          {c.selectedSize && c.selectedAddons.length > 0 ? ' · ' : ''}
+                          {c.selectedAddons.map((a) => a.name).join('، ')}
+                        </p>
+                      )}
+                      {c.notes && (
+                        <p className="text-[11px] text-amber-700 mt-0.5">ملاحظة: {c.notes}</p>
+                      )}
+                      <div className="mt-2.5 flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 bg-white border border-stone-200 rounded-lg px-1.5 py-0.5">
+                          <button
+                            type="button"
+                            onClick={() => onUpdateQty(c.cartKey, -1)}
+                            aria-label="تقليل"
+                            className="w-6 h-6 flex items-center justify-center text-stone-700 hover:bg-stone-100 rounded cursor-pointer"
+                          >
+                            <Minus className="w-3.5 h-3.5" />
+                          </button>
+                          <span className="w-5 text-center font-mono-num text-xs font-bold">
+                            {c.quantity}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => onUpdateQty(c.cartKey, 1)}
+                            aria-label="زيادة"
+                            className="w-6 h-6 flex items-center justify-center text-stone-700 hover:bg-stone-100 rounded cursor-pointer"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        <span className="font-mono-num text-sm font-bold text-stone-900">
+                          {formatPrice(c.unitPrice * c.quantity)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-2.5">
+                <label className="block text-sm font-bold">نوع الطلب</label>
+                <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-stone-100">
+                  {[
+                    { id: 'dine_in' as OrderType, label: 'صالة' },
+                    { id: 'delivery' as OrderType, label: 'دليفري' },
+                    { id: 'pickup' as OrderType, label: 'استلام' },
+                  ].map((opt) => {
+                    const active = orderType === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setOrderType(opt.id)}
+                        style={active ? { backgroundColor: restaurant.primaryColor } : undefined}
+                        className={`py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                          active ? 'text-white shadow-sm' : 'text-stone-600 hover:text-stone-900'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-stone-600 mb-1">
+                      الاسم *
+                    </label>
+                    <input
+                      type="text"
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      placeholder="أحمد محمد"
+                      className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-sm focus:outline-none focus:border-stone-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-stone-600 mb-1">
+                      رقم الجوال *
+                    </label>
+                    <input
+                      type="tel"
+                      value={customerPhone}
+                      onChange={(e) => setCustomerPhone(e.target.value)}
+                      placeholder="010XXXXXXXX"
+                      className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-sm font-mono-num focus:outline-none focus:border-stone-400"
+                    />
+                  </div>
+                </div>
+
+                {orderType === 'dine_in' && (
+                  <div>
+                    <label className="block text-xs font-semibold text-stone-600 mb-1">
+                      رقم الطاولة *
+                    </label>
+                    <input
+                      type="text"
+                      value={tableNumber}
+                      onChange={(e) => setTableNumber(e.target.value)}
+                      placeholder="مثال: طاولة 7"
+                      className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-sm focus:outline-none focus:border-stone-400"
+                    />
+                  </div>
+                )}
+
+                {orderType === 'delivery' && (
+                  <div>
+                    <label className="block text-xs font-semibold text-stone-600 mb-1">
+                      عنوان التوصيل *
+                    </label>
+                    <input
+                      type="text"
+                      value={deliveryAddress}
+                      onChange={(e) => setDeliveryAddress(e.target.value)}
+                      placeholder="الحي، الشارع، رقم المبنى..."
+                      className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-sm focus:outline-none focus:border-stone-400"
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-semibold text-stone-600 mb-1">
+                    ملاحظات إضافية (اختياري)
+                  </label>
+                  <input
+                    type="text"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="تعليمات التوصيل أو التحضير..."
+                    className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-sm focus:outline-none focus:border-stone-400"
+                  />
+                </div>
+              </div>
+
+              <div className="p-4 rounded-xl bg-stone-50 border border-stone-200 space-y-2 text-sm">
+                <div className="flex items-center justify-between text-stone-600">
+                  <span>المجموع الفرعي</span>
+                  <span className="font-mono-num">{formatPrice(subtotal)}</span>
+                </div>
+                {restaurant.serviceCharge > 0 && (
+                  <div className="flex items-center justify-between text-stone-600">
+                    <span>رسوم الخدمة ({restaurant.serviceCharge}%)</span>
+                    <span className="font-mono-num">{formatPrice(serviceCharge)}</span>
+                  </div>
+                )}
+                {restaurant.taxRate > 0 && (
+                  <div className="flex items-center justify-between text-stone-600">
+                    <span>الضريبة المضافة ({restaurant.taxRate}%)</span>
+                    <span className="font-mono-num">{formatPrice(taxAmount)}</span>
+                  </div>
+                )}
+                <div className="pt-2 border-t border-stone-200 flex items-center justify-between font-bold text-base text-stone-900">
+                  <span>الإجمالي النهائي</span>
+                  <span className="font-mono-num">{formatPrice(total)}</span>
+                </div>
+              </div>
+
+              {errorMsg && (
+                <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 font-medium">
+                  {errorMsg}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {!confirmedOrder && cart.length > 0 && (
+          <div className="p-4 border-t border-stone-200 bg-white space-y-2.5 shrink-0">
+            <button
+              type="button"
+              disabled={submitting}
+              onClick={() => submitAndPrepareOrder(false)}
+              style={{ backgroundColor: restaurant.primaryColor }}
+              className="w-full min-h-[48px] py-3.5 px-4 rounded-xl text-white font-bold text-sm flex items-center justify-center gap-2 hover:opacity-95 transition-opacity disabled:opacity-60 cursor-pointer"
+            >
+              <Send className="w-4 h-4" />
+              <span>
+                {submitting
+                  ? 'جاري إرسال الطلب...'
+                  : `إرسال الطلب للمطعم (${formatPrice(total)})`}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              disabled={submitting}
+              onClick={() => submitAndPrepareOrder(true)}
+              className="w-full min-h-[46px] py-3 px-4 rounded-xl border border-emerald-600 text-emerald-700 font-bold text-sm flex items-center justify-center gap-2 hover:bg-emerald-50 transition-colors disabled:opacity-60 cursor-pointer"
+            >
+              <MessageCircle className="w-4 h-4" />
+              <span>طلب عبر واتساب</span>
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
