@@ -1102,7 +1102,11 @@ export async function fetchPlatformLandingSettings(): Promise<PlatformLandingSet
       supportWhatsapp: data.supportWhatsapp ?? DEFAULT_PLATFORM_LANDING.supportWhatsapp,
       footerText: data.footerText || DEFAULT_PLATFORM_LANDING.footerText,
       footerText_en: data.footerText_en || DEFAULT_PLATFORM_LANDING.footerText_en,
-      platformLogoUrl: data.platformLogoUrl || DEFAULT_PLATFORM_LANDING.platformLogoUrl,
+      platformLogoUrl:
+        !data.platformLogoUrl ||
+        data.platformLogoUrl.includes('sufra_platform_logo_1795015927934')
+          ? DEFAULT_PLATFORM_LANDING.platformLogoUrl
+          : data.platformLogoUrl,
       shareTitle: data.shareTitle || DEFAULT_PLATFORM_LANDING.shareTitle,
       shareTitle_en: data.shareTitle_en || DEFAULT_PLATFORM_LANDING.shareTitle_en,
       shareDescription: data.shareDescription || DEFAULT_PLATFORM_LANDING.shareDescription,

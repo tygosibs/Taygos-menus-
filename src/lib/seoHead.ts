@@ -11,7 +11,48 @@ export interface ShareCardMetadata {
   schemaJsonLd?: Record<string, unknown>;
 }
 
-const DEFAULT_PLATFORM_LOGO_PATH = '/src/assets/images/sufra_platform_logo_1795015927934.jpg';
+/**
+ * Official and exclusive Sufra platform icon (never used as a restaurant fallback).
+ */
+export const OFFICIAL_PLATFORM_LOGO_PATH = '/assets/aistudio/suofra_logo_icon_f1015078.png';
+
+/**
+ * Food dish fallback image used ONLY when a restaurant has not uploaded its own logo yet.
+ */
+export const DEFAULT_RESTAURANT_FOOD_FALLBACK =
+  '/src/assets/images/burger_smash_signature_1794967836686.jpg';
+
+function isPlatformIconUrl(url?: string): boolean {
+  const clean = (url || '').trim();
+  return (
+    clean.includes('suofra_logo_icon_f1015078') ||
+    clean.includes('sufra_platform_logo_1795015927934')
+  );
+}
+
+export function normalizePlatformLogoUrl(url?: string): string {
+  const clean = (url || '').trim();
+  if (!clean || clean.includes('sufra_platform_logo_1795015927934')) {
+    return OFFICIAL_PLATFORM_LOGO_PATH;
+  }
+  return clean;
+}
+
+export function normalizeRestaurantLogoUrl(url?: string): string {
+  const clean = (url || '').trim();
+  if (!clean || isPlatformIconUrl(clean)) {
+    return DEFAULT_RESTAURANT_FOOD_FALLBACK;
+  }
+  return clean;
+}
+
+function shortCacheHash(input: string): string {
+  let hash = 5381;
+  for (let i = 0; i < Math.min(input.length, 300); i++) {
+    hash = ((hash << 5) + hash + input.charCodeAt(i)) >>> 0;
+  }
+  return hash.toString(36);
+}
 
 export function resolveRestaurantShareTitle(
   restaurant: Pick<Restaurant, 'name' | 'name_en' | 'shareTitle' | 'shareTitle_en'>,
@@ -89,8 +130,9 @@ export function getRestaurantShareMetadata(
 ): ShareCardMetadata {
   const title = resolveRestaurantShareTitle(restaurant, lang);
   const description = resolveRestaurantShareDescription(restaurant, lang);
-  const displayLogo = restaurant.logoUrl?.trim() || DEFAULT_PLATFORM_LOGO_PATH;
-  const ogImageUrl = `${origin}/api/og-image/${encodeURIComponent(restaurant.slug)}`;
+  const displayLogo = normalizeRestaurantLogoUrl(restaurant.logoUrl);
+  const ver = shortCacheHash(displayLogo);
+  const ogImageUrl = `${origin}/api/og-image/${encodeURIComponent(restaurant.slug)}?v=${ver}`;
   const url = `${origin}/menu/${encodeURIComponent(restaurant.slug)}`;
   const siteName = lang === 'en' ? restaurant.name_en?.trim() || restaurant.name : restaurant.name;
 
@@ -122,8 +164,9 @@ export function getPlatformShareMetadata(
 ): ShareCardMetadata {
   const title = resolvePlatformShareTitle(cms, lang);
   const description = resolvePlatformShareDescription(cms, lang);
-  const displayLogo = cms.platformLogoUrl?.trim() || DEFAULT_PLATFORM_LOGO_PATH;
-  const ogImageUrl = `${origin}/api/og-image/platform`;
+  const displayLogo = normalizePlatformLogoUrl(cms.platformLogoUrl);
+  const ver = shortCacheHash(displayLogo);
+  const ogImageUrl = `${origin}/api/og-image/platform?v=${ver}`;
   const siteName = lang === 'en' ? 'Sufra QR' : 'سُفرة QR';
 
   return {

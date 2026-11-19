@@ -117,7 +117,7 @@ export const DEFAULT_PLATFORM_LANDING: PlatformLandingSettings = {
   supportWhatsapp: '201000000000',
   footerText: 'منصة سُفرة QR · نظام إدارة القوائم الرقمية والطلبات الحية',
   footerText_en: 'Sufra QR Platform · Bilingual Digital Menu & Live Kitchen Ordering SaaS',
-  platformLogoUrl: '/src/assets/images/sufra_platform_logo_1795015927934.jpg',
+  platformLogoUrl: '/assets/aistudio/suofra_logo_icon_f1015078.png',
   shareTitle: 'سُفرة QR ترحب بكم — منصة المنيو الإلكتروني الذكي',
   shareTitle_en: 'Sufra QR Welcomes You — Smart Digital Restaurant Menu',
   shareDescription:

@@ -10,7 +10,17 @@ const __dirname = path.dirname(__filename);
 const isProduction = process.env.NODE_ENV === 'production';
 const PORT = Number(process.env.PORT || 3000);
 
-const DEFAULT_PLATFORM_LOGO_REL = '/src/assets/images/sufra_platform_logo_1795015927934.jpg';
+/**
+ * Official Sufra Platform Icon (used ONLY for / platform root, favicon & PWA).
+ */
+const OFFICIAL_PLATFORM_LOGO_REL = '/assets/aistudio/suofra_logo_icon_f1015078.png';
+
+/**
+ * Generic food dish fallback (used ONLY for restaurants without an uploaded logoUrl).
+ * NEVER mix with Sufra platform icon!
+ */
+const DEFAULT_RESTAURANT_FOOD_FALLBACK =
+  '/src/assets/images/burger_smash_signature_1794967836686.jpg';
 
 interface FirebaseConfig {
   projectId: string;
@@ -82,7 +92,7 @@ const DEFAULT_PLATFORM_META: ResolvedPlatformMeta = {
     'أنشئ رابطاً خاصاً لمطعمك في دقائق، خصّص مظهر القائمة بين 9 ثيمات تريند احترافية، أضف الأحجام والإضافات، واستقبل الطلبات مباشرة في لوحة التحكم مع تنبيه صوتي أو عبر واتساب المطعم.',
   heroSubtitle_en:
     'Launch your branded restaurant link in minutes, switch seamlessly across designer themes, and receive live kitchen orders.',
-  platformLogoUrl: DEFAULT_PLATFORM_LOGO_REL,
+  platformLogoUrl: OFFICIAL_PLATFORM_LOGO_REL,
   shareTitle: 'سُفرة QR ترحب بكم — منصة المنيو الإلكتروني الذكي',
   shareTitle_en: 'Sufra QR Welcomes You — Smart Digital Restaurant Menu',
   shareDescription:
@@ -90,6 +100,22 @@ const DEFAULT_PLATFORM_META: ResolvedPlatformMeta = {
   shareDescription_en:
     'Launch your bilingual interactive QR menu in minutes with 10 designer themes and receive live kitchen & WhatsApp orders.',
 };
+
+function isPlatformIconUrl(url?: string): boolean {
+  const clean = (url || '').trim();
+  return (
+    clean.includes('suofra_logo_icon_f1015078') ||
+    clean.includes('sufra_platform_logo_1795015927934')
+  );
+}
+
+function shortCacheHash(input: string): string {
+  let hash = 5381;
+  for (let i = 0; i < Math.min(input.length, 300); i++) {
+    hash = ((hash << 5) + hash + input.charCodeAt(i)) >>> 0;
+  }
+  return hash.toString(36);
+}
 
 function loadFirebaseConfig(): FirebaseConfig | null {
   try {
@@ -161,10 +187,16 @@ async function getPlatformMeta(): Promise<ResolvedPlatformMeta> {
     return DEFAULT_PLATFORM_META;
   }
 
+  const rawPlatLogo = getFieldString(fields, 'platformLogoUrl');
+  const resolvedPlatLogo =
+    !rawPlatLogo || rawPlatLogo.includes('sufra_platform_logo_1795015927934')
+      ? OFFICIAL_PLATFORM_LOGO_REL
+      : rawPlatLogo;
+
   const resolved: ResolvedPlatformMeta = {
     heroSubtitle: getFieldString(fields, 'heroSubtitle') || DEFAULT_PLATFORM_META.heroSubtitle,
     heroSubtitle_en: getFieldString(fields, 'heroSubtitle_en') || DEFAULT_PLATFORM_META.heroSubtitle_en,
-    platformLogoUrl: getFieldString(fields, 'platformLogoUrl') || DEFAULT_PLATFORM_LOGO_REL,
+    platformLogoUrl: resolvedPlatLogo,
     shareTitle: getFieldString(fields, 'shareTitle') || DEFAULT_PLATFORM_META.shareTitle,
     shareTitle_en: getFieldString(fields, 'shareTitle_en') || DEFAULT_PLATFORM_META.shareTitle_en,
     shareDescription:
@@ -218,13 +250,15 @@ async function getRestaurantMetaBySlug(rawSlug: string): Promise<ResolvedRestaur
     return null;
   }
 
+  const rawRestLogo = getFieldString(restFields, 'logoUrl');
+
   const resolved: ResolvedRestaurantMeta = {
     slug,
     name: getFieldString(restFields, 'name') || slug,
     name_en: getFieldString(restFields, 'name_en'),
     tagline: getFieldString(restFields, 'tagline'),
     tagline_en: getFieldString(restFields, 'tagline_en'),
-    logoUrl: getFieldString(restFields, 'logoUrl'),
+    logoUrl: isPlatformIconUrl(rawRestLogo) ? DEFAULT_RESTAURANT_FOOD_FALLBACK : rawRestLogo,
     shareTitle: getFieldString(restFields, 'shareTitle'),
     shareTitle_en: getFieldString(restFields, 'shareTitle_en'),
     shareDescription: getFieldString(restFields, 'shareDescription'),
@@ -248,17 +282,29 @@ function getRequestOrigin(req: Request): string {
 
 function resolveLocalAssetPath(relativeUrl: string): string | null {
   const cleanRel = relativeUrl.split('?')[0].replace(/^\/+/, '');
-  if (!cleanRel.startsWith('src/assets/')) return null;
 
-  const candidates = isProduction
-    ? [path.resolve(__dirname, 'dist', cleanRel), path.resolve(__dirname, cleanRel)]
-    : [path.resolve(__dirname, cleanRel)];
-
-  for (const candidate of candidates) {
-    if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
-      return candidate;
+  if (cleanRel.startsWith('src/assets/')) {
+    const candidates = isProduction
+      ? [path.resolve(__dirname, 'dist', cleanRel), path.resolve(__dirname, cleanRel)]
+      : [path.resolve(__dirname, cleanRel)];
+    for (const candidate of candidates) {
+      if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+        return candidate;
+      }
     }
   }
+
+  if (cleanRel.startsWith('assets/')) {
+    const candidates = isProduction
+      ? [path.resolve(__dirname, 'dist', cleanRel), path.resolve(__dirname, 'public', cleanRel)]
+      : [path.resolve(__dirname, 'public', cleanRel)];
+    for (const candidate of candidates) {
+      if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+        return candidate;
+      }
+    }
+  }
+
   return null;
 }
 
@@ -270,9 +316,16 @@ function getMimeFromExt(filePath: string): string {
   return 'image/jpeg';
 }
 
-async function sendResolvedLogoImage(res: Response, logoUrl?: string): Promise<void> {
+async function sendResolvedLogoImage(
+  res: Response,
+  logoUrl: string | undefined,
+  context: 'platform' | 'restaurant'
+): Promise<void> {
+  const fallbackAsset =
+    context === 'platform' ? OFFICIAL_PLATFORM_LOGO_REL : DEFAULT_RESTAURANT_FOOD_FALLBACK;
+
   const sendFallbackLogo = () => {
-    const fallbackPath = resolveLocalAssetPath(DEFAULT_PLATFORM_LOGO_REL);
+    const fallbackPath = resolveLocalAssetPath(fallbackAsset);
     if (fallbackPath) {
       res.setHeader('Content-Type', getMimeFromExt(fallbackPath));
       res.setHeader('Cache-Control', 'public, max-age=120, must-revalidate');
@@ -282,7 +335,12 @@ async function sendResolvedLogoImage(res: Response, logoUrl?: string): Promise<v
     res.status(404).end();
   };
 
-  const trimmed = (logoUrl || '').trim();
+  let trimmed = (logoUrl || '').trim();
+  // Enforce strict identity separation: NEVER allow Sufra icon on restaurant OG cards
+  if (context === 'restaurant' && isPlatformIconUrl(trimmed)) {
+    trimmed = '';
+  }
+
   if (!trimmed) {
     sendFallbackLogo();
     return;
@@ -306,8 +364,8 @@ async function sendResolvedLogoImage(res: Response, logoUrl?: string): Promise<v
     }
   }
 
-  // Case 2: Local bundled asset like /src/assets/images/...
-  if (trimmed.startsWith('/src/assets/')) {
+  // Case 2: Local bundled or public asset like /assets/... or /src/assets/...
+  if (trimmed.startsWith('/assets/') || trimmed.startsWith('/src/assets/')) {
     const localPath = resolveLocalAssetPath(trimmed);
     if (localPath) {
       res.setHeader('Content-Type', getMimeFromExt(localPath));
@@ -458,17 +516,17 @@ async function startServer(): Promise<void> {
   const app = express();
   app.set('trust proxy', true);
 
-  // Dynamic OG Image endpoint for Platform Root Link
+  // Dynamic OG Image endpoint exclusively for Sufra Platform Root Link
   app.get('/api/og-image/platform', async (_req: Request, res: Response) => {
     const meta = await getPlatformMeta();
-    await sendResolvedLogoImage(res, meta.platformLogoUrl);
+    await sendResolvedLogoImage(res, meta.platformLogoUrl, 'platform');
   });
 
-  // Dynamic OG Image endpoint per Restaurant Slug (supports base64, HTTPS Storage URLs, and local assets)
+  // Dynamic OG Image endpoint per Restaurant Slug (strictly restaurant.logoUrl or dish fallback, NEVER Sufra icon)
   app.get('/api/og-image/:slug', async (req: Request, res: Response) => {
     const rawSlug = String(req.params.slug || '');
     const restMeta = await getRestaurantMetaBySlug(rawSlug);
-    await sendResolvedLogoImage(res, restMeta?.logoUrl);
+    await sendResolvedLogoImage(res, restMeta?.logoUrl, 'restaurant');
   });
 
   let vite: ViteDevServer | null = null;
@@ -503,7 +561,8 @@ async function startServer(): Promise<void> {
         if (restMeta) {
           const title = buildRestaurantTitle(restMeta);
           const description = buildRestaurantDescription(restMeta);
-          const imageUrl = `${origin}/api/og-image/${encodeURIComponent(restMeta.slug)}`;
+          const ver = shortCacheHash(restMeta.logoUrl || DEFAULT_RESTAURANT_FOOD_FALLBACK);
+          const imageUrl = `${origin}/api/og-image/${encodeURIComponent(restMeta.slug)}?v=${ver}`;
           const pageUrl = `${origin}/menu/${encodeURIComponent(restMeta.slug)}`;
           html = injectOpenGraphHead(html, {
             title,
@@ -526,7 +585,8 @@ async function startServer(): Promise<void> {
         const platMeta = await getPlatformMeta();
         const title = platMeta.shareTitle || DEFAULT_PLATFORM_META.shareTitle!;
         const description = platMeta.shareDescription || DEFAULT_PLATFORM_META.shareDescription!;
-        const imageUrl = `${origin}/api/og-image/platform`;
+        const ver = shortCacheHash(platMeta.platformLogoUrl || OFFICIAL_PLATFORM_LOGO_REL);
+        const imageUrl = `${origin}/api/og-image/platform?v=${ver}`;
         const pageUrl = `${origin}${reqPath === '/' ? '/' : reqPath}`;
         html = injectOpenGraphHead(html, {
           title,

@@ -3,12 +3,95 @@ import react from '@vitejs/plugin-react';
 import fs from 'fs';
 import path from 'path';
 import {defineConfig} from 'vite';
+import {VitePWA} from 'vite-plugin-pwa';
 
 export default defineConfig(() => {
   return {
     plugins: [
       react(),
       tailwindcss(),
+      VitePWA({
+        registerType: 'autoUpdate',
+        manifestFilename: 'manifest.json',
+        includeAssets: [
+          'favicon-32x32.png',
+          'apple-touch-icon.png',
+          'assets/aistudio/suofra_logo_icon_f1015078.png',
+        ],
+        manifest: {
+          id: '/',
+          name: 'سُفرة QR — منصة المنيو الإلكتروني الذكي',
+          short_name: 'سُفرة QR',
+          description:
+            'منصة متكاملة لإدارة المطاعم وقوائم الطعام الرقمية ثنائية اللغة واستقبال الطلبات لحظياً.',
+          theme_color: '#0F172A',
+          background_color: '#FFFFFF',
+          display: 'standalone',
+          start_url: '/',
+          scope: '/',
+          lang: 'ar',
+          dir: 'rtl',
+          icons: [
+            {
+              src: '/pwa-192x192.png',
+              sizes: '192x192',
+              type: 'image/png',
+              purpose: 'any',
+            },
+            {
+              src: '/pwa-512x512.png',
+              sizes: '512x512',
+              type: 'image/png',
+              purpose: 'any',
+            },
+            {
+              src: '/pwa-maskable-512x512.png',
+              sizes: '512x512',
+              type: 'image/png',
+              purpose: 'maskable',
+            },
+          ],
+        },
+        workbox: {
+          navigateFallback: null,
+          maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
+          globPatterns: ['**/*.{js,css,ico,png,svg,webp,woff,woff2}'],
+          runtimeCaching: [
+            {
+              urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'google-fonts-cache',
+                expiration: {
+                  maxEntries: 10,
+                  maxAgeSeconds: 60 * 60 * 24 * 365,
+                },
+                cacheableResponse: {
+                  statuses: [0, 200],
+                },
+              },
+            },
+            {
+              urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'gstatic-fonts-cache',
+                expiration: {
+                  maxEntries: 10,
+                  maxAgeSeconds: 60 * 60 * 24 * 365,
+                },
+                cacheableResponse: {
+                  statuses: [0, 200],
+                },
+              },
+            },
+          ],
+        },
+        devOptions: {
+          enabled: true,
+          type: 'module',
+        },
+      }),
       // Copies src/assets into dist/ so root-relative URLs like
       // "/src/assets/images/..." (e.g. generate_image output) still resolve
       // in production builds. Do not remove.

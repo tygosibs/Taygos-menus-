@@ -10,19 +10,26 @@ import {
   X,
 } from 'lucide-react';
 import { LanguageToggleButton } from '../components/LanguageToggleButton';
+import { PWAInstallButton } from '../components/PWAInstallButton';
+import { SafeImage } from '../components/SafeImage';
 import { CartDrawer } from '../components/menu/CartDrawer';
 import { ItemModal } from '../components/menu/ItemModal';
 import { ThemeRenderer } from '../components/menu/ThemeRenderer';
 import { useLanguage } from '../contexts/LanguageContext';
 import { DEMO_RESTAURANTS } from '../data/demoRestaurants';
 import { getThemeMeta, isCustomThemeId, MENU_THEMES } from '../data/themes';
+import { usePWAInstall } from '../hooks/usePWAInstall';
 import { auth, isSuperAdminEmail } from '../lib/firebase';
 import {
   fetchActiveCustomThemes,
   fetchCustomThemeById,
   fetchRestaurantBySlug,
 } from '../lib/firestoreService';
-import { applySeoMetadata, getRestaurantShareMetadata } from '../lib/seoHead';
+import {
+  applySeoMetadata,
+  getRestaurantShareMetadata,
+  normalizeRestaurantLogoUrl,
+} from '../lib/seoHead';
 import {
   ActiveTheme,
   CartItem,
@@ -59,8 +66,10 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
   const [cartHydratedSlug, setCartHydratedSlug] = useState<string | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
   const [topBarDismissed, setTopBarDismissed] = useState(false);
+  const [installBannerDismissed, setInstallBannerDismissed] = useState(false);
   const [colorModeOverride, setColorModeOverride] = useState<MenuColorMode>('auto');
   const [prefillPromoCode, setPrefillPromoCode] = useState<string | null>(null);
+  const { isInstalled } = usePWAInstall();
 
   const urlThemeMode = useMemo(() => {
     if (isDemoMode) return true;
@@ -497,6 +506,60 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
           <LayoutDashboard className="w-3.5 h-3.5 text-amber-400" />
           <span>{isEn ? 'Dashboard' : 'لوحة التحكم'}</span>
         </button>
+      )}
+
+      {/* Restaurant-branded Quick PWA Install Bar (strictly uses restaurant logo & name, never Sufra icon) */}
+      {!isInstalled && !installBannerDismissed && (
+        <div
+          dir={dir}
+          className={`px-3 sm:px-5 py-2 border-b flex items-center justify-between gap-2.5 ${
+            isDarkSurface
+              ? 'bg-zinc-950 border-zinc-800 text-zinc-100'
+              : 'bg-white border-zinc-200 text-zinc-900'
+          }`}
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <SafeImage
+              src={normalizeRestaurantLogoUrl(restaurant.logoUrl)}
+              alt={loc(restaurant.name, restaurant.name_en)}
+              className="w-8 h-8 rounded-lg object-cover border border-black/10 shrink-0"
+            />
+            <div className="min-w-0">
+              <p className="text-xs font-extrabold truncate">
+                {loc(restaurant.name, restaurant.name_en)}
+              </p>
+              <p
+                className={`text-[11px] truncate ${
+                  isDarkSurface ? 'text-zinc-400' : 'text-zinc-500'
+                }`}
+              >
+                {isEn
+                  ? 'Save this menu as an app on your home screen'
+                  : 'أضف المنيو كأيقونة سريعة على شاشة هاتفك'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            <PWAInstallButton
+              variant="menu"
+              appTitle={loc(restaurant.name, restaurant.name_en)}
+              accentColor={restaurant.primaryColor}
+            />
+            <button
+              type="button"
+              onClick={() => setInstallBannerDismissed(true)}
+              aria-label={isEn ? 'Dismiss' : 'إخفاء'}
+              className={`w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer ${
+                isDarkSurface
+                  ? 'text-zinc-400 hover:bg-zinc-800 hover:text-white'
+                  : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'
+              }`}
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
       )}
 
       <ThemeRenderer

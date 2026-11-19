@@ -15,6 +15,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { LanguageToggleButton } from '../components/LanguageToggleButton';
+import { PWAInstallButton } from '../components/PWAInstallButton';
 import { OwnerAuthCard } from '../components/auth/OwnerAuthCard';
 import { SafeImage } from '../components/SafeImage';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -203,6 +204,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                 <span>{t.landing.contactWhatsapp}</span>
               </a>
             )}
+            <PWAInstallButton variant="hero" />
           </div>
         </div>
 
@@ -652,7 +654,8 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
       <footer className="mt-auto border-t border-zinc-200 bg-white py-6">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-zinc-500">
           <span>{loc(cms.footerText, cms.footerText_en)}</span>
-          <div className="flex items-center gap-5">
+          <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-5">
+            <PWAInstallButton variant="compact" />
             {cleanWhatsappDigits && (
               <a
                 href={`https://wa.me/${cleanWhatsappDigits}`}

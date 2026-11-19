@@ -398,6 +398,7 @@ export function LandingCmsTab() {
         </div>
 
         <SharePreviewCard
+          mode="platform"
           title={resolvePlatformShareTitle(form, lang)}
           description={resolvePlatformShareDescription(form, lang)}
           imageUrl={form.platformLogoUrl || DEFAULT_PLATFORM_LANDING.platformLogoUrl}
