@@ -19,4 +19,7 @@ export const DIRTY_DOZEN_CASES: DirtyDozenCase[] = [
   { id: 'DD-10', description: 'Invalid oversized document ID', path: '/restaurants/bad..id', operation: 'create', expected: 'PERMISSION_DENIED' },
   { id: 'DD-11', description: 'Client-forged createdAt timestamp', path: '/orders/ord_1', operation: 'create', expected: 'PERMISSION_DENIED' },
   { id: 'DD-12', description: 'Orphaned order with invalid restaurantId/ownerId', path: '/orders/ord_1', operation: 'create', expected: 'PERMISSION_DENIED' },
+  { id: 'DD-13', description: 'Shadow key injected into table_sessions', path: '/restaurants/rest_1/table_sessions/tbl_5_abcd', operation: 'update', expected: 'PERMISSION_DENIED' },
+  { id: 'DD-14', description: 'Invalid callType or cross-tenant list on service_calls', path: '/service_calls/call_1', operation: 'create', expected: 'PERMISSION_DENIED' },
+  { id: 'DD-15', description: 'Cross-tenant hall write or tableCount > 200', path: '/halls/hall_1', operation: 'create', expected: 'PERMISSION_DENIED' },
 ];

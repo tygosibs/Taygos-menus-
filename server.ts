@@ -1,4 +1,5 @@
 import express from 'express';
+import http from 'http';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -529,13 +530,19 @@ async function startServer(): Promise<void> {
     await sendResolvedLogoImage(res, restMeta?.logoUrl, 'restaurant');
   });
 
+  const httpServer = http.createServer(app);
   let vite: ViteDevServer | null = null;
   const distDir = path.resolve(__dirname, 'dist');
 
   if (!isProduction) {
     const { createServer: createViteServer } = await import('vite');
     vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        allowedHosts: true,
+        ws: { server: httpServer },
+        hmr: process.env.DISABLE_HMR !== 'true',
+      },
       appType: 'custom',
     });
     app.use(vite.middlewares);
@@ -620,7 +627,7 @@ async function startServer(): Promise<void> {
     }
   });
 
-  app.listen(PORT, '0.0.0.0', () => {
+  httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`Sufra QR server listening on http://0.0.0.0:${PORT}`);
   });
 }

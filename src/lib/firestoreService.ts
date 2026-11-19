@@ -7,6 +7,7 @@ import {
   increment,
   onSnapshot,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
   Timestamp,
@@ -20,8 +21,11 @@ import {
   ActiveTheme,
   Category,
   CustomTheme,
+  GuestCheckSummary,
+  Hall,
   ItemAddon,
   ItemBadge,
+  ItemPrepState,
   ItemSize,
   MenuColorMode,
   MenuItem,
@@ -31,11 +35,21 @@ import {
   OrderStatus,
   OrderType,
   PlatformLandingSettings,
+  PrepStation,
   PromoCode,
   Restaurant,
+  ServiceCall,
+  ServiceCallStatus,
+  ServiceCallType,
+  TableSession,
+  TableSessionItem,
   UserProfile,
 } from '../types/menu';
 import { db, handleFirestoreError, OperationType } from './firebase';
+
+export function cleanStation(val?: string): PrepStation {
+  return val === 'bar' || val === 'pastry' ? val : 'kitchen';
+}
 
 function makeId(prefix: string): string {
   const rand = Math.random().toString(36).slice(2, 8);
@@ -505,7 +519,9 @@ export async function saveCategory(
     name: string;
     name_en?: string;
     imageUrl?: string;
+    station?: PrepStation;
     sortOrder: number;
+    propagateStationToCategoryIds?: string[];
   }
 ): Promise<void> {
   const isNew = !data.id;
@@ -513,6 +529,7 @@ export async function saveCategory(
   const path = `categories/${catId}`;
   const cleanNameEn = (data.name_en || '').trim().slice(0, 80);
   const cleanParentId = (data.parentId || '').trim().slice(0, 128);
+  const safeStation = cleanStation(data.station);
   try {
     if (isNew) {
       const payload: Record<string, unknown> = {
@@ -520,6 +537,7 @@ export async function saveCategory(
         restaurantId,
         ownerId,
         name: data.name.trim().slice(0, 80),
+        station: safeStation,
         sortOrder: Number(data.sortOrder) || 0,
         createdAt: serverTimestamp(),
       };
@@ -539,8 +557,32 @@ export async function saveCategory(
         name: data.name.trim().slice(0, 80),
         name_en: cleanNameEn,
         imageUrl: (data.imageUrl || '').trim().slice(0, 300000),
+        station: safeStation,
         sortOrder: Number(data.sortOrder) || 0,
       });
+
+      const targetIds = new Set<string>([
+        catId,
+        ...(data.propagateStationToCategoryIds || []).filter(Boolean),
+      ]);
+      const itemsSnap = await getDocs(
+        query(collection(db, 'menu_items'), where('restaurantId', '==', restaurantId))
+      );
+      const matchingItems = itemsSnap.docs.filter((d) =>
+        targetIds.has(String(d.data()?.categoryId || ''))
+      );
+      const CHUNK_SIZE = 450;
+      for (let i = 0; i < matchingItems.length; i += CHUNK_SIZE) {
+        const chunk = matchingItems.slice(i, i + CHUNK_SIZE);
+        const batch = writeBatch(db);
+        chunk.forEach((d) => {
+          batch.update(d.ref, {
+            station: safeStation,
+            updatedAt: serverTimestamp(),
+          });
+        });
+        await batch.commit();
+      }
     }
   } catch (error) {
     handleFirestoreError(error, isNew ? OperationType.CREATE : OperationType.UPDATE, path);
@@ -630,12 +672,14 @@ export async function saveMenuItem(
     badge?: ItemBadge;
     isBogo?: boolean;
     suggestedItemIds?: string[];
+    station?: PrepStation;
     sortOrder: number;
   }
 ): Promise<void> {
   const isNew = !data.id;
   const itemId = data.id || makeId('item');
   const path = `menu_items/${itemId}`;
+  const safeStation = cleanStation(data.station);
 
   const cleanSizes = data.sizes.slice(0, 10).map((s) => ({
     name: s.name.trim().slice(0, 40),
@@ -676,6 +720,7 @@ export async function saveMenuItem(
         badge: cleanBadge,
         isBogo: cleanIsBogo,
         suggestedItemIds: cleanSuggestedIds,
+        station: safeStation,
         sortOrder: Number(data.sortOrder) || 0,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -717,6 +762,7 @@ export async function saveMenuItem(
         badge: cleanBadge,
         isBogo: cleanIsBogo,
         suggestedItemIds: cleanSuggestedIds,
+        station: safeStation,
         sortOrder: Number(data.sortOrder) || 0,
         updatedAt: serverTimestamp(),
       });
@@ -756,7 +802,11 @@ export interface SubmitOrderInput {
   customerName: string;
   customerPhone: string;
   orderType: OrderType;
+  hallName?: string;
   tableNumber?: string;
+  sessionId?: string;
+  isGroupOrder?: boolean;
+  guestChecks?: GuestCheckSummary[];
   deliveryAddress?: string;
   notes?: string;
   items: OrderItemPayload[];
@@ -774,15 +824,31 @@ export async function submitPublicOrder(input: SubmitOrderInput): Promise<{ id: 
   const orderNumber = `ORD-${Math.floor(1000 + Math.random() * 9000)}`;
   const path = `orders/${orderId}`;
 
+  const cleanItems = input.items.slice(0, 80).map((it) => {
+    const cleaned: OrderItemPayload = {
+      menuItemId: it.menuItemId,
+      name: it.name.slice(0, 120),
+      addonNames: (it.addonNames || []).slice(0, 20),
+      quantity: Math.max(1, Math.round(it.quantity)),
+      unitPrice: Number(it.unitPrice.toFixed(2)),
+      lineTotal: Number(it.lineTotal.toFixed(2)),
+      station: cleanStation(it.station),
+    };
+    if (it.sizeName) cleaned.sizeName = it.sizeName.slice(0, 40);
+    if (it.notes) cleaned.notes = it.notes.slice(0, 200);
+    if (it.guestName) cleaned.guestName = it.guestName.slice(0, 60);
+    return cleaned;
+  });
+
   const payload: Record<string, unknown> = {
     id: orderId,
     restaurantId: input.restaurantId,
     ownerId: input.ownerId,
     orderNumber,
-    customerName: input.customerName.trim().slice(0, 100),
+    customerName: input.customerName.trim().slice(0, 100) || 'ضيف',
     customerPhone: input.customerPhone.trim().slice(0, 24),
     orderType: input.orderType,
-    items: input.items.slice(0, 50),
+    items: cleanItems,
     subtotal: Number(input.subtotal.toFixed(2)),
     serviceCharge: Number(input.serviceCharge.toFixed(2)),
     taxAmount: Number(input.taxAmount.toFixed(2)),
@@ -801,8 +867,28 @@ export async function submitPublicOrder(input: SubmitOrderInput): Promise<{ id: 
   if (input.promoCode?.trim()) {
     payload.promoCode = input.promoCode.trim().toUpperCase().slice(0, 32);
   }
+  if (input.hallName?.trim()) {
+    payload.hallName = input.hallName.trim().slice(0, 60);
+  }
   if (input.tableNumber?.trim()) {
     payload.tableNumber = input.tableNumber.trim().slice(0, 20);
+  }
+  if (input.sessionId?.trim()) {
+    payload.sessionId = input.sessionId.trim().slice(0, 128);
+  }
+  if (input.isGroupOrder !== undefined) {
+    payload.isGroupOrder = Boolean(input.isGroupOrder);
+  }
+  if (Array.isArray(input.guestChecks) && input.guestChecks.length > 0) {
+    payload.guestChecks = input.guestChecks.slice(0, 30).map((gc) => ({
+      guestName: gc.guestName.trim().slice(0, 60),
+      ...(gc.guestId ? { guestId: gc.guestId.slice(0, 64) } : {}),
+      itemsCount: Math.max(1, Math.round(gc.itemsCount)),
+      subtotal: Number(gc.subtotal.toFixed(2)),
+      serviceCharge: Number(gc.serviceCharge.toFixed(2)),
+      taxAmount: Number(gc.taxAmount.toFixed(2)),
+      total: Number(gc.total.toFixed(2)),
+    }));
   }
   if (input.deliveryAddress?.trim()) {
     payload.deliveryAddress = input.deliveryAddress.trim().slice(0, 300);
@@ -893,6 +979,66 @@ export async function updateOrderStatus(
       status,
       updatedAt: serverTimestamp(),
     });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function updateOrderItemProgress(
+  orderId: string,
+  itemUpdates: Record<string, ItemPrepState>,
+  nextOrderStatus?: OrderStatus
+): Promise<void> {
+  const path = `orders/${orderId}`;
+  try {
+    await runTransaction(db, async (tx) => {
+      const ref = doc(db, 'orders', orderId);
+      const snap = await tx.get(ref);
+      if (!snap.exists()) return;
+      const current = snap.data() as Order;
+      if (current.status === 'completed' || current.status === 'cancelled') return;
+
+      const mergedProgress: Record<string, ItemPrepState> = {
+        ...(current.itemProgress || {}),
+        ...itemUpdates,
+      };
+
+      const updatePayload: Record<string, unknown> = {
+        itemProgress: mergedProgress,
+        updatedAt: serverTimestamp(),
+      };
+      if (nextOrderStatus && nextOrderStatus !== current.status) {
+        updatePayload.status = nextOrderStatus;
+      }
+      tx.update(ref, updatePayload);
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function closeTableOrdersAndSession(params: {
+  restaurantId: string;
+  orderIds: string[];
+  sessionId?: string;
+}): Promise<void> {
+  const path = 'orders';
+  try {
+    const batch = writeBatch(db);
+    params.orderIds.forEach((orderId) => {
+      if (orderId) {
+        batch.update(doc(db, 'orders', orderId), {
+          status: 'completed',
+          updatedAt: serverTimestamp(),
+        });
+      }
+    });
+    if (params.sessionId?.trim()) {
+      batch.delete(
+        doc(db, 'restaurants', params.restaurantId, 'table_sessions', params.sessionId.trim())
+      );
+    }
+    await batch.commit();
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
   }
@@ -1048,16 +1194,22 @@ export async function deleteRestaurantAccountCompletely(
 ): Promise<void> {
   const path = `restaurants/${restaurant.id}`;
   try {
-    const [catSnap, itemSnap, orderSnap] = await Promise.all([
+    const [catSnap, itemSnap, orderSnap, callsSnap, hallsSnap, sessionsSnap] = await Promise.all([
       getDocs(query(collection(db, 'categories'), where('restaurantId', '==', restaurant.id))),
       getDocs(query(collection(db, 'menu_items'), where('restaurantId', '==', restaurant.id))),
       getDocs(query(collection(db, 'orders'), where('restaurantId', '==', restaurant.id))),
+      getDocs(query(collection(db, 'service_calls'), where('restaurantId', '==', restaurant.id))),
+      getDocs(query(collection(db, 'halls'), where('restaurantId', '==', restaurant.id))),
+      getDocs(collection(db, 'restaurants', restaurant.id, 'table_sessions')),
     ]);
 
     const refsToDelete = [
       ...catSnap.docs.map((d) => d.ref),
       ...itemSnap.docs.map((d) => d.ref),
       ...orderSnap.docs.map((d) => d.ref),
+      ...callsSnap.docs.map((d) => d.ref),
+      ...hallsSnap.docs.map((d) => d.ref),
+      ...sessionsSnap.docs.map((d) => d.ref),
       doc(db, 'restaurants', restaurant.id),
     ];
 
@@ -1305,3 +1457,366 @@ export async function deleteCustomTheme(themeId: string): Promise<void> {
     handleFirestoreError(error, OperationType.DELETE, path);
   }
 }
+
+// ============================================================
+// Group Table Sessions (Live Collaborative Cart & Separate Check)
+// ============================================================
+
+export function subscribeTableSession(
+  restaurantId: string,
+  sessionId: string,
+  onData: (session: TableSession | null) => void,
+  onError?: (err: Error) => void
+): () => void {
+  const path = `restaurants/${restaurantId}/table_sessions/${sessionId}`;
+  return onSnapshot(
+    doc(db, 'restaurants', restaurantId, 'table_sessions', sessionId),
+    (snap) => {
+      if (!snap.exists()) {
+        onData(null);
+        return;
+      }
+      onData({ ...(snap.data() as TableSession), id: snap.id });
+    },
+    (error) => {
+      if (onError) {
+        onError(error instanceof Error ? error : new Error('Table session sync error'));
+      } else {
+        handleFirestoreError(error, OperationType.GET, path);
+      }
+    }
+  );
+}
+
+export async function registerGuestInTableSession(params: {
+  restaurantId: string;
+  ownerId: string;
+  sessionId: string;
+  hallName: string;
+  tableNumber: string;
+  guestName: string;
+}): Promise<void> {
+  const path = `restaurants/${params.restaurantId}/table_sessions/${params.sessionId}`;
+  const cleanGuest = params.guestName.trim().slice(0, 60);
+  const cleanHall = params.hallName.trim().slice(0, 60);
+  const cleanTable = params.tableNumber.trim().slice(0, 20);
+  if (!cleanTable || !cleanGuest) return;
+
+  try {
+    await runTransaction(db, async (tx) => {
+      const ref = doc(db, 'restaurants', params.restaurantId, 'table_sessions', params.sessionId);
+      const snap = await tx.get(ref);
+      if (!snap.exists()) {
+        tx.set(ref, {
+          id: params.sessionId,
+          restaurantId: params.restaurantId,
+          ownerId: params.ownerId,
+          hallName: cleanHall,
+          tableNumber: cleanTable,
+          status: 'active',
+          guests: [cleanGuest],
+          items: [],
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        const data = snap.data() as TableSession;
+        const existingGuests = Array.isArray(data.guests) ? data.guests : [];
+        const hasGuest = existingGuests.some(
+          (g) => g.trim().toLowerCase() === cleanGuest.toLowerCase()
+        );
+        const nextGuests = hasGuest
+          ? existingGuests.slice(0, 30)
+          : [...existingGuests, cleanGuest].slice(0, 30);
+        tx.update(ref, {
+          hallName: cleanHall || data.hallName || '',
+          tableNumber: cleanTable || data.tableNumber,
+          guests: nextGuests,
+          updatedAt: serverTimestamp(),
+        });
+      }
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+export async function mutateTableSessionCart(params: {
+  restaurantId: string;
+  ownerId: string;
+  sessionId: string;
+  hallName: string;
+  tableNumber: string;
+  guestName: string;
+  mutator: (currentItems: TableSessionItem[]) => TableSessionItem[];
+}): Promise<void> {
+  const path = `restaurants/${params.restaurantId}/table_sessions/${params.sessionId}`;
+  const cleanGuest = params.guestName.trim().slice(0, 60) || 'ضيف';
+  const cleanHall = params.hallName.trim().slice(0, 60);
+  const cleanTable = params.tableNumber.trim().slice(0, 20);
+  if (!cleanTable) return;
+
+  try {
+    await runTransaction(db, async (tx) => {
+      const ref = doc(db, 'restaurants', params.restaurantId, 'table_sessions', params.sessionId);
+      const snap = await tx.get(ref);
+      if (!snap.exists()) {
+        const nextItems = params.mutator([]).slice(0, 80);
+        tx.set(ref, {
+          id: params.sessionId,
+          restaurantId: params.restaurantId,
+          ownerId: params.ownerId,
+          hallName: cleanHall,
+          tableNumber: cleanTable,
+          status: 'active',
+          guests: [cleanGuest],
+          items: nextItems,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        const data = snap.data() as TableSession;
+        const currentItems = Array.isArray(data.items) ? data.items : [];
+        const nextItems = params.mutator(currentItems).slice(0, 80);
+        const existingGuests = Array.isArray(data.guests) ? data.guests : [];
+        const hasGuest = existingGuests.some(
+          (g) => g.trim().toLowerCase() === cleanGuest.toLowerCase()
+        );
+        const nextGuests = hasGuest
+          ? existingGuests.slice(0, 30)
+          : [...existingGuests, cleanGuest].slice(0, 30);
+
+        tx.update(ref, {
+          hallName: cleanHall || data.hallName || '',
+          tableNumber: cleanTable || data.tableNumber,
+          guests: nextGuests,
+          items: nextItems,
+          updatedAt: serverTimestamp(),
+        });
+      }
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+export async function clearTableSessionAfterOrder(
+  restaurantId: string,
+  sessionId: string,
+  orderNumber?: string
+): Promise<void> {
+  const path = `restaurants/${restaurantId}/table_sessions/${sessionId}`;
+  try {
+    await runTransaction(db, async (tx) => {
+      const ref = doc(db, 'restaurants', restaurantId, 'table_sessions', sessionId);
+      const snap = await tx.get(ref);
+      if (!snap.exists()) return;
+      const updatePayload: Record<string, unknown> = {
+        items: [],
+        updatedAt: serverTimestamp(),
+      };
+      if (orderNumber?.trim()) {
+        updatePayload.lastOrderNumber = orderNumber.trim().slice(0, 32);
+      }
+      tx.update(ref, updatePayload);
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+// ============================================================
+// Service Calls (Captain / Waiter / Bill / Cutlery & Water)
+// ============================================================
+
+export async function sendServiceCall(input: {
+  restaurantId: string;
+  ownerId: string;
+  hallName: string;
+  tableNumber: string;
+  sessionId?: string;
+  guestName: string;
+  callType: ServiceCallType;
+}): Promise<ServiceCall> {
+  const callId = makeId('call');
+  const path = `service_calls/${callId}`;
+  const cleanGuest = input.guestName.trim().slice(0, 60) || 'ضيف';
+  const cleanHall = input.hallName.trim().slice(0, 60);
+  const cleanTable = input.tableNumber.trim().slice(0, 20);
+
+  const payload: Record<string, unknown> = {
+    id: callId,
+    restaurantId: input.restaurantId,
+    ownerId: input.ownerId,
+    hallName: cleanHall,
+    tableNumber: cleanTable,
+    guestName: cleanGuest,
+    callType: input.callType,
+    status: 'pending',
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
+  if (input.sessionId?.trim()) {
+    payload.sessionId = input.sessionId.trim().slice(0, 128);
+  }
+
+  try {
+    await setDoc(doc(db, 'service_calls', callId), payload);
+    return {
+      id: callId,
+      restaurantId: input.restaurantId,
+      ownerId: input.ownerId,
+      hallName: cleanHall,
+      tableNumber: cleanTable,
+      sessionId: input.sessionId,
+      guestName: cleanGuest,
+      callType: input.callType,
+      status: 'pending',
+    };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, path);
+  }
+}
+
+export function subscribeOwnerServiceCalls(
+  restaurantId: string,
+  ownerId: string,
+  onData: (calls: ServiceCall[]) => void,
+  onError?: (err: Error) => void
+): () => void {
+  const path = 'service_calls';
+  const q = query(
+    collection(db, 'service_calls'),
+    where('restaurantId', '==', restaurantId),
+    where('ownerId', '==', ownerId)
+  );
+  return onSnapshot(
+    q,
+    (snap) => {
+      const list = snap.docs
+        .map((d) => ({ ...(d.data() as ServiceCall), id: d.id }))
+        .sort((a, b) => getMillis(b.createdAt) - getMillis(a.createdAt));
+      onData(list);
+    },
+    (error) => {
+      if (onError) {
+        onError(error instanceof Error ? error : new Error('Failed to load service calls'));
+      } else {
+        handleFirestoreError(error, OperationType.LIST, path);
+      }
+    }
+  );
+}
+
+export async function updateServiceCallStatus(
+  callId: string,
+  status: ServiceCallStatus
+): Promise<void> {
+  const path = `service_calls/${callId}`;
+  try {
+    await updateDoc(doc(db, 'service_calls', callId), {
+      status,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+// ============================================================
+// Halls / Floor Zones Management (Bulk Table QR & Operations)
+// ============================================================
+
+export function subscribeHalls(
+  restaurantId: string,
+  onData: (halls: Hall[]) => void,
+  onError?: (err: Error) => void
+): () => void {
+  const path = 'halls';
+  const q = query(collection(db, 'halls'), where('restaurantId', '==', restaurantId));
+  return onSnapshot(
+    q,
+    (snap) => {
+      const list = snap.docs
+        .map((d) => ({ ...(d.data() as Hall), id: d.id }))
+        .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+      onData(list);
+    },
+    (error) => {
+      if (onError) {
+        onError(error instanceof Error ? error : new Error('Failed to load halls'));
+      } else {
+        handleFirestoreError(error, OperationType.LIST, path);
+      }
+    }
+  );
+}
+
+export async function fetchRestaurantHalls(restaurantId: string): Promise<Hall[]> {
+  try {
+    const snap = await getDocs(query(collection(db, 'halls'), where('restaurantId', '==', restaurantId)));
+    return snap.docs
+      .map((d) => ({ ...(d.data() as Hall), id: d.id }))
+      .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+  } catch {
+    return [];
+  }
+}
+
+export async function saveHall(
+  restaurantId: string,
+  ownerId: string,
+  data: {
+    id?: string;
+    name: string;
+    name_en?: string;
+    tableCount: number;
+    sortOrder: number;
+  }
+): Promise<void> {
+  const isNew = !data.id;
+  const hallId = data.id || makeId('hall');
+  const path = `halls/${hallId}`;
+  const cleanName = data.name.trim().slice(0, 80);
+  const cleanNameEn = (data.name_en || '').trim().slice(0, 80);
+  const safeTableCount = Math.max(1, Math.min(200, Math.round(Number(data.tableCount) || 1)));
+  const safeSort = Math.max(0, Math.min(10000, Math.round(Number(data.sortOrder) || 0)));
+
+  try {
+    if (isNew) {
+      const payload: Record<string, unknown> = {
+        id: hallId,
+        restaurantId,
+        ownerId,
+        name: cleanName,
+        tableCount: safeTableCount,
+        sortOrder: safeSort,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+      if (cleanNameEn) payload.name_en = cleanNameEn;
+      await setDoc(doc(db, 'halls', hallId), payload);
+    } else {
+      await updateDoc(doc(db, 'halls', hallId), {
+        name: cleanName,
+        name_en: cleanNameEn,
+        tableCount: safeTableCount,
+        sortOrder: safeSort,
+        updatedAt: serverTimestamp(),
+      });
+    }
+  } catch (error) {
+    handleFirestoreError(error, isNew ? OperationType.CREATE : OperationType.UPDATE, path);
+  }
+}
+
+export async function deleteHall(hallId: string): Promise<void> {
+  const path = `halls/${hallId}`;
+  try {
+    await deleteDoc(doc(db, 'halls', hallId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
+

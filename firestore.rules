@@ -28,6 +28,10 @@ service cloud.firestore {
       );
     }
 
+    function isValidStation(val) {
+      return val in ['kitchen', 'bar', 'pastry'];
+    }
+
     function incoming() {
       return request.resource.data;
     }
@@ -128,7 +132,7 @@ service cloud.firestore {
 
     function isValidCategoryShape(data, catId) {
       return data.keys().hasAll(['id', 'restaurantId', 'ownerId', 'name', 'sortOrder', 'createdAt']) &&
-        data.keys().hasOnly(['id', 'restaurantId', 'ownerId', 'parentId', 'name', 'name_en', 'imageUrl', 'sortOrder', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'restaurantId', 'ownerId', 'parentId', 'name', 'name_en', 'imageUrl', 'station', 'sortOrder', 'createdAt']) &&
         isValidId(data.id) &&
         data.id == catId &&
         isValidId(data.restaurantId) &&
@@ -137,6 +141,7 @@ service cloud.firestore {
         data.name is string && data.name.size() >= 1 && data.name.size() <= 80 &&
         (!('name_en' in data) || (data.name_en is string && data.name_en.size() <= 80)) &&
         (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 300000)) &&
+        (!('station' in data) || isValidStation(data.station)) &&
         data.sortOrder is number && data.sortOrder >= 0 && data.sortOrder <= 10000 &&
         data.createdAt is timestamp;
     }
@@ -151,7 +156,7 @@ service cloud.firestore {
           'id', 'restaurantId', 'ownerId', 'categoryId', 'name', 'name_en',
           'description', 'description_en', 'basePrice', 'imageUrl', 'calories',
           'isSpicy', 'isAvailable', 'ordersCount',
-          'sizes', 'addons', 'badge', 'isBogo', 'suggestedItemIds',
+          'sizes', 'addons', 'badge', 'isBogo', 'suggestedItemIds', 'station',
           'sortOrder', 'createdAt', 'updatedAt'
         ]) &&
         isValidId(data.id) &&
@@ -174,6 +179,7 @@ service cloud.firestore {
         (!('badge' in data) || (data.badge in ['', 'none', 'best_seller', 'trending_week', 'chef_choice', 'bogo', 'new'])) &&
         (!('isBogo' in data) || data.isBogo is bool) &&
         (!('suggestedItemIds' in data) || (data.suggestedItemIds is list && data.suggestedItemIds.size() <= 8 && (data.suggestedItemIds.size() == 0 || data.suggestedItemIds[0] is string))) &&
+        (!('station' in data) || isValidStation(data.station)) &&
         data.sortOrder is number && data.sortOrder >= 0 && data.sortOrder <= 10000 &&
         data.createdAt is timestamp &&
         data.updatedAt is timestamp;
@@ -187,10 +193,11 @@ service cloud.firestore {
         ]) &&
         data.keys().hasOnly([
           'id', 'restaurantId', 'ownerId', 'orderNumber', 'customerName',
-          'customerPhone', 'orderType', 'tableNumber', 'deliveryAddress',
+          'customerPhone', 'orderType', 'hallName', 'tableNumber', 'sessionId',
+          'isGroupOrder', 'guestChecks', 'deliveryAddress',
           'notes', 'items', 'subtotal', 'serviceCharge', 'deliveryFee',
           'discountAmount', 'promoCode', 'taxAmount', 'total',
-          'status', 'createdAt', 'updatedAt'
+          'status', 'itemProgress', 'createdAt', 'updatedAt'
         ]) &&
         isValidId(data.id) &&
         data.id == orderId &&
@@ -198,12 +205,20 @@ service cloud.firestore {
         isValidId(data.ownerId) &&
         data.orderNumber is string && data.orderNumber.size() >= 1 && data.orderNumber.size() <= 32 &&
         data.customerName is string && data.customerName.size() >= 1 && data.customerName.size() <= 100 &&
-        data.customerPhone is string && data.customerPhone.size() >= 5 && data.customerPhone.size() <= 24 &&
         data.orderType in ['dine_in', 'delivery', 'pickup'] &&
+        (
+          data.orderType == 'dine_in'
+            ? (data.customerPhone is string && data.customerPhone.size() <= 24)
+            : (data.customerPhone is string && data.customerPhone.size() >= 5 && data.customerPhone.size() <= 24)
+        ) &&
+        (!('hallName' in data) || (data.hallName is string && data.hallName.size() <= 60)) &&
         (!('tableNumber' in data) || (data.tableNumber is string && data.tableNumber.size() <= 20)) &&
+        (!('sessionId' in data) || data.sessionId == '' || isValidId(data.sessionId)) &&
+        (!('isGroupOrder' in data) || data.isGroupOrder is bool) &&
+        (!('guestChecks' in data) || (data.guestChecks is list && data.guestChecks.size() <= 30 && (data.guestChecks.size() == 0 || data.guestChecks[0] is map))) &&
         (!('deliveryAddress' in data) || (data.deliveryAddress is string && data.deliveryAddress.size() <= 300)) &&
         (!('notes' in data) || (data.notes is string && data.notes.size() <= 400)) &&
-        data.items is list && data.items.size() >= 1 && data.items.size() <= 50 && data.items[0] is map &&
+        data.items is list && data.items.size() >= 1 && data.items.size() <= 80 && data.items[0] is map &&
         data.subtotal is number && data.subtotal >= 0 && data.subtotal <= 1000000 &&
         data.serviceCharge is number && data.serviceCharge >= 0 && data.serviceCharge <= 1000000 &&
         (!('deliveryFee' in data) || (data.deliveryFee is number && data.deliveryFee >= 0 && data.deliveryFee <= 100000)) &&
@@ -212,6 +227,73 @@ service cloud.firestore {
         data.taxAmount is number && data.taxAmount >= 0 && data.taxAmount <= 1000000 &&
         data.total is number && data.total >= 0 && data.total <= 1000000 &&
         data.status in ['pending', 'preparing', 'completed', 'cancelled'] &&
+        (!('itemProgress' in data) || (data.itemProgress is map && data.itemProgress.size() <= 80)) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidTableSession(data, restaurantId, sessionId) {
+      return data.keys().hasAll([
+          'id', 'restaurantId', 'ownerId', 'hallName', 'tableNumber',
+          'status', 'guests', 'items', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'restaurantId', 'ownerId', 'hallName', 'tableNumber',
+          'status', 'guests', 'items', 'lastOrderNumber', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.id) &&
+        data.id == sessionId &&
+        isValidId(data.restaurantId) &&
+        data.restaurantId == restaurantId &&
+        isValidId(data.ownerId) &&
+        data.hallName is string && data.hallName.size() <= 60 &&
+        data.tableNumber is string && data.tableNumber.size() >= 1 && data.tableNumber.size() <= 20 &&
+        data.status in ['active', 'closed'] &&
+        data.guests is list && data.guests.size() <= 30 && (data.guests.size() == 0 || data.guests[0] is string) &&
+        data.items is list && data.items.size() <= 80 && (data.items.size() == 0 || data.items[0] is map) &&
+        (!('lastOrderNumber' in data) || (data.lastOrderNumber is string && data.lastOrderNumber.size() <= 32)) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidServiceCall(data, callId) {
+      return data.keys().hasAll([
+          'id', 'restaurantId', 'ownerId', 'hallName', 'tableNumber',
+          'guestName', 'callType', 'status', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'restaurantId', 'ownerId', 'hallName', 'tableNumber',
+          'sessionId', 'guestName', 'callType', 'status', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.id) &&
+        data.id == callId &&
+        isValidId(data.restaurantId) &&
+        isValidId(data.ownerId) &&
+        data.hallName is string && data.hallName.size() <= 60 &&
+        data.tableNumber is string && data.tableNumber.size() >= 1 && data.tableNumber.size() <= 20 &&
+        (!('sessionId' in data) || data.sessionId == '' || isValidId(data.sessionId)) &&
+        data.guestName is string && data.guestName.size() >= 1 && data.guestName.size() <= 60 &&
+        data.callType in ['call_waiter', 'request_bill_cash', 'request_bill_card', 'cutlery_water'] &&
+        data.status in ['pending', 'acknowledged', 'resolved'] &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidHallShape(data, hallId) {
+      return data.keys().hasAll([
+          'id', 'restaurantId', 'ownerId', 'name', 'tableCount', 'sortOrder', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'restaurantId', 'ownerId', 'name', 'name_en', 'tableCount', 'sortOrder', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.id) &&
+        data.id == hallId &&
+        isValidId(data.restaurantId) &&
+        isValidId(data.ownerId) &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 80 &&
+        (!('name_en' in data) || (data.name_en is string && data.name_en.size() <= 80)) &&
+        data.tableCount is number && data.tableCount >= 1 && data.tableCount <= 200 &&
+        data.sortOrder is number && data.sortOrder >= 0 && data.sortOrder <= 10000 &&
         data.createdAt is timestamp &&
         data.updatedAt is timestamp;
     }
@@ -364,6 +446,56 @@ service cloud.firestore {
         isSuperAdmin() ||
         (isVerifiedAccount() && existing().ownerId == request.auth.uid)
       );
+
+      // 3b. Table Sessions subcollection (Live Group Cart per dining table)
+      match /table_sessions/{sessionId} {
+        allow get: if isValidId(restaurantId) &&
+          isValidId(sessionId) &&
+          exists(/databases/$(database)/documents/restaurants/$(restaurantId));
+        allow list: if isValidId(restaurantId) && (
+          isSuperAdmin() ||
+          (isVerifiedAccount() && resource.data.ownerId == request.auth.uid)
+        );
+        allow create: if isValidId(restaurantId) &&
+          isValidId(sessionId) &&
+          isValidTableSession(incoming(), restaurantId, sessionId) &&
+          incoming().status == 'active' &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          exists(/databases/$(database)/documents/restaurants/$(restaurantId)) &&
+          get(/databases/$(database)/documents/restaurants/$(restaurantId)).data.ownerId == incoming().ownerId;
+        allow update: if isValidId(restaurantId) &&
+          isValidId(sessionId) &&
+          isValidTableSession(incoming(), restaurantId, sessionId) &&
+          incoming().id == existing().id &&
+          incoming().restaurantId == existing().restaurantId &&
+          incoming().ownerId == existing().ownerId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          exists(/databases/$(database)/documents/restaurants/$(restaurantId)) && (
+            (
+              existing().status == 'active' &&
+              incoming().diff(existing()).affectedKeys().hasOnly([
+                'guests', 'items', 'hallName', 'tableNumber', 'lastOrderNumber', 'updatedAt'
+              ])
+            ) || (
+              existing().status == 'closed' &&
+              incoming().status == 'active' &&
+              incoming().diff(existing()).affectedKeys().hasOnly([
+                'status', 'guests', 'items', 'hallName', 'tableNumber', 'lastOrderNumber', 'updatedAt'
+              ])
+            ) || (
+              (isSuperAdmin() || (isVerifiedAccount() && existing().ownerId == request.auth.uid)) &&
+              incoming().diff(existing()).affectedKeys().hasOnly([
+                'status', 'guests', 'items', 'lastOrderNumber', 'updatedAt'
+              ])
+            )
+          );
+        allow delete: if isValidId(restaurantId) && isValidId(sessionId) && (
+          isSuperAdmin() ||
+          (isVerifiedAccount() && existing().ownerId == request.auth.uid)
+        );
+      }
     }
 
     // 4. Categories collection (linked by restaurantId)
@@ -403,7 +535,9 @@ service cloud.firestore {
         incoming().id == existing().id &&
         incoming().restaurantId == existing().restaurantId &&
         incoming().createdAt == existing().createdAt &&
-        incoming().diff(existing()).affectedKeys().hasOnly(['parentId', 'name', 'name_en', 'imageUrl', 'sortOrder']) && (
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'parentId', 'name', 'name_en', 'imageUrl', 'station', 'sortOrder'
+        ]) && (
           (
             isVerifiedAccount() &&
             existing().ownerId == request.auth.uid &&
@@ -470,10 +604,11 @@ service cloud.firestore {
             ) && (
               incoming().diff(existing()).affectedKeys().hasOnly(['isAvailable', 'updatedAt']) ||
               incoming().diff(existing()).affectedKeys().hasOnly(['sortOrder', 'updatedAt']) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['station', 'updatedAt']) ||
               incoming().diff(existing()).affectedKeys().hasOnly([
                 'categoryId', 'name', 'name_en', 'description', 'description_en', 'basePrice', 'imageUrl', 'calories',
                 'isSpicy', 'isAvailable', 'ordersCount', 'sizes', 'addons', 'badge', 'isBogo', 'suggestedItemIds',
-                'sortOrder', 'updatedAt'
+                'station', 'sortOrder', 'updatedAt'
               ])
             )
           ) || (
@@ -506,21 +641,105 @@ service cloud.firestore {
         incoming().updatedAt == request.time &&
         exists(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)) &&
         get(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)).data.ownerId == incoming().ownerId;
-      allow update: if isVerifiedAccount() && isValidId(orderId) &&
+      allow update: if isValidId(orderId) &&
         isValidOrder(incoming(), orderId) &&
-        existing().ownerId == request.auth.uid &&
         incoming().ownerId == existing().ownerId &&
         incoming().id == existing().id &&
         incoming().restaurantId == existing().restaurantId &&
         incoming().createdAt == existing().createdAt &&
         incoming().updatedAt == request.time &&
-        !(existing().status in ['completed', 'cancelled']) &&
-        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']) &&
-        get(/databases/$(database)/documents/restaurants/$(existing().restaurantId)).data.ownerId == request.auth.uid;
+        !(existing().status in ['completed', 'cancelled']) && (
+          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']) ||
+          incoming().diff(existing()).affectedKeys().hasOnly(['itemProgress', 'updatedAt']) ||
+          incoming().diff(existing()).affectedKeys().hasOnly(['itemProgress', 'status', 'updatedAt'])
+        ) &&
+        exists(/databases/$(database)/documents/restaurants/$(existing().restaurantId)) && (
+          isSuperAdmin() || (
+            isVerifiedAccount() &&
+            existing().ownerId == request.auth.uid &&
+            get(/databases/$(database)/documents/restaurants/$(existing().restaurantId)).data.ownerId == request.auth.uid
+          )
+        );
       allow delete: if isSuperAdmin() && isValidId(orderId);
     }
 
-    // 7. Platform Settings CMS collection (public read for landing page, Super Admin write)
+    // 7. Service Calls collection (Captain / Waiter / Bill requests isolated to restaurant owner)
+    match /service_calls/{callId} {
+      allow get: if isValidId(callId) && (
+        isSuperAdmin() ||
+        (isVerifiedAccount() && existing().ownerId == request.auth.uid)
+      );
+      allow list: if isSuperAdmin() || (isVerifiedAccount() && resource.data.ownerId == request.auth.uid);
+      allow create: if isValidId(callId) &&
+        isValidServiceCall(incoming(), callId) &&
+        incoming().status == 'pending' &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        exists(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)) &&
+        get(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)).data.ownerId == incoming().ownerId;
+      allow update: if isValidId(callId) &&
+        isValidServiceCall(incoming(), callId) &&
+        incoming().id == existing().id &&
+        incoming().restaurantId == existing().restaurantId &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (isSuperAdmin() || (isVerifiedAccount() && existing().ownerId == request.auth.uid)) &&
+        existing().status != 'resolved' &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']) &&
+        exists(/databases/$(database)/documents/restaurants/$(existing().restaurantId)) &&
+        get(/databases/$(database)/documents/restaurants/$(existing().restaurantId)).data.ownerId == existing().ownerId;
+      allow delete: if isValidId(callId) && (
+        isSuperAdmin() ||
+        (isVerifiedAccount() && existing().ownerId == request.auth.uid)
+      );
+    }
+
+    // 8. Halls / Dining Zones collection (zero-PII public lookup + strict owner write)
+    match /halls/{hallId} {
+      allow get: if isValidId(hallId);
+      allow list: if true;
+      allow create: if isValidId(hallId) &&
+        isValidHallShape(incoming(), hallId) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        exists(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)) && (
+          (
+            isVerifiedAccount() &&
+            incoming().ownerId == request.auth.uid &&
+            get(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)).data.ownerId == request.auth.uid
+          ) || (
+            isSuperAdmin() &&
+            get(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)).data.ownerId == incoming().ownerId
+          )
+        );
+      allow update: if isValidId(hallId) &&
+        isValidHallShape(incoming(), hallId) &&
+        incoming().id == existing().id &&
+        incoming().restaurantId == existing().restaurantId &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'name', 'name_en', 'tableCount', 'sortOrder', 'updatedAt'
+        ]) &&
+        exists(/databases/$(database)/documents/restaurants/$(existing().restaurantId)) && (
+          isSuperAdmin() || (
+            isVerifiedAccount() &&
+            existing().ownerId == request.auth.uid &&
+            get(/databases/$(database)/documents/restaurants/$(existing().restaurantId)).data.ownerId == request.auth.uid
+          )
+        );
+      allow delete: if isValidId(hallId) && (
+        isSuperAdmin() || (
+          isVerifiedAccount() &&
+          existing().ownerId == request.auth.uid &&
+          get(/databases/$(database)/documents/restaurants/$(existing().restaurantId)).data.ownerId == request.auth.uid
+        )
+      );
+    }
+
+    // 9. Platform Settings CMS collection (public read for landing page, Super Admin write)
     match /platform_settings/{settingId} {
       allow get: if settingId == 'landing';
       allow list: if isSuperAdmin();
@@ -531,7 +750,7 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // 8. Custom Injected Themes collection (public read, Super Admin write only)
+    // 10. Custom Injected Themes collection (public read, Super Admin write only)
     match /custom_themes/{themeId} {
       allow get: if isValidId(themeId);
       allow list: if isSuperAdmin() || resource.data.isActive == true;

@@ -50,6 +50,8 @@ export type ItemBadge =
   | 'bogo'
   | 'new';
 export type MenuSortMode = 'default' | 'best_selling' | 'chef_quality' | 'lowest_price';
+export type PrepStation = 'kitchen' | 'bar' | 'pastry';
+export type ItemPrepState = 'pending' | 'preparing' | 'ready' | 'served';
 
 export interface MenuOffer {
   id: string;
@@ -128,6 +130,7 @@ export interface Category {
   name: string;
   name_en?: string;
   imageUrl?: string;
+  station?: PrepStation;
   sortOrder: number;
   createdAt?: unknown;
 }
@@ -152,6 +155,7 @@ export interface MenuItem {
   badge?: ItemBadge;
   isBogo?: boolean;
   suggestedItemIds?: string[];
+  station?: PrepStation;
   sortOrder: number;
   createdAt?: unknown;
   updatedAt?: unknown;
@@ -165,6 +169,9 @@ export interface CartItem {
   quantity: number;
   notes?: string;
   unitPrice: number;
+  guestId?: string;
+  guestName?: string;
+  entryId?: string;
 }
 
 export type OrderType = 'dine_in' | 'delivery' | 'pickup';
@@ -179,6 +186,18 @@ export interface OrderItemPayload {
   unitPrice: number;
   lineTotal: number;
   notes?: string;
+  guestName?: string;
+  station?: PrepStation;
+}
+
+export interface GuestCheckSummary {
+  guestName: string;
+  guestId?: string;
+  itemsCount: number;
+  subtotal: number;
+  serviceCharge: number;
+  taxAmount: number;
+  total: number;
 }
 
 export interface Order {
@@ -189,7 +208,11 @@ export interface Order {
   customerName: string;
   customerPhone: string;
   orderType: OrderType;
+  hallName?: string;
   tableNumber?: string;
+  sessionId?: string;
+  isGroupOrder?: boolean;
+  guestChecks?: GuestCheckSummary[];
   deliveryAddress?: string;
   notes?: string;
   items: OrderItemPayload[];
@@ -201,6 +224,73 @@ export interface Order {
   taxAmount: number;
   total: number;
   status: OrderStatus;
+  itemProgress?: Record<string, ItemPrepState>;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+}
+
+export interface TableSessionItem {
+  entryId: string;
+  guestId: string;
+  guestName: string;
+  cartKey: string;
+  menuItemId: string;
+  name: string;
+  name_en?: string;
+  selectedSizeName?: string;
+  selectedSizeName_en?: string;
+  selectedAddonNames: string[];
+  selectedAddonNames_en?: string[];
+  quantity: number;
+  unitPrice: number;
+  notes?: string;
+  addedAt: number;
+}
+
+export interface TableSession {
+  id: string;
+  restaurantId: string;
+  ownerId: string;
+  hallName: string;
+  tableNumber: string;
+  status: 'active' | 'closed';
+  guests: string[];
+  items: TableSessionItem[];
+  lastOrderNumber?: string;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+}
+
+export type ServiceCallType =
+  | 'call_waiter'
+  | 'request_bill_cash'
+  | 'request_bill_card'
+  | 'cutlery_water';
+
+export type ServiceCallStatus = 'pending' | 'acknowledged' | 'resolved';
+
+export interface ServiceCall {
+  id: string;
+  restaurantId: string;
+  ownerId: string;
+  hallName: string;
+  tableNumber: string;
+  sessionId?: string;
+  guestName: string;
+  callType: ServiceCallType;
+  status: ServiceCallStatus;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+}
+
+export interface Hall {
+  id: string;
+  restaurantId: string;
+  ownerId: string;
+  name: string;
+  name_en?: string;
+  tableCount: number;
+  sortOrder: number;
   createdAt?: unknown;
   updatedAt?: unknown;
 }

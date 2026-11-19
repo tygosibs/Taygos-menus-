@@ -6,7 +6,9 @@ import {
   Check,
   CheckCircle2,
   Copy,
+  Edit3,
   Info,
+  MapPin,
   MessageCircle,
   Minus,
   Plus,
@@ -14,12 +16,16 @@ import {
   ShoppingBag,
   Tag,
   Trash2,
+  Users,
   X,
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { submitPublicOrder } from '../../lib/firestoreService';
+import { resolveMenuItemStation } from '../../lib/stationUtils';
+import { computeSeparateChecks } from '../../lib/tableSessionUtils';
 import {
   CartItem,
+  Category,
   MenuItem,
   OrderItemPayload,
   OrderType,
@@ -32,9 +38,17 @@ interface CartDrawerProps {
   open: boolean;
   restaurant: Restaurant;
   cart: CartItem[];
+  categories?: Category[];
   allItems?: MenuItem[];
   isDemoMode: boolean;
   prefillPromoCode?: string | null;
+  hallName?: string;
+  tableNumber?: string;
+  sessionId?: string;
+  guestName?: string;
+  activeGuests?: string[];
+  onRequestGuestOrTable?: () => void;
+  onTableOrderSubmitted?: (orderNumber: string) => Promise<void> | void;
   onClose: () => void;
   onUpdateQty: (cartKey: string, delta: number) => void;
   onRemoveItem: (cartKey: string) => void;
@@ -104,9 +118,17 @@ export function CartDrawer({
   open,
   restaurant,
   cart,
+  categories,
   allItems,
   isDemoMode,
   prefillPromoCode,
+  hallName = '',
+  tableNumber: activeTableNumber = '',
+  sessionId = '',
+  guestName = '',
+  activeGuests = [],
+  onRequestGuestOrTable,
+  onTableOrderSubmitted,
   onClose,
   onUpdateQty,
   onRemoveItem,
@@ -115,9 +137,10 @@ export function CartDrawer({
 }: CartDrawerProps) {
   const { lang, dir, isRtl, t, loc, formatCurrency } = useLanguage();
   const initialTable =
-    typeof window !== 'undefined'
+    activeTableNumber ||
+    (typeof window !== 'undefined'
       ? new URLSearchParams(window.location.search).get('table') || ''
-      : '';
+      : '');
 
   const draft = useMemo(
     () => readDraft(restaurant.slug, initialTable),
@@ -151,15 +174,15 @@ export function CartDrawer({
   const addressInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    setCustomerName(draft.customerName);
+    setCustomerName(draft.customerName || guestName || '');
     setCustomerPhone(draft.customerPhone);
-    setOrderType(draft.orderType);
-    setTableNumber(draft.tableNumber);
+    setOrderType(activeTableNumber ? 'dine_in' : draft.orderType);
+    setTableNumber(activeTableNumber || draft.tableNumber);
     setDeliveryAddress(draft.deliveryAddress);
     setNotes(draft.notes);
     setAppliedPromoCode(draft.appliedPromoCode);
     setPromoInput(draft.appliedPromoCode);
-  }, [draft]);
+  }, [draft, activeTableNumber, guestName]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !restaurant.slug) return;
@@ -274,6 +297,19 @@ export function CartDrawer({
   const total = discountedSubtotal + serviceCharge + taxAmount + deliveryFee;
   const displayCurrency = formatCurrency(restaurant.currency);
 
+  const isGroupTableMode = Boolean(
+    orderType === 'dine_in' && (activeTableNumber || sessionId)
+  );
+
+  const separateChecks = useMemo(
+    () =>
+      computeSeparateChecks(cart, restaurant, guestName || customerName || (lang === 'en' ? 'Guest' : 'ضيف'), {
+        waiveService: Boolean(matchedPromo && promoEligible && matchedPromo.type === 'waive_service'),
+        totalDiscount: discountAmount,
+      }),
+    [cart, restaurant, guestName, customerName, lang, matchedPromo, promoEligible, discountAmount]
+  );
+
   const formatPrice = (val: number) => `${val.toFixed(2).replace(/\.00$/, '')} ${displayCurrency}`;
 
   const suggestedInCart = useMemo(() => {
@@ -339,6 +375,11 @@ export function CartDrawer({
     }
   };
 
+  const categoryMap = useMemo(
+    () => new Map((categories || []).map((c) => [c.id, c])),
+    [categories]
+  );
+
   const buildOrderItems = (): OrderItemPayload[] =>
     cart.map((c) => {
       const payload: OrderItemPayload = {
@@ -348,47 +389,74 @@ export function CartDrawer({
         quantity: c.quantity,
         unitPrice: Number(c.unitPrice.toFixed(2)),
         lineTotal: Number((c.unitPrice * c.quantity).toFixed(2)),
+        station: resolveMenuItemStation(c.menuItem, categoryMap),
       };
       if (c.selectedSize?.name) {
         payload.sizeName = loc(c.selectedSize.name, c.selectedSize.name_en);
       }
       if (c.notes) payload.notes = c.notes;
+      if (c.guestName || guestName) {
+        payload.guestName = (c.guestName || guestName).trim().slice(0, 60);
+      }
       return payload;
     });
 
   const buildWhatsappInvoice = (orderNumber: string): string => {
     const restName = loc(restaurant.name, restaurant.name_en);
-    const safeName = customerName.trim() || (lang === 'en' ? 'Guest' : 'ضيف');
+    const effectiveCustomerName =
+      customerName.trim() ||
+      guestName.trim() ||
+      (activeGuests.length > 0 ? activeGuests.join('، ') : '') ||
+      (lang === 'en' ? 'Guest' : 'ضيف');
     const safePhone = customerPhone.trim() || '-';
 
     if (lang === 'en') {
       const typeLabel =
         orderType === 'dine_in'
-          ? `Dine-In${tableNumber.trim() ? ` (Table: ${tableNumber.trim()})` : ''}`
+          ? `Dine-In${hallName ? ` (${hallName})` : ''}${tableNumber.trim() ? ` (Table: ${tableNumber.trim()})` : ''}`
           : orderType === 'delivery'
             ? `Delivery (${deliveryAddress.trim() || 'N/A'})`
             : 'Pickup';
+
+      const itemLines = isGroupTableMode
+        ? separateChecks.groups.flatMap((group) => [
+            `*${group.summary.guestName}'s Check (${formatPrice(group.summary.total)}):*`,
+            ...group.items.map((c, idx) => {
+              const sizeTxt = c.selectedSize
+                ? ` (${loc(c.selectedSize.name, c.selectedSize.name_en)})`
+                : '';
+              const addonTxt =
+                c.selectedAddons.length > 0
+                  ? `\n   + Add-ons: ${c.selectedAddons.map((a) => loc(a.name, a.name_en)).join(', ')}`
+                  : '';
+              const noteTxt = c.notes ? `\n   * Note: ${c.notes}` : '';
+              return `  ${idx + 1}. ${loc(c.menuItem.name, c.menuItem.name_en)}${sizeTxt} × ${
+                c.quantity
+              } = ${formatPrice(c.unitPrice * c.quantity)}${addonTxt}${noteTxt}`;
+            }),
+          ])
+        : cart.map((c, idx) => {
+            const sizeTxt = c.selectedSize
+              ? ` (${loc(c.selectedSize.name, c.selectedSize.name_en)})`
+              : '';
+            const addonTxt =
+              c.selectedAddons.length > 0
+                ? `\n   + Add-ons: ${c.selectedAddons.map((a) => loc(a.name, a.name_en)).join(', ')}`
+                : '';
+            const noteTxt = c.notes ? `\n   * Note: ${c.notes}` : '';
+            return `${idx + 1}. ${loc(c.menuItem.name, c.menuItem.name_en)}${sizeTxt} × ${
+              c.quantity
+            } = ${formatPrice(c.unitPrice * c.quantity)}${addonTxt}${noteTxt}`;
+          });
 
       const lines = [
         `*New Order from ${restName}*`,
         `Order #: ${orderNumber}`,
         `Order Type: ${typeLabel}`,
-        `Customer: ${safeName}`,
-        `Phone: ${safePhone}`,
+        `Customer: ${effectiveCustomerName}`,
+        ...(safePhone !== '-' ? [`Phone: ${safePhone}`] : []),
         `----------------`,
-        ...cart.map((c, idx) => {
-          const sizeTxt = c.selectedSize
-            ? ` (${loc(c.selectedSize.name, c.selectedSize.name_en)})`
-            : '';
-          const addonTxt =
-            c.selectedAddons.length > 0
-              ? `\n   + Add-ons: ${c.selectedAddons.map((a) => loc(a.name, a.name_en)).join(', ')}`
-              : '';
-          const noteTxt = c.notes ? `\n   * Note: ${c.notes}` : '';
-          return `${idx + 1}. ${loc(c.menuItem.name, c.menuItem.name_en)}${sizeTxt} × ${
-            c.quantity
-          } = ${formatPrice(c.unitPrice * c.quantity)}${addonTxt}${noteTxt}`;
-        }),
+        ...itemLines,
         `----------------`,
         `Subtotal: ${formatPrice(subtotal)}`,
       ];
@@ -418,31 +486,50 @@ export function CartDrawer({
 
     const typeLabel =
       orderType === 'dine_in'
-        ? `صالة${tableNumber.trim() ? ` (طاولة: ${tableNumber.trim()})` : ''}`
+        ? `صالة${hallName ? ` (${hallName})` : ''}${tableNumber.trim() ? ` (طاولة: ${tableNumber.trim()})` : ''}`
         : orderType === 'delivery'
           ? `توصيل (${deliveryAddress.trim() || 'غير محدد'})`
           : 'استلام من الفرع';
+
+    const itemLines = isGroupTableMode
+      ? separateChecks.groups.flatMap((group) => [
+          `*حساب ${group.summary.guestName} (${formatPrice(group.summary.total)}):*`,
+          ...group.items.map((c, idx) => {
+            const sizeTxt = c.selectedSize
+              ? ` (${loc(c.selectedSize.name, c.selectedSize.name_en)})`
+              : '';
+            const addonTxt =
+              c.selectedAddons.length > 0
+                ? `\n   + إضافات: ${c.selectedAddons.map((a) => loc(a.name, a.name_en)).join('، ')}`
+                : '';
+            const noteTxt = c.notes ? `\n   * ملاحظة: ${c.notes}` : '';
+            return `  ${idx + 1}. ${loc(c.menuItem.name, c.menuItem.name_en)}${sizeTxt} × ${
+              c.quantity
+            } = ${formatPrice(c.unitPrice * c.quantity)}${addonTxt}${noteTxt}`;
+          }),
+        ])
+      : cart.map((c, idx) => {
+          const sizeTxt = c.selectedSize
+            ? ` (${loc(c.selectedSize.name, c.selectedSize.name_en)})`
+            : '';
+          const addonTxt =
+            c.selectedAddons.length > 0
+              ? `\n   + إضافات: ${c.selectedAddons.map((a) => loc(a.name, a.name_en)).join('، ')}`
+              : '';
+          const noteTxt = c.notes ? `\n   * ملاحظة: ${c.notes}` : '';
+          return `${idx + 1}. ${loc(c.menuItem.name, c.menuItem.name_en)}${sizeTxt} × ${
+            c.quantity
+          } = ${formatPrice(c.unitPrice * c.quantity)}${addonTxt}${noteTxt}`;
+        });
 
     const lines = [
       `*طلب جديد من ${restName}*`,
       `رقم الطلب: ${orderNumber}`,
       `نوع الطلب: ${typeLabel}`,
-      `العميل: ${safeName}`,
-      `الجوال: ${safePhone}`,
+      `العميل: ${effectiveCustomerName}`,
+      ...(safePhone !== '-' ? [`الجوال: ${safePhone}`] : []),
       `----------------`,
-      ...cart.map((c, idx) => {
-        const sizeTxt = c.selectedSize
-          ? ` (${loc(c.selectedSize.name, c.selectedSize.name_en)})`
-          : '';
-        const addonTxt =
-          c.selectedAddons.length > 0
-            ? `\n   + إضافات: ${c.selectedAddons.map((a) => loc(a.name, a.name_en)).join('، ')}`
-            : '';
-        const noteTxt = c.notes ? `\n   * ملاحظة: ${c.notes}` : '';
-        return `${idx + 1}. ${loc(c.menuItem.name, c.menuItem.name_en)}${sizeTxt} × ${
-          c.quantity
-        } = ${formatPrice(c.unitPrice * c.quantity)}${addonTxt}${noteTxt}`;
-      }),
+      ...itemLines,
       `----------------`,
       `المجموع الفرعي: ${formatPrice(subtotal)}`,
     ];
@@ -476,7 +563,8 @@ export function CartDrawer({
       setErrorMsg(t.menu.closedBanner);
       return false;
     }
-    if (!customerName.trim()) {
+    const resolvedName = customerName.trim() || guestName.trim();
+    if (!resolvedName) {
       setInvalidField('name');
       setErrorMsg(
         lang === 'en'
@@ -487,7 +575,7 @@ export function CartDrawer({
       nameInputRef.current?.focus();
       return false;
     }
-    if (customerPhone.trim().length < 5) {
+    if (orderType !== 'dine_in' && customerPhone.trim().length < 5) {
       setInvalidField('phone');
       setErrorMsg(
         lang === 'en'
@@ -513,6 +601,11 @@ export function CartDrawer({
     if (cart.length === 0 || submitting) return;
     if (!validateForm()) return;
 
+    const resolvedName =
+      isGroupTableMode && separateChecks.groups.length > 1
+        ? separateChecks.groups.map((g) => g.summary.guestName).join('، ')
+        : customerName.trim() || guestName.trim() || 'ضيف';
+
     setSubmitting(true);
     setErrorMsg(null);
     try {
@@ -521,11 +614,15 @@ export function CartDrawer({
         const res = await submitPublicOrder({
           restaurantId: restaurant.id,
           ownerId: restaurant.ownerId,
-          customerName,
-          customerPhone,
+          customerName: resolvedName,
+          customerPhone: customerPhone.trim(),
           orderType,
+          hallName: orderType === 'dine_in' && hallName.trim() ? hallName.trim() : undefined,
           tableNumber:
             orderType === 'dine_in' && tableNumber.trim() ? tableNumber.trim() : undefined,
+          sessionId: isGroupTableMode && sessionId ? sessionId : undefined,
+          isGroupOrder: isGroupTableMode,
+          guestChecks: isGroupTableMode ? separateChecks.groups.map((g) => g.summary) : undefined,
           deliveryAddress:
             orderType === 'delivery' && deliveryAddress.trim()
               ? deliveryAddress.trim()
@@ -565,7 +662,11 @@ export function CartDrawer({
       setAppliedPromoCode('');
       setPromoInput('');
       setNotes('');
-      onClearCart();
+      if (isGroupTableMode && onTableOrderSubmitted) {
+        await onTableOrderSubmitted(orderNumber);
+      } else {
+        onClearCart();
+      }
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : t.menu.errOrderFailed);
     } finally {
@@ -760,80 +861,247 @@ export function CartDrawer({
             </div>
           ) : (
             <>
-              <div className="space-y-3">
-                {cart.map((c) => {
-                  const itemName = loc(c.menuItem.name, c.menuItem.name_en);
-                  const sizeLabel = c.selectedSize
-                    ? loc(c.selectedSize.name, c.selectedSize.name_en)
-                    : '';
-                  const addonsLabel = c.selectedAddons
-                    .map((a) => loc(a.name, a.name_en))
-                    .join(lang === 'en' ? ', ' : '، ');
-                  return (
-                    <div
-                      key={c.cartKey}
-                      className="p-3 rounded-xl border border-stone-200 bg-stone-50/60 flex gap-3"
-                    >
-                      <SafeImage
-                        src={c.menuItem.imageUrl}
-                        alt={itemName}
-                        className="w-16 h-16 rounded-lg object-cover shrink-0"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                          <h3 className="text-sm font-bold text-stone-900 truncate">{itemName}</h3>
-                          <button
-                            type="button"
-                            onClick={() => onRemoveItem(c.cartKey)}
-                            aria-label={lang === 'en' ? 'Remove item' : 'حذف الصنف'}
-                            className="p-1 text-stone-400 hover:text-red-600 transition-colors cursor-pointer"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                        {(sizeLabel || addonsLabel) && (
-                          <p className="text-xs text-stone-500 mt-0.5 line-clamp-2">
-                            {sizeLabel}
-                            {sizeLabel && addonsLabel ? ' · ' : ''}
-                            {addonsLabel}
-                          </p>
-                        )}
-                        {c.notes && (
-                          <p className="text-[11px] text-amber-700 mt-0.5">
-                            {lang === 'en' ? `Note: ${c.notes}` : `ملاحظة: ${c.notes}`}
-                          </p>
-                        )}
-                        <div className="mt-2.5 flex items-center justify-between">
-                          <div className="flex items-center gap-1.5 bg-white border border-stone-200 rounded-lg px-1.5 py-0.5">
-                            <button
-                              type="button"
-                              onClick={() => onUpdateQty(c.cartKey, -1)}
-                              aria-label={lang === 'en' ? 'Decrease' : 'تقليل'}
-                              className="w-7 h-7 flex items-center justify-center text-stone-700 hover:bg-stone-100 rounded cursor-pointer"
+              {isGroupTableMode && (
+                <div className="p-3.5 rounded-2xl bg-amber-50/90 border border-amber-200 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 text-xs font-extrabold text-amber-950 min-w-0">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                      <MapPin className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                      <span className="truncate">
+                        {lang === 'en' ? 'Live Group Table' : 'سلة جماعية حية'} ·{' '}
+                        {hallName ? `${hallName} · ` : ''}
+                        {lang === 'en' ? `Table ${activeTableNumber}` : `ترابيزة ${activeTableNumber}`}
+                      </span>
+                    </div>
+                    {onRequestGuestOrTable && (
+                      <button
+                        type="button"
+                        onClick={onRequestGuestOrTable}
+                        className="px-2 py-1 rounded-lg bg-white border border-amber-200 text-[11px] font-bold text-amber-900 hover:bg-amber-100 flex items-center gap-1 shrink-0 cursor-pointer"
+                      >
+                        <Edit3 className="w-3 h-3" />
+                        <span>{guestName || (lang === 'en' ? 'Set Name' : 'تغيير الاسم')}</span>
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[11px] text-amber-800">
+                    <Users className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">
+                      {lang === 'en'
+                        ? `Separate Check active (${separateChecks.groups.length} ${separateChecks.groups.length === 1 ? 'person' : 'people'})`
+                        : `تقسيم الحساب بالاسم مفعّل (${separateChecks.groups.length} ${separateChecks.groups.length === 1 ? 'فرد' : 'أفراد'})`}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {isGroupTableMode ? (
+                <div className="space-y-4">
+                  {separateChecks.groups.map((group) => {
+                    const isCurrentGuest =
+                      guestName &&
+                      group.summary.guestName.trim().toLowerCase() === guestName.trim().toLowerCase();
+                    return (
+                      <div
+                        key={group.summary.guestName}
+                        className="rounded-2xl border border-stone-200 bg-white overflow-hidden shadow-2xs"
+                      >
+                        <div className="px-3.5 py-2.5 bg-stone-100/90 border-b border-stone-200 flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span
+                              style={{ backgroundColor: restaurant.primaryColor }}
+                              className="w-6 h-6 rounded-full text-white text-xs font-extrabold flex items-center justify-center shrink-0"
                             >
-                              <Minus className="w-3.5 h-3.5" />
-                            </button>
-                            <span className="w-5 text-center font-mono-num text-xs font-bold">
-                              {c.quantity}
+                              {group.summary.guestName.charAt(0)}
                             </span>
-                            <button
-                              type="button"
-                              onClick={() => onUpdateQty(c.cartKey, 1)}
-                              aria-label={lang === 'en' ? 'Increase' : 'زيادة'}
-                              className="w-7 h-7 flex items-center justify-center text-stone-700 hover:bg-stone-100 rounded cursor-pointer"
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                            </button>
+                            <span className="text-xs sm:text-sm font-extrabold text-stone-950 truncate">
+                              {group.summary.guestName}
+                            </span>
+                            {isCurrentGuest && (
+                              <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-extrabold shrink-0">
+                                {lang === 'en' ? 'You' : 'أنت'}
+                              </span>
+                            )}
                           </div>
-                          <span className="font-mono-num text-sm font-bold text-stone-900">
-                            {formatPrice(c.unitPrice * c.quantity)}
+                          <span className="text-xs font-extrabold font-mono-num text-stone-900 shrink-0">
+                            {lang === 'en'
+                              ? `${group.summary.guestName}: ${formatPrice(group.summary.total)}`
+                              : `حساب ${group.summary.guestName}: ${formatPrice(group.summary.total)}`}
                           </span>
                         </div>
+
+                        <div className="p-3 space-y-2.5">
+                          {group.items.map((c) => {
+                            const itemName = loc(c.menuItem.name, c.menuItem.name_en);
+                            const sizeLabel = c.selectedSize
+                              ? loc(c.selectedSize.name, c.selectedSize.name_en)
+                              : '';
+                            const addonsLabel = c.selectedAddons
+                              .map((a) => loc(a.name, a.name_en))
+                              .join(lang === 'en' ? ', ' : '، ');
+                            return (
+                              <div
+                                key={c.cartKey}
+                                className="p-2.5 rounded-xl border border-stone-100 bg-stone-50/70 flex gap-2.5"
+                              >
+                                <SafeImage
+                                  src={c.menuItem.imageUrl}
+                                  alt={itemName}
+                                  className="w-14 h-14 rounded-lg object-cover shrink-0"
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <h3 className="text-xs sm:text-sm font-bold text-stone-900 truncate">
+                                      {itemName}
+                                    </h3>
+                                    <button
+                                      type="button"
+                                      onClick={() => onRemoveItem(c.cartKey)}
+                                      aria-label={lang === 'en' ? 'Remove item' : 'حذف الصنف'}
+                                      className="p-1 text-stone-400 hover:text-red-600 transition-colors cursor-pointer"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                  {(sizeLabel || addonsLabel) && (
+                                    <p className="text-[11px] text-stone-500 mt-0.5 line-clamp-2">
+                                      {sizeLabel}
+                                      {sizeLabel && addonsLabel ? ' · ' : ''}
+                                      {addonsLabel}
+                                    </p>
+                                  )}
+                                  {c.notes && (
+                                    <p className="text-[11px] text-amber-700 mt-0.5">
+                                      {lang === 'en' ? `Note: ${c.notes}` : `ملاحظة: ${c.notes}`}
+                                    </p>
+                                  )}
+                                  <div className="mt-2 flex items-center justify-between">
+                                    <div className="flex items-center gap-1 bg-white border border-stone-200 rounded-lg px-1 py-0.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => onUpdateQty(c.cartKey, -1)}
+                                        aria-label={lang === 'en' ? 'Decrease' : 'تقليل'}
+                                        className="w-6 h-6 flex items-center justify-center text-stone-700 hover:bg-stone-100 rounded cursor-pointer"
+                                      >
+                                        <Minus className="w-3 h-3" />
+                                      </button>
+                                      <span className="w-5 text-center font-mono-num text-xs font-bold">
+                                        {c.quantity}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => onUpdateQty(c.cartKey, 1)}
+                                        aria-label={lang === 'en' ? 'Increase' : 'زيادة'}
+                                        className="w-6 h-6 flex items-center justify-center text-stone-700 hover:bg-stone-100 rounded cursor-pointer"
+                                      >
+                                        <Plus className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                    <span className="font-mono-num text-xs sm:text-sm font-bold text-stone-900">
+                                      {formatPrice(c.unitPrice * c.quantity)}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+
+                          {(group.summary.serviceCharge > 0 || group.summary.taxAmount > 0) && (
+                            <div className="pt-1.5 border-t border-stone-100 flex flex-wrap items-center justify-between gap-2 text-[11px] text-stone-500">
+                              <span>
+                                {lang === 'en' ? 'Items:' : 'الأصناف:'}{' '}
+                                <span className="font-mono-num">{formatPrice(group.summary.subtotal)}</span>
+                                {group.summary.serviceCharge > 0 &&
+                                  ` + ${lang === 'en' ? 'Svc' : 'خدمة'} ${formatPrice(group.summary.serviceCharge)}`}
+                                {group.summary.taxAmount > 0 &&
+                                  ` + ${lang === 'en' ? 'Tax' : 'ضريبة'} ${formatPrice(group.summary.taxAmount)}`}
+                              </span>
+                              <span className="font-bold text-stone-900 font-mono-num">
+                                {formatPrice(group.summary.total)}
+                              </span>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {cart.map((c) => {
+                    const itemName = loc(c.menuItem.name, c.menuItem.name_en);
+                    const sizeLabel = c.selectedSize
+                      ? loc(c.selectedSize.name, c.selectedSize.name_en)
+                      : '';
+                    const addonsLabel = c.selectedAddons
+                      .map((a) => loc(a.name, a.name_en))
+                      .join(lang === 'en' ? ', ' : '، ');
+                    return (
+                      <div
+                        key={c.cartKey}
+                        className="p-3 rounded-xl border border-stone-200 bg-stone-50/60 flex gap-3"
+                      >
+                        <SafeImage
+                          src={c.menuItem.imageUrl}
+                          alt={itemName}
+                          className="w-16 h-16 rounded-lg object-cover shrink-0"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <h3 className="text-sm font-bold text-stone-900 truncate">{itemName}</h3>
+                            <button
+                              type="button"
+                              onClick={() => onRemoveItem(c.cartKey)}
+                              aria-label={lang === 'en' ? 'Remove item' : 'حذف الصنف'}
+                              className="p-1 text-stone-400 hover:text-red-600 transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                          {(sizeLabel || addonsLabel) && (
+                            <p className="text-xs text-stone-500 mt-0.5 line-clamp-2">
+                              {sizeLabel}
+                              {sizeLabel && addonsLabel ? ' · ' : ''}
+                              {addonsLabel}
+                            </p>
+                          )}
+                          {c.notes && (
+                            <p className="text-[11px] text-amber-700 mt-0.5">
+                              {lang === 'en' ? `Note: ${c.notes}` : `ملاحظة: ${c.notes}`}
+                            </p>
+                          )}
+                          <div className="mt-2.5 flex items-center justify-between">
+                            <div className="flex items-center gap-1.5 bg-white border border-stone-200 rounded-lg px-1.5 py-0.5">
+                              <button
+                                type="button"
+                                onClick={() => onUpdateQty(c.cartKey, -1)}
+                                aria-label={lang === 'en' ? 'Decrease' : 'تقليل'}
+                                className="w-7 h-7 flex items-center justify-center text-stone-700 hover:bg-stone-100 rounded cursor-pointer"
+                              >
+                                <Minus className="w-3.5 h-3.5" />
+                              </button>
+                              <span className="w-5 text-center font-mono-num text-xs font-bold">
+                                {c.quantity}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => onUpdateQty(c.cartKey, 1)}
+                                aria-label={lang === 'en' ? 'Increase' : 'زيادة'}
+                                className="w-7 h-7 flex items-center justify-center text-stone-700 hover:bg-stone-100 rounded cursor-pointer"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                            <span className="font-mono-num text-sm font-bold text-stone-900">
+                              {formatPrice(c.unitPrice * c.quantity)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
 
               {suggestedInCart.length > 0 && onQuickAddItem && (
                 <div className="space-y-2 pt-1">
@@ -916,6 +1184,24 @@ export function CartDrawer({
               </div>
 
               <div className="space-y-3">
+                {orderType === 'dine_in' && !activeTableNumber && onRequestGuestOrTable && (
+                  <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-between gap-2 text-xs">
+                    <span className="font-bold text-amber-950">
+                      {lang === 'en'
+                        ? 'Activate Group Table Cart & Separate Check?'
+                        : 'تفعيل السلة الجماعية وتقسيم الحساب بالاسم؟'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={onRequestGuestOrTable}
+                      style={{ backgroundColor: restaurant.primaryColor }}
+                      className="px-2.5 py-1.5 rounded-lg text-white font-bold shrink-0 cursor-pointer"
+                    >
+                      {lang === 'en' ? 'Set Table & Name' : 'تحديد الترابيزة'}
+                    </button>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-semibold text-stone-600 mb-1">
@@ -942,7 +1228,11 @@ export function CartDrawer({
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-stone-600 mb-1">
-                      {t.menu.customerPhone}
+                      {orderType === 'dine_in'
+                        ? lang === 'en'
+                          ? 'Phone (optional)'
+                          : 'رقم الجوال (اختياري للصالة)'
+                        : t.menu.customerPhone}
                     </label>
                     <input
                       ref={phoneInputRef}
@@ -1095,6 +1385,29 @@ export function CartDrawer({
               )}
 
               <div className="p-4 rounded-xl bg-stone-50 border border-stone-200 space-y-2 text-sm">
+                {isGroupTableMode && separateChecks.groups.length > 0 && (
+                  <div className="pb-2.5 mb-2 border-b border-stone-200 space-y-1.5">
+                    <p className="text-xs font-extrabold text-stone-800">
+                      {lang === 'en' ? 'Separate Check Breakdown' : 'تقسيم الفاتورة بالاسم'}
+                    </p>
+                    {separateChecks.groups.map((g) => (
+                      <div
+                        key={`sum_${g.summary.guestName}`}
+                        className="flex items-center justify-between text-xs text-stone-700"
+                      >
+                        <span className="font-bold">
+                          {lang === 'en'
+                            ? `${g.summary.guestName} (${g.summary.itemsCount})`
+                            : `حساب ${g.summary.guestName} (${g.summary.itemsCount})`}
+                        </span>
+                        <span className="font-mono-num font-extrabold text-stone-900">
+                          {formatPrice(g.summary.total)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between text-stone-600">
                   <span>{t.menu.subtotal}</span>
                   <span className="font-mono-num">{formatPrice(subtotal)}</span>
@@ -1138,7 +1451,13 @@ export function CartDrawer({
                   </div>
                 )}
                 <div className="pt-2 border-t border-stone-200 flex items-center justify-between font-bold text-base text-stone-900">
-                  <span>{t.menu.grandTotal}</span>
+                  <span>
+                    {isGroupTableMode
+                      ? lang === 'en'
+                        ? 'Combined Table Total'
+                        : 'الإجمالي المجمع للترابيزة'
+                      : t.menu.grandTotal}
+                  </span>
                   <span className="font-mono-num">{formatPrice(total)}</span>
                 </div>
               </div>

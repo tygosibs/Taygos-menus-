@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import {
   ArrowLeft,
@@ -13,7 +13,9 @@ import { LanguageToggleButton } from '../components/LanguageToggleButton';
 import { PWAInstallButton } from '../components/PWAInstallButton';
 import { SafeImage } from '../components/SafeImage';
 import { CartDrawer } from '../components/menu/CartDrawer';
+import { GuestNameModal } from '../components/menu/GuestNameModal';
 import { ItemModal } from '../components/menu/ItemModal';
+import { TableServiceBar } from '../components/menu/TableServiceBar';
 import { ThemeRenderer } from '../components/menu/ThemeRenderer';
 import { useLanguage } from '../contexts/LanguageContext';
 import { DEMO_RESTAURANTS } from '../data/demoRestaurants';
@@ -21,9 +23,15 @@ import { getThemeMeta, isCustomThemeId, MENU_THEMES } from '../data/themes';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 import { auth, isSuperAdminEmail } from '../lib/firebase';
 import {
+  clearTableSessionAfterOrder,
   fetchActiveCustomThemes,
   fetchCustomThemeById,
   fetchRestaurantBySlug,
+  fetchRestaurantHalls,
+  mutateTableSessionCart,
+  registerGuestInTableSession,
+  sendServiceCall,
+  subscribeTableSession,
 } from '../lib/firestoreService';
 import {
   applySeoMetadata,
@@ -31,13 +39,27 @@ import {
   normalizeRestaurantLogoUrl,
 } from '../lib/seoHead';
 import {
+  buildTableSessionId,
+  cartItemToTableSessionItem,
+  getOrCreateGuestId,
+  getSavedGuestName,
+  normalizeHallName,
+  normalizeTableNumber,
+  saveGuestName,
+  tableSessionItemsToCartItems,
+} from '../lib/tableSessionUtils';
+import {
   ActiveTheme,
   CartItem,
   Category,
   CustomTheme,
+  Hall,
   MenuColorMode,
   MenuItem,
   Restaurant,
+  ServiceCallType,
+  TableSession,
+  TableSessionItem,
 } from '../types/menu';
 
 interface PublicMenuPageProps {
@@ -56,6 +78,7 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [items, setItems] = useState<MenuItem[]>([]);
+  const [halls, setHalls] = useState<Hall[]>([]);
   const [isDemoMode, setIsDemoMode] = useState(false);
 
   const [previewTheme, setPreviewTheme] = useState<ActiveTheme | null>(null);
@@ -70,6 +93,32 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
   const [colorModeOverride, setColorModeOverride] = useState<MenuColorMode>('auto');
   const [prefillPromoCode, setPrefillPromoCode] = useState<string | null>(null);
   const { isInstalled } = usePWAInstall();
+
+  const guestId = useMemo(() => getOrCreateGuestId(), []);
+  const [guestName, setGuestName] = useState<string>(() => getSavedGuestName());
+  const [hallName, setHallName] = useState<string>(() =>
+    typeof window !== 'undefined'
+      ? normalizeHallName(new URLSearchParams(window.location.search).get('hall'))
+      : ''
+  );
+  const [tableNumber, setTableNumber] = useState<string>(() =>
+    typeof window !== 'undefined'
+      ? normalizeTableNumber(new URLSearchParams(window.location.search).get('table'))
+      : ''
+  );
+  const [guestModalOpen, setGuestModalOpen] = useState(false);
+  const [tableSession, setTableSession] = useState<TableSession | null>(null);
+  const registeredKeyRef = useRef<string>('');
+  const pendingCartActionRef = useRef<
+    | { type: 'add'; item: CartItem }
+    | { type: 'quick'; item: MenuItem; delta: number }
+    | null
+  >(null);
+
+  const sessionId = useMemo(
+    () => buildTableSessionId(hallName, tableNumber),
+    [hallName, tableNumber]
+  );
 
   const urlThemeMode = useMemo(() => {
     if (isDemoMode) return true;
@@ -95,6 +144,20 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
     setError(null);
     setColorModeOverride('auto');
     setPrefillPromoCode(null);
+    setTableSession(null);
+    registeredKeyRef.current = '';
+
+    const params =
+      typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+    const urlHall = normalizeHallName(params?.get('hall'));
+    const urlTable = normalizeTableNumber(params?.get('table'));
+    const savedGuest = getSavedGuestName();
+    setHallName(urlHall);
+    setTableNumber(urlTable);
+    setGuestName(savedGuest);
+    if (urlTable && !savedGuest) {
+      setGuestModalOpen(true);
+    }
 
     let restoredCart: CartItem[] = [];
     if (typeof window !== 'undefined' && slug) {
@@ -115,10 +178,7 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
     setCart(restoredCart);
     setCartHydratedSlug(slug);
 
-    const urlThemeParam =
-      typeof window !== 'undefined'
-        ? new URLSearchParams(window.location.search).get('theme')
-        : null;
+    const urlThemeParam = params?.get('theme') || null;
     const requestedTheme =
       urlThemeParam && (VALID_THEME_IDS.has(urlThemeParam) || isCustomThemeId(urlThemeParam))
         ? (urlThemeParam as ActiveTheme)
@@ -147,6 +207,7 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
         if (!active) return;
         if (!res) {
           setRestaurant(null);
+          setHalls([]);
           setLoading(false);
           return;
         }
@@ -154,6 +215,9 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
         setCategories(res.categories);
         setItems(res.items);
         setIsDemoMode(false);
+        fetchRestaurantHalls(res.restaurant.id).then((loadedHalls) => {
+          if (active) setHalls(loadedHalls);
+        });
         const chosen = requestedTheme || res.restaurant.activeTheme;
         setPreviewTheme(chosen);
         if (isCustomThemeId(chosen)) {
@@ -188,7 +252,282 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
     applySeoMetadata(getRestaurantShareMetadata(restaurant, lang, window.location.origin));
   }, [restaurant, lang]);
 
+  // Real-time Table Session Listener (Firestore for live restaurants, localStorage + BroadcastChannel for demo)
+  useEffect(() => {
+    if (!restaurant || !sessionId) {
+      setTableSession(null);
+      return;
+    }
+
+    if (!isDemoMode) {
+      const unsub = subscribeTableSession(
+        restaurant.id,
+        sessionId,
+        (session) => {
+          setTableSession(session);
+        },
+        (err) => {
+          console.warn('Table session sync warning:', err.message);
+        }
+      );
+      return () => unsub();
+    }
+
+    if (typeof window === 'undefined') return;
+    const storageKey = `sufra_demo_session_${slug}_${sessionId}`;
+    const readDemoSession = (): TableSession | null => {
+      try {
+        const raw = window.localStorage.getItem(storageKey);
+        if (!raw) return null;
+        return JSON.parse(raw) as TableSession;
+      } catch {
+        return null;
+      }
+    };
+
+    setTableSession(readDemoSession());
+
+    const onStorage = (ev: StorageEvent) => {
+      if (ev.key === storageKey) {
+        setTableSession(readDemoSession());
+      }
+    };
+    window.addEventListener('storage', onStorage);
+
+    let bc: BroadcastChannel | null = null;
+    if (typeof BroadcastChannel !== 'undefined') {
+      bc = new BroadcastChannel(`sufra_table_${slug}_${sessionId}`);
+      bc.onmessage = (ev) => {
+        if (ev.data && typeof ev.data === 'object') {
+          setTableSession(ev.data as TableSession);
+        }
+      };
+    }
+
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      bc?.close();
+    };
+  }, [restaurant, sessionId, isDemoMode, slug]);
+
+  // Register returning guest automatically in active table session
+  useEffect(() => {
+    if (!restaurant || loading || !sessionId || !tableNumber || !guestName.trim()) return;
+    const regKey = `${restaurant.id}:${sessionId}:${guestName.trim().toLowerCase()}`;
+    if (registeredKeyRef.current === regKey) return;
+    registeredKeyRef.current = regKey;
+
+    if (!isDemoMode) {
+      registerGuestInTableSession({
+        restaurantId: restaurant.id,
+        ownerId: restaurant.ownerId,
+        sessionId,
+        hallName,
+        tableNumber,
+        guestName: guestName.trim(),
+      }).catch((err) => {
+        console.warn('Failed to register guest in table session:', err);
+      });
+    } else if (typeof window !== 'undefined') {
+      const storageKey = `sufra_demo_session_${slug}_${sessionId}`;
+      let current: TableSession | null = null;
+      try {
+        const raw = window.localStorage.getItem(storageKey);
+        if (raw) current = JSON.parse(raw) as TableSession;
+      } catch {
+        current = null;
+      }
+      const existingGuests = Array.isArray(current?.guests) ? current.guests : [];
+      const cleanGuest = guestName.trim();
+      const hasGuest = existingGuests.some(
+        (g) => g.trim().toLowerCase() === cleanGuest.toLowerCase()
+      );
+      const nextSession: TableSession = {
+        id: sessionId,
+        restaurantId: restaurant.id,
+        ownerId: restaurant.ownerId,
+        hallName,
+        tableNumber,
+        status: 'active',
+        guests: hasGuest ? existingGuests : [...existingGuests, cleanGuest],
+        items: current?.items || [],
+      };
+      try {
+        window.localStorage.setItem(storageKey, JSON.stringify(nextSession));
+        setTableSession(nextSession);
+        if (typeof BroadcastChannel !== 'undefined') {
+          const bc = new BroadcastChannel(`sufra_table_${slug}_${sessionId}`);
+          bc.postMessage(nextSession);
+          bc.close();
+        }
+      } catch {
+        // Ignore demo storage quota errors
+      }
+    }
+  }, [restaurant, loading, sessionId, hallName, tableNumber, guestName, isDemoMode, slug]);
+
+  const mutateActiveSessionItems = useCallback(
+    async (
+      targetSessionId: string,
+      targetHall: string,
+      targetTable: string,
+      targetGuest: string,
+      mutator: (currentItems: TableSessionItem[]) => TableSessionItem[]
+    ) => {
+      if (!restaurant || !targetSessionId || !targetTable) return;
+      const cleanGuest = targetGuest.trim() || (isEn ? 'Guest' : 'ضيف');
+
+      if (!isDemoMode) {
+        await mutateTableSessionCart({
+          restaurantId: restaurant.id,
+          ownerId: restaurant.ownerId,
+          sessionId: targetSessionId,
+          hallName: targetHall,
+          tableNumber: targetTable,
+          guestName: cleanGuest,
+          mutator,
+        });
+        return;
+      }
+
+      if (typeof window === 'undefined') return;
+      const storageKey = `sufra_demo_session_${slug}_${targetSessionId}`;
+      let current: TableSession | null = null;
+      try {
+        const raw = window.localStorage.getItem(storageKey);
+        if (raw) current = JSON.parse(raw) as TableSession;
+      } catch {
+        current = null;
+      }
+      const currentItems = Array.isArray(current?.items) ? current.items : [];
+      const nextItems = mutator(currentItems).slice(0, 80);
+      const existingGuests = Array.isArray(current?.guests) ? current.guests : [];
+      const hasGuest = existingGuests.some(
+        (g) => g.trim().toLowerCase() === cleanGuest.toLowerCase()
+      );
+      const nextSession: TableSession = {
+        id: targetSessionId,
+        restaurantId: restaurant.id,
+        ownerId: restaurant.ownerId,
+        hallName: targetHall,
+        tableNumber: targetTable,
+        status: 'active',
+        guests: hasGuest ? existingGuests : [...existingGuests, cleanGuest],
+        items: nextItems,
+      };
+      try {
+        window.localStorage.setItem(storageKey, JSON.stringify(nextSession));
+        setTableSession(nextSession);
+        if (typeof BroadcastChannel !== 'undefined') {
+          const bc = new BroadcastChannel(`sufra_table_${slug}_${targetSessionId}`);
+          bc.postMessage(nextSession);
+          bc.close();
+        }
+      } catch {
+        // Ignore storage errors
+      }
+    },
+    [restaurant, isDemoMode, slug, isEn]
+  );
+
+  const applyAddItemToSession = (
+    currentItems: TableSessionItem[],
+    incoming: CartItem,
+    activeGuestId: string,
+    activeGuestName: string
+  ): TableSessionItem[] => {
+    const entryId = `${activeGuestId}__${incoming.cartKey}`
+      .replace(/[^a-zA-Z0-9_\-:.|]/g, '_')
+      .slice(0, 180);
+    const idx = currentItems.findIndex((si) => si.entryId === entryId);
+    if (idx >= 0) {
+      const next = [...currentItems];
+      next[idx] = {
+        ...next[idx],
+        quantity: next[idx].quantity + incoming.quantity,
+      };
+      return next;
+    }
+    return [
+      ...currentItems,
+      cartItemToTableSessionItem({ ...incoming, entryId }, activeGuestId, activeGuestName),
+    ];
+  };
+
+  const applyQuickStepToSession = (
+    currentItems: TableSessionItem[],
+    item: MenuItem,
+    delta: number,
+    activeGuestId: string,
+    activeGuestName: string
+  ): TableSessionItem[] => {
+    const defaultSize = item.sizes && item.sizes.length > 0 ? item.sizes[0] : undefined;
+    const unitPrice = defaultSize ? defaultSize.price : item.basePrice;
+    const quickKey = `${item.id}__${defaultSize?.name || 'std'}____`;
+    const entryId = `${activeGuestId}__${quickKey}`
+      .replace(/[^a-zA-Z0-9_\-:.|]/g, '_')
+      .slice(0, 180);
+
+    const idx = currentItems.findIndex((si) => si.entryId === entryId);
+    if (idx >= 0) {
+      const nextQty = currentItems[idx].quantity + delta;
+      if (nextQty <= 0) {
+        return currentItems.filter((_, i) => i !== idx);
+      }
+      const next = [...currentItems];
+      next[idx] = { ...next[idx], quantity: nextQty };
+      return next;
+    }
+
+    if (delta > 0) {
+      return [
+        ...currentItems,
+        cartItemToTableSessionItem(
+          {
+            cartKey: quickKey,
+            entryId,
+            menuItem: item,
+            selectedSize: defaultSize,
+            selectedAddons: [],
+            quantity: delta,
+            unitPrice,
+          },
+          activeGuestId,
+          activeGuestName
+        ),
+      ];
+    }
+
+    // Scope decrements to this guest's own items on the table
+    const guestItemIdx = currentItems.findIndex(
+      (si) => si.guestId === activeGuestId && si.menuItemId === item.id
+    );
+    if (guestItemIdx >= 0) {
+      const nextQty = currentItems[guestItemIdx].quantity + delta;
+      if (nextQty <= 0) {
+        return currentItems.filter((_, i) => i !== guestItemIdx);
+      }
+      const next = [...currentItems];
+      next[guestItemIdx] = { ...next[guestItemIdx], quantity: nextQty };
+      return next;
+    }
+
+    return currentItems;
+  };
+
   const handleAddToCart = (incoming: CartItem) => {
+    if (sessionId) {
+      if (!guestName.trim()) {
+        pendingCartActionRef.current = { type: 'add', item: incoming };
+        setGuestModalOpen(true);
+        return;
+      }
+      void mutateActiveSessionItems(sessionId, hallName, tableNumber, guestName, (prev) =>
+        applyAddItemToSession(prev, incoming, guestId, guestName)
+      );
+      return;
+    }
+
     setCart((prev) => {
       const existingIdx = prev.findIndex((c) => c.cartKey === incoming.cartKey);
       if (existingIdx >= 0) {
@@ -204,6 +543,19 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
   };
 
   const handleQuickStepItem = (item: MenuItem, delta: number) => {
+    if (sessionId) {
+      if (delta > 0 && !guestName.trim()) {
+        pendingCartActionRef.current = { type: 'quick', item, delta };
+        setGuestModalOpen(true);
+        return;
+      }
+      const effectiveName = guestName.trim() || (isEn ? 'Guest' : 'ضيف');
+      void mutateActiveSessionItems(sessionId, hallName, tableNumber, effectiveName, (prev) =>
+        applyQuickStepToSession(prev, item, delta, guestId, effectiveName)
+      );
+      return;
+    }
+
     const defaultSize = item.sizes && item.sizes.length > 0 ? item.sizes[0] : undefined;
     const unitPrice = defaultSize ? defaultSize.price : item.basePrice;
     const quickKey = `${item.id}__${defaultSize?.name || 'std'}____`;
@@ -245,6 +597,19 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
   };
 
   const handleUpdateQty = (cartKey: string, delta: number) => {
+    if (sessionId) {
+      const effectiveName = guestName.trim() || (isEn ? 'Guest' : 'ضيف');
+      void mutateActiveSessionItems(sessionId, hallName, tableNumber, effectiveName, (prev) =>
+        prev
+          .map((si) => {
+            const key = si.entryId || `${si.guestId}__${si.cartKey}`;
+            return key === cartKey ? { ...si, quantity: si.quantity + delta } : si;
+          })
+          .filter((si) => si.quantity > 0)
+      );
+      return;
+    }
+
     setCart((prev) =>
       prev
         .map((c) => (c.cartKey === cartKey ? { ...c, quantity: c.quantity + delta } : c))
@@ -253,17 +618,155 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
   };
 
   const handleRemoveItem = (cartKey: string) => {
+    if (sessionId) {
+      const effectiveName = guestName.trim() || (isEn ? 'Guest' : 'ضيف');
+      void mutateActiveSessionItems(sessionId, hallName, tableNumber, effectiveName, (prev) =>
+        prev.filter((si) => (si.entryId || `${si.guestId}__${si.cartKey}`) !== cartKey)
+      );
+      return;
+    }
+
     setCart((prev) => prev.filter((c) => c.cartKey !== cartKey));
   };
 
-  const cartCount = useMemo(() => cart.reduce((s, c) => s + c.quantity, 0), [cart]);
+  const handleConfirmGuestModal = async (payload: {
+    guestName: string;
+    hallName: string;
+    tableNumber: string;
+  }) => {
+    saveGuestName(payload.guestName);
+    setGuestName(payload.guestName);
+    setHallName(payload.hallName);
+    setTableNumber(payload.tableNumber);
+    setGuestModalOpen(false);
+
+    const nextSessionId = buildTableSessionId(payload.hallName, payload.tableNumber);
+
+    // Keep ?hall=&table= reflected in URL so reloads stay bound to this table
+    if (typeof window !== 'undefined' && payload.tableNumber) {
+      const params = new URLSearchParams(window.location.search);
+      if (payload.hallName) {
+        params.set('hall', payload.hallName);
+      } else {
+        params.delete('hall');
+      }
+      params.set('table', payload.tableNumber);
+      const nextUrl = `${window.location.pathname}?${params.toString()}`;
+      window.history.replaceState({}, '', nextUrl);
+    }
+
+    if (restaurant && nextSessionId) {
+      registeredKeyRef.current = `${restaurant.id}:${nextSessionId}:${payload.guestName.trim().toLowerCase()}`;
+      const localItemsToMigrate = !sessionId && cart.length > 0 ? [...cart] : [];
+      const pendingAction = pendingCartActionRef.current;
+      pendingCartActionRef.current = null;
+
+      if (localItemsToMigrate.length > 0 || pendingAction) {
+        await mutateActiveSessionItems(
+          nextSessionId,
+          payload.hallName,
+          payload.tableNumber,
+          payload.guestName,
+          (prev) => {
+            let next = [...prev];
+            localItemsToMigrate.forEach((localItem) => {
+              next = applyAddItemToSession(next, localItem, guestId, payload.guestName);
+            });
+            if (pendingAction?.type === 'add') {
+              next = applyAddItemToSession(next, pendingAction.item, guestId, payload.guestName);
+            } else if (pendingAction?.type === 'quick') {
+              next = applyQuickStepToSession(
+                next,
+                pendingAction.item,
+                pendingAction.delta,
+                guestId,
+                payload.guestName
+              );
+            }
+            return next;
+          }
+        );
+        if (localItemsToMigrate.length > 0) {
+          setCart([]);
+        }
+      } else if (!isDemoMode) {
+        await registerGuestInTableSession({
+          restaurantId: restaurant.id,
+          ownerId: restaurant.ownerId,
+          sessionId: nextSessionId,
+          hallName: payload.hallName,
+          tableNumber: payload.tableNumber,
+          guestName: payload.guestName,
+        });
+      }
+    }
+  };
+
+  const handleTableOrderSubmitted = async (orderNumber: string) => {
+    if (!restaurant || !sessionId) return;
+    if (!isDemoMode) {
+      await clearTableSessionAfterOrder(restaurant.id, sessionId, orderNumber);
+    } else if (typeof window !== 'undefined') {
+      const storageKey = `sufra_demo_session_${slug}_${sessionId}`;
+      try {
+        const raw = window.localStorage.getItem(storageKey);
+        const current = raw ? (JSON.parse(raw) as TableSession) : null;
+        const nextSession: TableSession = {
+          id: sessionId,
+          restaurantId: restaurant.id,
+          ownerId: restaurant.ownerId,
+          hallName,
+          tableNumber,
+          status: 'active',
+          guests: current?.guests || (guestName ? [guestName] : []),
+          items: [],
+          lastOrderNumber: orderNumber,
+        };
+        window.localStorage.setItem(storageKey, JSON.stringify(nextSession));
+        setTableSession(nextSession);
+        if (typeof BroadcastChannel !== 'undefined') {
+          const bc = new BroadcastChannel(`sufra_table_${slug}_${sessionId}`);
+          bc.postMessage(nextSession);
+          bc.close();
+        }
+      } catch {
+        // Ignore demo errors
+      }
+    }
+  };
+
+  const handleSendServiceCall = async (callType: ServiceCallType) => {
+    if (!restaurant || !tableNumber) return;
+    if (isDemoMode) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      return;
+    }
+    await sendServiceCall({
+      restaurantId: restaurant.id,
+      ownerId: restaurant.ownerId,
+      hallName,
+      tableNumber,
+      sessionId,
+      guestName: guestName || (isEn ? 'Guest' : 'ضيف'),
+      callType,
+    });
+  };
+
+  const displayCart = useMemo(() => {
+    if (sessionId) {
+      return tableSessionItemsToCartItems(tableSession?.items || [], items);
+    }
+    return cart;
+  }, [sessionId, tableSession?.items, items, cart]);
+
+  const cartCount = useMemo(() => displayCart.reduce((s, c) => s + c.quantity, 0), [displayCart]);
   const cartTotal = useMemo(() => {
     if (!restaurant) return 0;
-    const sub = cart.reduce((s, c) => s + c.unitPrice * c.quantity, 0);
+    const sub = displayCart.reduce((s, c) => s + c.unitPrice * c.quantity, 0);
     const svc = (sub * (restaurant.serviceCharge || 0)) / 100;
     const tax = ((sub + svc) * (restaurant.taxRate || 0)) / 100;
     return sub + svc + tax;
-  }, [cart, restaurant]);
+  }, [displayCart, restaurant]);
 
   if (loading) {
     return (
@@ -562,13 +1065,25 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
         </div>
       )}
 
+      <TableServiceBar
+        restaurant={restaurant}
+        hallName={hallName}
+        tableNumber={tableNumber}
+        guestName={guestName}
+        activeGuests={tableSession?.guests || (guestName ? [guestName] : [])}
+        isDarkSurface={isDarkSurface}
+        isDemoMode={isDemoMode}
+        onEditGuestOrTable={() => setGuestModalOpen(true)}
+        onSendServiceCall={handleSendServiceCall}
+      />
+
       <ThemeRenderer
         restaurant={restaurant}
         categories={categories}
         items={items}
         activeTheme={effectiveTheme}
         customTheme={activeCustomTheme}
-        cart={cart}
+        cart={displayCart}
         cartCount={cartCount}
         cartTotal={cartTotal}
         colorModeOverride={colorModeOverride}
@@ -596,13 +1111,37 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
         onQuickAddSuggested={(sug) => handleQuickStepItem(sug, 1)}
       />
 
+      <GuestNameModal
+        open={guestModalOpen}
+        restaurant={restaurant}
+        halls={halls}
+        initialGuestName={guestName}
+        initialHallName={hallName}
+        initialTableNumber={tableNumber}
+        allowTableEdit={Boolean(!tableNumber)}
+        isDarkSurface={isDarkSurface}
+        onClose={() => {
+          pendingCartActionRef.current = null;
+          setGuestModalOpen(false);
+        }}
+        onConfirm={handleConfirmGuestModal}
+      />
+
       <CartDrawer
         open={cartOpen}
         restaurant={restaurant}
-        cart={cart}
+        cart={displayCart}
+        categories={categories}
         allItems={items}
         isDemoMode={isDemoMode}
         prefillPromoCode={prefillPromoCode}
+        hallName={hallName}
+        tableNumber={tableNumber}
+        sessionId={sessionId}
+        guestName={guestName}
+        activeGuests={tableSession?.guests || (guestName ? [guestName] : [])}
+        onRequestGuestOrTable={() => setGuestModalOpen(true)}
+        onTableOrderSubmitted={handleTableOrderSubmitted}
         onClose={() => setCartOpen(false)}
         onUpdateQty={handleUpdateQty}
         onRemoveItem={handleRemoveItem}
@@ -610,6 +1149,9 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
         onClearCart={() => {
           setCart([]);
           setPrefillPromoCode(null);
+          if (sessionId) {
+            void handleTableOrderSubmitted('');
+          }
           if (typeof window !== 'undefined' && slug) {
             try {
               window.localStorage.removeItem(`sufra_cart_v1_${slug}`);

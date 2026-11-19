@@ -1,19 +1,29 @@
 import { useEffect, useRef, useState } from 'react';
 import { User, onAuthStateChanged, signOut } from 'firebase/auth';
 import {
+  ArrowUpRight,
   BellRing,
+  Calculator,
+  CheckCircle2,
   ExternalLink,
   Home,
+  Layers,
   LayoutGrid,
   LogOut,
+  MessageCircle,
+  PackageCheck,
   Palette,
   QrCode,
+  Receipt,
   ShieldCheck,
+  Sparkles,
   Tag,
+  UserCheck,
   X,
 } from 'lucide-react';
 import { ConfirmSignOutModal } from '../components/ConfirmSignOutModal';
 import { LanguageToggleButton } from '../components/LanguageToggleButton';
+import { CaptainWaiterTab } from '../components/admin/CaptainWaiterTab';
 import { LiveOrdersTab } from '../components/admin/LiveOrdersTab';
 import { MenuBuilderTab } from '../components/admin/MenuBuilderTab';
 import { OffersPromosTab } from '../components/admin/OffersPromosTab';
@@ -22,11 +32,14 @@ import { QrGeneratorTab } from '../components/admin/QrGeneratorTab';
 import { ThemeCustomizerTab } from '../components/admin/ThemeCustomizerTab';
 import { OwnerAuthCard } from '../components/auth/OwnerAuthCard';
 import { useLanguage } from '../contexts/LanguageContext';
+import { DEFAULT_PLATFORM_LANDING } from '../data/defaultLandingSettings';
 import { auth, isSuperAdminEmail } from '../lib/firebase';
 import {
   ensureUserProfile,
   fetchOwnerRestaurant,
+  fetchPlatformLandingSettings,
   subscribeOwnerOrders,
+  subscribeOwnerServiceCalls,
 } from '../lib/firestoreService';
 import { playOrderAlertChime, unlockAudioContext } from '../lib/sound';
 import { Restaurant } from '../types/menu';
@@ -35,7 +48,7 @@ interface AdminPortalProps {
   onNavigate: (path: string) => void;
 }
 
-type AdminTab = 'orders' | 'menu' | 'offers' | 'theme' | 'qr';
+type AdminTab = 'orders' | 'captain' | 'menu' | 'offers' | 'theme' | 'qr';
 
 export function AdminPortal({ onNavigate }: AdminPortalProps) {
   const { lang, t, dir, loc } = useLanguage();
@@ -51,13 +64,28 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
   const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
 
   const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
+  const [pendingCallsCount, setPendingCallsCount] = useState(0);
   const [newOrderToast, setNewOrderToast] = useState<string | null>(null);
+  const [newCallToast, setNewCallToast] = useState<string | null>(null);
+  const [tygosModalOpen, setTygosModalOpen] = useState(false);
+  const [supportWhatsapp, setSupportWhatsapp] = useState(DEFAULT_PLATFORM_LANDING.supportWhatsapp);
   const orderInitRef = useRef(false);
   const knownOrderIdsRef = useRef<Set<string>>(new Set());
+  const callInitRef = useRef(false);
+  const knownCallIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     const unlock = () => unlockAudioContext();
     window.addEventListener('pointerdown', unlock, { once: true });
+    fetchPlatformLandingSettings()
+      .then((cms) => {
+        if (cms.supportWhatsapp) {
+          setSupportWhatsapp(cms.supportWhatsapp);
+        }
+      })
+      .catch(() => {
+        // Fallback to DEFAULT_PLATFORM_LANDING.supportWhatsapp
+      });
     return () => window.removeEventListener('pointerdown', unlock);
   }, []);
 
@@ -133,6 +161,68 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
 
     return () => unsub();
   }, [restaurant?.id, restaurant?.ownerId, activeTab]);
+
+  // Global live captain/service calls listener across ALL dashboard tabs
+  useEffect(() => {
+    if (!restaurant?.id || !restaurant?.ownerId) {
+      setPendingCallsCount(0);
+      return;
+    }
+
+    callInitRef.current = false;
+    knownCallIdsRef.current = new Set();
+
+    const unsub = subscribeOwnerServiceCalls(
+      restaurant.id,
+      restaurant.ownerId,
+      (calls) => {
+        const pending = calls.filter((c) => c.status === 'pending');
+        setPendingCallsCount(pending.length);
+
+        if (!callInitRef.current) {
+          calls.forEach((c) => knownCallIdsRef.current.add(c.id));
+          callInitRef.current = true;
+          return;
+        }
+
+        let latestLabel: string | null = null;
+        calls.forEach((c) => {
+          if (!knownCallIdsRef.current.has(c.id)) {
+            knownCallIdsRef.current.add(c.id);
+            if (c.status === 'pending') {
+              const typeText = isEn
+                ? c.callType === 'call_waiter'
+                  ? 'Call Captain'
+                  : c.callType === 'request_bill_cash'
+                    ? 'Bill (Cash)'
+                    : c.callType === 'request_bill_card'
+                      ? 'Bill (Card)'
+                      : 'Cutlery / Water'
+                : c.callType === 'call_waiter'
+                  ? 'نداء كابتن'
+                  : c.callType === 'request_bill_cash'
+                    ? 'طلب فاتورة (كاش)'
+                    : c.callType === 'request_bill_card'
+                      ? 'طلب فاتورة (فيزا)'
+                      : 'أدوات طعام / مياه';
+              const locPart = c.hallName ? `${c.hallName} · ` : '';
+              latestLabel = `${locPart}${isEn ? `Table ${c.tableNumber}` : `ترابيزة ${c.tableNumber}`} (${c.guestName}) — ${typeText}`;
+            }
+          }
+        });
+
+        if (latestLabel && activeTab !== 'captain') {
+          playOrderAlertChime();
+          setNewCallToast(latestLabel);
+        }
+      },
+      () => {
+        // Non-fatal fallback; LiveOrdersTab displays retry UI
+      }
+    );
+
+    return () => unsub();
+  }, [restaurant?.id, restaurant?.ownerId, activeTab, isEn]);
 
   if (!authReady || (user && loadingRestaurant)) {
     return (
@@ -262,10 +352,17 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
   const navItems: { id: AdminTab; label: string; shortLabel: string; icon: typeof BellRing; badge?: number }[] = [
     {
       id: 'orders',
-      label: t.admin.tabs.orders,
-      shortLabel: isEn ? 'Kitchen' : 'المطبخ والطلبات',
+      label: isEn ? 'Cashier & Multi-KDS' : 'شاشات الكاشير والمطبخ',
+      shortLabel: isEn ? 'Cashier & KDS' : 'الكاشير والمطبخ',
       icon: BellRing,
       badge: pendingOrdersCount > 0 ? pendingOrdersCount : undefined,
+    },
+    {
+      id: 'captain',
+      label: isEn ? 'Captain / Waiter Screen' : 'شاشة الكابتن (الويتر)',
+      shortLabel: isEn ? 'Captain Screen' : 'شاشة الكابتن',
+      icon: UserCheck,
+      badge: pendingCallsCount > 0 ? pendingCallsCount : undefined,
     },
     {
       id: 'menu',
@@ -287,16 +384,24 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
     },
     {
       id: 'qr',
-      label: t.admin.tabs.qr,
-      shortLabel: isEn ? 'QR Code' : 'كود QR',
+      label: isEn ? 'Halls & Table QRs' : 'الصالات وأكواد QR',
+      shortLabel: isEn ? 'Halls & QR' : 'الصالات و QR',
       icon: QrCode,
     },
   ];
 
+  const cleanWhatsappDigits = (supportWhatsapp || '').replace(/[^\d]/g, '') || '201000000000';
+  const tygosInquiryText = encodeURIComponent(
+    isEn
+      ? `Hello, I'm using Sufra QR for "${restaurant.name}" and would like to learn about connecting Tygos Cloud ERP (Inventory, Costing, POS, Accounting).`
+      : `مرحباً، أستخدم منصة سُفرة لمطعم "${restaurant.name}" وأرغب في معرفة تفاصيل ربط منظومة تايجوس (Tygos) السحابية الكاملة للمخازن والتكاليف ونقاط البيع والحسابات.`
+  );
+  const tygosWhatsappHref = `https://wa.me/${cleanWhatsappDigits}?text=${tygosInquiryText}`;
+
   return (
     <div dir={dir} className="min-h-screen bg-[#F5F6F8] text-zinc-900 flex flex-col lg:flex-row overflow-x-clip max-w-full">
       {/* Sidebar */}
-      <aside className="lg:w-68 bg-white border-b lg:border-b-0 lg:border-e border-zinc-200 shrink-0 flex flex-col justify-between">
+      <aside className="print:hidden lg:w-68 bg-white border-b lg:border-b-0 lg:border-e border-zinc-200 shrink-0 flex flex-col justify-between">
         <div className="p-4 sm:p-5 space-y-4 sm:space-y-5">
           <div className="flex items-center justify-between gap-2">
             <button
@@ -350,8 +455,8 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
             </p>
           </div>
 
-          {/* 2-column grid on mobile so ALL 5 dashboard sections fit cleanly without horizontal overflow */}
-          <nav className="grid grid-cols-2 sm:grid-cols-5 lg:flex lg:flex-col gap-2">
+          {/* 2-column mobile / 3-column tablet grid so ALL 6 dashboard sections fit cleanly without horizontal overflow */}
+          <nav className="grid grid-cols-2 sm:grid-cols-3 lg:flex lg:flex-col gap-2">
             {navItems.map((item) => {
               const Icon = item.icon;
               const active = activeTab === item.id;
@@ -362,7 +467,12 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
                   onClick={() => {
                     unlockAudioContext();
                     setActiveTab(item.id);
-                    if (item.id === 'orders') setNewOrderToast(null);
+                    if (item.id === 'orders') {
+                      setNewOrderToast(null);
+                    }
+                    if (item.id === 'captain') {
+                      setNewCallToast(null);
+                    }
                   }}
                   className={`min-h-[44px] flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
                     active
@@ -425,8 +535,9 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
       </aside>
 
       {/* Main Content Area */}
-      <div className="flex-1 min-w-0 flex flex-col">
-        <header className="bg-white border-b border-zinc-200 px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div className="flex-1 min-w-0 flex flex-col justify-between">
+        <div>
+          <header className="print:hidden bg-white border-b border-zinc-200 px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
           <div className="text-xs text-zinc-500 flex items-center gap-2 min-w-0">
             <span className="hidden sm:inline">{t.admin.workspaceTitle}</span>
             <span className="hidden sm:inline">/</span>
@@ -527,12 +638,42 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
             </div>
           )}
 
+          {newCallToast && activeTab !== 'captain' && (
+            <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-300 flex items-center justify-between gap-3 text-xs text-rose-950 shadow-sm">
+              <div className="flex items-center gap-2 font-bold min-w-0">
+                <BellRing className="w-4 h-4 text-rose-600 shrink-0 animate-bounce" />
+                <span className="truncate">{newCallToast}</span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('captain');
+                    setNewCallToast(null);
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-rose-600 text-white font-bold cursor-pointer"
+                >
+                  {isEn ? 'Open Captain Screen' : 'عرض في شاشة الكابتن'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNewCallToast(null)}
+                  aria-label="Close alert"
+                  className="p-1 rounded-lg hover:bg-rose-200/60 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
           {restaurant.isSuspended && (
             <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-xs font-bold text-rose-800">
               {t.menu.suspendedTitle} — {t.menu.suspendedDesc}
             </div>
           )}
           {activeTab === 'orders' && <LiveOrdersTab restaurant={restaurant} />}
+          {activeTab === 'captain' && <CaptainWaiterTab restaurant={restaurant} />}
           {activeTab === 'menu' && <MenuBuilderTab restaurant={restaurant} />}
           {activeTab === 'offers' && (
             <OffersPromosTab
@@ -549,7 +690,137 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
           )}
           {activeTab === 'qr' && <QrGeneratorTab restaurant={restaurant} />}
         </main>
+        </div>
+
+        {/* Tygos Cloud ERP Footer Banner */}
+        <footer className="print:hidden px-3 sm:px-6 pb-6 pt-2 max-w-6xl w-full mx-auto">
+          <div className="rounded-2xl bg-zinc-950 text-white border border-zinc-800 p-4 sm:p-5 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-400/30 text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
+                <Layers className="w-5 h-5" />
+              </div>
+              <div className="space-y-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 text-[11px] font-extrabold">
+                    <Sparkles className="w-3 h-3" />
+                    <span>Tygos Cloud ERP</span>
+                  </span>
+                  <span className="text-[11px] text-zinc-400 font-semibold">
+                    {isEn ? 'Enterprise Hospitality Suite' : 'منظومة الإدارة السحابية للمطاعم والكافيهات'}
+                  </span>
+                </div>
+                <p className="text-xs sm:text-sm font-bold text-zinc-100 leading-relaxed">
+                  {isEn
+                    ? 'Want to connect these screens to inventory, recipe costing, integrated POS, and full accounting? Discover the complete Tygos Cloud ERP.'
+                    : 'هل تريد ربط هذه الشاشات بالمخازن، التكاليف، نقاط البيع، والحسابات المتكاملة؟ اكتشف منظومة تايجوس (Tygos) السحابية الكاملة'}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setTygosModalOpen(true)}
+              className="w-full sm:w-auto shrink-0 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-extrabold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <span>{isEn ? 'Discover Tygos Cloud' : 'اكتشف منظومة تايجوس'}</span>
+              <ArrowUpRight className="w-4 h-4" />
+            </button>
+          </div>
+        </footer>
       </div>
+
+      {/* Tygos Cloud ERP Overview Modal */}
+      {tygosModalOpen && (
+        <div
+          className="print:hidden fixed inset-0 z-50 bg-zinc-950/60 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={() => setTygosModalOpen(false)}
+        >
+          <div
+            className="bg-white rounded-3xl border border-zinc-200 max-w-lg w-full p-5 sm:p-6 space-y-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-1">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-950 text-amber-400 text-[11px] font-extrabold">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Tygos Cloud ERP</span>
+                </span>
+                <h3 className="text-lg font-extrabold text-zinc-950 pt-1">
+                  {isEn ? 'Full Restaurant Operations & ERP Integration' : 'منظومة تايجوس (Tygos) السحابية الكاملة'}
+                </h3>
+                <p className="text-xs text-zinc-600 leading-relaxed">
+                  {isEn
+                    ? 'Upgrade from QR ordering & KDS screens to end-to-end financial, inventory, and branch control.'
+                    : 'اربط شاشات الصالة والمطبخ والكاشير في سُفرة مباشرة بإدارة التشغيل الكاملة للمطاعم والسلاسل.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTygosModalOpen(false)}
+                aria-label={isEn ? 'Close' : 'إغلاق'}
+                className="w-9 h-9 rounded-xl border border-zinc-200 text-zinc-600 hover:bg-zinc-100 flex items-center justify-center cursor-pointer shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {[
+                {
+                  icon: PackageCheck,
+                  title: isEn ? 'Smart Inventory & Stock' : 'إدارة المخازن والجرد اللحظي',
+                  desc: isEn ? 'Automatic raw-material deduction per sold dish & waste tracking.' : 'خصم تلقائي للخامات مع كل أوردر وتنبيهات الحد الأدنى والهالك.',
+                },
+                {
+                  icon: Calculator,
+                  title: isEn ? 'Recipe Costing & Margins' : 'حساب التكاليف والريسبي',
+                  desc: isEn ? 'Live Food Cost % and profit margin per dish & branch.' : 'تكلفة كل وجبة بدقة وصافي الربح لكل صنف وفرع.',
+                },
+                {
+                  icon: Receipt,
+                  title: isEn ? 'Integrated Cloud POS' : 'نقاط البيع الكاملة (POS)',
+                  desc: isEn ? 'Shifts, cash drawers, tax invoices, delivery & aggregators.' : 'إدارة الورديات والخزائن والفواتير الضريبية والتوصيل.',
+                },
+                {
+                  icon: CheckCircle2,
+                  title: isEn ? 'Full General Ledger' : 'الحسابات العامة المتكاملة',
+                  desc: isEn ? 'Suppliers, P&L statements, payroll & multi-branch reports.' : 'حسابات الموردين وقوائم الدخل والأرباح وتقارير الفروع.',
+                },
+              ].map((mod) => {
+                const Icon = mod.icon;
+                return (
+                  <div key={mod.title} className="p-3.5 rounded-2xl bg-zinc-50 border border-zinc-200 space-y-1.5">
+                    <div className="flex items-center gap-2 text-zinc-950 font-extrabold text-xs">
+                      <Icon className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>{mod.title}</span>
+                    </div>
+                    <p className="text-[11px] text-zinc-600 leading-relaxed">{mod.desc}</p>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 pt-1">
+              <a
+                href={tygosWhatsappHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold flex items-center justify-center gap-2 transition-colors"
+              >
+                <MessageCircle className="w-4 h-4" />
+                <span>{isEn ? 'Request Tygos Demo via WhatsApp' : 'اطلب عرضاً توضيحياً لـ Tygos عبر واتساب'}</span>
+              </a>
+              <button
+                type="button"
+                onClick={() => setTygosModalOpen(false)}
+                className="py-3 px-4 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-700 hover:bg-zinc-50 cursor-pointer"
+              >
+                {isEn ? 'Continue Using Sufra' : 'العودة للوحة التحكم'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <ConfirmSignOutModal
         open={signOutConfirmOpen}
         onCancel={() => setSignOutConfirmOpen(false)}

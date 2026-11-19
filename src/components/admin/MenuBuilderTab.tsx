@@ -3,6 +3,8 @@ import {
   ArrowDown,
   ArrowUp,
   Check,
+  ChefHat,
+  Croissant,
   Edit3,
   Flame,
   FolderTree,
@@ -14,6 +16,7 @@ import {
   Trash2,
   Upload,
   Wand2,
+  Wine,
   X,
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -32,7 +35,21 @@ import {
 } from '../../lib/firestoreService';
 import { CURATED_FOOD_IMAGES, uploadRestaurantAsset } from '../../lib/imageUtils';
 import { buildCategoryHierarchy, doesItemMatchHierarchy } from '../../lib/menuHierarchy';
-import { Category, ItemAddon, ItemBadge, ItemSize, MenuItem, Restaurant } from '../../types/menu';
+import {
+  resolveCategoryStation,
+  resolveMenuItemStation,
+  STATION_LIST,
+  STATION_META_MAP,
+} from '../../lib/stationUtils';
+import {
+  Category,
+  ItemAddon,
+  ItemBadge,
+  ItemSize,
+  MenuItem,
+  PrepStation,
+  Restaurant,
+} from '../../types/menu';
 import { SafeImage } from '../SafeImage';
 
 const QUICK_ADDON_PRESETS: Array<{ name: string; name_en: string; price: number }> = [
@@ -75,6 +92,7 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
   const [catParentId, setCatParentId] = useState('');
   const [catName, setCatName] = useState('');
   const [catNameEn, setCatNameEn] = useState('');
+  const [catStation, setCatStation] = useState<PrepStation>('kitchen');
   const [catImageUrl, setCatImageUrl] = useState(CURATED_FOOD_IMAGES[0].url);
   const [catSortOrder, setCatSortOrder] = useState(1);
   const [savingCat, setSavingCat] = useState(false);
@@ -420,6 +438,7 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
     setCatParentId('');
     setCatName('');
     setCatNameEn('');
+    setCatStation('kitchen');
     setCatError(null);
     setCatImageUrl(CURATED_FOOD_IMAGES[0].url);
     setCatSortOrder(categories.length + 1);
@@ -428,11 +447,15 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
 
   const openNewSubCategory = (parentId?: string) => {
     const defaultParent = parentId || hierarchy.mainCategories[0]?.id || '';
+    const inheritedStation = defaultParent
+      ? resolveCategoryStation(defaultParent, hierarchy.categoryById)
+      : 'kitchen';
     setEditingCat(null);
     setCatIsSub(Boolean(defaultParent));
     setCatParentId(defaultParent);
     setCatName('');
     setCatNameEn('');
+    setCatStation(inheritedStation);
     setCatError(null);
     setCatImageUrl(CURATED_FOOD_IMAGES[1].url);
     setCatSortOrder(categories.length + 1);
@@ -446,6 +469,7 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
     setCatParentId(hasParent ? cat.parentId || '' : hierarchy.mainCategories.find((m) => m.id !== cat.id)?.id || '');
     setCatName(cat.name);
     setCatNameEn(cat.name_en || '');
+    setCatStation(resolveCategoryStation(cat.id, hierarchy.categoryById));
     setCatError(null);
     setCatImageUrl(cat.imageUrl || CURATED_FOOD_IMAGES[0].url);
     setCatSortOrder(cat.sortOrder);
@@ -462,13 +486,18 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
     setSavingCat(true);
     setCatError(null);
     try {
+      const childIds = editingCat
+        ? (hierarchy.subCategoriesByParent.get(editingCat.id) || []).map((s) => s.id)
+        : [];
       await saveCategory(restaurant.id, restaurant.ownerId, {
         id: editingCat?.id,
         parentId: catIsSub ? catParentId : '',
         name: catName,
         name_en: catNameEn,
         imageUrl: catImageUrl,
+        station: catStation,
         sortOrder: catSortOrder,
+        propagateStationToCategoryIds: editingCat ? [editingCat.id, ...childIds] : undefined,
       });
       setCatModalOpen(false);
     } catch (err) {
@@ -572,6 +601,7 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
     if (!itemName.trim() || !itemCatId) return;
     setSavingItem(true);
     setItemError(null);
+    const inheritedStation = resolveCategoryStation(itemCatId, hierarchy.categoryById);
     try {
       await saveMenuItem(restaurant.id, restaurant.ownerId, {
         id: editingItem?.id,
@@ -591,6 +621,7 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
         badge: itemBadge,
         isBogo: itemIsBogo,
         suggestedItemIds: itemSuggestedIds,
+        station: inheritedStation,
         sortOrder: itemSortOrder,
       });
       setItemModalOpen(false);
@@ -789,6 +820,17 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
                           <span className="px-2 py-0.5 rounded-md bg-zinc-950 text-white text-[10px] font-bold">
                             {isEn ? 'MAIN' : 'رئيسي'}
                           </span>
+                          {(() => {
+                            const st = resolveCategoryStation(main.id, hierarchy.categoryById);
+                            const meta = STATION_META_MAP[st];
+                            return (
+                              <span
+                                className={`px-2 py-0.5 rounded-md border text-[10px] font-bold ${meta.badgeClass}`}
+                              >
+                                {isEn ? meta.shortLabel_en : meta.shortLabel}
+                              </span>
+                            );
+                          })()}
                           <p className="text-sm font-extrabold text-zinc-950 truncate">
                             {loc(main.name, main.name_en)}
                           </p>
@@ -903,9 +945,22 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
                                   className="w-10 h-10 rounded-lg object-cover shrink-0 pointer-events-none"
                                 />
                                 <div className="min-w-0">
-                                  <p className="text-xs font-bold text-zinc-900 truncate">
-                                    {loc(sub.name, sub.name_en)}
-                                  </p>
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <p className="text-xs font-bold text-zinc-900 truncate">
+                                      {loc(sub.name, sub.name_en)}
+                                    </p>
+                                    {(() => {
+                                      const subSt = resolveCategoryStation(sub.id, hierarchy.categoryById);
+                                      const stMeta = STATION_META_MAP[subSt];
+                                      return (
+                                        <span
+                                          className={`px-1.5 py-0.5 rounded border text-[9px] font-bold ${stMeta.badgeClass}`}
+                                        >
+                                          {isEn ? stMeta.shortLabel_en : stMeta.shortLabel}
+                                        </span>
+                                      );
+                                    })()}
+                                  </div>
                                   <p className="text-[11px] text-zinc-500 font-mono-num truncate">
                                     #{subIdx + 1} · {subItemsCount} {isEn ? 'items' : 'صنف'}
                                   </p>
@@ -1119,7 +1174,20 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
                   <div className="p-4 flex-1 flex flex-col justify-between gap-3">
                     <div>
                       <div className="flex items-center justify-between text-[11px] text-zinc-500 gap-2">
-                        <span className="truncate font-semibold text-zinc-600">{catName}</span>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="truncate font-semibold text-zinc-600">{catName}</span>
+                          {(() => {
+                            const itemSt = resolveMenuItemStation(item, hierarchy.categoryById);
+                            const stMeta = STATION_META_MAP[itemSt];
+                            return (
+                              <span
+                                className={`px-1.5 py-0.5 rounded border text-[9px] font-bold shrink-0 ${stMeta.badgeClass}`}
+                              >
+                                {isEn ? stMeta.shortLabel_en : stMeta.shortLabel}
+                              </span>
+                            );
+                          })()}
+                        </div>
                         <span className="font-mono-num shrink-0">
                           {item.sizes.length} {isEn ? 'sizes' : 'أحجام'} · {item.addons.length}{' '}
                           {isEn ? 'add-ons' : 'إضافات'}
@@ -1340,6 +1408,41 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
               </div>
             </div>
 
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-zinc-900">
+                {isEn ? 'Prep Screen / Station Routing' : 'شاشة التحضير (Station Routing)'}
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {STATION_LIST.map((st) => {
+                  const selected = catStation === st.id;
+                  const StIcon =
+                    st.id === 'bar' ? Wine : st.id === 'pastry' ? Croissant : ChefHat;
+                  return (
+                    <button
+                      key={st.id}
+                      type="button"
+                      onClick={() => setCatStation(st.id)}
+                      className={`px-2.5 py-2.5 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center gap-1 ${
+                        selected
+                          ? 'bg-zinc-950 text-white border-zinc-950 shadow-xs'
+                          : 'bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-50'
+                      }`}
+                    >
+                      <StIcon className="w-4 h-4" />
+                      <span className="text-[11px] font-extrabold leading-tight">
+                        {isEn ? st.shortLabel_en : st.shortLabel}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-zinc-500">
+                {isEn
+                  ? 'All dishes inside this category automatically route to the selected kitchen/bar/pastry screen.'
+                  : 'كل الأصناف داخل هذا القسم ستظهر تلقائياً على شاشة التحضير المختارة.'}
+              </p>
+            </div>
+
             <div>
               <label className="block text-xs font-bold mb-1">
                 {isEn ? 'Sort Order' : 'الترتيب'}
@@ -1509,6 +1612,20 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
                   );
                 })}
               </select>
+              {itemCatId && (
+                <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-zinc-600">
+                  <span>{isEn ? 'Auto-routed to screen:' : 'يتجه تلقائياً إلى شاشة:'}</span>
+                  {(() => {
+                    const st = resolveCategoryStation(itemCatId, hierarchy.categoryById);
+                    const meta = STATION_META_MAP[st];
+                    return (
+                      <span className={`px-2 py-0.5 rounded border text-[10px] font-bold ${meta.badgeClass}`}>
+                        {isEn ? meta.label_en : meta.label}
+                      </span>
+                    );
+                  })()}
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

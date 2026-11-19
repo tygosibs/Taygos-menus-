@@ -88,6 +88,7 @@
         "name": { "type": "string", "minLength": 1, "maxLength": 80 },
         "name_en": { "type": "string", "maxLength": 80 },
         "imageUrl": { "type": "string", "maxLength": 300000 },
+        "station": { "type": "string", "enum": ["kitchen", "bar", "pastry"] },
         "sortOrder": { "type": "number" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
@@ -117,6 +118,7 @@
         "badge": { "type": "string", "enum": ["none", "best_seller", "trending_week", "chef_choice", "bogo", "new"] },
         "isBogo": { "type": "boolean" },
         "suggestedItemIds": { "type": "array" },
+        "station": { "type": "string", "enum": ["kitchen", "bar", "pastry"] },
         "sortOrder": { "type": "number" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
@@ -150,7 +152,11 @@
         "customerName": { "type": "string", "minLength": 1, "maxLength": 100 },
         "customerPhone": { "type": "string", "minLength": 5, "maxLength": 24 },
         "orderType": { "type": "string", "enum": ["dine_in", "delivery", "pickup"] },
+        "hallName": { "type": "string", "maxLength": 60 },
         "tableNumber": { "type": "string", "maxLength": 20 },
+        "sessionId": { "type": "string", "maxLength": 128 },
+        "isGroupOrder": { "type": "boolean" },
+        "guestChecks": { "type": "array" },
         "deliveryAddress": { "type": "string", "maxLength": 300 },
         "notes": { "type": "string", "maxLength": 400 },
         "items": { "type": "array" },
@@ -162,6 +168,7 @@
         "taxAmount": { "type": "number" },
         "total": { "type": "number" },
         "status": { "type": "string", "enum": ["pending", "preparing", "completed", "cancelled"] },
+        "itemProgress": { "type": "object" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
@@ -179,6 +186,92 @@
         "taxAmount",
         "total",
         "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "TableSession": {
+      "title": "TableSession",
+      "description": "Live shared dining table session storing collaborative group cart items tagged by guestName.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "restaurantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "hallName": { "type": "string", "maxLength": 60 },
+        "tableNumber": { "type": "string", "minLength": 1, "maxLength": 20 },
+        "status": { "type": "string", "enum": ["active", "closed"] },
+        "guests": { "type": "array" },
+        "items": { "type": "array" },
+        "lastOrderNumber": { "type": "string", "maxLength": 32 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "id",
+        "restaurantId",
+        "ownerId",
+        "hallName",
+        "tableNumber",
+        "status",
+        "guests",
+        "items",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "ServiceCall": {
+      "title": "ServiceCall",
+      "description": "Real-time waiter/captain service alert sent from a dining table.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "restaurantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "hallName": { "type": "string", "maxLength": 60 },
+        "tableNumber": { "type": "string", "minLength": 1, "maxLength": 20 },
+        "sessionId": { "type": "string", "maxLength": 128 },
+        "guestName": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "callType": { "type": "string", "enum": ["call_waiter", "request_bill_cash", "request_bill_card", "cutlery_water"] },
+        "status": { "type": "string", "enum": ["pending", "acknowledged", "resolved"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "id",
+        "restaurantId",
+        "ownerId",
+        "hallName",
+        "tableNumber",
+        "guestName",
+        "callType",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Hall": {
+      "title": "Hall",
+      "description": "Dining hall / floor zone with configurable table count for bulk QR generation and KDS/Waiter filtering.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "restaurantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "name_en": { "type": "string", "maxLength": 80 },
+        "tableCount": { "type": "number" },
+        "sortOrder": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "id",
+        "restaurantId",
+        "ownerId",
+        "name",
+        "tableCount",
+        "sortOrder",
         "createdAt",
         "updatedAt"
       ]
@@ -277,6 +370,18 @@
     "/custom_themes/{themeId}": {
       "schema": { "$ref": "#/entities/CustomTheme" },
       "description": "Dynamic custom HTML/CSS/JS themes injected by Super Admin."
+    },
+    "/restaurants/{restaurantId}/table_sessions/{sessionId}": {
+      "schema": { "$ref": "#/entities/TableSession" },
+      "description": "Live collaborative group cart sessions per dining table and hall."
+    },
+    "/service_calls/{callId}": {
+      "schema": { "$ref": "#/entities/ServiceCall" },
+      "description": "Real-time captain/waiter service call notifications linked to restaurantId and ownerId."
+    },
+    "/halls/{hallId}": {
+      "schema": { "$ref": "#/entities/Hall" },
+      "description": "Restaurant dining halls/zones and their table counts."
     }
   }
 }
