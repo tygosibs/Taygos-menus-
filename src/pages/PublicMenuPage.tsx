@@ -15,16 +15,25 @@ import { SafeImage } from '../components/SafeImage';
 import { CartDrawer } from '../components/menu/CartDrawer';
 import { GuestNameModal } from '../components/menu/GuestNameModal';
 import { ItemModal } from '../components/menu/ItemModal';
+import { LoyaltyBar } from '../components/menu/LoyaltyBar';
+import { LoyaltyRegisterModal } from '../components/menu/LoyaltyRegisterModal';
 import { TableServiceBar } from '../components/menu/TableServiceBar';
 import { ThemeRenderer } from '../components/menu/ThemeRenderer';
 import { useLanguage } from '../contexts/LanguageContext';
 import { DEMO_RESTAURANTS } from '../data/demoRestaurants';
 import { getThemeMeta, isCustomThemeId, MENU_THEMES } from '../data/themes';
 import { usePWAInstall } from '../hooks/usePWAInstall';
+import {
+  clearCustomerPhone,
+  getDemoCustomerProfile,
+  getResolvedLoyaltyConfig,
+  getSavedCustomerPhone,
+} from '../lib/customerLoyaltyUtils';
 import { auth, isSuperAdminEmail } from '../lib/firebase';
 import {
   clearTableSessionAfterOrder,
   fetchActiveCustomThemes,
+  fetchCustomerProfile,
   fetchCustomThemeById,
   fetchRestaurantBySlug,
   fetchRestaurantHalls,
@@ -52,6 +61,8 @@ import {
   ActiveTheme,
   CartItem,
   Category,
+  CustomerLastOrderItem,
+  CustomerProfile,
   CustomTheme,
   Hall,
   MenuColorMode,
@@ -92,6 +103,8 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
   const [installBannerDismissed, setInstallBannerDismissed] = useState(false);
   const [colorModeOverride, setColorModeOverride] = useState<MenuColorMode>('auto');
   const [prefillPromoCode, setPrefillPromoCode] = useState<string | null>(null);
+  const [customerProfile, setCustomerProfile] = useState<CustomerProfile | null>(null);
+  const [loyaltyModalOpen, setLoyaltyModalOpen] = useState(false);
   const { isInstalled } = usePWAInstall();
 
   const guestId = useMemo(() => getOrCreateGuestId(), []);
@@ -192,6 +205,8 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
         setCategories(demo.categories);
         setItems(demo.items);
         setIsDemoMode(true);
+        const savedPhone = getSavedCustomerPhone(slug);
+        setCustomerProfile(savedPhone ? getDemoCustomerProfile(slug, savedPhone) : null);
         const chosen = requestedTheme || demo.restaurant.activeTheme;
         setPreviewTheme(chosen);
         if (isCustomThemeId(chosen)) {
@@ -208,6 +223,7 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
         if (!res) {
           setRestaurant(null);
           setHalls([]);
+          setCustomerProfile(null);
           setLoading(false);
           return;
         }
@@ -215,6 +231,24 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
         setCategories(res.categories);
         setItems(res.items);
         setIsDemoMode(false);
+        const savedPhone = getSavedCustomerPhone(slug);
+        if (savedPhone) {
+          fetchCustomerProfile(res.restaurant.id, savedPhone)
+            .then((profile) => {
+              if (!active) return;
+              if (profile) {
+                setCustomerProfile(profile);
+              } else {
+                clearCustomerPhone(slug);
+                setCustomerProfile(null);
+              }
+            })
+            .catch(() => {
+              if (active) setCustomerProfile(null);
+            });
+        } else {
+          setCustomerProfile(null);
+        }
         fetchRestaurantHalls(res.restaurant.id).then((loadedHalls) => {
           if (active) setHalls(loadedHalls);
         });
@@ -752,6 +786,39 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
     });
   };
 
+  const handleReorderLastOrder = (lastItems: CustomerLastOrderItem[]) => {
+    const liveMap = new Map(items.filter((i) => i.isAvailable).map((i) => [i.id, i]));
+    lastItems.forEach((li) => {
+      const menuItem = liveMap.get(li.menuItemId);
+      if (!menuItem) return;
+      const matchedSize = li.sizeName
+        ? menuItem.sizes.find(
+            (s) => s.name === li.sizeName || s.name_en === li.sizeName
+          )
+        : menuItem.sizes[0];
+      const matchedAddons = (li.addonNames || [])
+        .map((an) => menuItem.addons.find((a) => a.name === an || a.name_en === an))
+        .filter((a): a is MenuItem['addons'][number] => Boolean(a));
+      const baseUnit = matchedSize ? matchedSize.price : menuItem.basePrice;
+      const addonSum = matchedAddons.reduce((acc, a) => acc + a.price, 0);
+      const sizeKey = matchedSize?.name || 'std';
+      const addonKey = matchedAddons.map((a) => a.name).join('|');
+      handleAddToCart({
+        cartKey: `${menuItem.id}__${sizeKey}__${addonKey}__`,
+        menuItem,
+        selectedSize: matchedSize,
+        selectedAddons: matchedAddons,
+        quantity: Math.max(1, li.quantity || 1),
+        unitPrice: baseUnit + addonSum,
+      });
+    });
+  };
+
+  const resolvedLoyaltyConfig = useMemo(
+    () => getResolvedLoyaltyConfig(restaurant),
+    [restaurant]
+  );
+
   const displayCart = useMemo(() => {
     if (sessionId) {
       return tableSessionItemsToCartItems(tableSession?.items || [], items);
@@ -1077,6 +1144,17 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
         onSendServiceCall={handleSendServiceCall}
       />
 
+      <LoyaltyBar
+        restaurant={restaurant}
+        items={items}
+        customer={customerProfile}
+        loyaltyConfig={resolvedLoyaltyConfig}
+        isDarkSurface={isDarkSurface}
+        onOpenRegisterModal={() => setLoyaltyModalOpen(true)}
+        onQuickAddItem={(item) => handleQuickStepItem(item, 1)}
+        onReorderLastOrder={handleReorderLastOrder}
+      />
+
       <ThemeRenderer
         restaurant={restaurant}
         categories={categories}
@@ -1127,6 +1205,18 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
         onConfirm={handleConfirmGuestModal}
       />
 
+      <LoyaltyRegisterModal
+        open={loyaltyModalOpen}
+        restaurant={restaurant}
+        loyaltyConfig={resolvedLoyaltyConfig}
+        existingCustomer={customerProfile}
+        isDemoMode={isDemoMode}
+        isDarkSurface={isDarkSurface}
+        onClose={() => setLoyaltyModalOpen(false)}
+        onSuccess={(saved) => setCustomerProfile(saved)}
+        onSignedOut={() => setCustomerProfile(null)}
+      />
+
       <CartDrawer
         open={cartOpen}
         restaurant={restaurant}
@@ -1135,6 +1225,13 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
         allItems={items}
         isDemoMode={isDemoMode}
         prefillPromoCode={prefillPromoCode}
+        customerProfile={customerProfile}
+        loyaltyConfig={resolvedLoyaltyConfig}
+        onCustomerUpdated={(updated) => setCustomerProfile(updated)}
+        onOpenLoyaltyModal={() => {
+          setCartOpen(false);
+          setLoyaltyModalOpen(true);
+        }}
         hallName={hallName}
         tableNumber={tableNumber}
         sessionId={sessionId}

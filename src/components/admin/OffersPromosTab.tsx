@@ -2,6 +2,8 @@ import { PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState
 import {
   ArrowDown,
   ArrowUp,
+  Award,
+  Cake,
   Check,
   Copy,
   Gift,
@@ -13,11 +15,22 @@ import {
   Sparkles,
   Tag,
   Trash2,
+  Users,
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { getContrastOnAccent, isValidHexColor } from '../../lib/contrastUtils';
-import { updateRestaurantOffersAndPromos } from '../../lib/firestoreService';
 import {
+  formatLastVisitDate,
+  getResolvedLoyaltyConfig,
+  isInBirthdayWindow,
+} from '../../lib/customerLoyaltyUtils';
+import {
+  subscribeRestaurantCustomers,
+  updateRestaurantOffersAndPromos,
+} from '../../lib/firestoreService';
+import {
+  CustomerProfile,
+  LoyaltyConfig,
   MenuOffer,
   OfferAnimation,
   OfferPlacement,
@@ -29,19 +42,29 @@ import {
 interface OffersPromosTabProps {
   restaurant: Restaurant;
   onRestaurantUpdated: (updated: Restaurant) => void;
+  onOpenCustomersTab?: () => void;
 }
 
 function makeLocalId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 }
 
-export function OffersPromosTab({ restaurant, onRestaurantUpdated }: OffersPromosTabProps) {
+export function OffersPromosTab({
+  restaurant,
+  onRestaurantUpdated,
+  onOpenCustomersTab,
+}: OffersPromosTabProps) {
   const { lang, dir, t, loc, formatCurrency } = useLanguage();
   const isEn = lang === 'en';
   const currencyLabel = formatCurrency(restaurant.currency);
 
   const [offers, setOffers] = useState<MenuOffer[]>(restaurant.offers || []);
   const [promoCodes, setPromoCodes] = useState<PromoCode[]>(restaurant.promoCodes || []);
+  const [loyaltyConfig, setLoyaltyConfig] = useState<Required<LoyaltyConfig>>(() =>
+    getResolvedLoyaltyConfig(restaurant)
+  );
+  const [customers, setCustomers] = useState<CustomerProfile[]>([]);
+  const [customersLoading, setCustomersLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savedToast, setSavedToast] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,7 +77,25 @@ export function OffersPromosTab({ restaurant, onRestaurantUpdated }: OffersPromo
   useEffect(() => {
     setOffers(restaurant.offers || []);
     setPromoCodes(restaurant.promoCodes || []);
-  }, [restaurant.id, restaurant.offers, restaurant.promoCodes]);
+    setLoyaltyConfig(getResolvedLoyaltyConfig(restaurant));
+  }, [restaurant]);
+
+  useEffect(() => {
+    if (!restaurant.id || !restaurant.ownerId) return;
+    setCustomersLoading(true);
+    const unsub = subscribeRestaurantCustomers(
+      restaurant.id,
+      restaurant.ownerId,
+      (list) => {
+        setCustomers(list);
+        setCustomersLoading(false);
+      },
+      () => {
+        setCustomersLoading(false);
+      }
+    );
+    return () => unsub();
+  }, [restaurant.id, restaurant.ownerId]);
 
   useEffect(() => {
     offersRef.current = offers;
@@ -229,13 +270,25 @@ export function OffersPromosTab({ restaurant, onRestaurantUpdated }: OffersPromo
     setError(null);
     setSavedToast(false);
     try {
-      const saved = await updateRestaurantOffersAndPromos(restaurant.id, offers, promoCodes);
+      const saved = await updateRestaurantOffersAndPromos(
+        restaurant.id,
+        offers,
+        promoCodes,
+        loyaltyConfig
+      );
       setOffers(saved.offers);
       setPromoCodes(saved.promoCodes);
+      if (saved.loyaltyConfig) {
+        setLoyaltyConfig({
+          ...loyaltyConfig,
+          ...saved.loyaltyConfig,
+        });
+      }
       onRestaurantUpdated({
         ...restaurant,
         offers: saved.offers,
         promoCodes: saved.promoCodes,
+        loyaltyConfig: saved.loyaltyConfig ?? loyaltyConfig,
       });
       setSavedToast(true);
       setTimeout(() => setSavedToast(false), 3000);
@@ -766,6 +819,361 @@ export function OffersPromosTab({ restaurant, onRestaurantUpdated }: OffersPromo
                 </div>
               </div>
             ))}
+          </div>
+        )}
+      </section>
+
+      {/* Section 3: Smart Customer Loyalty, Birthdays & Punch Card */}
+      <section className="bg-white border border-zinc-200 rounded-2xl p-4 sm:p-5 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm sm:text-base font-extrabold text-zinc-950 flex items-center gap-2">
+              <Award className="w-4 h-4 text-[#A61C1C]" />
+              <span>
+                {isEn
+                  ? 'Smart Customer Loyalty & Birthdays'
+                  : 'منظومة ولاء العملاء وأعياد الميلاد الذكية'}
+              </span>
+            </h3>
+            <p className="text-[11px] text-zinc-500 mt-0.5 leading-relaxed">
+              {isEn
+                ? '1-tap phone registration, automatic first-order discount, birthday offers, punch card stamps & smart favorites reorder.'
+                : 'تسجيل سريع برقم الهاتف، خصم أول طلب تلقائي، عروض أعياد الميلاد، بطاقة أختام الطلبات، وترشيح الأصناف المفضلة.'}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {onOpenCustomersTab && (
+              <button
+                type="button"
+                onClick={onOpenCustomersTab}
+                className="min-h-[38px] px-3 py-1.5 rounded-xl bg-zinc-950 text-white text-xs font-bold hover:bg-zinc-800 flex items-center gap-1.5 cursor-pointer"
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>{isEn ? 'Open Customers CRM' : 'فتح صفحة عملائي CRM'}</span>
+              </button>
+            )}
+            <label className="flex items-center gap-2 text-xs font-extrabold cursor-pointer px-3 py-2 rounded-xl border border-zinc-200 bg-zinc-50">
+              <input
+                type="checkbox"
+                checked={loyaltyConfig.enabled}
+                onChange={(e) =>
+                  setLoyaltyConfig((prev) => ({ ...prev, enabled: e.target.checked }))
+                }
+                className="w-4 h-4 accent-emerald-600"
+              />
+              <span>{isEn ? 'Enable Loyalty Engine' : 'تفعيل نظام الولاء'}</span>
+            </label>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+          <div>
+            <label className="block text-[11px] font-bold mb-1">
+              {isEn ? 'Guest Promo Strip Text (Arabic)' : 'نص شريط التحفيز العلوي (عربي)'}
+            </label>
+            <input
+              type="text"
+              dir="rtl"
+              value={loyaltyConfig.promoBannerText}
+              onChange={(e) =>
+                setLoyaltyConfig((prev) => ({ ...prev, promoBannerText: e.target.value }))
+              }
+              className="w-full px-3 py-2 rounded-xl border border-zinc-200 bg-white text-xs"
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] font-bold mb-1">
+              {isEn ? 'Guest Promo Strip Text (English)' : 'نص شريط التحفيز العلوي (إنجليزي)'}
+            </label>
+            <input
+              type="text"
+              dir="ltr"
+              value={loyaltyConfig.promoBannerText_en}
+              onChange={(e) =>
+                setLoyaltyConfig((prev) => ({ ...prev, promoBannerText_en: e.target.value }))
+              }
+              className="w-full px-3 py-2 rounded-xl border border-zinc-200 bg-white text-xs text-left"
+            />
+          </div>
+
+          <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            <label className="flex items-center justify-between gap-2 text-xs font-bold cursor-pointer px-3 py-2.5 rounded-xl border border-zinc-200 bg-zinc-50">
+              <span>{isEn ? 'Enable 1st-Order Discount' : 'تفعيل خصم أول طلب عند التسجيل'}</span>
+              <input
+                type="checkbox"
+                checked={loyaltyConfig.firstOrderEnabled}
+                onChange={(e) =>
+                  setLoyaltyConfig((prev) => ({ ...prev, firstOrderEnabled: e.target.checked }))
+                }
+                className="w-4 h-4 accent-emerald-600"
+              />
+            </label>
+            <label className="flex items-center justify-between gap-2 text-xs font-bold cursor-pointer px-3 py-2.5 rounded-xl border border-zinc-200 bg-zinc-50">
+              <span>{isEn ? 'Enable Punch Card Reward' : 'تفعيل مكافأة الزيارات المتكررة'}</span>
+              <input
+                type="checkbox"
+                checked={loyaltyConfig.punchCardEnabled}
+                onChange={(e) =>
+                  setLoyaltyConfig((prev) => ({ ...prev, punchCardEnabled: e.target.checked }))
+                }
+                className="w-4 h-4 accent-emerald-600"
+              />
+            </label>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-bold mb-1">
+              {isEn ? '1st-Order Welcome Discount (%)' : 'نسبة خصم أول طلب عند التسجيل (%)'}
+            </label>
+            <input
+              type="number"
+              min={0}
+              max={50}
+              disabled={!loyaltyConfig.firstOrderEnabled}
+              value={loyaltyConfig.firstOrderDiscountPercent}
+              onChange={(e) =>
+                setLoyaltyConfig((prev) => ({
+                  ...prev,
+                  firstOrderDiscountPercent: Math.max(0, Math.min(50, Number(e.target.value) || 0)),
+                }))
+              }
+              className="w-full px-3 py-2 rounded-xl border border-zinc-200 bg-white text-xs font-mono-num disabled:opacity-40"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2.5">
+            <div>
+              <label className="block text-[11px] font-bold mb-1">
+                {isEn ? 'Punch Target (Orders)' : 'عدد الطلبات المستهدف'}
+              </label>
+              <input
+                type="number"
+                min={2}
+                max={20}
+                disabled={!loyaltyConfig.punchCardEnabled}
+                value={loyaltyConfig.punchCardTarget}
+                onChange={(e) =>
+                  setLoyaltyConfig((prev) => ({
+                    ...prev,
+                    punchCardTarget: Math.max(2, Math.min(20, Number(e.target.value) || 5)),
+                  }))
+                }
+                className="w-full px-3 py-2 rounded-xl border border-zinc-200 bg-white text-xs font-mono-num disabled:opacity-40"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-bold mb-1">
+                {isEn ? 'Punch Discount (%)' : 'خصم البطاقة (%)'}
+              </label>
+              <input
+                type="number"
+                min={0}
+                max={50}
+                disabled={!loyaltyConfig.punchCardEnabled}
+                value={loyaltyConfig.punchCardDiscountPercent}
+                onChange={(e) =>
+                  setLoyaltyConfig((prev) => ({
+                    ...prev,
+                    punchCardDiscountPercent: Math.max(
+                      0,
+                      Math.min(50, Number(e.target.value) || 0)
+                    ),
+                  }))
+                }
+                className="w-full px-3 py-2 rounded-xl border border-zinc-200 bg-white text-xs font-mono-num disabled:opacity-40"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-bold mb-1">
+              {isEn ? 'Punch Card Reward Label (Arabic)' : 'وصف مكافأة إكمال البطاقة (عربي)'}
+            </label>
+            <input
+              type="text"
+              dir="rtl"
+              value={loyaltyConfig.punchCardRewardText}
+              onChange={(e) =>
+                setLoyaltyConfig((prev) => ({ ...prev, punchCardRewardText: e.target.value }))
+              }
+              className="w-full px-3 py-2 rounded-xl border border-zinc-200 bg-white text-xs"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-bold mb-1">
+              {isEn ? 'Punch Card Reward Label (English)' : 'وصف مكافأة إكمال البطاقة (إنجليزي)'}
+            </label>
+            <input
+              type="text"
+              dir="ltr"
+              value={loyaltyConfig.punchCardRewardText_en}
+              onChange={(e) =>
+                setLoyaltyConfig((prev) => ({ ...prev, punchCardRewardText_en: e.target.value }))
+              }
+              className="w-full px-3 py-2 rounded-xl border border-zinc-200 bg-white text-xs text-left"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-bold mb-1">
+              {isEn ? 'Birthday Discount (%)' : 'نسبة خصم أعياد الميلاد (%)'}
+            </label>
+            <input
+              type="number"
+              min={0}
+              max={50}
+              value={loyaltyConfig.birthdayDiscountPercent}
+              onChange={(e) =>
+                setLoyaltyConfig((prev) => ({
+                  ...prev,
+                  birthdayDiscountPercent: Math.max(0, Math.min(50, Number(e.target.value) || 0)),
+                }))
+              }
+              className="w-full px-3 py-2 rounded-xl border border-zinc-200 bg-white text-xs font-mono-num"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-bold mb-1">
+              {isEn ? 'Birthday Banner Offer (Arabic)' : 'رسالة وعرض عيد الميلاد (عربي)'}
+            </label>
+            <input
+              type="text"
+              dir="rtl"
+              value={loyaltyConfig.birthdayOfferText}
+              onChange={(e) =>
+                setLoyaltyConfig((prev) => ({ ...prev, birthdayOfferText: e.target.value }))
+              }
+              className="w-full px-3 py-2 rounded-xl border border-zinc-200 bg-white text-xs"
+            />
+          </div>
+
+          <div className="sm:col-span-2">
+            <label className="block text-[11px] font-bold mb-1">
+              {isEn ? 'Birthday Banner Offer (English)' : 'رسالة وعرض عيد الميلاد (إنجليزي)'}
+            </label>
+            <input
+              type="text"
+              dir="ltr"
+              value={loyaltyConfig.birthdayOfferText_en}
+              onChange={(e) =>
+                setLoyaltyConfig((prev) => ({ ...prev, birthdayOfferText_en: e.target.value }))
+              }
+              className="w-full px-3 py-2 rounded-xl border border-zinc-200 bg-white text-xs text-left"
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* Section 4: Registered Loyalty Members Preview -> Link to Full CRM */}
+      <section className="bg-white border border-zinc-200 rounded-2xl p-4 sm:p-5 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="text-sm sm:text-base font-extrabold text-zinc-950 flex items-center gap-2">
+              <Users className="w-4 h-4 text-zinc-700" />
+              <span>
+                {isEn
+                  ? `Registered Loyalty Members (${customers.length})`
+                  : `سجل عملاء برنامج الولاء (${customers.length})`}
+              </span>
+            </h3>
+            <p className="text-[11px] text-zinc-500 mt-0.5">
+              {isEn
+                ? 'Quick preview — open "Customers & Smart CRM" tab for Birthday Radar, Smart Filters, WhatsApp Retargeting & CSV Export.'
+                : 'معاينة سريعة — انتقل لتبويب "عملائي (CRM والتسويق الذكي)" لرادار أعياد الميلاد، الفلاتر، واتساب التسويقي، وتصدير الإكسل.'}
+            </p>
+          </div>
+          {onOpenCustomersTab && (
+            <button
+              type="button"
+              onClick={onOpenCustomersTab}
+              className="min-h-[38px] px-3 py-1.5 rounded-xl border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-xs font-bold text-zinc-900 cursor-pointer"
+            >
+              {isEn ? 'Open Full CRM →' : 'إدارة العملاء والتسويق ←'}
+            </button>
+          )}
+        </div>
+
+        {customersLoading ? (
+          <div className="p-6 text-center text-xs text-zinc-500 flex items-center justify-center gap-2">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span>{isEn ? 'Loading loyalty members...' : 'جاري تحميل قائمة العملاء...'}</span>
+          </div>
+        ) : customers.length === 0 ? (
+          <div className="p-6 rounded-2xl border border-dashed border-zinc-300 bg-zinc-50/70 text-center space-y-1.5">
+            <Users className="w-6 h-6 text-zinc-300 mx-auto" />
+            <p className="text-xs font-semibold text-zinc-500">
+              {isEn
+                ? 'No registered loyalty customers yet. Visitors can sign up in 1 tap at the top of your menu.'
+                : 'لا يوجد عملاء مسجلين بعد. بمجرد تسجيل العميل برقم هاتفه في المنيو سيظهر هنا فوراً.'}
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-zinc-200 text-zinc-500 text-start">
+                  <th className="py-2 px-2 font-bold text-start">{isEn ? 'Name' : 'العميل'}</th>
+                  <th className="py-2 px-2 font-bold text-start">{isEn ? 'Phone' : 'الهاتف'}</th>
+                  <th className="py-2 px-2 font-bold text-start">{isEn ? 'Preference' : 'التفضيل'}</th>
+                  <th className="py-2 px-2 font-bold text-start">{isEn ? 'Orders' : 'الطلبات'}</th>
+                  <th className="py-2 px-2 font-bold text-start">{isEn ? 'Punch Card' : 'الأختام'}</th>
+                  <th className="py-2 px-2 font-bold text-start">{isEn ? 'Birthday' : 'الميلاد'}</th>
+                  <th className="py-2 px-2 font-bold text-start">{isEn ? 'Last Visit' : 'آخر زيارة'}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100">
+                {customers.slice(0, 50).map((cust) => {
+                  const bday = isInBirthdayWindow(cust.birthDay, cust.birthMonth);
+                  const lastVisit = formatLastVisitDate(cust.lastVisitAt, lang);
+                  const prefLabel =
+                    cust.preferredOrderType === 'delivery'
+                      ? isEn
+                        ? 'Delivery'
+                        : 'دليفري'
+                      : cust.preferredOrderType === 'pickup'
+                        ? isEn
+                          ? 'Takeaway'
+                          : 'تيك أواي'
+                        : isEn
+                          ? 'Dine-In'
+                          : 'صالة';
+                  return (
+                    <tr key={cust.id} className="hover:bg-zinc-50/70">
+                      <td className="py-2.5 px-2 font-bold text-zinc-900">
+                        <div className="flex items-center gap-1.5">
+                          <span>{cust.fullName}</span>
+                          {bday.active && (
+                            <span
+                              title={isEn ? 'Birthday Window Active' : 'فترة عيد الميلاد مفعلة'}
+                              className="inline-flex items-center gap-0.5 text-amber-700 font-extrabold"
+                            >
+                              <Cake className="w-3.5 h-3.5" />
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-2.5 px-2 font-mono-num text-zinc-700" dir="ltr">
+                        {cust.phone}
+                      </td>
+                      <td className="py-2.5 px-2 text-zinc-600">{prefLabel}</td>
+                      <td className="py-2.5 px-2 font-mono-num font-bold text-zinc-900">
+                        {cust.totalOrders}
+                      </td>
+                      <td className="py-2.5 px-2 font-mono-num text-zinc-700">
+                        {cust.loyaltyCycleOrders}/{loyaltyConfig.punchCardTarget}
+                      </td>
+                      <td className="py-2.5 px-2 font-mono-num text-zinc-600">
+                        {cust.birthDay}/{cust.birthMonth}
+                      </td>
+                      <td className="py-2.5 px-2 text-zinc-500">{lastVisit || '—'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </section>

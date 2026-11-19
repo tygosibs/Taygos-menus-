@@ -12,6 +12,10 @@ service cloud.firestore {
       return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
+    function isValidPhoneId(phone) {
+      return phone is string && phone.size() >= 6 && phone.size() <= 24 && phone.matches('^[0-9]+$');
+    }
+
     function isValidSlug(slug) {
       return slug is string && slug.size() >= 2 && slug.size() <= 64 && slug.matches('^[a-z0-9]+(?:-[a-z0-9]+)*$');
     }
@@ -95,7 +99,7 @@ service cloud.firestore {
           'shareDescription', 'shareDescription_en', 'activeTheme', 'primaryColor',
           'colorMode', 'headingColor', 'descriptionColor', 'priceColor', 'menuColumns',
           'taxRate', 'serviceCharge', 'deliveryFee', 'currency',
-          'isOpen', 'isSuspended', 'offers', 'promoCodes', 'createdAt', 'updatedAt'
+          'isOpen', 'isSuspended', 'offers', 'promoCodes', 'loyaltyConfig', 'createdAt', 'updatedAt'
         ]) &&
         isValidId(data.id) &&
         data.id == restId &&
@@ -126,6 +130,66 @@ service cloud.firestore {
         (!('isSuspended' in data) || data.isSuspended is bool) &&
         (!('offers' in data) || (data.offers is list && data.offers.size() <= 12 && (data.offers.size() == 0 || data.offers[0] is map))) &&
         (!('promoCodes' in data) || (data.promoCodes is list && data.promoCodes.size() <= 20 && (data.promoCodes.size() == 0 || data.promoCodes[0] is map))) &&
+        (!('loyaltyConfig' in data) || (
+          data.loyaltyConfig is map &&
+          data.loyaltyConfig.keys().hasOnly([
+            'enabled', 'firstOrderEnabled', 'promoBannerText', 'promoBannerText_en',
+            'firstOrderDiscountPercent', 'punchCardEnabled', 'punchCardTarget',
+            'punchCardDiscountPercent', 'punchCardRewardText', 'punchCardRewardText_en',
+            'birthdayOfferText', 'birthdayOfferText_en', 'birthdayDiscountPercent',
+            'birthdayWhatsappMessage'
+          ]) &&
+          (!('enabled' in data.loyaltyConfig) || data.loyaltyConfig.enabled is bool) &&
+          (!('firstOrderEnabled' in data.loyaltyConfig) || data.loyaltyConfig.firstOrderEnabled is bool) &&
+          (!('promoBannerText' in data.loyaltyConfig) || (data.loyaltyConfig.promoBannerText is string && data.loyaltyConfig.promoBannerText.size() <= 200)) &&
+          (!('promoBannerText_en' in data.loyaltyConfig) || (data.loyaltyConfig.promoBannerText_en is string && data.loyaltyConfig.promoBannerText_en.size() <= 200)) &&
+          (!('firstOrderDiscountPercent' in data.loyaltyConfig) || (data.loyaltyConfig.firstOrderDiscountPercent is number && data.loyaltyConfig.firstOrderDiscountPercent >= 0 && data.loyaltyConfig.firstOrderDiscountPercent <= 50)) &&
+          (!('punchCardEnabled' in data.loyaltyConfig) || data.loyaltyConfig.punchCardEnabled is bool) &&
+          (!('punchCardTarget' in data.loyaltyConfig) || (data.loyaltyConfig.punchCardTarget is number && data.loyaltyConfig.punchCardTarget >= 2 && data.loyaltyConfig.punchCardTarget <= 20)) &&
+          (!('punchCardDiscountPercent' in data.loyaltyConfig) || (data.loyaltyConfig.punchCardDiscountPercent is number && data.loyaltyConfig.punchCardDiscountPercent >= 0 && data.loyaltyConfig.punchCardDiscountPercent <= 50)) &&
+          (!('punchCardRewardText' in data.loyaltyConfig) || (data.loyaltyConfig.punchCardRewardText is string && data.loyaltyConfig.punchCardRewardText.size() <= 140)) &&
+          (!('punchCardRewardText_en' in data.loyaltyConfig) || (data.loyaltyConfig.punchCardRewardText_en is string && data.loyaltyConfig.punchCardRewardText_en.size() <= 140)) &&
+          (!('birthdayOfferText' in data.loyaltyConfig) || (data.loyaltyConfig.birthdayOfferText is string && data.loyaltyConfig.birthdayOfferText.size() <= 220)) &&
+          (!('birthdayOfferText_en' in data.loyaltyConfig) || (data.loyaltyConfig.birthdayOfferText_en is string && data.loyaltyConfig.birthdayOfferText_en.size() <= 220)) &&
+          (!('birthdayDiscountPercent' in data.loyaltyConfig) || (data.loyaltyConfig.birthdayDiscountPercent is number && data.loyaltyConfig.birthdayDiscountPercent >= 0 && data.loyaltyConfig.birthdayDiscountPercent <= 50)) &&
+          (!('birthdayWhatsappMessage' in data.loyaltyConfig) || (data.loyaltyConfig.birthdayWhatsappMessage is string && data.loyaltyConfig.birthdayWhatsappMessage.size() <= 400))
+        )) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidCustomerShape(data, restaurantId, customerPhone) {
+      return data.keys().hasAll([
+          'id', 'restaurantId', 'ownerId', 'fullName', 'phone',
+          'birthDay', 'birthMonth', 'birthYear', 'preferredOrderType',
+          'totalOrders', 'loyaltyCycleOrders', 'firstOrderDiscountUsed',
+          'favoriteItems', 'lastOrderItems', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'restaurantId', 'ownerId', 'fullName', 'phone',
+          'birthDay', 'birthMonth', 'birthYear', 'preferredOrderType', 'address',
+          'totalOrders', 'loyaltyCycleOrders', 'firstOrderDiscountUsed',
+          'lastVisitAt', 'favoriteItems', 'lastOrderItems', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidPhoneId(data.id) &&
+        data.id == customerPhone &&
+        isValidId(data.restaurantId) &&
+        data.restaurantId == restaurantId &&
+        isValidId(data.ownerId) &&
+        data.fullName is string && data.fullName.size() >= 1 && data.fullName.size() <= 100 &&
+        isValidPhoneId(data.phone) &&
+        data.phone == customerPhone &&
+        data.birthDay is number && data.birthDay >= 1 && data.birthDay <= 31 &&
+        data.birthMonth is number && data.birthMonth >= 1 && data.birthMonth <= 12 &&
+        data.birthYear is number && data.birthYear >= 1920 && data.birthYear <= 2020 &&
+        data.preferredOrderType in ['dine_in', 'delivery', 'pickup'] &&
+        (!('address' in data) || (data.address is string && data.address.size() <= 300)) &&
+        data.totalOrders is number && data.totalOrders >= 0 && data.totalOrders <= 100000 &&
+        data.loyaltyCycleOrders is number && data.loyaltyCycleOrders >= 0 && data.loyaltyCycleOrders <= 100 &&
+        data.firstOrderDiscountUsed is bool &&
+        (!('lastVisitAt' in data) || data.lastVisitAt is timestamp) &&
+        data.favoriteItems is list && data.favoriteItems.size() <= 20 && (data.favoriteItems.size() == 0 || data.favoriteItems[0] is map) &&
+        data.lastOrderItems is list && data.lastOrderItems.size() <= 30 && (data.lastOrderItems.size() == 0 || data.lastOrderItems[0] is map) &&
         data.createdAt is timestamp &&
         data.updatedAt is timestamp;
     }
@@ -409,7 +473,9 @@ service cloud.firestore {
             isVerifiedAccount() &&
             existing().ownerId == request.auth.uid && (
               incoming().diff(existing()).affectedKeys().hasOnly(['activeTheme', 'updatedAt']) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['loyaltyConfig', 'updatedAt']) ||
               incoming().diff(existing()).affectedKeys().hasOnly(['offers', 'promoCodes', 'updatedAt']) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['offers', 'promoCodes', 'loyaltyConfig', 'updatedAt']) ||
               incoming().diff(existing()).affectedKeys().hasOnly([
                 'activeTheme', 'primaryColor', 'taxRate', 'serviceCharge',
                 'colorMode', 'headingColor', 'descriptionColor', 'priceColor', 'menuColumns',
@@ -426,7 +492,9 @@ service cloud.firestore {
           ) || (
             isSuperAdmin() && (
               incoming().diff(existing()).affectedKeys().hasOnly(['isSuspended', 'updatedAt']) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['loyaltyConfig', 'updatedAt']) ||
               incoming().diff(existing()).affectedKeys().hasOnly(['offers', 'promoCodes', 'updatedAt']) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['offers', 'promoCodes', 'loyaltyConfig', 'updatedAt']) ||
               incoming().diff(existing()).affectedKeys().hasOnly([
                 'activeTheme', 'primaryColor', 'taxRate', 'serviceCharge',
                 'colorMode', 'headingColor', 'descriptionColor', 'priceColor', 'menuColumns',
@@ -492,6 +560,60 @@ service cloud.firestore {
             )
           );
         allow delete: if isValidId(restaurantId) && isValidId(sessionId) && (
+          isSuperAdmin() ||
+          (isVerifiedAccount() && existing().ownerId == request.auth.uid)
+        );
+      }
+
+      // 3c. Customers Loyalty & Personalization subcollection (keyed by phone)
+      match /customers/{customerPhone} {
+        allow get: if isValidId(restaurantId) &&
+          isValidPhoneId(customerPhone) &&
+          exists(/databases/$(database)/documents/restaurants/$(restaurantId));
+        allow list: if isValidId(restaurantId) && (
+          isSuperAdmin() ||
+          (isVerifiedAccount() && resource.data.ownerId == request.auth.uid)
+        );
+        allow create: if isValidId(restaurantId) &&
+          isValidPhoneId(customerPhone) &&
+          isValidCustomerShape(incoming(), restaurantId, customerPhone) &&
+          incoming().totalOrders == 0 &&
+          incoming().loyaltyCycleOrders == 0 &&
+          incoming().firstOrderDiscountUsed == false &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          exists(/databases/$(database)/documents/restaurants/$(restaurantId)) &&
+          get(/databases/$(database)/documents/restaurants/$(restaurantId)).data.ownerId == incoming().ownerId;
+        allow update: if isValidId(restaurantId) &&
+          isValidPhoneId(customerPhone) &&
+          isValidCustomerShape(incoming(), restaurantId, customerPhone) &&
+          incoming().id == existing().id &&
+          incoming().phone == existing().phone &&
+          incoming().restaurantId == existing().restaurantId &&
+          incoming().ownerId == existing().ownerId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          (existing().firstOrderDiscountUsed == false || incoming().firstOrderDiscountUsed == true) &&
+          exists(/databases/$(database)/documents/restaurants/$(restaurantId)) && (
+            (
+              incoming().diff(existing()).affectedKeys().hasOnly([
+                'fullName', 'birthDay', 'birthMonth', 'birthYear', 'preferredOrderType', 'address', 'updatedAt'
+              ])
+            ) || (
+              incoming().totalOrders >= existing().totalOrders &&
+              incoming().totalOrders <= existing().totalOrders + 1 &&
+              incoming().lastVisitAt == request.time &&
+              incoming().diff(existing()).affectedKeys().hasOnly([
+                'fullName', 'preferredOrderType', 'address',
+                'totalOrders', 'loyaltyCycleOrders', 'firstOrderDiscountUsed',
+                'lastVisitAt', 'favoriteItems', 'lastOrderItems', 'updatedAt'
+              ])
+            ) || (
+              isSuperAdmin() ||
+              (isVerifiedAccount() && existing().ownerId == request.auth.uid)
+            )
+          );
+        allow delete: if isValidId(restaurantId) && isValidPhoneId(customerPhone) && (
           isSuperAdmin() ||
           (isVerifiedAccount() && existing().ownerId == request.auth.uid)
         );

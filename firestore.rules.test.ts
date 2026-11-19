@@ -22,4 +22,7 @@ export const DIRTY_DOZEN_CASES: DirtyDozenCase[] = [
   { id: 'DD-13', description: 'Shadow key injected into table_sessions', path: '/restaurants/rest_1/table_sessions/tbl_5_abcd', operation: 'update', expected: 'PERMISSION_DENIED' },
   { id: 'DD-14', description: 'Invalid callType or cross-tenant list on service_calls', path: '/service_calls/call_1', operation: 'create', expected: 'PERMISSION_DENIED' },
   { id: 'DD-15', description: 'Cross-tenant hall write or tableCount > 200', path: '/halls/hall_1', operation: 'create', expected: 'PERMISSION_DENIED' },
+  { id: 'DD-16', description: 'Customer loyalty list scraping or resetting firstOrderDiscountUsed', path: '/restaurants/rest_1/customers/01012345678', operation: 'update', expected: 'PERMISSION_DENIED' },
+  { id: 'DD-17', description: 'Poisoned loyaltyConfig percent > 50 or shadow key', path: '/restaurants/rest_1', operation: 'update', expected: 'PERMISSION_DENIED' },
 ];
+

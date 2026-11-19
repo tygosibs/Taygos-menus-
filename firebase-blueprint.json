@@ -57,6 +57,7 @@
         "isSuspended": { "type": "boolean" },
         "offers": { "type": "array" },
         "promoCodes": { "type": "array" },
+        "loyaltyConfig": { "$ref": "#/entities/LoyaltyConfig" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
@@ -336,6 +337,70 @@
         "isActive",
         "createdAt"
       ]
+    },
+    "CustomerProfile": {
+      "title": "CustomerProfile",
+      "description": "Smart customer loyalty, punch card, birthday, and personalization profile keyed by normalized phone inside a restaurant.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 6, "maxLength": 24, "pattern": "^[0-9]+$" },
+        "restaurantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "fullName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "phone": { "type": "string", "minLength": 6, "maxLength": 24, "pattern": "^[0-9]+$" },
+        "birthDay": { "type": "number" },
+        "birthMonth": { "type": "number" },
+        "birthYear": { "type": "number" },
+        "preferredOrderType": { "type": "string", "enum": ["dine_in", "delivery", "pickup"] },
+        "address": { "type": "string", "maxLength": 300 },
+        "totalOrders": { "type": "number" },
+        "loyaltyCycleOrders": { "type": "number" },
+        "firstOrderDiscountUsed": { "type": "boolean" },
+        "lastVisitAt": { "type": "string", "format": "date-time" },
+        "favoriteItems": { "type": "array" },
+        "lastOrderItems": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "id",
+        "restaurantId",
+        "ownerId",
+        "fullName",
+        "phone",
+        "birthDay",
+        "birthMonth",
+        "birthYear",
+        "preferredOrderType",
+        "totalOrders",
+        "loyaltyCycleOrders",
+        "firstOrderDiscountUsed",
+        "favoriteItems",
+        "lastOrderItems",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "LoyaltyConfig": {
+      "title": "LoyaltyConfig",
+      "description": "Restaurant-level smart loyalty, first-order discount, punch card, and birthday offer configuration.",
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "firstOrderEnabled": { "type": "boolean" },
+        "promoBannerText": { "type": "string", "maxLength": 200 },
+        "promoBannerText_en": { "type": "string", "maxLength": 200 },
+        "firstOrderDiscountPercent": { "type": "number" },
+        "punchCardEnabled": { "type": "boolean" },
+        "punchCardTarget": { "type": "number" },
+        "punchCardDiscountPercent": { "type": "number" },
+        "punchCardRewardText": { "type": "string", "maxLength": 140 },
+        "punchCardRewardText_en": { "type": "string", "maxLength": 140 },
+        "birthdayOfferText": { "type": "string", "maxLength": 220 },
+        "birthdayOfferText_en": { "type": "string", "maxLength": 220 },
+        "birthdayDiscountPercent": { "type": "number" },
+        "birthdayWhatsappMessage": { "type": "string", "maxLength": 400 }
+      }
     }
   },
   "firestore": {
@@ -374,6 +439,10 @@
     "/restaurants/{restaurantId}/table_sessions/{sessionId}": {
       "schema": { "$ref": "#/entities/TableSession" },
       "description": "Live collaborative group cart sessions per dining table and hall."
+    },
+    "/restaurants/{restaurantId}/customers/{customerPhone}": {
+      "schema": { "$ref": "#/entities/CustomerProfile" },
+      "description": "Per-restaurant registered customer loyalty profiles, birthdays, punch card progress, and favorite items."
     },
     "/service_calls/{callId}": {
       "schema": { "$ref": "#/entities/ServiceCall" },

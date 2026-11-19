@@ -20,6 +20,7 @@ import { getStarterSeedData } from '../data/demoRestaurants';
 import {
   ActiveTheme,
   Category,
+  CustomerProfile,
   CustomTheme,
   GuestCheckSummary,
   Hall,
@@ -27,6 +28,7 @@ import {
   ItemBadge,
   ItemPrepState,
   ItemSize,
+  LoyaltyConfig,
   MenuColorMode,
   MenuItem,
   MenuOffer,
@@ -45,6 +47,12 @@ import {
   TableSessionItem,
   UserProfile,
 } from '../types/menu';
+import {
+  buildLastOrderSnapshot,
+  DEFAULT_LOYALTY_CONFIG,
+  mergeFavoriteItems,
+  normalizeCustomerPhone,
+} from './customerLoyaltyUtils';
 import { db, handleFirestoreError, OperationType } from './firebase';
 
 export function cleanStation(val?: string): PrepStation {
@@ -263,11 +271,84 @@ export async function updateRestaurantThemeAndTaxes(
   }
 }
 
+function sanitizeLoyaltyConfig(loyaltyConfig: LoyaltyConfig): LoyaltyConfig {
+  return {
+    enabled: Boolean(loyaltyConfig.enabled),
+    firstOrderEnabled: loyaltyConfig.firstOrderEnabled ?? true,
+    promoBannerText: (loyaltyConfig.promoBannerText ?? DEFAULT_LOYALTY_CONFIG.promoBannerText)
+      .trim()
+      .slice(0, 200),
+    promoBannerText_en: (
+      loyaltyConfig.promoBannerText_en ?? DEFAULT_LOYALTY_CONFIG.promoBannerText_en
+    )
+      .trim()
+      .slice(0, 200),
+    firstOrderDiscountPercent: Math.max(
+      0,
+      Math.min(50, Math.round(Number(loyaltyConfig.firstOrderDiscountPercent) || 0))
+    ),
+    punchCardEnabled: loyaltyConfig.punchCardEnabled ?? true,
+    punchCardTarget: Math.max(
+      2,
+      Math.min(20, Math.round(Number(loyaltyConfig.punchCardTarget) || 5))
+    ),
+    punchCardDiscountPercent: Math.max(
+      0,
+      Math.min(50, Math.round(Number(loyaltyConfig.punchCardDiscountPercent) || 0))
+    ),
+    punchCardRewardText: (
+      loyaltyConfig.punchCardRewardText ?? DEFAULT_LOYALTY_CONFIG.punchCardRewardText
+    )
+      .trim()
+      .slice(0, 140),
+    punchCardRewardText_en: (
+      loyaltyConfig.punchCardRewardText_en ?? DEFAULT_LOYALTY_CONFIG.punchCardRewardText_en
+    )
+      .trim()
+      .slice(0, 140),
+    birthdayOfferText: (loyaltyConfig.birthdayOfferText ?? DEFAULT_LOYALTY_CONFIG.birthdayOfferText)
+      .trim()
+      .slice(0, 220),
+    birthdayOfferText_en: (
+      loyaltyConfig.birthdayOfferText_en ?? DEFAULT_LOYALTY_CONFIG.birthdayOfferText_en
+    )
+      .trim()
+      .slice(0, 220),
+    birthdayDiscountPercent: Math.max(
+      0,
+      Math.min(50, Math.round(Number(loyaltyConfig.birthdayDiscountPercent) || 0))
+    ),
+    birthdayWhatsappMessage: (
+      loyaltyConfig.birthdayWhatsappMessage ?? DEFAULT_LOYALTY_CONFIG.birthdayWhatsappMessage
+    )
+      .trim()
+      .slice(0, 400),
+  };
+}
+
+export async function updateRestaurantLoyaltyConfig(
+  restaurantId: string,
+  loyaltyConfig: LoyaltyConfig
+): Promise<LoyaltyConfig> {
+  const path = `restaurants/${restaurantId}`;
+  const cleanLoyalty = sanitizeLoyaltyConfig(loyaltyConfig);
+  try {
+    await updateDoc(doc(db, 'restaurants', restaurantId), {
+      loyaltyConfig: cleanLoyalty,
+      updatedAt: serverTimestamp(),
+    });
+    return cleanLoyalty;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
 export async function updateRestaurantOffersAndPromos(
   restaurantId: string,
   offers: MenuOffer[],
-  promoCodes: PromoCode[]
-): Promise<{ offers: MenuOffer[]; promoCodes: PromoCode[] }> {
+  promoCodes: PromoCode[],
+  loyaltyConfig?: LoyaltyConfig
+): Promise<{ offers: MenuOffer[]; promoCodes: PromoCode[]; loyaltyConfig?: LoyaltyConfig }> {
   const path = `restaurants/${restaurantId}`;
   const cleanOffers: MenuOffer[] = (offers || []).slice(0, 12).map((o, idx) => {
     const clean: MenuOffer = {
@@ -310,13 +391,19 @@ export async function updateRestaurantOffersAndPromos(
     }))
     .filter((p) => p.code.length >= 2);
 
+  const cleanLoyalty = loyaltyConfig ? sanitizeLoyaltyConfig(loyaltyConfig) : undefined;
+
   try {
-    await updateDoc(doc(db, 'restaurants', restaurantId), {
+    const updatePayload: Record<string, unknown> = {
       offers: cleanOffers,
       promoCodes: cleanPromos,
       updatedAt: serverTimestamp(),
-    });
-    return { offers: cleanOffers, promoCodes: cleanPromos };
+    };
+    if (cleanLoyalty) {
+      updatePayload.loyaltyConfig = cleanLoyalty;
+    }
+    await updateDoc(doc(db, 'restaurants', restaurantId), updatePayload);
+    return { offers: cleanOffers, promoCodes: cleanPromos, loyaltyConfig: cleanLoyalty };
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
   }
@@ -1194,14 +1281,16 @@ export async function deleteRestaurantAccountCompletely(
 ): Promise<void> {
   const path = `restaurants/${restaurant.id}`;
   try {
-    const [catSnap, itemSnap, orderSnap, callsSnap, hallsSnap, sessionsSnap] = await Promise.all([
-      getDocs(query(collection(db, 'categories'), where('restaurantId', '==', restaurant.id))),
-      getDocs(query(collection(db, 'menu_items'), where('restaurantId', '==', restaurant.id))),
-      getDocs(query(collection(db, 'orders'), where('restaurantId', '==', restaurant.id))),
-      getDocs(query(collection(db, 'service_calls'), where('restaurantId', '==', restaurant.id))),
-      getDocs(query(collection(db, 'halls'), where('restaurantId', '==', restaurant.id))),
-      getDocs(collection(db, 'restaurants', restaurant.id, 'table_sessions')),
-    ]);
+    const [catSnap, itemSnap, orderSnap, callsSnap, hallsSnap, sessionsSnap, customersSnap] =
+      await Promise.all([
+        getDocs(query(collection(db, 'categories'), where('restaurantId', '==', restaurant.id))),
+        getDocs(query(collection(db, 'menu_items'), where('restaurantId', '==', restaurant.id))),
+        getDocs(query(collection(db, 'orders'), where('restaurantId', '==', restaurant.id))),
+        getDocs(query(collection(db, 'service_calls'), where('restaurantId', '==', restaurant.id))),
+        getDocs(query(collection(db, 'halls'), where('restaurantId', '==', restaurant.id))),
+        getDocs(collection(db, 'restaurants', restaurant.id, 'table_sessions')),
+        getDocs(collection(db, 'restaurants', restaurant.id, 'customers')),
+      ]);
 
     const refsToDelete = [
       ...catSnap.docs.map((d) => d.ref),
@@ -1210,6 +1299,7 @@ export async function deleteRestaurantAccountCompletely(
       ...callsSnap.docs.map((d) => d.ref),
       ...hallsSnap.docs.map((d) => d.ref),
       ...sessionsSnap.docs.map((d) => d.ref),
+      ...customersSnap.docs.map((d) => d.ref),
       doc(db, 'restaurants', restaurant.id),
     ];
 
@@ -1818,5 +1908,239 @@ export async function deleteHall(hallId: string): Promise<void> {
     handleFirestoreError(error, OperationType.DELETE, path);
   }
 }
+
+// ============================================================
+// Customer Loyalty, Birthdays & Personalization Subcollection
+// ============================================================
+
+export async function fetchCustomerProfile(
+  restaurantId: string,
+  rawPhone: string
+): Promise<CustomerProfile | null> {
+  const cleanPhone = normalizeCustomerPhone(rawPhone);
+  if (cleanPhone.length < 6 || cleanPhone.length > 24) return null;
+  const path = `restaurants/${restaurantId}/customers/${cleanPhone}`;
+  try {
+    const snap = await getDoc(doc(db, 'restaurants', restaurantId, 'customers', cleanPhone));
+    if (!snap.exists()) return null;
+    return { ...(snap.data() as CustomerProfile), id: snap.id };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, path);
+  }
+}
+
+export async function registerOrUpdateCustomerProfile(input: {
+  restaurantId: string;
+  ownerId: string;
+  fullName: string;
+  phone: string;
+  birthDay: number;
+  birthMonth: number;
+  birthYear: number;
+  preferredOrderType: OrderType;
+  address?: string;
+}): Promise<CustomerProfile> {
+  const cleanPhone = normalizeCustomerPhone(input.phone);
+  if (cleanPhone.length < 6 || cleanPhone.length > 24) {
+    throw new Error('يرجى إدخال رقم هاتف صحيح (6 إلى 24 رقم)');
+  }
+  const cleanName = input.fullName.trim().slice(0, 100);
+  if (!cleanName) {
+    throw new Error('يرجى إدخال الاسم الكامل');
+  }
+  const safeDay = Math.max(1, Math.min(31, Math.round(Number(input.birthDay) || 1)));
+  const safeMonth = Math.max(1, Math.min(12, Math.round(Number(input.birthMonth) || 1)));
+  const safeYear = Math.max(1920, Math.min(2020, Math.round(Number(input.birthYear) || 1995)));
+  const safeOrderType: OrderType =
+    input.preferredOrderType === 'delivery' || input.preferredOrderType === 'pickup'
+      ? input.preferredOrderType
+      : 'dine_in';
+  const cleanAddress = (input.address || '').trim().slice(0, 300);
+  const path = `restaurants/${input.restaurantId}/customers/${cleanPhone}`;
+
+  try {
+    await runTransaction(db, async (tx) => {
+      const ref = doc(db, 'restaurants', input.restaurantId, 'customers', cleanPhone);
+      const snap = await tx.get(ref);
+      if (!snap.exists()) {
+        const createPayload: Record<string, unknown> = {
+          id: cleanPhone,
+          restaurantId: input.restaurantId,
+          ownerId: input.ownerId,
+          fullName: cleanName,
+          phone: cleanPhone,
+          birthDay: safeDay,
+          birthMonth: safeMonth,
+          birthYear: safeYear,
+          preferredOrderType: safeOrderType,
+          totalOrders: 0,
+          loyaltyCycleOrders: 0,
+          firstOrderDiscountUsed: false,
+          favoriteItems: [],
+          lastOrderItems: [],
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        };
+        if (cleanAddress) {
+          createPayload.address = cleanAddress;
+        }
+        tx.set(ref, createPayload);
+      } else {
+        tx.update(ref, {
+          fullName: cleanName,
+          birthDay: safeDay,
+          birthMonth: safeMonth,
+          birthYear: safeYear,
+          preferredOrderType: safeOrderType,
+          address: cleanAddress,
+          updatedAt: serverTimestamp(),
+        });
+      }
+    });
+
+    const freshSnap = await getDoc(doc(db, 'restaurants', input.restaurantId, 'customers', cleanPhone));
+    if (freshSnap.exists()) {
+      return { ...(freshSnap.data() as CustomerProfile), id: freshSnap.id };
+    }
+
+    return {
+      id: cleanPhone,
+      restaurantId: input.restaurantId,
+      ownerId: input.ownerId,
+      fullName: cleanName,
+      phone: cleanPhone,
+      birthDay: safeDay,
+      birthMonth: safeMonth,
+      birthYear: safeYear,
+      preferredOrderType: safeOrderType,
+      ...(cleanAddress ? { address: cleanAddress } : {}),
+      totalOrders: 0,
+      loyaltyCycleOrders: 0,
+      firstOrderDiscountUsed: false,
+      favoriteItems: [],
+      lastOrderItems: [],
+    };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+export async function recordCustomerOrderLoyalty(input: {
+  restaurantId: string;
+  phone: string;
+  fullName?: string;
+  preferredOrderType: OrderType;
+  address?: string;
+  orderedItems: OrderItemPayload[];
+  itemMap?: Map<string, MenuItem>;
+  punchCardTarget: number;
+}): Promise<CustomerProfile | null> {
+  const cleanPhone = normalizeCustomerPhone(input.phone);
+  if (cleanPhone.length < 6 || cleanPhone.length > 24) return null;
+  const path = `restaurants/${input.restaurantId}/customers/${cleanPhone}`;
+  const safeTarget = Math.max(2, Math.min(20, Math.round(Number(input.punchCardTarget) || 5)));
+
+  try {
+    const updated = await runTransaction(db, async (tx) => {
+      const ref = doc(db, 'restaurants', input.restaurantId, 'customers', cleanPhone);
+      const snap = await tx.get(ref);
+      if (!snap.exists()) return null;
+
+      const existing = snap.data() as CustomerProfile;
+      const nextTotalOrders = Math.min(100000, (Number(existing.totalOrders) || 0) + 1);
+      const currentCycle = Math.max(0, Math.min(100, Number(existing.loyaltyCycleOrders) || 0));
+      const nextCycleOrders = currentCycle >= safeTarget ? 1 : currentCycle + 1;
+      const nextFavorites = mergeFavoriteItems(existing.favoriteItems || [], input.orderedItems);
+      const nextLastOrder = buildLastOrderSnapshot(input.orderedItems, input.itemMap);
+
+      const cleanName = input.fullName?.trim().slice(0, 100) || existing.fullName;
+      const safeOrderType: OrderType =
+        input.preferredOrderType === 'delivery' || input.preferredOrderType === 'pickup'
+          ? input.preferredOrderType
+          : 'dine_in';
+      const cleanAddress =
+        input.address !== undefined
+          ? input.address.trim().slice(0, 300)
+          : (existing.address || '').slice(0, 300);
+
+      const updateFields: Record<string, unknown> = {
+        fullName: cleanName,
+        preferredOrderType: safeOrderType,
+        address: cleanAddress,
+        totalOrders: nextTotalOrders,
+        loyaltyCycleOrders: nextCycleOrders,
+        firstOrderDiscountUsed: true,
+        lastVisitAt: serverTimestamp(),
+        favoriteItems: nextFavorites,
+        lastOrderItems: nextLastOrder,
+        updatedAt: serverTimestamp(),
+      };
+
+      tx.update(ref, updateFields);
+
+      return {
+        ...existing,
+        id: snap.id,
+        fullName: cleanName,
+        preferredOrderType: safeOrderType,
+        address: cleanAddress,
+        totalOrders: nextTotalOrders,
+        loyaltyCycleOrders: nextCycleOrders,
+        firstOrderDiscountUsed: true,
+        lastVisitAt: Date.now(),
+        favoriteItems: nextFavorites,
+        lastOrderItems: nextLastOrder,
+      } as CustomerProfile;
+    });
+
+    if (!updated) return null;
+    try {
+      const fresh = await getDoc(doc(db, 'restaurants', input.restaurantId, 'customers', cleanPhone));
+      if (fresh.exists()) {
+        return { ...(fresh.data() as CustomerProfile), id: fresh.id };
+      }
+    } catch {
+      // Return optimistic snapshot computed in transaction
+    }
+    return updated;
+  } catch (error) {
+    console.warn('Customer loyalty sync warning:', error);
+    return null;
+  }
+}
+
+export function subscribeRestaurantCustomers(
+  restaurantId: string,
+  ownerId: string,
+  onData: (customers: CustomerProfile[]) => void,
+  onError?: (err: Error) => void
+): () => void {
+  const path = `restaurants/${restaurantId}/customers`;
+  const q = query(
+    collection(db, 'restaurants', restaurantId, 'customers'),
+    where('ownerId', '==', ownerId)
+  );
+  return onSnapshot(
+    q,
+    (snap) => {
+      const list = snap.docs
+        .map((d) => ({ ...(d.data() as CustomerProfile), id: d.id }))
+        .sort(
+          (a, b) =>
+            (getMillis(b.lastVisitAt) || getMillis(b.updatedAt)) -
+            (getMillis(a.lastVisitAt) || getMillis(a.updatedAt))
+        );
+      onData(list);
+    },
+    (error) => {
+      if (onError) {
+        onError(error instanceof Error ? error : new Error('Failed to load customers'));
+      } else {
+        handleFirestoreError(error, OperationType.LIST, path);
+      }
+    }
+  );
+}
+
 
 

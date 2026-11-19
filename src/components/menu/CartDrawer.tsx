@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Copy,
   Edit3,
+  Gift,
   Info,
   MapPin,
   MessageCircle,
@@ -20,12 +21,23 @@ import {
   X,
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
-import { submitPublicOrder } from '../../lib/firestoreService';
+import {
+  buildLastOrderSnapshot,
+  getCustomerLoyaltyDiscount,
+  getResolvedLoyaltyConfig,
+  mergeFavoriteItems,
+  normalizeCustomerPhone,
+  saveCustomerPhone,
+  saveDemoCustomerProfile,
+} from '../../lib/customerLoyaltyUtils';
+import { recordCustomerOrderLoyalty, submitPublicOrder } from '../../lib/firestoreService';
 import { resolveMenuItemStation } from '../../lib/stationUtils';
 import { computeSeparateChecks } from '../../lib/tableSessionUtils';
 import {
   CartItem,
   Category,
+  CustomerProfile,
+  LoyaltyConfig,
   MenuItem,
   OrderItemPayload,
   OrderType,
@@ -42,6 +54,10 @@ interface CartDrawerProps {
   allItems?: MenuItem[];
   isDemoMode: boolean;
   prefillPromoCode?: string | null;
+  customerProfile?: CustomerProfile | null;
+  loyaltyConfig?: Required<LoyaltyConfig>;
+  onCustomerUpdated?: (customer: CustomerProfile) => void;
+  onOpenLoyaltyModal?: () => void;
   hallName?: string;
   tableNumber?: string;
   sessionId?: string;
@@ -122,6 +138,10 @@ export function CartDrawer({
   allItems,
   isDemoMode,
   prefillPromoCode,
+  customerProfile = null,
+  loyaltyConfig,
+  onCustomerUpdated,
+  onOpenLoyaltyModal,
   hallName = '',
   tableNumber: activeTableNumber = '',
   sessionId = '',
@@ -174,15 +194,21 @@ export function CartDrawer({
   const addressInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    setCustomerName(draft.customerName || guestName || '');
-    setCustomerPhone(draft.customerPhone);
-    setOrderType(activeTableNumber ? 'dine_in' : draft.orderType);
+    setCustomerName(draft.customerName || customerProfile?.fullName || guestName || '');
+    setCustomerPhone(draft.customerPhone || customerProfile?.phone || '');
+    setOrderType(
+      activeTableNumber
+        ? 'dine_in'
+        : draft.customerName
+          ? draft.orderType
+          : customerProfile?.preferredOrderType || draft.orderType
+    );
     setTableNumber(activeTableNumber || draft.tableNumber);
-    setDeliveryAddress(draft.deliveryAddress);
+    setDeliveryAddress(draft.deliveryAddress || customerProfile?.address || '');
     setNotes(draft.notes);
     setAppliedPromoCode(draft.appliedPromoCode);
     setPromoInput(draft.appliedPromoCode);
-  }, [draft, activeTableNumber, guestName]);
+  }, [draft, activeTableNumber, guestName, customerProfile]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !restaurant.slug) return;
@@ -265,7 +291,17 @@ export function CartDrawer({
     return true;
   }, [matchedPromo, subtotal]);
 
-  const discountAmount = useMemo(() => {
+  const resolvedLoyaltyConfig = useMemo(
+    () => loyaltyConfig || getResolvedLoyaltyConfig(restaurant),
+    [loyaltyConfig, restaurant]
+  );
+
+  const loyaltyDiscount = useMemo(
+    () => getCustomerLoyaltyDiscount(customerProfile, resolvedLoyaltyConfig),
+    [customerProfile, resolvedLoyaltyConfig]
+  );
+
+  const promoDiscountAmount = useMemo(() => {
     if (!matchedPromo || !promoEligible) return 0;
     if (matchedPromo.type === 'percent') {
       return Math.min(subtotal, (subtotal * (matchedPromo.value || 0)) / 100);
@@ -275,6 +311,14 @@ export function CartDrawer({
     }
     return 0;
   }, [matchedPromo, promoEligible, subtotal]);
+
+  const loyaltyDiscountAmount = useMemo(() => {
+    if (loyaltyDiscount.percent <= 0) return 0;
+    const remaining = Math.max(0, subtotal - promoDiscountAmount);
+    return Math.min(remaining, (subtotal * loyaltyDiscount.percent) / 100);
+  }, [loyaltyDiscount.percent, subtotal, promoDiscountAmount]);
+
+  const discountAmount = Math.min(subtotal, promoDiscountAmount + loyaltyDiscountAmount);
 
   const serviceCharge = useMemo(() => {
     if (matchedPromo && promoEligible && matchedPromo.type === 'waive_service') {
@@ -461,8 +505,17 @@ export function CartDrawer({
         `Subtotal: ${formatPrice(subtotal)}`,
       ];
 
-      if (discountAmount > 0 && matchedPromo) {
-        lines.push(`Promo (${matchedPromo.code}): -${formatPrice(discountAmount)}`);
+      if (promoDiscountAmount > 0 && matchedPromo) {
+        lines.push(`Promo (${matchedPromo.code}): -${formatPrice(promoDiscountAmount)}`);
+      }
+      if (loyaltyDiscountAmount > 0) {
+        const loyaltyLabelEn =
+          loyaltyDiscount.reason === 'birthday'
+            ? `Birthday Treat (${loyaltyDiscount.percent}%)`
+            : loyaltyDiscount.reason === 'punch_card'
+              ? `Loyalty Punch Reward (${loyaltyDiscount.percent}%)`
+              : `1st Order Welcome (${loyaltyDiscount.percent}%)`;
+        lines.push(`${loyaltyLabelEn}: -${formatPrice(loyaltyDiscountAmount)}`);
       }
       if (serviceCharge > 0) {
         lines.push(`Service Charge (${restaurant.serviceCharge}%): ${formatPrice(serviceCharge)}`);
@@ -534,8 +587,17 @@ export function CartDrawer({
       `المجموع الفرعي: ${formatPrice(subtotal)}`,
     ];
 
-    if (discountAmount > 0 && matchedPromo) {
-      lines.push(`خصم (${matchedPromo.code}): -${formatPrice(discountAmount)}`);
+    if (promoDiscountAmount > 0 && matchedPromo) {
+      lines.push(`خصم (${matchedPromo.code}): -${formatPrice(promoDiscountAmount)}`);
+    }
+    if (loyaltyDiscountAmount > 0) {
+      const loyaltyLabelAr =
+        loyaltyDiscount.reason === 'birthday'
+          ? `خصم عيد الميلاد (${loyaltyDiscount.percent}%)`
+          : loyaltyDiscount.reason === 'punch_card'
+            ? `مكافأة بطاقة الولاء (${loyaltyDiscount.percent}%)`
+            : `خصم أول طلب (${loyaltyDiscount.percent}%)`;
+      lines.push(`${loyaltyLabelAr}: -${formatPrice(loyaltyDiscountAmount)}`);
     }
     if (serviceCharge > 0) {
       lines.push(`رسوم الخدمة (${restaurant.serviceCharge}%): ${formatPrice(serviceCharge)}`);
@@ -610,6 +672,18 @@ export function CartDrawer({
     setErrorMsg(null);
     try {
       let orderNumber = `DEMO-${Math.floor(1000 + Math.random() * 9000)}`;
+      const orderedItems = buildOrderItems();
+      const promoLabel =
+        matchedPromo && promoEligible
+          ? matchedPromo.code
+          : loyaltyDiscountAmount > 0
+            ? loyaltyDiscount.reason === 'birthday'
+              ? 'BIRTHDAY'
+              : loyaltyDiscount.reason === 'punch_card'
+                ? 'LOYALTY'
+                : 'WELCOME'
+            : undefined;
+
       if (!isDemoMode) {
         const res = await submitPublicOrder({
           restaurantId: restaurant.id,
@@ -628,16 +702,61 @@ export function CartDrawer({
               ? deliveryAddress.trim()
               : undefined,
           notes: notes.trim() || undefined,
-          items: buildOrderItems(),
+          items: orderedItems,
           subtotal,
           serviceCharge,
           deliveryFee: deliveryFee > 0 ? deliveryFee : undefined,
           discountAmount: discountAmount > 0 ? discountAmount : undefined,
-          promoCode: matchedPromo && promoEligible ? matchedPromo.code : undefined,
+          promoCode: promoLabel,
           taxAmount,
           total,
         });
         orderNumber = res.orderNumber;
+      }
+
+      // Sync customer loyalty stats (visits, punch card, favorites, last order) if registered
+      const syncPhone = normalizeCustomerPhone(customerPhone) || customerProfile?.phone || '';
+      if (syncPhone.length >= 6) {
+        const itemMap = new Map((allItems || []).map((i) => [i.id, i]));
+        if (!isDemoMode) {
+          const synced = await recordCustomerOrderLoyalty({
+            restaurantId: restaurant.id,
+            phone: syncPhone,
+            fullName: customerName.trim() || customerProfile?.fullName,
+            preferredOrderType: orderType,
+            address: orderType === 'delivery' ? deliveryAddress.trim() : undefined,
+            orderedItems,
+            itemMap,
+            punchCardTarget: resolvedLoyaltyConfig.punchCardTarget,
+          });
+          if (synced) {
+            saveCustomerPhone(restaurant.slug, synced.phone);
+            onCustomerUpdated?.(synced);
+          }
+        } else if (customerProfile && syncPhone === customerProfile.phone) {
+          const currentCycle = Math.max(0, customerProfile.loyaltyCycleOrders || 0);
+          const nextCycle =
+            currentCycle >= resolvedLoyaltyConfig.punchCardTarget ? 1 : currentCycle + 1;
+          const updatedDemo: CustomerProfile = {
+            ...customerProfile,
+            fullName: customerName.trim() || customerProfile.fullName,
+            preferredOrderType: orderType,
+            address:
+              orderType === 'delivery' && deliveryAddress.trim()
+                ? deliveryAddress.trim()
+                : customerProfile.address,
+            totalOrders: (customerProfile.totalOrders || 0) + 1,
+            loyaltyCycleOrders: nextCycle,
+            firstOrderDiscountUsed: true,
+            lastVisitAt: Date.now(),
+            favoriteItems: mergeFavoriteItems(customerProfile.favoriteItems || [], orderedItems),
+            lastOrderItems: buildLastOrderSnapshot(orderedItems, itemMap),
+            updatedAt: Date.now(),
+          };
+          saveDemoCustomerProfile(restaurant.slug, updatedDemo);
+          saveCustomerPhone(restaurant.slug, updatedDemo.phone);
+          onCustomerUpdated?.(updatedDemo);
+        }
       }
 
       const whatsappMessage = buildWhatsappInvoice(orderNumber);
@@ -1412,14 +1531,55 @@ export function CartDrawer({
                   <span>{t.menu.subtotal}</span>
                   <span className="font-mono-num">{formatPrice(subtotal)}</span>
                 </div>
-                {discountAmount > 0 && (
+                {promoDiscountAmount > 0 && (
                   <div className="flex items-center justify-between text-emerald-700 font-bold">
                     <span>
                       {t.menu.discountLabel} ({matchedPromo?.code})
                     </span>
-                    <span className="font-mono-num">-{formatPrice(discountAmount)}</span>
+                    <span className="font-mono-num">-{formatPrice(promoDiscountAmount)}</span>
                   </div>
                 )}
+                {loyaltyDiscountAmount > 0 && (
+                  <div className="flex items-center justify-between text-emerald-700 font-bold">
+                    <span>
+                      {loyaltyDiscount.reason === 'birthday'
+                        ? lang === 'en'
+                          ? `Birthday Discount (${loyaltyDiscount.percent}%)`
+                          : `خصم عيد الميلاد (${loyaltyDiscount.percent}%)`
+                        : loyaltyDiscount.reason === 'punch_card'
+                          ? lang === 'en'
+                            ? `Loyalty Punch Reward (${loyaltyDiscount.percent}%)`
+                            : `مكافأة بطاقة الولاء (${loyaltyDiscount.percent}%)`
+                          : lang === 'en'
+                            ? `First Order Welcome (${loyaltyDiscount.percent}%)`
+                            : `خصم العضوية الترحيبي (${loyaltyDiscount.percent}%)`}
+                    </span>
+                    <span className="font-mono-num">-{formatPrice(loyaltyDiscountAmount)}</span>
+                  </div>
+                )}
+                {resolvedLoyaltyConfig.enabled &&
+                  !customerProfile &&
+                  resolvedLoyaltyConfig.firstOrderEnabled &&
+                  resolvedLoyaltyConfig.firstOrderDiscountPercent > 0 &&
+                  onOpenLoyaltyModal && (
+                    <button
+                      type="button"
+                      onClick={onOpenLoyaltyModal}
+                      className="w-full py-2 px-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-950 text-xs font-bold flex items-center justify-between gap-2 hover:bg-amber-100 transition-colors cursor-pointer"
+                    >
+                      <span className="flex items-center gap-1.5 text-start">
+                        <Gift className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                        <span>
+                          {lang === 'en'
+                            ? `Register now for ${resolvedLoyaltyConfig.firstOrderDiscountPercent}% off!`
+                            : `سجّل رقمك واحصل على خصم ${resolvedLoyaltyConfig.firstOrderDiscountPercent}% الآن`}
+                        </span>
+                      </span>
+                      <span className="underline shrink-0">
+                        {lang === 'en' ? 'Join' : 'سجّل'}
+                      </span>
+                    </button>
+                  )}
                 {restaurant.serviceCharge > 0 && (
                   <div className="flex items-center justify-between text-stone-600">
                     <span>

@@ -1,11 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { User, onAuthStateChanged, signOut } from 'firebase/auth';
 import {
   ArrowUpRight,
   BellRing,
+  Cake,
   Calculator,
   CheckCircle2,
   ExternalLink,
+  Gift,
   Home,
   Layers,
   LayoutGrid,
@@ -19,11 +21,13 @@ import {
   Sparkles,
   Tag,
   UserCheck,
+  Users,
   X,
 } from 'lucide-react';
 import { ConfirmSignOutModal } from '../components/ConfirmSignOutModal';
 import { LanguageToggleButton } from '../components/LanguageToggleButton';
 import { CaptainWaiterTab } from '../components/admin/CaptainWaiterTab';
+import { CustomersCrmTab } from '../components/admin/CustomersCrmTab';
 import { LiveOrdersTab } from '../components/admin/LiveOrdersTab';
 import { MenuBuilderTab } from '../components/admin/MenuBuilderTab';
 import { OffersPromosTab } from '../components/admin/OffersPromosTab';
@@ -33,6 +37,11 @@ import { ThemeCustomizerTab } from '../components/admin/ThemeCustomizerTab';
 import { OwnerAuthCard } from '../components/auth/OwnerAuthCard';
 import { useLanguage } from '../contexts/LanguageContext';
 import { DEFAULT_PLATFORM_LANDING } from '../data/defaultLandingSettings';
+import {
+  buildBirthdayWhatsappUrl,
+  getDaysUntilUpcomingBirthday,
+  getResolvedLoyaltyConfig,
+} from '../lib/customerLoyaltyUtils';
 import { auth, isSuperAdminEmail } from '../lib/firebase';
 import {
   ensureUserProfile,
@@ -40,15 +49,16 @@ import {
   fetchPlatformLandingSettings,
   subscribeOwnerOrders,
   subscribeOwnerServiceCalls,
+  subscribeRestaurantCustomers,
 } from '../lib/firestoreService';
 import { playOrderAlertChime, unlockAudioContext } from '../lib/sound';
-import { Restaurant } from '../types/menu';
+import { CustomerProfile, Restaurant } from '../types/menu';
 
 interface AdminPortalProps {
   onNavigate: (path: string) => void;
 }
 
-type AdminTab = 'orders' | 'captain' | 'menu' | 'offers' | 'theme' | 'qr';
+type AdminTab = 'orders' | 'captain' | 'customers' | 'menu' | 'offers' | 'theme' | 'qr';
 
 export function AdminPortal({ onNavigate }: AdminPortalProps) {
   const { lang, t, dir, loc } = useLanguage();
@@ -65,6 +75,8 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
 
   const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
   const [pendingCallsCount, setPendingCallsCount] = useState(0);
+  const [customers, setCustomers] = useState<CustomerProfile[]>([]);
+  const [birthdayAlertDismissed, setBirthdayAlertDismissed] = useState(false);
   const [newOrderToast, setNewOrderToast] = useState<string | null>(null);
   const [newCallToast, setNewCallToast] = useState<string | null>(null);
   const [tygosModalOpen, setTygosModalOpen] = useState(false);
@@ -224,6 +236,36 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
     return () => unsub();
   }, [restaurant?.id, restaurant?.ownerId, activeTab, isEn]);
 
+  // Global customers subscription for proactive 3-day Birthday Radar across dashboard
+  useEffect(() => {
+    if (!restaurant?.id || !restaurant?.ownerId) {
+      setCustomers([]);
+      return;
+    }
+    const unsub = subscribeRestaurantCustomers(
+      restaurant.id,
+      restaurant.ownerId,
+      (list) => setCustomers(list),
+      () => {
+        // Non-fatal fallback; CustomersCrmTab shows interactive load state
+      }
+    );
+    return () => unsub();
+  }, [restaurant?.id, restaurant?.ownerId]);
+
+  const upcomingBirthdays = useMemo(() => {
+    return customers
+      .map((customer) => ({
+        customer,
+        daysUntil: getDaysUntilUpcomingBirthday(customer.birthDay, customer.birthMonth),
+      }))
+      .filter(
+        (entry): entry is { customer: CustomerProfile; daysUntil: number } =>
+          entry.daysUntil !== null
+      )
+      .sort((a, b) => a.daysUntil - b.daysUntil);
+  }, [customers]);
+
   if (!authReady || (user && loadingRestaurant)) {
     return (
       <div dir={dir} className="min-h-screen bg-zinc-50 flex items-center justify-center p-6">
@@ -363,6 +405,13 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
       shortLabel: isEn ? 'Captain Screen' : 'شاشة الكابتن',
       icon: UserCheck,
       badge: pendingCallsCount > 0 ? pendingCallsCount : undefined,
+    },
+    {
+      id: 'customers',
+      label: isEn ? 'Customers (Smart CRM)' : 'عملائي (CRM والتسويق الذكي)',
+      shortLabel: isEn ? 'Customers CRM' : 'عملائي CRM',
+      icon: Users,
+      badge: upcomingBirthdays.length > 0 ? upcomingBirthdays.length : undefined,
     },
     {
       id: 'menu',
@@ -667,6 +716,88 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
             </div>
           )}
 
+          {upcomingBirthdays.length > 0 &&
+            activeTab !== 'customers' &&
+            !birthdayAlertDismissed && (() => {
+              const nearest = upcomingBirthdays[0];
+              const resolvedCfg = getResolvedLoyaltyConfig(restaurant);
+              const publicMenuUrl =
+                typeof window !== 'undefined'
+                  ? `${window.location.origin}/menu/${restaurant.slug}`
+                  : `/menu/${restaurant.slug}`;
+              const quickWaUrl = buildBirthdayWhatsappUrl(
+                nearest.customer,
+                loc(restaurant.name, restaurant.name_en),
+                resolvedCfg,
+                publicMenuUrl,
+                lang
+              );
+              const countdownText = isEn
+                ? nearest.daysUntil === 0
+                  ? `Today is ${nearest.customer.fullName}'s birthday!`
+                  : `${nearest.daysUntil} day${nearest.daysUntil === 1 ? '' : 's'} until ${nearest.customer.fullName}'s birthday`
+                : nearest.daysUntil === 0
+                  ? `اليوم عيد ميلاد أستاذ ${nearest.customer.fullName}! 🎈`
+                  : nearest.daysUntil === 1
+                    ? `باقي يوم واحد على عيد ميلاد أستاذ ${nearest.customer.fullName} 🎈`
+                    : nearest.daysUntil === 2
+                      ? `باقي يومين على عيد ميلاد أستاذ ${nearest.customer.fullName} 🎈`
+                      : `باقي ${nearest.daysUntil} أيام على عيد ميلاد أستاذ ${nearest.customer.fullName} 🎈`;
+
+              return (
+                <div className="p-3.5 sm:p-4 rounded-2xl bg-amber-50 border border-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-950">
+                  <div className="flex items-start sm:items-center gap-2.5 min-w-0">
+                    <span className="w-8 h-8 rounded-xl bg-amber-200/70 text-amber-900 flex items-center justify-center shrink-0">
+                      <Cake className="w-4 h-4" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="font-extrabold">
+                        {isEn
+                          ? `🎂 Customer Birthdays in the Next 3 Days (${upcomingBirthdays.length})`
+                          : `🎂 أعياد ميلاد عملائك خلال الـ 3 أيام القادمة (${upcomingBirthdays.length})`}
+                      </p>
+                      <p className="text-[11px] text-amber-900 font-semibold truncate">
+                        {countdownText}{' '}
+                        <span className="font-mono-num">
+                          ({nearest.customer.birthDay}/{nearest.customer.birthMonth})
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
+                    <a
+                      href={quickWaUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="min-h-[36px] px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold flex items-center gap-1.5 transition-colors"
+                    >
+                      <Gift className="w-3.5 h-3.5 shrink-0" />
+                      <span>
+                        {isEn
+                          ? 'Send Birthday Offer'
+                          : 'أرسل عرض عيد الميلاد عبر واتساب 🎁'}
+                      </span>
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('customers')}
+                      className="min-h-[36px] px-3 py-1.5 rounded-xl bg-zinc-950 text-white font-bold hover:bg-zinc-800 cursor-pointer"
+                    >
+                      {isEn ? 'Open Customers Radar' : 'عرض الكل في عملائي'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBirthdayAlertDismissed(true)}
+                      aria-label={isEn ? 'Dismiss alert' : 'إغلاق التنبيه'}
+                      className="p-1.5 rounded-lg hover:bg-amber-200/60 cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+
           {restaurant.isSuspended && (
             <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-xs font-bold text-rose-800">
               {t.menu.suspendedTitle} — {t.menu.suspendedDesc}
@@ -674,11 +805,18 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
           )}
           {activeTab === 'orders' && <LiveOrdersTab restaurant={restaurant} />}
           {activeTab === 'captain' && <CaptainWaiterTab restaurant={restaurant} />}
+          {activeTab === 'customers' && (
+            <CustomersCrmTab
+              restaurant={restaurant}
+              onRestaurantUpdated={(updated) => setRestaurant(updated)}
+            />
+          )}
           {activeTab === 'menu' && <MenuBuilderTab restaurant={restaurant} />}
           {activeTab === 'offers' && (
             <OffersPromosTab
               restaurant={restaurant}
               onRestaurantUpdated={(updated) => setRestaurant(updated)}
+              onOpenCustomersTab={() => setActiveTab('customers')}
             />
           )}
           {activeTab === 'theme' && (

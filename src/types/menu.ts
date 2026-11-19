@@ -82,6 +82,62 @@ export interface PromoCode {
   isActive: boolean;
 }
 
+export interface LoyaltyConfig {
+  enabled: boolean;
+  firstOrderEnabled?: boolean;
+  promoBannerText?: string;
+  promoBannerText_en?: string;
+  firstOrderDiscountPercent: number;
+  punchCardEnabled?: boolean;
+  punchCardTarget: number;
+  punchCardDiscountPercent?: number;
+  punchCardRewardText?: string;
+  punchCardRewardText_en?: string;
+  birthdayOfferText?: string;
+  birthdayOfferText_en?: string;
+  birthdayDiscountPercent: number;
+  birthdayWhatsappMessage?: string;
+}
+
+export interface CustomerFavoriteItem {
+  menuItemId: string;
+  name: string;
+  name_en?: string;
+  count: number;
+  lastOrderedAt?: number;
+}
+
+export interface CustomerLastOrderItem {
+  menuItemId: string;
+  name: string;
+  name_en?: string;
+  sizeName?: string;
+  addonNames?: string[];
+  quantity: number;
+  unitPrice: number;
+}
+
+export interface CustomerProfile {
+  id: string;
+  restaurantId: string;
+  ownerId: string;
+  fullName: string;
+  phone: string;
+  birthDay: number;
+  birthMonth: number;
+  birthYear: number;
+  preferredOrderType: OrderType;
+  address?: string;
+  totalOrders: number;
+  loyaltyCycleOrders: number;
+  firstOrderDiscountUsed: boolean;
+  lastVisitAt?: unknown;
+  favoriteItems: CustomerFavoriteItem[];
+  lastOrderItems: CustomerLastOrderItem[];
+  createdAt?: unknown;
+  updatedAt?: unknown;
+}
+
 export interface Restaurant {
   id: string;
   ownerId: string;
@@ -111,6 +167,7 @@ export interface Restaurant {
   isSuspended?: boolean;
   offers?: MenuOffer[];
   promoCodes?: PromoCode[];
+  loyaltyConfig?: LoyaltyConfig;
   createdAt?: unknown;
   updatedAt?: unknown;
 }
