@@ -1,200 +1,137 @@
-import { useState } from 'react';
-import { Check, Copy, Download, MoreVertical, Share, Smartphone, X } from 'lucide-react';
-import { useLanguage } from '../contexts/LanguageContext';
+import React, { useState } from 'react';
+import { CheckCircle2, Download, Share, Smartphone, X } from 'lucide-react';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 
 interface PWAInstallButtonProps {
-  variant?: 'hero' | 'compact' | 'menu';
+  variant?: 'primary' | 'outline' | 'compact' | 'hero' | 'menu';
+  className?: string;
   appTitle?: string;
   accentColor?: string;
-  className?: string;
 }
 
-export function PWAInstallButton({
-  variant = 'hero',
+export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
+  variant = 'outline',
+  className = '',
   appTitle,
   accentColor,
-  className = '',
-}: PWAInstallButtonProps) {
-  const { lang, dir } = useLanguage();
-  const isEn = lang === 'en';
-  const { isInstallable, isInstalled, isIOS, install } = usePWAInstall();
-  const [guideOpen, setGuideOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
+}) => {
+  const { isInstalled, isIOS, hasNativePrompt, promptInstall } = usePWAInstall();
+  const [showInstructions, setShowInstructions] = useState(false);
 
   if (isInstalled) {
-    return null;
+    if (variant === 'compact' || variant === 'menu') return null;
+    return (
+      <span
+        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold whitespace-nowrap shrink-0 ${className}`}
+      >
+        <CheckCircle2 className="w-3.5 h-3.5" />
+        التطبيق مثبّت على هذا الجهاز
+      </span>
+    );
   }
 
-  const label = isEn ? 'Install App on Phone' : 'تثبيت التطبيق على الهاتف';
-  const targetName = appTitle?.trim() || (isEn ? 'Sufra QR' : 'سُفرة QR');
-
   const handleClick = async () => {
-    if (isInstallable) {
-      const ok = await install();
-      if (!ok) {
-        setGuideOpen(true);
-      }
-      return;
-    }
-    setGuideOpen(true);
-  };
-
-  const handleCopyCurrentUrl = async () => {
-    if (typeof window === 'undefined') return;
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Ignore clipboard restriction
+    const result = await promptInstall();
+    if (result === 'ios' || result === 'unavailable') {
+      setShowInstructions(true);
     }
   };
 
-  const buttonClasses =
+  const baseStyles =
+    variant === 'primary'
+      ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm px-4 py-2.5 rounded-xl text-sm font-bold'
+      : variant === 'hero'
+        ? 'bg-slate-900 hover:bg-slate-800 text-white shadow-sm px-4 py-3.5 rounded-xl text-sm font-bold'
+        : variant === 'menu'
+          ? 'text-white shadow-sm px-3 py-2 rounded-xl text-xs font-bold'
+          : variant === 'compact'
+            ? 'bg-slate-900 hover:bg-slate-800 text-white px-3 py-2 rounded-xl text-xs font-bold'
+            : 'bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold shadow-xs';
+
+  const inlineAccent =
     variant === 'menu'
-      ? `min-h-[38px] px-3.5 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 shadow-xs transition-transform active:scale-95 cursor-pointer whitespace-nowrap ${className}`
-      : variant === 'compact'
-        ? `min-h-[36px] px-3 py-1.5 rounded-xl border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-800 text-xs font-bold flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${className}`
-        : `min-h-[46px] px-4 py-3 rounded-xl border border-zinc-300 bg-white hover:bg-zinc-50 text-zinc-900 text-xs sm:text-sm font-extrabold flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer whitespace-nowrap ${className}`;
+      ? { backgroundColor: accentColor || '#0f172a' }
+      : undefined;
 
-  const inlineStyle =
-    variant === 'menu' && accentColor
-      ? { backgroundColor: accentColor, color: '#FFFFFF' }
-      : variant === 'menu'
-        ? { backgroundColor: '#0F172A', color: '#FFFFFF' }
-        : undefined;
+  const displayTitle = appTitle ? `تثبيت ${appTitle} كتطبيق` : 'تثبيت سُفرة QR كتطبيق';
 
   return (
     <>
       <button
         type="button"
         onClick={handleClick}
-        style={inlineStyle}
-        className={buttonClasses}
+        style={inlineAccent}
+        className={`inline-flex items-center justify-center gap-2 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${baseStyles} ${className}`}
       >
-        <Smartphone className="w-4 h-4 shrink-0" />
-        <span>{label}</span>
+        <Download className="w-4 h-4 shrink-0" />
+        <span>تثبيت التطبيق على هذا الجهاز</span>
       </button>
 
-      {guideOpen && (
+      {showInstructions && (
         <div
-          dir={dir}
-          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4"
-          onClick={() => setGuideOpen(false)}
+          className="fixed inset-0 z-[120] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={() => setShowInstructions(false)}
+          dir="rtl"
         >
           <div
+            className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-5 shadow-2xl space-y-4"
             onClick={(e) => e.stopPropagation()}
-            className="w-full sm:max-w-md bg-white text-zinc-900 rounded-t-3xl sm:rounded-2xl border border-zinc-200 shadow-2xl p-5 sm:p-6 space-y-4"
           >
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-xl bg-zinc-950 text-white flex items-center justify-center shrink-0">
-                  <Download className="w-5 h-5" />
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700">
+                  <Smartphone className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-extrabold text-zinc-950">{label}</h3>
-                  <p className="text-xs text-zinc-500">
-                    {isEn
-                      ? `Add "${targetName}" directly to your phone's home screen`
-                      : `أضف "${targetName}" كأيقونة تطبيق على شاشة هاتفك`}
-                  </p>
+                  <h3 className="font-black text-slate-900 text-base">{displayTitle}</h3>
+                  <p className="text-xs text-slate-500">للوصول السريع من الشاشة الرئيسية</p>
                 </div>
               </div>
               <button
                 type="button"
-                onClick={() => setGuideOpen(false)}
-                aria-label={isEn ? 'Close' : 'إغلاق'}
-                className="w-8 h-8 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-600 flex items-center justify-center cursor-pointer"
+                onClick={() => setShowInstructions(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {isIOS ? (
-              <div className="rounded-xl bg-zinc-50 border border-zinc-200 p-4 space-y-3 text-xs text-zinc-700 leading-relaxed">
-                <p className="font-extrabold text-zinc-950">
-                  {isEn ? 'Steps on iPhone / iPad (Safari):' : 'الخطوات على هواتف آيفون (Safari):'}
-                </p>
-                <div className="flex items-center gap-2.5">
-                  <span className="w-6 h-6 rounded-full bg-zinc-950 text-white font-bold flex items-center justify-center shrink-0 text-[11px]">
-                    1
-                  </span>
-                  <span className="flex items-center gap-1.5 flex-wrap">
-                    {isEn ? 'Tap the Share button' : 'اضغط على زر المشاركة'}
-                    <Share className="w-4 h-4 text-blue-600 inline" />
-                    {isEn ? 'at the bottom of Safari.' : 'في أسفل متصفح Safari.'}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2.5">
-                  <span className="w-6 h-6 rounded-full bg-zinc-950 text-white font-bold flex items-center justify-center shrink-0 text-[11px]">
-                    2
-                  </span>
-                  <span>
-                    {isEn
-                      ? 'Scroll down and tap "Add to Home Screen".'
-                      : 'مرّر للأسفل واختر "إضافة إلى الشاشة الرئيسية" (Add to Home Screen).'}
-                  </span>
-                </div>
+              <div className="space-y-2.5 text-sm text-slate-700 bg-slate-50 rounded-xl p-3.5 border border-slate-200">
+                <p className="font-bold text-slate-900">على أجهزة iPhone / iPad (Safari):</p>
+                <ol className="list-decimal list-inside space-y-1.5 text-xs leading-relaxed">
+                  <li>
+                    اضغط على أيقونة المشاركة <Share className="inline w-3.5 h-3.5 text-sky-600 mx-0.5" /> في شريط Safari.
+                  </li>
+                  <li>اختر <strong>إضافة إلى الشاشة الرئيسية (Add to Home Screen)</strong>.</li>
+                  <li>اضغط <strong>إضافة (Add)</strong> ليظهر التطبيق على الجهاز.</li>
+                </ol>
               </div>
             ) : (
-              <div className="rounded-xl bg-zinc-50 border border-zinc-200 p-4 space-y-3 text-xs text-zinc-700 leading-relaxed">
-                <p className="font-extrabold text-zinc-950">
-                  {isEn
-                    ? 'Quick Install on Android / Chrome:'
-                    : 'التثبيت السريع على أندرويد / متصفح Chrome:'}
+              <div className="space-y-2.5 text-sm text-slate-700 bg-slate-50 rounded-xl p-3.5 border border-slate-200">
+                <p className="font-bold text-slate-900">
+                  {hasNativePrompt
+                    ? 'يمكنك تثبيت التطبيق من قائمة المتصفح:'
+                    : 'خطوات التثبيت عبر Chrome / Edge:'}
                 </p>
-                <div className="flex items-center gap-2.5">
-                  <span className="w-6 h-6 rounded-full bg-zinc-950 text-white font-bold flex items-center justify-center shrink-0 text-[11px]">
-                    1
-                  </span>
-                  <span className="flex items-center gap-1.5 flex-wrap">
-                    {isEn ? 'Open browser menu' : 'اضغط على قائمة المتصفح'}
-                    <MoreVertical className="w-4 h-4 text-zinc-800 inline" />
-                    {isEn ? 'in the top corner.' : 'أعلى الشاشة.'}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2.5">
-                  <span className="w-6 h-6 rounded-full bg-zinc-950 text-white font-bold flex items-center justify-center shrink-0 text-[11px]">
-                    2
-                  </span>
-                  <span>
-                    {isEn
-                      ? 'Tap "Install app" or "Add to Home screen".'
-                      : 'اختر "تثبيت التطبيق" أو "الإضافة إلى الشاشة الرئيسية" وستظهر الأيقونة فوراً.'}
-                  </span>
-                </div>
+                <ol className="list-decimal list-inside space-y-1.5 text-xs leading-relaxed">
+                  <li>افتح قائمة المتصفح (⋮) في الزاوية العلوية.</li>
+                  <li>اختر <strong>تثبيت التطبيق (Install app)</strong> أو <strong>إضافة للشاشة الرئيسية</strong>.</li>
+                  <li>أكّد التثبيت لفتح شاشة الكادر بملء الشاشة دائماً.</li>
+                </ol>
               </div>
             )}
 
-            <div className="flex items-center gap-2 pt-1">
-              <button
-                type="button"
-                onClick={handleCopyCurrentUrl}
-                className="flex-1 min-h-[42px] px-4 py-2 rounded-xl border border-zinc-200 bg-white hover:bg-zinc-50 text-xs font-bold text-zinc-800 flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
-                <span>
-                  {copied
-                    ? isEn
-                      ? 'Link Copied'
-                      : 'تم نسخ الرابط'
-                    : isEn
-                      ? 'Copy Direct Link'
-                      : 'نسخ الرابط المباشر'}
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setGuideOpen(false)}
-                className="min-h-[42px] px-5 py-2 rounded-xl bg-zinc-950 text-white text-xs font-bold hover:bg-zinc-800 cursor-pointer"
-              >
-                {isEn ? 'Got it' : 'تم'}
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setShowInstructions(false)}
+              className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold"
+            >
+              فهمت
+            </button>
           </div>
         </div>
       )}
     </>
   );
-}
+};

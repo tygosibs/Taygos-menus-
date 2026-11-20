@@ -35,6 +35,7 @@ import { MenuBuilderTab } from '../components/admin/MenuBuilderTab';
 import { OffersPromosTab } from '../components/admin/OffersPromosTab';
 import { OnboardingForm } from '../components/admin/OnboardingForm';
 import { QrGeneratorTab } from '../components/admin/QrGeneratorTab';
+import { StaffManagementTab } from '../components/admin/StaffManagementTab';
 import { ThemeCustomizerTab } from '../components/admin/ThemeCustomizerTab';
 import { OwnerAuthCard } from '../components/auth/OwnerAuthCard';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -56,13 +57,14 @@ import {
   subscribeRestaurantCustomers,
 } from '../lib/firestoreService';
 import { playOrderAlertChime, unlockAudioContext } from '../lib/sound';
+import { fetchRestaurantSlugById, getStaffAccessForUid } from '../lib/staffService';
 import { CustomerProfile, Restaurant } from '../types/menu';
 
 interface AdminPortalProps {
   onNavigate: (path: string) => void;
 }
 
-type AdminTab = 'orders' | 'captain' | 'customers' | 'menu' | 'offers' | 'theme' | 'qr';
+type AdminTab = 'orders' | 'captain' | 'staff' | 'customers' | 'menu' | 'offers' | 'theme' | 'qr';
 
 export function AdminPortal({ onNavigate }: AdminPortalProps) {
   const { lang, t, dir, loc } = useLanguage();
@@ -72,6 +74,7 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
   const [authError, setAuthError] = useState<string | null>(null);
 
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
+  const [staffPortalSlug, setStaffPortalSlug] = useState<string | null>(null);
   const [loadingRestaurant, setLoadingRestaurant] = useState(false);
   const [activeTab, setActiveTab] = useState<AdminTab>('orders');
   const [justCreatedBanner, setJustCreatedBanner] = useState(false);
@@ -125,6 +128,17 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
           );
           const rest = await fetchOwnerRestaurant(u.uid);
           setRestaurant(rest);
+          if (!rest) {
+            const staffAccess = await getStaffAccessForUid(u.uid);
+            if (staffAccess?.isActive) {
+              const slug = await fetchRestaurantSlugById(staffAccess.restaurantId);
+              setStaffPortalSlug(slug);
+            } else {
+              setStaffPortalSlug(null);
+            }
+          } else {
+            setStaffPortalSlug(null);
+          }
         } catch (err) {
           setAuthError(err instanceof Error ? err.message : t.auth.errGeneric);
         } finally {
@@ -132,6 +146,7 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
         }
       } else {
         setRestaurant(null);
+        setStaffPortalSlug(null);
       }
     });
     return () => unsub();
@@ -378,6 +393,30 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
           </div>
         </header>
 
+        {staffPortalSlug && (
+          <div className="max-w-3xl mx-auto mt-6 px-4">
+            <div className="bg-indigo-50 border-2 border-indigo-200 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="space-y-1">
+                <p className="text-sm font-extrabold text-indigo-950">
+                  {isEn ? 'You are signed in with a Staff Account' : 'أنت مسجّل الآن بحساب كادر / مدير مطعم'}
+                </p>
+                <p className="text-xs text-indigo-800">
+                  {isEn
+                    ? 'Open your dedicated Staff Portal to access your assigned screens.'
+                    : 'لوحة المالك مخصصة لمالكي المطاعم. افتح بوابة الكادر المخصصة للدخول مباشرة إلى شاشات عملك.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => onNavigate(`/staff/${staffPortalSlug}`)}
+                className="min-h-[42px] px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold whitespace-nowrap shrink-0 cursor-pointer"
+              >
+                {isEn ? 'Open Staff Portal' : 'الانتقال لبوابة الكادر'}
+              </button>
+            </div>
+          </div>
+        )}
+
         <OnboardingForm
           ownerId={user.uid}
           ownerDisplayName={user.displayName || user.email || 'Owner'}
@@ -414,6 +453,12 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
       shortLabel: isEn ? 'Captain Screen' : 'شاشة الكابتن',
       icon: UserCheck,
       badge: pendingCallsCount > 0 ? pendingCallsCount : undefined,
+    },
+    {
+      id: 'staff',
+      label: isEn ? 'Manager & Staff RBAC' : 'المدير والكادر والصلاحيات',
+      shortLabel: isEn ? 'Staff & Roles' : 'الكادر والصلاحيات',
+      icon: ShieldCheck,
     },
     {
       id: 'customers',
@@ -844,8 +889,37 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
               {t.menu.suspendedTitle} — {t.menu.suspendedDesc}
             </div>
           )}
-          {activeTab === 'orders' && <LiveOrdersTab restaurant={restaurant} />}
-          {activeTab === 'captain' && <CaptainWaiterTab restaurant={restaurant} />}
+          {activeTab === 'orders' && (
+            <LiveOrdersTab
+              restaurant={restaurant}
+              actor={{
+                uid: user.uid,
+                name: user.displayName || restaurant.name,
+                role: 'owner',
+              }}
+            />
+          )}
+          {activeTab === 'captain' && (
+            <CaptainWaiterTab
+              restaurant={restaurant}
+              actor={{
+                uid: user.uid,
+                name: user.displayName || restaurant.name,
+                role: 'owner',
+              }}
+            />
+          )}
+          {activeTab === 'staff' && (
+            <StaffManagementTab
+              restaurant={restaurant}
+              mode="owner"
+              actor={{
+                uid: user.uid,
+                name: user.displayName || restaurant.name,
+                role: 'owner',
+              }}
+            />
+          )}
           {activeTab === 'customers' && (
             <CustomersCrmTab
               restaurant={restaurant}

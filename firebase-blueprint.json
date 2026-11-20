@@ -93,7 +93,8 @@
         "name": { "type": "string", "minLength": 1, "maxLength": 80 },
         "name_en": { "type": "string", "maxLength": 80 },
         "imageUrl": { "type": "string", "maxLength": 300000 },
-        "station": { "type": "string", "enum": ["kitchen", "bar", "pastry"] },
+        "station": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-z0-9_\\-]+$" },
+        "stationId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-z0-9_\\-]+$" },
         "sortOrder": { "type": "number" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
@@ -123,7 +124,8 @@
         "badge": { "type": "string", "enum": ["none", "best_seller", "trending_week", "chef_choice", "bogo", "new"] },
         "isBogo": { "type": "boolean" },
         "suggestedItemIds": { "type": "array" },
-        "station": { "type": "string", "enum": ["kitchen", "bar", "pastry"] },
+        "station": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-z0-9_\\-]+$" },
+        "stationId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-z0-9_\\-]+$" },
         "sortOrder": { "type": "number" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
@@ -174,6 +176,16 @@
         "total": { "type": "number" },
         "status": { "type": "string", "enum": ["pending", "preparing", "completed", "cancelled"] },
         "itemProgress": { "type": "object" },
+        "itemProgressBy": { "type": "object" },
+        "createdByUid": { "type": "string", "maxLength": 128 },
+        "createdByName": { "type": "string", "maxLength": 120 },
+        "createdByRole": { "type": "string", "maxLength": 32 },
+        "lastUpdatedByUid": { "type": "string", "maxLength": 128 },
+        "lastUpdatedByName": { "type": "string", "maxLength": 120 },
+        "lastUpdatedByRole": { "type": "string", "maxLength": 32 },
+        "closedByUid": { "type": "string", "maxLength": 128 },
+        "closedByName": { "type": "string", "maxLength": 120 },
+        "closedByRole": { "type": "string", "maxLength": 32 },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
@@ -239,6 +251,9 @@
         "guestName": { "type": "string", "minLength": 1, "maxLength": 60 },
         "callType": { "type": "string", "enum": ["call_waiter", "request_bill_cash", "request_bill_card", "cutlery_water"] },
         "status": { "type": "string", "enum": ["pending", "acknowledged", "resolved"] },
+        "handledByUid": { "type": "string", "maxLength": 128 },
+        "handledByName": { "type": "string", "maxLength": 120 },
+        "handledByRole": { "type": "string", "maxLength": 32 },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
@@ -465,6 +480,260 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "code", "discountType", "discountValue", "isActive", "createdAt", "updatedAt"]
+    },
+    "StaffMember": {
+      "title": "StaffMember",
+      "description": "Restaurant staff or manager account linked to Firebase Auth UID with role and allowed screens.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "restaurantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "username": { "type": "string", "minLength": 2, "maxLength": 64 },
+        "phone": { "type": "string", "minLength": 5, "maxLength": 24 },
+        "email": { "type": "string", "maxLength": 254 },
+        "authEmail": { "type": "string", "minLength": 3, "maxLength": 254 },
+        "jobTitle": { "type": "string", "maxLength": 80 },
+        "role": { "type": "string", "enum": ["manager", "cashier", "kitchen", "bar", "pastry", "captain", "station_staff", "custom"] },
+        "allowedScreens": { "type": "array" },
+        "allowedStations": { "type": "array" },
+        "defaultScreen": { "type": "string", "minLength": 2, "maxLength": 72 },
+        "defaultStationId": { "type": "string", "maxLength": 64 },
+        "hallId": { "type": "string", "maxLength": 128 },
+        "hallName": { "type": "string", "maxLength": 80 },
+        "isActive": { "type": "boolean" },
+        "mustChangePassword": { "type": "boolean" },
+        "activeInviteHash": { "type": "string", "maxLength": 128 },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "lastLoginAt": { "type": "string", "format": "date-time" },
+        "passwordChangedAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "uid",
+        "restaurantId",
+        "ownerId",
+        "name",
+        "username",
+        "phone",
+        "email",
+        "authEmail",
+        "role",
+        "allowedScreens",
+        "defaultScreen",
+        "isActive",
+        "mustChangePassword",
+        "createdBy",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "StaffInvite": {
+      "title": "StaffInvite",
+      "description": "One-time SHA-256 hashed staff onboarding invitation link expiring after 24 hours.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 16, "maxLength": 128, "pattern": "^[a-f0-9]+$" },
+        "staffId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "restaurantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "restaurantSlug": { "type": "string", "minLength": 2, "maxLength": 64 },
+        "restaurantName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "restaurantName_en": { "type": "string", "maxLength": 120 },
+        "tokenHash": { "type": "string", "minLength": 16, "maxLength": 128, "pattern": "^[a-f0-9]+$" },
+        "authEmail": { "type": "string", "minLength": 3, "maxLength": 254 },
+        "staffName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "staffUsername": { "type": "string", "minLength": 2, "maxLength": 64 },
+        "staffPhone": { "type": "string", "maxLength": 24 },
+        "staffEmail": { "type": "string", "maxLength": 254 },
+        "staffRole": { "type": "string", "enum": ["manager", "cashier", "kitchen", "bar", "pastry", "captain", "station_staff", "custom"] },
+        "staffJobTitle": { "type": "string", "maxLength": 80 },
+        "staffHallId": { "type": "string", "maxLength": 128 },
+        "staffHallName": { "type": "string", "maxLength": 80 },
+        "allowedScreens": { "type": "array" },
+        "allowedStations": { "type": "array" },
+        "defaultScreen": { "type": "string", "minLength": 2, "maxLength": 72 },
+        "defaultStationId": { "type": "string", "maxLength": 64 },
+        "expiresAt": { "type": "string", "format": "date-time" },
+        "usedAt": { "type": "string", "format": "date-time" },
+        "usedByUid": { "type": "string", "maxLength": 128 },
+        "revokedAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "id",
+        "staffId",
+        "restaurantId",
+        "ownerId",
+        "restaurantSlug",
+        "restaurantName",
+        "tokenHash",
+        "authEmail",
+        "staffName",
+        "staffUsername",
+        "staffRole",
+        "allowedScreens",
+        "defaultScreen",
+        "expiresAt",
+        "createdBy",
+        "createdAt"
+      ]
+    },
+    "StaffLoginIndex": {
+      "title": "StaffLoginIndex",
+      "description": "Hashed single-document lookup resolving username, phone, or optional email to Firebase Auth login email inside a restaurant without exposing staff PII lists.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 8, "maxLength": 128, "pattern": "^[upe]_[a-f0-9]+$" },
+        "restaurantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "staffUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "authEmail": { "type": "string", "minLength": 3, "maxLength": 254 },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "restaurantId", "ownerId", "staffUid", "authEmail", "isActive", "createdAt", "updatedAt"]
+    },
+    "StaffAccess": {
+      "title": "StaffAccess",
+      "description": "Server-rule authorization record keyed by Firebase Auth UID for single-read RBAC checks in Firestore rules.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "restaurantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "role": { "type": "string", "enum": ["manager", "cashier", "kitchen", "bar", "pastry", "captain", "station_staff", "custom"] },
+        "allowedScreens": { "type": "array" },
+        "allowedStations": { "type": "array" },
+        "defaultScreen": { "type": "string", "minLength": 2, "maxLength": 72 },
+        "defaultStationId": { "type": "string", "maxLength": 64 },
+        "hallId": { "type": "string", "maxLength": 128 },
+        "isActive": { "type": "boolean" },
+        "mustChangePassword": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "restaurantId", "ownerId", "role", "allowedScreens", "defaultScreen", "isActive", "mustChangePassword", "updatedAt"]
+    },
+    "StaffAuditLog": {
+      "title": "StaffAuditLog",
+      "description": "Immutable accountability log capturing staff creation, logins, invite consumption, password changes, order updates, KDS updates, stations, shifts, table closes, and service calls.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "restaurantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "eventType": {
+          "type": "string",
+          "enum": [
+            "staff_created",
+            "staff_updated",
+            "staff_deleted",
+            "invite_created",
+            "invite_used",
+            "password_changed",
+            "staff_login",
+            "order_created",
+            "order_status_updated",
+            "kds_item_updated",
+            "table_closed",
+            "service_call_handled",
+            "station_created",
+            "station_updated",
+            "station_deleted",
+            "shift_started",
+            "shift_ended",
+            "station_uncovered_alert",
+            "domain_verified"
+          ]
+        },
+        "actorUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "actorName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "actorRole": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "targetUid": { "type": "string", "maxLength": 128 },
+        "targetName": { "type": "string", "maxLength": 120 },
+        "screen": { "type": "string", "maxLength": 72 },
+        "details": { "type": "string", "maxLength": 400 },
+        "inviteHash": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "restaurantId", "ownerId", "eventType", "actorUid", "actorName", "actorRole", "createdAt"]
+    },
+    "RestaurantStation": {
+      "title": "RestaurantStation",
+      "description": "Dynamic unlimited kitchen/prep station (KDS) defined per restaurant.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-z0-9_\\-]+$" },
+        "stationId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-z0-9_\\-]+$" },
+        "restaurantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "nameEn": { "type": "string", "maxLength": 80 },
+        "color": { "type": "string", "minLength": 4, "maxLength": 16, "pattern": "^#[0-9a-fA-F]{6}$" },
+        "icon": {
+          "type": "string",
+          "enum": [
+            "chef-hat", "flame", "wine", "croissant", "coffee", "pizza",
+            "fish", "salad", "cup-soda", "wind", "utensils", "sparkles"
+          ]
+        },
+        "isActive": { "type": "boolean" },
+        "sortOrder": { "type": "number" },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "stationId", "restaurantId", "ownerId", "name", "color", "icon", "isActive", "sortOrder", "createdBy", "createdAt", "updatedAt"]
+    },
+    "StaffShift": {
+      "title": "StaffShift",
+      "description": "Active or completed operational shift session for a staff member on a screen/station.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "restaurantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "staffId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "staffName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "stationId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-z0-9_\\-]+$" },
+        "stationName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "hallId": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string", "enum": ["active", "completed"] },
+        "ordersHandled": { "type": "number" },
+        "itemsMarkedReady": { "type": "number" },
+        "serviceCallsHandled": { "type": "number" },
+        "startedAt": { "type": "string", "format": "date-time" },
+        "endedAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "restaurantId", "ownerId", "staffId", "staffName", "stationId", "stationName", "status", "ordersHandled", "itemsMarkedReady", "serviceCallsHandled", "startedAt", "updatedAt"]
+    },
+    "StaffDevice": {
+      "title": "StaffDevice",
+      "description": "Registered PWA browser device and FCM notification token/topics for a staff member.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "restaurantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "staffId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "staffName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "fcmToken": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "deviceName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "platform": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "activeStations": { "type": "array" },
+        "topics": { "type": "array" },
+        "isActive": { "type": "boolean" },
+        "lastSeenAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "restaurantId", "ownerId", "staffId", "staffName", "fcmToken", "deviceName", "platform", "activeStations", "topics", "isActive", "lastSeenAt", "createdAt", "updatedAt"]
     }
   },
   "firestore": {
@@ -519,6 +788,38 @@
     "/halls/{hallId}": {
       "schema": { "$ref": "#/entities/Hall" },
       "description": "Restaurant dining halls/zones and their table counts."
+    },
+    "/staff_access/{staffUid}": {
+      "schema": { "$ref": "#/entities/StaffAccess" },
+      "description": "RBAC lookup document keyed by staff Firebase Auth UID for rule-enforced multi-tenant role & screen isolation."
+    },
+    "/restaurants/{restaurantId}/staff/{staffUid}": {
+      "schema": { "$ref": "#/entities/StaffMember" },
+      "description": "Per-restaurant manager and staff profiles, roles, assigned screens, and hall linkage."
+    },
+    "/restaurants/{restaurantId}/staff_invites/{inviteId}": {
+      "schema": { "$ref": "#/entities/StaffInvite" },
+      "description": "Single-use SHA-256 hashed staff onboarding invite tokens expiring in 24 hours."
+    },
+    "/restaurants/{restaurantId}/staff_login_index/{lookupId}": {
+      "schema": { "$ref": "#/entities/StaffLoginIndex" },
+      "description": "Hashed lookup records guaranteeing per-restaurant uniqueness and email resolution for username/phone logins."
+    },
+    "/restaurants/{restaurantId}/staff_audit_logs/{logId}": {
+      "schema": { "$ref": "#/entities/StaffAuditLog" },
+      "description": "Immutable operational and authentication accountability audit trail per restaurant."
+    },
+    "/restaurants/{restaurantId}/stations/{stationId}": {
+      "schema": { "$ref": "#/entities/RestaurantStation" },
+      "description": "Dynamic unlimited kitchen/prep stations configured per restaurant."
+    },
+    "/restaurants/{restaurantId}/staff_shifts/{shiftId}": {
+      "schema": { "$ref": "#/entities/StaffShift" },
+      "description": "Operational staff shifts per station/screen tracking active shift coverage and metrics."
+    },
+    "/restaurants/{restaurantId}/staff_devices/{deviceId}": {
+      "schema": { "$ref": "#/entities/StaffDevice" },
+      "description": "PWA browser notification registrations, FCM tokens, and active station topics per staff device."
     }
   }
 }

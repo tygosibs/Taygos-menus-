@@ -27,6 +27,7 @@ import {
   ItemAddon,
   ItemBadge,
   ItemPrepState,
+  ItemProgressActorEntry,
   ItemSize,
   LandingSectionConfig,
   LandingSectionId,
@@ -47,6 +48,8 @@ import {
   ServiceCall,
   ServiceCallStatus,
   ServiceCallType,
+  StaffActorInfo,
+  StaffAuditEventType,
   TableSession,
   TableSessionItem,
   UserProfile,
@@ -59,9 +62,12 @@ import {
   parseIsoBirthday,
 } from './customerLoyaltyUtils';
 import { db, handleFirestoreError, OperationType } from './firebase';
+import { incrementActiveShiftMetric } from './shiftsService';
+import { cleanStationId } from './stationUtils';
 
 export function cleanStation(val?: string): PrepStation {
-  return val === 'bar' || val === 'pastry' ? val : 'kitchen';
+  const c = cleanStationId(val);
+  return c || 'kitchen';
 }
 
 function makeId(prefix: string): string {
@@ -630,6 +636,7 @@ export async function saveCategory(
     name_en?: string;
     imageUrl?: string;
     station?: PrepStation;
+    stationId?: string;
     sortOrder: number;
     propagateStationToCategoryIds?: string[];
   }
@@ -639,7 +646,7 @@ export async function saveCategory(
   const path = `categories/${catId}`;
   const cleanNameEn = (data.name_en || '').trim().slice(0, 80);
   const cleanParentId = (data.parentId || '').trim().slice(0, 128);
-  const safeStation = cleanStation(data.station);
+  const safeStation = cleanStation(data.stationId || data.station);
   try {
     if (isNew) {
       const payload: Record<string, unknown> = {
@@ -648,6 +655,7 @@ export async function saveCategory(
         ownerId,
         name: data.name.trim().slice(0, 80),
         station: safeStation,
+        stationId: safeStation,
         sortOrder: Number(data.sortOrder) || 0,
         createdAt: serverTimestamp(),
       };
@@ -668,6 +676,7 @@ export async function saveCategory(
         name_en: cleanNameEn,
         imageUrl: (data.imageUrl || '').trim().slice(0, 300000),
         station: safeStation,
+        stationId: safeStation,
         sortOrder: Number(data.sortOrder) || 0,
       });
 
@@ -688,6 +697,7 @@ export async function saveCategory(
         chunk.forEach((d) => {
           batch.update(d.ref, {
             station: safeStation,
+            stationId: safeStation,
             updatedAt: serverTimestamp(),
           });
         });
@@ -783,13 +793,14 @@ export async function saveMenuItem(
     isBogo?: boolean;
     suggestedItemIds?: string[];
     station?: PrepStation;
+    stationId?: string;
     sortOrder: number;
   }
 ): Promise<void> {
   const isNew = !data.id;
   const itemId = data.id || makeId('item');
   const path = `menu_items/${itemId}`;
-  const safeStation = cleanStation(data.station);
+  const safeStation = cleanStation(data.stationId || data.station);
 
   const cleanSizes = data.sizes.slice(0, 10).map((s) => ({
     name: s.name.trim().slice(0, 40),
@@ -831,6 +842,7 @@ export async function saveMenuItem(
         isBogo: cleanIsBogo,
         suggestedItemIds: cleanSuggestedIds,
         station: safeStation,
+        stationId: safeStation,
         sortOrder: Number(data.sortOrder) || 0,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -873,6 +885,7 @@ export async function saveMenuItem(
         isBogo: cleanIsBogo,
         suggestedItemIds: cleanSuggestedIds,
         station: safeStation,
+        stationId: safeStation,
         sortOrder: Number(data.sortOrder) || 0,
         updatedAt: serverTimestamp(),
       });
@@ -906,6 +919,38 @@ export async function removeMenuItem(itemId: string): Promise<void> {
   }
 }
 
+export async function writeStaffAuditLog(input: {
+  restaurantId: string;
+  ownerId: string;
+  eventType: StaffAuditEventType;
+  actor: StaffActorInfo;
+  targetUid?: string;
+  targetName?: string;
+  screen?: string;
+  details?: string;
+}): Promise<void> {
+  try {
+    const logId = makeId('slog');
+    const payload: Record<string, unknown> = {
+      id: logId,
+      restaurantId: input.restaurantId,
+      ownerId: input.ownerId,
+      eventType: input.eventType,
+      actorUid: input.actor.uid,
+      actorName: (input.actor.name || 'كادر').trim().slice(0, 100),
+      actorRole: input.actor.role,
+      createdAt: serverTimestamp(),
+    };
+    if (input.targetUid) payload.targetUid = input.targetUid.slice(0, 128);
+    if (input.targetName) payload.targetName = input.targetName.slice(0, 100);
+    if (input.screen) payload.screen = input.screen.slice(0, 48);
+    if (input.details) payload.details = input.details.slice(0, 260);
+    await setDoc(doc(db, 'restaurants', input.restaurantId, 'staff_audit_logs', logId), payload);
+  } catch {
+    // Non-fatal audit logging
+  }
+}
+
 export interface SubmitOrderInput {
   restaurantId: string;
   ownerId: string;
@@ -927,6 +972,7 @@ export interface SubmitOrderInput {
   promoCode?: string;
   taxAmount: number;
   total: number;
+  actor?: StaffActorInfo;
 }
 
 export async function submitPublicOrder(input: SubmitOrderInput): Promise<{ id: string; orderNumber: string }> {
@@ -935,6 +981,7 @@ export async function submitPublicOrder(input: SubmitOrderInput): Promise<{ id: 
   const path = `orders/${orderId}`;
 
   const cleanItems = input.items.slice(0, 80).map((it) => {
+    const safeStation = cleanStation(it.stationId || it.station);
     const cleaned: OrderItemPayload = {
       menuItemId: it.menuItemId,
       name: it.name.slice(0, 120),
@@ -942,8 +989,10 @@ export async function submitPublicOrder(input: SubmitOrderInput): Promise<{ id: 
       quantity: Math.max(1, Math.round(it.quantity)),
       unitPrice: Number(it.unitPrice.toFixed(2)),
       lineTotal: Number(it.lineTotal.toFixed(2)),
-      station: cleanStation(it.station),
+      station: safeStation,
+      stationId: safeStation,
     };
+    if (it.stationName?.trim()) cleaned.stationName = it.stationName.trim().slice(0, 80);
     if (it.sizeName) cleaned.sizeName = it.sizeName.slice(0, 40);
     if (it.notes) cleaned.notes = it.notes.slice(0, 200);
     if (it.guestName) cleaned.guestName = it.guestName.slice(0, 60);
@@ -1006,11 +1055,29 @@ export async function submitPublicOrder(input: SubmitOrderInput): Promise<{ id: 
   if (input.notes?.trim()) {
     payload.notes = input.notes.trim().slice(0, 400);
   }
+  if (input.actor) {
+    payload.createdByUid = input.actor.uid;
+    payload.createdByName = input.actor.name.trim().slice(0, 100);
+    payload.createdByRole = input.actor.role;
+  }
 
   try {
     await setDoc(doc(db, 'orders', orderId), payload);
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, path);
+  }
+
+  if (input.actor) {
+    await writeStaffAuditLog({
+      restaurantId: input.restaurantId,
+      ownerId: input.ownerId,
+      eventType: 'order_created',
+      actor: input.actor,
+      targetUid: orderId,
+      targetName: orderNumber,
+      screen: 'cashier',
+      details: `إنشاء طلب ${orderNumber}`,
+    });
   }
 
   // Best-effort popularity counter update; never fail or roll back the customer's order if an item was edited/removed
@@ -1053,14 +1120,17 @@ export function subscribeOwnerOrders(
   restaurantId: string,
   ownerId: string,
   onData: (orders: Order[]) => void,
-  onError?: (err: Error) => void
+  onError?: (err: Error) => void,
+  options?: { staffMode?: boolean }
 ): () => void {
   const path = 'orders';
-  const q = query(
-    collection(db, 'orders'),
-    where('restaurantId', '==', restaurantId),
-    where('ownerId', '==', ownerId)
-  );
+  const q = options?.staffMode
+    ? query(collection(db, 'orders'), where('restaurantId', '==', restaurantId))
+    : query(
+        collection(db, 'orders'),
+        where('restaurantId', '==', restaurantId),
+        where('ownerId', '==', ownerId)
+      );
   return onSnapshot(
     q,
     (snap) => {
@@ -1081,14 +1151,53 @@ export function subscribeOwnerOrders(
 
 export async function updateOrderStatus(
   orderId: string,
-  status: OrderStatus
+  status: OrderStatus,
+  meta?: {
+    restaurantId?: string;
+    ownerId?: string;
+    orderNumber?: string;
+    actor?: StaffActorInfo;
+  }
 ): Promise<void> {
   const path = `orders/${orderId}`;
   try {
-    await updateDoc(doc(db, 'orders', orderId), {
+    const payload: Record<string, unknown> = {
       status,
       updatedAt: serverTimestamp(),
-    });
+    };
+    if (meta?.actor) {
+      payload.lastUpdatedByUid = meta.actor.uid;
+      payload.lastUpdatedByName = meta.actor.name.trim().slice(0, 100);
+      payload.lastUpdatedByRole = meta.actor.role;
+      if (status === 'completed') {
+        payload.closedByUid = meta.actor.uid;
+        payload.closedByName = meta.actor.name.trim().slice(0, 100);
+        payload.closedByRole = meta.actor.role;
+      }
+    }
+    await updateDoc(doc(db, 'orders', orderId), payload);
+
+    if (meta?.actor && meta.restaurantId && meta.ownerId) {
+      await writeStaffAuditLog({
+        restaurantId: meta.restaurantId,
+        ownerId: meta.ownerId,
+        eventType: 'order_status_updated',
+        actor: meta.actor,
+        targetUid: orderId,
+        targetName: meta.orderNumber || orderId,
+        screen: 'cashier',
+        details: `تحديث حالة الطلب ${meta.orderNumber || ''} إلى ${status}`,
+      });
+      if (meta.actor.role !== 'owner' && status === 'completed') {
+        void incrementActiveShiftMetric({
+          restaurantId: meta.restaurantId,
+          staffUid: meta.actor.uid,
+          stationId: 'cashier',
+          field: 'ordersHandled',
+          delta: 1,
+        });
+      }
+    }
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
   }
@@ -1097,7 +1206,14 @@ export async function updateOrderStatus(
 export async function updateOrderItemProgress(
   orderId: string,
   itemUpdates: Record<string, ItemPrepState>,
-  nextOrderStatus?: OrderStatus
+  nextOrderStatus?: OrderStatus,
+  meta?: {
+    restaurantId?: string;
+    ownerId?: string;
+    orderNumber?: string;
+    station?: PrepStation;
+    actor?: StaffActorInfo;
+  }
 ): Promise<void> {
   const path = `orders/${orderId}`;
   try {
@@ -1117,11 +1233,58 @@ export async function updateOrderItemProgress(
         itemProgress: mergedProgress,
         updatedAt: serverTimestamp(),
       };
+
+      if (meta?.actor) {
+        const nowMs = Date.now();
+        const mergedBy: Record<string, ItemProgressActorEntry> = {
+          ...(current.itemProgressBy || {}),
+        };
+        Object.entries(itemUpdates).forEach(([idxKey, st]) => {
+          mergedBy[idxKey] = {
+            state: st,
+            updatedByUid: meta.actor!.uid,
+            updatedByName: meta.actor!.name.trim().slice(0, 100),
+            updatedByRole: meta.actor!.role,
+            ...(meta.station ? { station: meta.station } : {}),
+            updatedAt: nowMs,
+          };
+        });
+        updatePayload.itemProgressBy = mergedBy;
+        updatePayload.lastUpdatedByUid = meta.actor.uid;
+        updatePayload.lastUpdatedByName = meta.actor.name.trim().slice(0, 100);
+        updatePayload.lastUpdatedByRole = meta.actor.role;
+      }
+
       if (nextOrderStatus && nextOrderStatus !== current.status) {
         updatePayload.status = nextOrderStatus;
       }
       tx.update(ref, updatePayload);
     });
+
+    if (meta?.actor && meta.restaurantId && meta.ownerId) {
+      await writeStaffAuditLog({
+        restaurantId: meta.restaurantId,
+        ownerId: meta.ownerId,
+        eventType: 'kds_item_updated',
+        actor: meta.actor,
+        targetUid: orderId,
+        targetName: meta.orderNumber || orderId,
+        screen: meta.station || 'kitchen',
+        details: `تحديث حالة تجهيز أصناف في الطلب ${meta.orderNumber || ''}`,
+      });
+      if (meta.actor.role !== 'owner') {
+        const readyCount = Object.values(itemUpdates).filter((st) => st === 'ready').length;
+        if (readyCount > 0) {
+          void incrementActiveShiftMetric({
+            restaurantId: meta.restaurantId,
+            staffUid: meta.actor.uid,
+            stationId: meta.station,
+            field: 'itemsMarkedReady',
+            delta: readyCount,
+          });
+        }
+      }
+    }
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
   }
@@ -1129,18 +1292,31 @@ export async function updateOrderItemProgress(
 
 export async function closeTableOrdersAndSession(params: {
   restaurantId: string;
+  ownerId?: string;
+  hallName?: string;
+  tableNumber?: string;
   orderIds: string[];
   sessionId?: string;
+  actor?: StaffActorInfo;
 }): Promise<void> {
   const path = 'orders';
   try {
     const batch = writeBatch(db);
     params.orderIds.forEach((orderId) => {
       if (orderId) {
-        batch.update(doc(db, 'orders', orderId), {
+        const updateData: Record<string, unknown> = {
           status: 'completed',
           updatedAt: serverTimestamp(),
-        });
+        };
+        if (params.actor) {
+          updateData.lastUpdatedByUid = params.actor.uid;
+          updateData.lastUpdatedByName = params.actor.name.trim().slice(0, 100);
+          updateData.lastUpdatedByRole = params.actor.role;
+          updateData.closedByUid = params.actor.uid;
+          updateData.closedByName = params.actor.name.trim().slice(0, 100);
+          updateData.closedByRole = params.actor.role;
+        }
+        batch.update(doc(db, 'orders', orderId), updateData);
       }
     });
     if (params.sessionId?.trim()) {
@@ -1149,6 +1325,19 @@ export async function closeTableOrdersAndSession(params: {
       );
     }
     await batch.commit();
+
+    if (params.actor && params.ownerId) {
+      await writeStaffAuditLog({
+        restaurantId: params.restaurantId,
+        ownerId: params.ownerId,
+        eventType: 'table_closed',
+        actor: params.actor,
+        targetUid: params.sessionId || '',
+        targetName: params.tableNumber ? `طاولة ${params.tableNumber}` : 'طاولة',
+        screen: 'cashier',
+        details: `إقفال حساب ${params.hallName ? `${params.hallName} - ` : ''}طاولة ${params.tableNumber || ''}`,
+      });
+    }
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
   }
@@ -1304,16 +1493,39 @@ export async function deleteRestaurantAccountCompletely(
 ): Promise<void> {
   const path = `restaurants/${restaurant.id}`;
   try {
-    const [catSnap, itemSnap, orderSnap, callsSnap, hallsSnap, sessionsSnap, customersSnap] =
-      await Promise.all([
-        getDocs(query(collection(db, 'categories'), where('restaurantId', '==', restaurant.id))),
-        getDocs(query(collection(db, 'menu_items'), where('restaurantId', '==', restaurant.id))),
-        getDocs(query(collection(db, 'orders'), where('restaurantId', '==', restaurant.id))),
-        getDocs(query(collection(db, 'service_calls'), where('restaurantId', '==', restaurant.id))),
-        getDocs(query(collection(db, 'halls'), where('restaurantId', '==', restaurant.id))),
-        getDocs(collection(db, 'restaurants', restaurant.id, 'table_sessions')),
-        getDocs(collection(db, 'restaurants', restaurant.id, 'customers')),
-      ]);
+    const [
+      catSnap,
+      itemSnap,
+      orderSnap,
+      callsSnap,
+      hallsSnap,
+      sessionsSnap,
+      customersSnap,
+      stationsSnap,
+      staffSnap,
+      invitesSnap,
+      loginIndexSnap,
+      auditLogsSnap,
+      staffShiftsSnap,
+      staffDevicesSnap,
+      staffAccessSnap,
+    ] = await Promise.all([
+      getDocs(query(collection(db, 'categories'), where('restaurantId', '==', restaurant.id))),
+      getDocs(query(collection(db, 'menu_items'), where('restaurantId', '==', restaurant.id))),
+      getDocs(query(collection(db, 'orders'), where('restaurantId', '==', restaurant.id))),
+      getDocs(query(collection(db, 'service_calls'), where('restaurantId', '==', restaurant.id))),
+      getDocs(query(collection(db, 'halls'), where('restaurantId', '==', restaurant.id))),
+      getDocs(collection(db, 'restaurants', restaurant.id, 'table_sessions')),
+      getDocs(collection(db, 'restaurants', restaurant.id, 'customers')),
+      getDocs(collection(db, 'restaurants', restaurant.id, 'stations')),
+      getDocs(collection(db, 'restaurants', restaurant.id, 'staff')),
+      getDocs(collection(db, 'restaurants', restaurant.id, 'staff_invites')),
+      getDocs(collection(db, 'restaurants', restaurant.id, 'staff_login_index')),
+      getDocs(collection(db, 'restaurants', restaurant.id, 'staff_audit_logs')),
+      getDocs(collection(db, 'restaurants', restaurant.id, 'staff_shifts')),
+      getDocs(collection(db, 'restaurants', restaurant.id, 'staff_devices')),
+      getDocs(query(collection(db, 'staff_access'), where('restaurantId', '==', restaurant.id))),
+    ]);
 
     const refsToDelete = [
       ...catSnap.docs.map((d) => d.ref),
@@ -1323,6 +1535,14 @@ export async function deleteRestaurantAccountCompletely(
       ...hallsSnap.docs.map((d) => d.ref),
       ...sessionsSnap.docs.map((d) => d.ref),
       ...customersSnap.docs.map((d) => d.ref),
+      ...stationsSnap.docs.map((d) => d.ref),
+      ...staffSnap.docs.map((d) => d.ref),
+      ...invitesSnap.docs.map((d) => d.ref),
+      ...loginIndexSnap.docs.map((d) => d.ref),
+      ...auditLogsSnap.docs.map((d) => d.ref),
+      ...staffShiftsSnap.docs.map((d) => d.ref),
+      ...staffDevicesSnap.docs.map((d) => d.ref),
+      ...staffAccessSnap.docs.map((d) => d.ref),
       doc(db, 'restaurants', restaurant.id),
     ];
 
@@ -2133,14 +2353,17 @@ export function subscribeOwnerServiceCalls(
   restaurantId: string,
   ownerId: string,
   onData: (calls: ServiceCall[]) => void,
-  onError?: (err: Error) => void
+  onError?: (err: Error) => void,
+  options?: { staffMode?: boolean }
 ): () => void {
   const path = 'service_calls';
-  const q = query(
-    collection(db, 'service_calls'),
-    where('restaurantId', '==', restaurantId),
-    where('ownerId', '==', ownerId)
-  );
+  const q = options?.staffMode
+    ? query(collection(db, 'service_calls'), where('restaurantId', '==', restaurantId))
+    : query(
+        collection(db, 'service_calls'),
+        where('restaurantId', '==', restaurantId),
+        where('ownerId', '==', ownerId)
+      );
   return onSnapshot(
     q,
     (snap) => {
@@ -2161,14 +2384,48 @@ export function subscribeOwnerServiceCalls(
 
 export async function updateServiceCallStatus(
   callId: string,
-  status: ServiceCallStatus
+  status: ServiceCallStatus,
+  meta?: {
+    restaurantId?: string;
+    ownerId?: string;
+    tableLabel?: string;
+    actor?: StaffActorInfo;
+  }
 ): Promise<void> {
   const path = `service_calls/${callId}`;
   try {
-    await updateDoc(doc(db, 'service_calls', callId), {
+    const payload: Record<string, unknown> = {
       status,
       updatedAt: serverTimestamp(),
-    });
+    };
+    if (meta?.actor) {
+      payload.handledByUid = meta.actor.uid;
+      payload.handledByName = meta.actor.name.trim().slice(0, 100);
+      payload.handledByRole = meta.actor.role;
+    }
+    await updateDoc(doc(db, 'service_calls', callId), payload);
+
+    if (meta?.actor && meta.restaurantId && meta.ownerId) {
+      await writeStaffAuditLog({
+        restaurantId: meta.restaurantId,
+        ownerId: meta.ownerId,
+        eventType: 'service_call_handled',
+        actor: meta.actor,
+        targetUid: callId,
+        targetName: meta.tableLabel || 'طاولة',
+        screen: 'captain',
+        details: `استجابة لطلب خدمة (${status}) — ${meta.tableLabel || ''}`,
+      });
+      if (meta.actor.role !== 'owner' && (status === 'acknowledged' || status === 'resolved')) {
+        void incrementActiveShiftMetric({
+          restaurantId: meta.restaurantId,
+          staffUid: meta.actor.uid,
+          stationId: 'captain',
+          field: 'serviceCallsHandled',
+          delta: 1,
+        });
+      }
+    }
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
   }

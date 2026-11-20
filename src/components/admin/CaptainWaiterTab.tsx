@@ -8,16 +8,17 @@ import {
   ChefHat,
   Clock,
   CreditCard,
-  Croissant,
   MapPin,
   Maximize2,
   Minimize2,
+  Printer,
+  Scissors,
   UserCheck,
   Utensils,
   Volume2,
-  Wine,
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { showOperationalNotification } from '../../lib/fcmNotificationService';
 import {
   subscribeCategories,
   subscribeHalls,
@@ -28,7 +29,19 @@ import {
   updateServiceCallStatus,
 } from '../../lib/firestoreService';
 import { playOrderAlertChime, unlockAudioContext } from '../../lib/sound';
-import { resolveOrderItemStation, STATION_META_MAP } from '../../lib/stationUtils';
+import { subscribeRestaurantStations } from '../../lib/stationsService';
+import {
+  buildEffectiveStations,
+  getStationIconComponent,
+  resolveOrderItemStation,
+  STATION_META_MAP,
+  StationMeta,
+} from '../../lib/stationUtils';
+import {
+  getActivePrinterConnection,
+  getSavedPrinterProfile,
+  tryAutoReconnectSavedPrinter,
+} from '../../lib/thermalPrinterService';
 import {
   Category,
   Hall,
@@ -37,13 +50,20 @@ import {
   Order,
   PrepStation,
   Restaurant,
+  RestaurantStation,
   ServiceCall,
   ServiceCallStatus,
   ServiceCallType,
+  StaffActorInfo,
 } from '../../types/menu';
+import { SplitCheckPrintModal } from './SplitCheckPrintModal';
+import { ThermalPrinterSettingsModal } from './ThermalPrinterSettingsModal';
 
 interface CaptainWaiterTabProps {
   restaurant: Restaurant;
+  defaultHallName?: string;
+  staffMode?: boolean;
+  actor?: StaffActorInfo;
 }
 
 interface ReadyDishEntry {
@@ -63,7 +83,12 @@ interface ReadyDishEntry {
   station: PrepStation;
 }
 
-export function CaptainWaiterTab({ restaurant }: CaptainWaiterTabProps) {
+export function CaptainWaiterTab({
+  restaurant,
+  defaultHallName,
+  staffMode = false,
+  actor,
+}: CaptainWaiterTabProps) {
   const { lang, dir } = useLanguage();
   const isEn = lang === 'en';
 
@@ -72,11 +97,20 @@ export function CaptainWaiterTab({ restaurant }: CaptainWaiterTabProps) {
   const [halls, setHalls] = useState<Hall[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-  const [selectedHall, setSelectedHall] = useState<string>('all');
+  const [dynamicStations, setDynamicStations] = useState<RestaurantStation[]>([]);
+  const [selectedHall, setSelectedHall] = useState<string>(() => defaultHallName?.trim() || 'all');
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [updatingCallId, setUpdatingCallId] = useState<string | null>(null);
   const [servingKey, setServingKey] = useState<string | null>(null);
+
+  const [printerModalOpen, setPrinterModalOpen] = useState(false);
+  const [printerStatusLabel, setPrinterStatusLabel] = useState<string>(() => {
+    const conn = getActivePrinterConnection();
+    if (conn.connected && conn.name) return conn.name;
+    return getSavedPrinterProfile()?.name || '';
+  });
+  const [splitCheckOrder, setSplitCheckOrder] = useState<Order | null>(null);
 
   const callsInitRef = useRef(false);
   const knownCallIdsRef = useRef<Set<string>>(new Set());
@@ -86,12 +120,19 @@ export function CaptainWaiterTab({ restaurant }: CaptainWaiterTabProps) {
   useEffect(() => {
     const unlock = () => unlockAudioContext();
     window.addEventListener('pointerdown', unlock, { once: true });
+    void tryAutoReconnectSavedPrinter().then((ok) => {
+      if (ok) {
+        const conn = getActivePrinterConnection();
+        if (conn.name) setPrinterStatusLabel(conn.name);
+      }
+    });
     return () => window.removeEventListener('pointerdown', unlock);
   }, []);
 
   useEffect(() => {
     const unsubCats = subscribeCategories(restaurant.id, setCategories);
     const unsubItems = subscribeMenuItems(restaurant.id, setMenuItems);
+    const unsubStations = subscribeRestaurantStations(restaurant.id, setDynamicStations);
     const unsubHalls = subscribeHalls(
       restaurant.id,
       setHalls,
@@ -100,9 +141,16 @@ export function CaptainWaiterTab({ restaurant }: CaptainWaiterTabProps) {
     return () => {
       unsubCats();
       unsubItems();
+      unsubStations();
       unsubHalls();
     };
   }, [restaurant.id]);
+
+  useEffect(() => {
+    if (defaultHallName?.trim()) {
+      setSelectedHall(defaultHallName.trim());
+    }
+  }, [defaultHallName]);
 
   useEffect(() => {
     callsInitRef.current = false;
@@ -116,20 +164,30 @@ export function CaptainWaiterTab({ restaurant }: CaptainWaiterTabProps) {
           incoming.forEach((c) => knownCallIdsRef.current.add(c.id));
           callsInitRef.current = true;
         } else {
-          let hasNewPending = false;
+          const newPendingCalls: ServiceCall[] = [];
           incoming.forEach((c) => {
             if (!knownCallIdsRef.current.has(c.id)) {
               knownCallIdsRef.current.add(c.id);
-              if (c.status === 'pending') hasNewPending = true;
+              if (c.status === 'pending') newPendingCalls.push(c);
             }
           });
-          if (hasNewPending && soundEnabled) {
-            playOrderAlertChime();
+          if (newPendingCalls.length > 0) {
+            if (soundEnabled) playOrderAlertChime();
+            if (staffMode) {
+              const firstCall = newPendingCalls[0];
+              void showOperationalNotification({
+                title: `نداء طاولة ${firstCall.tableNumber}`,
+                body: `${firstCall.hallName ? `${firstCall.hallName} · ` : ''}${firstCall.guestName}`,
+                url: `/staff/${restaurant.slug}`,
+                tag: `call_${firstCall.id}`,
+              });
+            }
           }
         }
         setServiceCalls(incoming);
       },
-      () => {}
+      () => {},
+      { staffMode }
     );
 
     readyInitRef.current = false;
@@ -160,20 +218,55 @@ export function CaptainWaiterTab({ restaurant }: CaptainWaiterTabProps) {
             }
           });
           knownReadyKeysRef.current = currentReadyKeys;
-          if (hasNewReady && soundEnabled) {
-            playOrderAlertChime();
+          if (hasNewReady) {
+            if (soundEnabled) playOrderAlertChime();
+            if (staffMode) {
+              void showOperationalNotification({
+                title: 'صنف جاهز للاستلام!',
+                body: 'أحد الأقسام جهّز أصنافاً جديدة بانتظار التقديم للطاولة.',
+                url: `/staff/${restaurant.slug}`,
+                tag: `ready_${Date.now()}`,
+              });
+            }
           }
         }
         setOrders(incoming);
       },
-      () => {}
+      () => {},
+      { staffMode }
     );
 
     return () => {
       unsubCalls();
       unsubOrders();
     };
-  }, [restaurant.id, restaurant.ownerId, soundEnabled]);
+  }, [restaurant.id, restaurant.ownerId, restaurant.slug, soundEnabled, staffMode]);
+
+  const effectiveStations = useMemo(
+    () => buildEffectiveStations(dynamicStations),
+    [dynamicStations]
+  );
+
+  const stationById = useMemo(() => {
+    const map = new Map<string, StationMeta>();
+    effectiveStations.forEach((st) => map.set(st.stationId, st));
+    return map;
+  }, [effectiveStations]);
+
+  const resolveStationMeta = (stationId: string): StationMeta => {
+    return (
+      stationById.get(stationId) ||
+      STATION_META_MAP[stationId] || {
+        ...STATION_META_MAP.kitchen,
+        id: stationId,
+        stationId,
+        label: stationId,
+        label_en: stationId,
+        shortLabel: stationId,
+        shortLabel_en: stationId,
+      }
+    );
+  };
 
   const categoryMap = useMemo(
     () => new Map(categories.map((c) => [c.id, c])),
@@ -231,13 +324,18 @@ export function CaptainWaiterTab({ restaurant }: CaptainWaiterTabProps) {
             quantity: it.quantity,
             guestName: it.guestName,
             notes: it.notes,
-            station: resolveOrderItemStation(it, itemMap, categoryMap),
+            station: resolveOrderItemStation(
+              it,
+              itemMap,
+              categoryMap,
+              effectiveStations[0]?.stationId || 'kitchen'
+            ),
           });
         }
       });
     });
     return list;
-  }, [orders, selectedHall, itemMap, categoryMap]);
+  }, [orders, selectedHall, itemMap, categoryMap, effectiveStations]);
 
   const readyGroupedByOrder = useMemo(() => {
     const map = new Map<
@@ -281,16 +379,25 @@ export function CaptainWaiterTab({ restaurant }: CaptainWaiterTabProps) {
     }
   };
 
-  const handleCallStatus = async (callId: string, nextStatus: ServiceCallStatus) => {
-    setUpdatingCallId(callId);
+  const handleCallStatus = async (call: ServiceCall, nextStatus: ServiceCallStatus) => {
+    setUpdatingCallId(call.id);
     try {
-      await updateServiceCallStatus(callId, nextStatus);
+      await updateServiceCallStatus(call.id, nextStatus, {
+        restaurantId: restaurant.id,
+        ownerId: restaurant.ownerId,
+        tableLabel: `${call.hallName ? `${call.hallName} · ` : ''}ترابيزة ${call.tableNumber}`,
+        actor,
+      });
     } finally {
       setUpdatingCallId(null);
     }
   };
 
-  const handleMarkItemServed = async (orderId: string, itemIndices: number[]) => {
+  const handleMarkItemServed = async (
+    orderId: string,
+    orderNumber: string,
+    itemIndices: number[]
+  ) => {
     const key = `${orderId}:${itemIndices.join(',')}`;
     setServingKey(key);
     try {
@@ -298,7 +405,12 @@ export function CaptainWaiterTab({ restaurant }: CaptainWaiterTabProps) {
       itemIndices.forEach((idx) => {
         updates[String(idx)] = 'served';
       });
-      await updateOrderItemProgress(orderId, updates);
+      await updateOrderItemProgress(orderId, updates, undefined, {
+        restaurantId: restaurant.id,
+        ownerId: restaurant.ownerId,
+        orderNumber,
+        actor,
+      });
     } finally {
       setServingKey(null);
     }
@@ -361,6 +473,19 @@ export function CaptainWaiterTab({ restaurant }: CaptainWaiterTabProps) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => setPrinterModalOpen(true)}
+            className={`min-h-[40px] px-3 py-2 rounded-xl border text-xs font-extrabold flex items-center gap-1.5 cursor-pointer ${
+              printerStatusLabel
+                ? 'border-indigo-200 bg-indigo-50 text-indigo-800 hover:bg-indigo-100'
+                : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50'
+            }`}
+          >
+            <Printer className="w-4 h-4" />
+            <span>{printerStatusLabel ? `طابعة: ${printerStatusLabel}` : isEn ? 'Printer' : 'طابعة حرارية'}</span>
+          </button>
+
           <button
             type="button"
             onClick={() => {
@@ -522,12 +647,18 @@ export function CaptainWaiterTab({ restaurant }: CaptainWaiterTabProps) {
                     </span>
                   </div>
 
+                  {call.handledByName && (
+                    <p className="text-[11px] font-bold text-blue-700">
+                      {isEn ? `Handled by: ${call.handledByName}` : `تحت متابعة: ${call.handledByName}`}
+                    </p>
+                  )}
+
                   <div className="flex items-center gap-2 pt-1">
                     {!isAck && (
                       <button
                         type="button"
                         disabled={updatingCallId === call.id}
-                        onClick={() => handleCallStatus(call.id, 'acknowledged')}
+                        onClick={() => handleCallStatus(call, 'acknowledged')}
                         className="flex-1 min-h-[40px] py-2 px-3 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 cursor-pointer disabled:opacity-50"
                       >
                         {isEn ? 'On My Way' : 'جاري التوجه'}
@@ -536,7 +667,7 @@ export function CaptainWaiterTab({ restaurant }: CaptainWaiterTabProps) {
                     <button
                       type="button"
                       disabled={updatingCallId === call.id}
-                      onClick={() => handleCallStatus(call.id, 'resolved')}
+                      onClick={() => handleCallStatus(call, 'resolved')}
                       className="flex-1 min-h-[40px] py-2 px-3 rounded-xl bg-emerald-600 text-white text-xs font-extrabold hover:bg-emerald-700 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
                     >
                       <CheckCheck className="w-4 h-4" />
@@ -605,28 +736,40 @@ export function CaptainWaiterTab({ restaurant }: CaptainWaiterTabProps) {
                       <p className="text-[11px] text-zinc-500 mt-1">{group.customerName}</p>
                     </div>
 
-                    {group.entries.length > 1 && (
-                      <button
-                        type="button"
-                        disabled={servingKey === batchKey}
-                        onClick={() => handleMarkItemServed(group.orderId, allIndices)}
-                        className="px-3 py-2 rounded-xl bg-emerald-600 text-white text-[11px] font-extrabold hover:bg-emerald-700 flex items-center gap-1 cursor-pointer disabled:opacity-50"
-                      >
-                        <CheckCheck className="w-3.5 h-3.5" />
-                        <span>{isEn ? 'Serve All Ready' : 'تم تقديم الكل'}</span>
-                      </button>
-                    )}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {(() => {
+                        const matchedOrder = orders.find((o) => o.id === group.orderId) || null;
+                        if (!matchedOrder) return null;
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => setSplitCheckOrder(matchedOrder)}
+                            className="px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-950 text-[11px] font-extrabold flex items-center gap-1 cursor-pointer"
+                          >
+                            <Scissors className="w-3.5 h-3.5" />
+                            <span>{isEn ? 'Split Check' : 'تقسيم الشيك'}</span>
+                          </button>
+                        );
+                      })()}
+
+                      {group.entries.length > 1 && (
+                        <button
+                          type="button"
+                          disabled={servingKey === batchKey}
+                          onClick={() => handleMarkItemServed(group.orderId, group.orderNumber, allIndices)}
+                          className="px-3 py-2 rounded-xl bg-emerald-600 text-white text-[11px] font-extrabold hover:bg-emerald-700 flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                        >
+                          <CheckCheck className="w-3.5 h-3.5" />
+                          <span>{isEn ? 'Serve All Ready' : 'تم تقديم الكل'}</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <div className="space-y-2">
                     {group.entries.map((dish) => {
-                      const stMeta = STATION_META_MAP[dish.station];
-                      const StIcon =
-                        dish.station === 'bar'
-                          ? Wine
-                          : dish.station === 'pastry'
-                            ? Croissant
-                            : ChefHat;
+                      const stMeta = resolveStationMeta(dish.station);
+                      const StIcon = getStationIconComponent(stMeta.icon);
                       const singleKey = `${dish.orderId}:${dish.itemIndex}`;
                       return (
                         <div
@@ -667,7 +810,7 @@ export function CaptainWaiterTab({ restaurant }: CaptainWaiterTabProps) {
                           <button
                             type="button"
                             disabled={servingKey === singleKey}
-                            onClick={() => handleMarkItemServed(dish.orderId, [dish.itemIndex])}
+                            onClick={() => handleMarkItemServed(dish.orderId, dish.orderNumber, [dish.itemIndex])}
                             className="min-h-[40px] px-3 py-2 rounded-xl bg-zinc-950 text-white text-xs font-extrabold hover:bg-zinc-800 flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-50"
                           >
                             <CheckCheck className="w-3.5 h-3.5 text-emerald-400" />
@@ -683,6 +826,27 @@ export function CaptainWaiterTab({ restaurant }: CaptainWaiterTabProps) {
           </div>
         )}
       </section>
+
+      <ThermalPrinterSettingsModal
+        isOpen={printerModalOpen}
+        onClose={() => setPrinterModalOpen(false)}
+        restaurant={restaurant}
+        onProfileChanged={(prof) => setPrinterStatusLabel(prof?.name || '')}
+      />
+
+      <SplitCheckPrintModal
+        isOpen={Boolean(splitCheckOrder)}
+        onClose={() => setSplitCheckOrder(null)}
+        order={splitCheckOrder}
+        restaurant={restaurant}
+        stations={effectiveStations}
+        itemsMap={itemMap}
+        categoriesMap={categoryMap}
+        onOpenPrinterSettings={() => {
+          setSplitCheckOrder(null);
+          setPrinterModalOpen(true);
+        }}
+      />
     </div>
   );
 }

@@ -562,6 +562,7 @@ async function startServer(): Promise<void> {
       let html = fs.readFileSync(templatePath, 'utf8');
 
       const menuMatch = /^\/menu\/([^/]+)\/?$/i.exec(reqPath);
+      const staffMatch = /^\/staff\/([^/]+)(?:\/(onboarding))?\/?$/i.exec(reqPath);
       if (menuMatch) {
         const slug = decodeURIComponent(menuMatch[1]);
         const restMeta = await getRestaurantMetaBySlug(slug);
@@ -588,6 +589,36 @@ async function startServer(): Promise<void> {
             },
           });
         }
+      } else if (staffMatch) {
+        const slug = decodeURIComponent(staffMatch[1]);
+        const isOnboarding = Boolean(staffMatch[2]);
+        const restMeta = await getRestaurantMetaBySlug(slug);
+        const restName = restMeta?.name || slug;
+        const title = isOnboarding
+          ? `${restName} — تفعيل حساب الكادر`
+          : `${restName} — دخول الكادر`;
+        const description = isOnboarding
+          ? `بوابة تفعيل حساب عضو الكادر وتعيين كلمة المرور لمطعم ${restName}.`
+          : `بوابة تشغيل الكادر والشاشات المعتمدة لمطعم ${restName} عبر سُفرة QR.`;
+        const ver = shortCacheHash(restMeta?.logoUrl || DEFAULT_RESTAURANT_FOOD_FALLBACK);
+        const imageUrl = restMeta
+          ? `${origin}/api/og-image/${encodeURIComponent(restMeta.slug)}?v=${ver}`
+          : `${origin}/api/og-image/platform`;
+        const pageUrl = `${origin}${reqPath}`;
+        html = injectOpenGraphHead(html, {
+          title,
+          description,
+          imageUrl,
+          pageUrl,
+          siteName: restName,
+          schemaJsonLd: {
+            '@context': 'https://schema.org',
+            '@type': 'WebApplication',
+            name: title,
+            description,
+            url: pageUrl,
+          },
+        });
       } else {
         const platMeta = await getPlatformMeta();
         const title = platMeta.shareTitle || DEFAULT_PLATFORM_META.shareTitle!;

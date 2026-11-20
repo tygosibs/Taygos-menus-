@@ -50,8 +50,38 @@ export type ItemBadge =
   | 'bogo'
   | 'new';
 export type MenuSortMode = 'default' | 'best_selling' | 'chef_quality' | 'lowest_price';
-export type PrepStation = 'kitchen' | 'bar' | 'pastry';
+export type PrepStation = string;
 export type ItemPrepState = 'pending' | 'preparing' | 'ready' | 'served';
+
+export type StationIconName =
+  | 'chef-hat'
+  | 'flame'
+  | 'wine'
+  | 'croissant'
+  | 'coffee'
+  | 'fish'
+  | 'pizza'
+  | 'salad'
+  | 'cup-soda'
+  | 'wind'
+  | 'utensils'
+  | 'sparkles';
+
+export interface RestaurantStation {
+  id: string;
+  stationId: string;
+  restaurantId: string;
+  ownerId: string;
+  name: string;
+  nameEn?: string;
+  color: string;
+  icon: StationIconName;
+  isActive: boolean;
+  sortOrder: number;
+  createdBy?: string;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+}
 
 export interface MenuOffer {
   id: string;
@@ -206,6 +236,7 @@ export interface Category {
   name_en?: string;
   imageUrl?: string;
   station?: PrepStation;
+  stationId?: string;
   sortOrder: number;
   createdAt?: unknown;
 }
@@ -231,6 +262,7 @@ export interface MenuItem {
   isBogo?: boolean;
   suggestedItemIds?: string[];
   station?: PrepStation;
+  stationId?: string;
   sortOrder: number;
   createdAt?: unknown;
   updatedAt?: unknown;
@@ -263,6 +295,8 @@ export interface OrderItemPayload {
   notes?: string;
   guestName?: string;
   station?: PrepStation;
+  stationId?: string;
+  stationName?: string;
 }
 
 export interface GuestCheckSummary {
@@ -273,6 +307,34 @@ export interface GuestCheckSummary {
   serviceCharge: number;
   taxAmount: number;
   total: number;
+}
+
+export type StaffRole = 'manager' | 'cashier' | 'kitchen' | 'bar' | 'pastry' | 'captain' | 'station_staff' | 'custom';
+
+export type StaffScreen =
+  | 'staff_management'
+  | 'cashier'
+  | 'kitchen'
+  | 'bar'
+  | 'pastry'
+  | 'captain'
+  | 'halls'
+  | `station:${string}`;
+
+export interface StaffActorInfo {
+  uid: string;
+  name: string;
+  role: 'owner' | StaffRole;
+}
+
+export interface ItemProgressActorEntry {
+  state: ItemPrepState;
+  updatedByUid: string;
+  updatedByName: string;
+  updatedByRole?: string;
+  station?: PrepStation;
+  stationId?: string;
+  updatedAt: number;
 }
 
 export interface Order {
@@ -300,6 +362,16 @@ export interface Order {
   total: number;
   status: OrderStatus;
   itemProgress?: Record<string, ItemPrepState>;
+  itemProgressBy?: Record<string, ItemProgressActorEntry>;
+  createdByUid?: string;
+  createdByName?: string;
+  createdByRole?: string;
+  lastUpdatedByUid?: string;
+  lastUpdatedByName?: string;
+  lastUpdatedByRole?: string;
+  closedByUid?: string;
+  closedByName?: string;
+  closedByRole?: string;
   createdAt?: unknown;
   updatedAt?: unknown;
 }
@@ -354,8 +426,157 @@ export interface ServiceCall {
   guestName: string;
   callType: ServiceCallType;
   status: ServiceCallStatus;
+  handledByUid?: string;
+  handledByName?: string;
+  handledByRole?: string;
   createdAt?: unknown;
   updatedAt?: unknown;
+}
+
+export interface StaffMember {
+  uid: string;
+  restaurantId: string;
+  ownerId: string;
+  name: string;
+  username: string;
+  phone: string;
+  email: string;
+  authEmail: string;
+  jobTitle?: string;
+  role: StaffRole;
+  allowedScreens: StaffScreen[];
+  allowedStations?: string[];
+  defaultScreen: StaffScreen;
+  defaultStationId?: string;
+  hallId?: string;
+  hallName?: string;
+  isActive: boolean;
+  mustChangePassword: boolean;
+  activeInviteHash?: string;
+  createdBy: string;
+  lastLoginAt?: unknown;
+  passwordChangedAt?: unknown;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+}
+
+export interface StaffInvite {
+  id: string;
+  staffId: string;
+  restaurantId: string;
+  ownerId: string;
+  restaurantSlug: string;
+  restaurantName: string;
+  restaurantName_en?: string;
+  tokenHash: string;
+  authEmail: string;
+  staffName: string;
+  staffUsername: string;
+  staffPhone: string;
+  staffEmail?: string;
+  staffRole: StaffRole;
+  staffJobTitle?: string;
+  staffHallId?: string;
+  staffHallName?: string;
+  allowedScreens: StaffScreen[];
+  allowedStations?: string[];
+  defaultScreen: StaffScreen;
+  defaultStationId?: string;
+  expiresAt: unknown;
+  usedAt?: unknown;
+  usedByUid?: string;
+  revokedAt?: unknown;
+  createdBy: string;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+}
+
+export interface StaffAccess {
+  uid: string;
+  restaurantId: string;
+  ownerId: string;
+  role: StaffRole;
+  allowedScreens: StaffScreen[];
+  allowedStations?: string[];
+  defaultScreen: StaffScreen;
+  defaultStationId?: string;
+  hallId?: string;
+  isActive: boolean;
+  mustChangePassword: boolean;
+  updatedAt?: unknown;
+}
+
+export interface StaffDevice {
+  id: string;
+  restaurantId: string;
+  ownerId: string;
+  staffId: string;
+  staffName: string;
+  fcmToken: string;
+  deviceName: string;
+  platform: string;
+  activeStations: string[];
+  topics: string[];
+  isActive: boolean;
+  lastSeenAt?: unknown;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+}
+
+export type StaffShiftStatus = 'active' | 'completed';
+
+export interface StaffShift {
+  id: string;
+  restaurantId: string;
+  ownerId: string;
+  staffId: string;
+  staffName: string;
+  stationId: string;
+  stationName: string;
+  hallId?: string;
+  status: StaffShiftStatus;
+  ordersHandled: number;
+  itemsMarkedReady: number;
+  serviceCallsHandled: number;
+  startedAt?: unknown;
+  endedAt?: unknown;
+  updatedAt?: unknown;
+}
+
+export type StaffAuditEventType =
+  | 'staff_created'
+  | 'staff_updated'
+  | 'invite_created'
+  | 'invite_used'
+  | 'password_changed'
+  | 'staff_login'
+  | 'order_created'
+  | 'order_status_updated'
+  | 'kds_item_updated'
+  | 'table_closed'
+  | 'service_call_handled'
+  | 'station_created'
+  | 'station_updated'
+  | 'station_deleted'
+  | 'shift_started'
+  | 'shift_ended'
+  | 'station_uncovered_alert'
+  | 'domain_verified';
+
+export interface StaffAuditLog {
+  id: string;
+  restaurantId: string;
+  ownerId: string;
+  eventType: StaffAuditEventType;
+  actorUid: string;
+  actorName: string;
+  actorRole: string;
+  targetUid?: string;
+  targetName?: string;
+  screen?: string;
+  details?: string;
+  inviteHash?: string;
+  createdAt?: unknown;
 }
 
 export interface Hall {

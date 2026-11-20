@@ -31,7 +31,7 @@ import {
   saveDemoCustomerProfile,
 } from '../../lib/customerLoyaltyUtils';
 import { recordCustomerOrderLoyalty, submitPublicOrder } from '../../lib/firestoreService';
-import { resolveMenuItemStation } from '../../lib/stationUtils';
+import { resolveMenuItemStation, StationMeta } from '../../lib/stationUtils';
 import { computeSeparateChecks } from '../../lib/tableSessionUtils';
 import {
   CartItem,
@@ -51,6 +51,7 @@ interface CartDrawerProps {
   restaurant: Restaurant;
   cart: CartItem[];
   categories?: Category[];
+  stations?: StationMeta[];
   allItems?: MenuItem[];
   isDemoMode: boolean;
   prefillPromoCode?: string | null;
@@ -136,6 +137,7 @@ export function CartDrawer({
   cart,
   categories,
   allItems,
+  stations = [],
   isDemoMode,
   prefillPromoCode,
   customerProfile = null,
@@ -424,8 +426,15 @@ export function CartDrawer({
     [categories]
   );
 
+  const stationMap = useMemo(
+    () => new Map((stations || []).map((s) => [s.stationId, s])),
+    [stations]
+  );
+
   const buildOrderItems = (): OrderItemPayload[] =>
     cart.map((c) => {
+      const resolvedStation = resolveMenuItemStation(c.menuItem, categoryMap);
+      const stMeta = stationMap.get(resolvedStation);
       const payload: OrderItemPayload = {
         menuItemId: c.menuItem.id,
         name: loc(c.menuItem.name, c.menuItem.name_en),
@@ -433,7 +442,9 @@ export function CartDrawer({
         quantity: c.quantity,
         unitPrice: Number(c.unitPrice.toFixed(2)),
         lineTotal: Number((c.unitPrice * c.quantity).toFixed(2)),
-        station: resolveMenuItemStation(c.menuItem, categoryMap),
+        station: resolvedStation,
+        stationId: resolvedStation,
+        ...(stMeta?.shortLabel ? { stationName: stMeta.shortLabel } : {}),
       };
       if (c.selectedSize?.name) {
         payload.sizeName = loc(c.selectedSize.name, c.selectedSize.name_en);

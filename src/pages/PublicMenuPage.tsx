@@ -47,6 +47,8 @@ import {
   getRestaurantShareMetadata,
   normalizeRestaurantLogoUrl,
 } from '../lib/seoHead';
+import { subscribeRestaurantStations } from '../lib/stationsService';
+import { buildEffectiveStations } from '../lib/stationUtils';
 import {
   buildTableSessionId,
   cartItemToTableSessionItem,
@@ -68,6 +70,7 @@ import {
   MenuColorMode,
   MenuItem,
   Restaurant,
+  RestaurantStation,
   ServiceCallType,
   TableSession,
   TableSessionItem,
@@ -90,6 +93,7 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [items, setItems] = useState<MenuItem[]>([]);
   const [halls, setHalls] = useState<Hall[]>([]);
+  const [dynamicStations, setDynamicStations] = useState<RestaurantStation[]>([]);
   const [isDemoMode, setIsDemoMode] = useState(false);
 
   const [previewTheme, setPreviewTheme] = useState<ActiveTheme | null>(null);
@@ -150,6 +154,19 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
     fetchActiveCustomThemes().then(setCustomThemes);
     return () => unsub();
   }, []);
+
+  useEffect(() => {
+    if (!restaurant?.id || isDemoMode) {
+      setDynamicStations([]);
+      return;
+    }
+    return subscribeRestaurantStations(restaurant.id, setDynamicStations, () => {});
+  }, [restaurant?.id, isDemoMode]);
+
+  const effectiveStations = useMemo(
+    () => buildEffectiveStations(dynamicStations),
+    [dynamicStations]
+  );
 
   useEffect(() => {
     let active = true;
@@ -1222,6 +1239,7 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
         restaurant={restaurant}
         cart={displayCart}
         categories={categories}
+        stations={effectiveStations}
         allItems={items}
         isDemoMode={isDemoMode}
         prefillPromoCode={prefillPromoCode}

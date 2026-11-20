@@ -7,24 +7,23 @@ import {
   BellRing,
   Check,
   CheckCheck,
-  ChefHat,
   Clock,
   CreditCard,
-  Croissant,
   MapPin,
   Maximize2,
   Minimize2,
   Printer,
   Receipt,
   RefreshCw,
+  Scissors,
   Users,
   Utensils,
   Volume2,
-  Wine,
   X,
   XCircle,
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { showOperationalNotification } from '../../lib/fcmNotificationService';
 import {
   closeTableOrdersAndSession,
   subscribeCategories,
@@ -36,7 +35,23 @@ import {
   updateServiceCallStatus,
 } from '../../lib/firestoreService';
 import { playOrderAlertChime, unlockAudioContext } from '../../lib/sound';
-import { resolveOrderItemStation, STATION_META_MAP } from '../../lib/stationUtils';
+import { subscribeRestaurantStations } from '../../lib/stationsService';
+import {
+  buildEffectiveStations,
+  cleanStationId,
+  getStationIconComponent,
+  resolveOrderItemStation,
+  screenToStationId,
+  STATION_META_MAP,
+  StationMeta,
+} from '../../lib/stationUtils';
+import {
+  buildStationTicketJob,
+  getActivePrinterConnection,
+  getSavedPrinterProfile,
+  printThermalJobsSequentially,
+  tryAutoReconnectSavedPrinter,
+} from '../../lib/thermalPrinterService';
 import {
   Category,
   ItemPrepState,
@@ -46,16 +61,31 @@ import {
   OrderStatus,
   PrepStation,
   Restaurant,
+  RestaurantStation,
   ServiceCall,
   ServiceCallStatus,
   ServiceCallType,
+  StaffActorInfo,
 } from '../../types/menu';
+import { SplitCheckPrintModal } from './SplitCheckPrintModal';
+import { ThermalPrinterSettingsModal } from './ThermalPrinterSettingsModal';
+
+type StationView = 'cashier' | PrepStation;
+
+function normalizeStationView(raw?: string): StationView | undefined {
+  if (!raw) return undefined;
+  if (raw === 'cashier') return 'cashier';
+  const extracted = screenToStationId(raw);
+  return extracted || cleanStationId(raw);
+}
 
 interface LiveOrdersTabProps {
   restaurant: Restaurant;
+  allowedStations?: StationView[];
+  initialStation?: StationView;
+  staffMode?: boolean;
+  actor?: StaffActorInfo;
 }
-
-type StationView = 'cashier' | PrepStation;
 
 interface AggregatedGuestCheck {
   guestName: string;
@@ -82,7 +112,13 @@ interface TableMasterGroup {
   grandTotal: number;
 }
 
-export function LiveOrdersTab({ restaurant }: LiveOrdersTabProps) {
+export function LiveOrdersTab({
+  restaurant,
+  allowedStations,
+  initialStation,
+  staffMode = false,
+  actor,
+}: LiveOrdersTabProps) {
   const { lang, dir, t, loc, formatCurrency } = useLanguage();
   const isEn = lang === 'en';
   const currencyLabel = formatCurrency(restaurant.currency);
@@ -91,11 +127,36 @@ export function LiveOrdersTab({ restaurant }: LiveOrdersTabProps) {
   const [serviceCalls, setServiceCalls] = useState<ServiceCall[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [dynamicStations, setDynamicStations] = useState<RestaurantStation[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
 
-  const [activeStation, setActiveStation] = useState<StationView>('cashier');
+  const normalizedAllowedStations = useMemo(() => {
+    if (!allowedStations || allowedStations.length === 0) return undefined;
+    return Array.from(
+      new Set(
+        allowedStations
+          .map((s) => normalizeStationView(s))
+          .filter((s): s is StationView => Boolean(s))
+      )
+    );
+  }, [allowedStations]);
+
+  const normalizedInitialStation = useMemo(
+    () => normalizeStationView(initialStation),
+    [initialStation]
+  );
+
+  const [activeStation, setActiveStation] = useState<StationView>(() => {
+    if (
+      normalizedInitialStation &&
+      (!normalizedAllowedStations || normalizedAllowedStations.includes(normalizedInitialStation))
+    ) {
+      return normalizedInitialStation;
+    }
+    return normalizedAllowedStations?.[0] || 'cashier';
+  });
   const [filterStatus, setFilterStatus] = useState<'all' | OrderStatus>('all');
   const [kdsShowCompletedItems, setKdsShowCompletedItems] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -107,6 +168,17 @@ export function LiveOrdersTab({ restaurant }: LiveOrdersTabProps) {
   const [updatingCallId, setUpdatingCallId] = useState<string | null>(null);
   const [receiptModalTable, setReceiptModalTable] = useState<TableMasterGroup | null>(null);
   const [receiptModalOrder, setReceiptModalOrder] = useState<Order | null>(null);
+
+  // Thermal printer + Split Check state
+  const [printerModalOpen, setPrinterModalOpen] = useState(false);
+  const [printerStatusLabel, setPrinterStatusLabel] = useState<string>(() => {
+    const conn = getActivePrinterConnection();
+    if (conn.connected && conn.name) return conn.name;
+    return getSavedPrinterProfile()?.name || '';
+  });
+  const [splitCheckOrder, setSplitCheckOrder] = useState<Order | null>(null);
+  const [printingKdsOrderId, setPrintingKdsOrderId] = useState<string | null>(null);
+  const [printFeedback, setPrintFeedback] = useState<string | null>(null);
 
   const initializedRef = useRef(false);
   const knownIdsRef = useRef<Set<string>>(new Set());
@@ -135,17 +207,43 @@ export function LiveOrdersTab({ restaurant }: LiveOrdersTabProps) {
   useEffect(() => {
     const unlock = () => unlockAudioContext();
     window.addEventListener('pointerdown', unlock, { once: true });
+    void tryAutoReconnectSavedPrinter().then((ok) => {
+      if (ok) {
+        const conn = getActivePrinterConnection();
+        if (conn.name) setPrinterStatusLabel(conn.name);
+      }
+    });
     return () => window.removeEventListener('pointerdown', unlock);
   }, []);
 
   useEffect(() => {
     const unsubCats = subscribeCategories(restaurant.id, setCategories);
     const unsubItems = subscribeMenuItems(restaurant.id, setMenuItems);
+    const unsubStations = subscribeRestaurantStations(restaurant.id, setDynamicStations);
     return () => {
       unsubCats();
       unsubItems();
+      unsubStations();
     };
   }, [restaurant.id]);
+
+  useEffect(() => {
+    if (
+      normalizedInitialStation &&
+      (!normalizedAllowedStations || normalizedAllowedStations.includes(normalizedInitialStation))
+    ) {
+      setActiveStation(normalizedInitialStation);
+    } else if (
+      normalizedAllowedStations &&
+      normalizedAllowedStations.length > 0 &&
+      !normalizedAllowedStations.includes(activeStation)
+    ) {
+      setActiveStation(normalizedAllowedStations[0]);
+    }
+  }, [normalizedInitialStation, normalizedAllowedStations, activeStation]);
+
+  const canReadServiceCalls =
+    !normalizedAllowedStations || normalizedAllowedStations.includes('cashier');
 
   useEffect(() => {
     initializedRef.current = false;
@@ -161,15 +259,29 @@ export function LiveOrdersTab({ restaurant }: LiveOrdersTabProps) {
           incoming.forEach((o) => knownIdsRef.current.add(o.id));
           initializedRef.current = true;
         } else {
-          let hasNewPending = false;
+          const newPendingOrders: Order[] = [];
           incoming.forEach((o) => {
             if (!knownIdsRef.current.has(o.id)) {
               knownIdsRef.current.add(o.id);
-              if (o.status === 'pending') hasNewPending = true;
+              if (o.status === 'pending') newPendingOrders.push(o);
             }
           });
-          if (hasNewPending && soundEnabled) {
-            playOrderAlertChime();
+          if (newPendingOrders.length > 0) {
+            if (soundEnabled) {
+              playOrderAlertChime();
+            }
+            if (staffMode) {
+              const firstNew = newPendingOrders[0];
+              void showOperationalNotification({
+                title: `طلب جديد #${firstNew.orderNumber}`,
+                body:
+                  firstNew.orderType === 'dine_in'
+                    ? `${firstNew.hallName ? `${firstNew.hallName} · ` : ''}ترابيزة ${firstNew.tableNumber || '-'}`
+                    : `${firstNew.customerName} · ${firstNew.items.length} أصناف`,
+                url: `/staff/${restaurant.slug}`,
+                tag: `order_${firstNew.id}`,
+              });
+            }
           }
         }
         setOrders(incoming);
@@ -179,13 +291,19 @@ export function LiveOrdersTab({ restaurant }: LiveOrdersTabProps) {
       (err) => {
         setLoadError(err.message || (isEn ? 'Could not load orders.' : 'تعذر تحميل الطلبات.'));
         setLoading(false);
-      }
+      },
+      { staffMode }
     );
 
     return () => unsub();
-  }, [restaurant.id, restaurant.ownerId, soundEnabled, retryKey, isEn]);
+  }, [restaurant.id, restaurant.ownerId, restaurant.slug, soundEnabled, retryKey, isEn, staffMode]);
 
   useEffect(() => {
+    if (!canReadServiceCalls) {
+      setServiceCalls([]);
+      return;
+    }
+
     callsInitializedRef.current = false;
     knownCallIdsRef.current = new Set();
 
@@ -210,11 +328,12 @@ export function LiveOrdersTab({ restaurant }: LiveOrdersTabProps) {
         }
         setServiceCalls(incoming);
       },
-      () => {}
+      () => {},
+      { staffMode }
     );
 
     return () => unsub();
-  }, [restaurant.id, restaurant.ownerId, soundEnabled, retryKey]);
+  }, [restaurant.id, restaurant.ownerId, soundEnabled, retryKey, staffMode, canReadServiceCalls]);
 
   const categoryMap = useMemo(
     () => new Map(categories.map((c) => [c.id, c])),
@@ -235,54 +354,83 @@ export function LiveOrdersTab({ restaurant }: LiveOrdersTabProps) {
     [orders]
   );
 
-  // Station KDS filtering & counts
+  const effectiveStations = useMemo(
+    () => buildEffectiveStations(dynamicStations),
+    [dynamicStations]
+  );
+
+  const stationById = useMemo(() => {
+    const map = new Map<string, StationMeta>();
+    effectiveStations.forEach((st) => map.set(st.stationId, st));
+    return map;
+  }, [effectiveStations]);
+
+  const resolveStationMeta = (stationId: string): StationMeta => {
+    return (
+      stationById.get(stationId) ||
+      STATION_META_MAP[stationId] || {
+        ...STATION_META_MAP.kitchen,
+        id: stationId,
+        stationId,
+        label: stationId,
+        label_en: stationId,
+        shortLabel: stationId,
+        shortLabel_en: stationId,
+      }
+    );
+  };
+
+  // Dynamic Station KDS filtering & counts
   const stationOrdersMap = useMemo(() => {
-    const res: Record<
-      PrepStation,
+    const map = new Map<
+      string,
       Array<{
         order: Order;
         items: Array<{ item: OrderItemPayload; originalIndex: number; prepState: ItemPrepState }>;
         pendingCount: number;
       }>
-    > = {
-      kitchen: [],
-      bar: [],
-      pastry: [],
-    };
+    >();
+
+    effectiveStations.forEach((st) => map.set(st.stationId, []));
+    const fallbackStationId = effectiveStations[0]?.stationId || 'kitchen';
 
     activeOrders.forEach((order) => {
-      const grouped: Record<
-        PrepStation,
+      const grouped = new Map<
+        string,
         Array<{ item: OrderItemPayload; originalIndex: number; prepState: ItemPrepState }>
-      > = { kitchen: [], bar: [], pastry: [] };
+      >();
 
       order.items.forEach((it, idx) => {
-        const st = resolveOrderItemStation(it, itemMap, categoryMap);
+        const st = resolveOrderItemStation(it, itemMap, categoryMap, fallbackStationId);
         const prepState: ItemPrepState = order.itemProgress?.[String(idx)] || 'pending';
-        grouped[st].push({ item: it, originalIndex: idx, prepState });
+        const list = grouped.get(st) || [];
+        list.push({ item: it, originalIndex: idx, prepState });
+        grouped.set(st, list);
       });
 
-      (['kitchen', 'bar', 'pastry'] as PrepStation[]).forEach((st) => {
-        const stItems = grouped[st];
-        if (stItems.length === 0) return;
+      grouped.forEach((stItems, stId) => {
         const pendingCount = stItems.filter(
           (x) => x.prepState === 'pending' || x.prepState === 'preparing'
         ).length;
-        res[st].push({ order, items: stItems, pendingCount });
+        const bucket = map.get(stId) || [];
+        bucket.push({ order, items: stItems, pendingCount });
+        map.set(stId, bucket);
       });
     });
 
-    return res;
-  }, [activeOrders, itemMap, categoryMap]);
+    return map;
+  }, [activeOrders, itemMap, categoryMap, effectiveStations]);
 
-  const stationOpenCounts = useMemo(
-    () => ({
-      kitchen: stationOrdersMap.kitchen.filter((c) => c.pendingCount > 0).length,
-      bar: stationOrdersMap.bar.filter((c) => c.pendingCount > 0).length,
-      pastry: stationOrdersMap.pastry.filter((c) => c.pendingCount > 0).length,
-    }),
-    [stationOrdersMap]
-  );
+  const stationOpenCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    stationOrdersMap.forEach((entries, stId) => {
+      counts.set(
+        stId,
+        entries.filter((c) => c.pendingCount > 0).length
+      );
+    });
+    return counts;
+  }, [stationOrdersMap]);
 
   // Cashier Master View: Group active dine-in orders per Table (Hall + Table Number) with aggregated Separate Checks
   const openTableGroups = useMemo<TableMasterGroup[]>(() => {
@@ -402,13 +550,71 @@ export function LiveOrdersTab({ restaurant }: LiveOrdersTabProps) {
     }
   };
 
-  const handleStatusChange = async (orderId: string, nextStatus: OrderStatus) => {
-    setUpdatingId(orderId);
+  const handleStatusChange = async (order: Order, nextStatus: OrderStatus) => {
+    setUpdatingId(order.id);
     try {
-      await updateOrderStatus(orderId, nextStatus);
+      await updateOrderStatus(order.id, nextStatus, {
+        restaurantId: restaurant.id,
+        ownerId: restaurant.ownerId,
+        orderNumber: order.orderNumber,
+        actor,
+      });
     } finally {
       setUpdatingId(null);
     }
+  };
+
+  const handlePrintKdsTicket = async (
+    order: Order,
+    stationMeta: StationMeta,
+    stationItems: OrderItemPayload[]
+  ) => {
+    setPrintingKdsOrderId(order.id);
+    setPrintFeedback(null);
+    try {
+      const job = buildStationTicketJob({
+        restaurant,
+        order,
+        station: stationMeta,
+        stationItems,
+      });
+      const res = await printThermalJobsSequentially([job]);
+      setPrintFeedback(
+        res.mode === 'hardware'
+          ? `تمت طباعة تذكرة #${order.orderNumber} (${stationMeta.shortLabel}) على الطابعة الحرارية.`
+          : `تم تجهيز تذكرة #${order.orderNumber} (${stationMeta.shortLabel}) للطباعة.`
+      );
+    } finally {
+      setPrintingKdsOrderId(null);
+    }
+  };
+
+  const openSplitCheckForTableGroup = (group: TableMasterGroup) => {
+    const first = group.orders[0];
+    if (!first) return;
+    const consolidated: Order = {
+      ...first,
+      id: group.groupKey,
+      orderNumber: group.orderNumbers.join('+'),
+      items: group.orders.flatMap((o) => o.items),
+      subtotal: group.subtotal,
+      serviceCharge: group.serviceCharge,
+      taxAmount: group.taxAmount,
+      discountAmount: group.discountAmount,
+      total: group.grandTotal,
+      guestChecks: group.guestsBreakdown.map((g) => ({
+        guestName: g.guestName,
+        itemsCount: g.itemsCount,
+        subtotal: g.subtotal,
+        serviceCharge: g.serviceCharge,
+        taxAmount: g.taxAmount,
+        total: g.total,
+      })),
+      hallName: group.hallName,
+      tableNumber: group.tableNumber,
+      orderType: 'dine_in',
+    };
+    setSplitCheckOrder(consolidated);
   };
 
   const handleMarkStationItemsReady = async (order: Order, itemIndices: number[]) => {
@@ -423,7 +629,17 @@ export function LiveOrdersTab({ restaurant }: LiveOrdersTabProps) {
       await updateOrderItemProgress(
         order.id,
         updates,
-        order.status === 'pending' ? 'preparing' : undefined
+        order.status === 'pending' ? 'preparing' : undefined,
+        {
+          restaurantId: restaurant.id,
+          ownerId: restaurant.ownerId,
+          orderNumber: order.orderNumber,
+          station:
+            activeStation === 'cashier'
+              ? effectiveStations[0]?.stationId || 'kitchen'
+              : activeStation,
+          actor,
+        }
       );
     } finally {
       setUpdatingItemKey(null);
@@ -435,18 +651,27 @@ export function LiveOrdersTab({ restaurant }: LiveOrdersTabProps) {
     try {
       await closeTableOrdersAndSession({
         restaurantId: restaurant.id,
+        ownerId: restaurant.ownerId,
+        hallName: group.hallName,
+        tableNumber: group.tableNumber,
         orderIds: group.orderIds,
         sessionId: group.sessionId,
+        actor,
       });
     } finally {
       setClosingTableKey(null);
     }
   };
 
-  const handleCallStatusChange = async (callId: string, nextStatus: ServiceCallStatus) => {
-    setUpdatingCallId(callId);
+  const handleCallStatusChange = async (call: ServiceCall, nextStatus: ServiceCallStatus) => {
+    setUpdatingCallId(call.id);
     try {
-      await updateServiceCallStatus(callId, nextStatus);
+      await updateServiceCallStatus(call.id, nextStatus, {
+        restaurantId: restaurant.id,
+        ownerId: restaurant.ownerId,
+        tableLabel: `${call.hallName ? `${call.hallName} · ` : ''}ترابيزة ${call.tableNumber}`,
+        actor,
+      });
     } finally {
       setUpdatingCallId(null);
     }
@@ -485,37 +710,36 @@ export function LiveOrdersTab({ restaurant }: LiveOrdersTabProps) {
 
   const pendingCount = orders.filter((o) => o.status === 'pending').length;
 
-  const stationTabs: Array<{
-    id: StationView;
-    label: string;
-    icon: typeof Receipt;
-    count?: number;
-  }> = [
-    {
-      id: 'cashier',
-      label: isEn ? 'Cashier Master View' : 'شاشة الكاشير (Master)',
-      icon: Receipt,
-      count: activeOrders.length,
-    },
-    {
-      id: 'kitchen',
-      label: isEn ? 'Kitchen KDS' : 'شاشة المطبخ (Kitchen)',
-      icon: ChefHat,
-      count: stationOpenCounts.kitchen,
-    },
-    {
-      id: 'bar',
-      label: isEn ? 'Bar KDS' : 'شاشة البار (Bar)',
-      icon: Wine,
-      count: stationOpenCounts.bar,
-    },
-    {
-      id: 'pastry',
-      label: isEn ? 'Pastry KDS' : 'شاشة الباستري (Pastry)',
-      icon: Croissant,
-      count: stationOpenCounts.pastry,
-    },
-  ];
+  const stationTabs = useMemo(() => {
+    const base: Array<{
+      id: StationView;
+      label: string;
+      icon: typeof Receipt;
+      count?: number;
+    }> = [
+      {
+        id: 'cashier',
+        label: isEn ? 'Cashier Master View' : 'شاشة الكاشير (Master)',
+        icon: Receipt,
+        count: activeOrders.length,
+      },
+      ...effectiveStations.map((st) => ({
+        id: st.stationId as StationView,
+        label: isEn ? `${st.shortLabel_en} KDS` : st.label,
+        icon: getStationIconComponent(st.icon),
+        count: stationOpenCounts.get(st.stationId) || 0,
+      })),
+    ];
+    return base;
+  }, [isEn, activeOrders.length, effectiveStations, stationOpenCounts]);
+
+  const visibleStationTabs = useMemo(
+    () =>
+      normalizedAllowedStations && normalizedAllowedStations.length > 0
+        ? stationTabs.filter((tab) => normalizedAllowedStations.includes(tab.id))
+        : stationTabs,
+    [normalizedAllowedStations, stationTabs]
+  );
 
   const getPrepBadge = (state: ItemPrepState) => {
     if (state === 'served') {
@@ -553,7 +777,11 @@ export function LiveOrdersTab({ restaurant }: LiveOrdersTabProps) {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h2 className="text-base sm:text-lg font-extrabold text-zinc-950">
-              {isEn ? 'Multi-Station Operations & KDS' : 'شاشات التشغيل والمحطات (Cashier & Multi-KDS)'}
+              {visibleStationTabs.length === 1
+                ? visibleStationTabs[0].label
+                : isEn
+                  ? 'Multi-Station Operations & KDS'
+                  : 'شاشات التشغيل والمحطات (Cashier & Multi-KDS)'}
             </h2>
             <p className="text-xs text-zinc-500 mt-0.5 leading-relaxed">
               {t.admin.orders.subtitle}
@@ -566,6 +794,19 @@ export function LiveOrdersTab({ restaurant }: LiveOrdersTabProps) {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setPrinterModalOpen(true)}
+              className={`min-h-[40px] px-3 py-2 rounded-xl border text-xs font-extrabold flex items-center gap-1.5 cursor-pointer ${
+                printerStatusLabel
+                  ? 'border-indigo-200 bg-indigo-50 text-indigo-800 hover:bg-indigo-100'
+                  : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50'
+              }`}
+            >
+              <Printer className="w-4 h-4" />
+              <span>{printerStatusLabel ? `طابعة: ${printerStatusLabel}` : isEn ? 'Thermal Printer' : 'طابعة حرارية'}</span>
+            </button>
+
             <button
               type="button"
               onClick={() => {
@@ -614,39 +855,50 @@ export function LiveOrdersTab({ restaurant }: LiveOrdersTabProps) {
           </div>
         </div>
 
-        {/* 4 Station Tabs */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 pt-1">
-          {stationTabs.map((tab) => {
-            const TabIcon = tab.icon;
-            const active = activeStation === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveStation(tab.id)}
-                className={`min-h-[46px] px-3.5 py-2.5 rounded-xl border text-xs font-extrabold transition-all flex items-center justify-between gap-2 cursor-pointer ${
-                  active
-                    ? 'bg-zinc-950 text-white border-zinc-950 shadow-sm'
-                    : 'bg-zinc-50 border-zinc-200 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950'
-                }`}
-              >
-                <span className="flex items-center gap-2 min-w-0">
-                  <TabIcon className={`w-4 h-4 shrink-0 ${active ? 'text-amber-400' : 'text-zinc-500'}`} />
-                  <span className="truncate">{tab.label}</span>
-                </span>
-                {tab.count !== undefined && tab.count > 0 && (
-                  <span
-                    className={`font-mono-num text-[11px] font-extrabold px-2 py-0.5 rounded-md shrink-0 ${
-                      active ? 'bg-amber-500 text-zinc-950' : 'bg-zinc-200 text-zinc-800'
-                    }`}
-                  >
-                    {tab.count}
+        {printFeedback && (
+          <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-900 flex items-center justify-between gap-2">
+            <span>{printFeedback}</span>
+            <button type="button" onClick={() => setPrintFeedback(null)} className="cursor-pointer">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {/* Station Tabs (hidden if single isolated station screen) */}
+        {visibleStationTabs.length > 1 && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 pt-1">
+            {visibleStationTabs.map((tab) => {
+              const TabIcon = tab.icon;
+              const active = activeStation === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveStation(tab.id)}
+                  className={`min-h-[46px] px-3.5 py-2.5 rounded-xl border text-xs font-extrabold transition-all flex items-center justify-between gap-2 cursor-pointer ${
+                    active
+                      ? 'bg-zinc-950 text-white border-zinc-950 shadow-sm'
+                      : 'bg-zinc-50 border-zinc-200 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950'
+                  }`}
+                >
+                  <span className="flex items-center gap-2 min-w-0">
+                    <TabIcon className={`w-4 h-4 shrink-0 ${active ? 'text-amber-400' : 'text-zinc-500'}`} />
+                    <span className="truncate">{tab.label}</span>
                   </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+                  {tab.count !== undefined && tab.count > 0 && (
+                    <span
+                      className={`font-mono-num text-[11px] font-extrabold px-2 py-0.5 rounded-md shrink-0 ${
+                        active ? 'bg-amber-500 text-zinc-950' : 'bg-zinc-200 text-zinc-800'
+                      }`}
+                    >
+                      {tab.count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {loadError && (
@@ -674,11 +926,11 @@ export function LiveOrdersTab({ restaurant }: LiveOrdersTabProps) {
         </div>
       ) : activeStation !== 'cashier' ? (
         /* ============================================================== */
-        /* KITCHEN / BAR / PASTRY DEDICATED KDS SCREEN                    */
+        /* DYNAMIC STATION DEDICATED KDS SCREEN                           */
         /* ============================================================== */
         (() => {
-          const stMeta = STATION_META_MAP[activeStation];
-          const allStationOrders = stationOrdersMap[activeStation];
+          const stMeta = resolveStationMeta(activeStation);
+          const allStationOrders = stationOrdersMap.get(activeStation) || [];
           const visibleKdsOrders = kdsShowCompletedItems
             ? allStationOrders
             : allStationOrders.filter((entry) => entry.pendingCount > 0);
@@ -850,21 +1102,39 @@ export function LiveOrdersTab({ restaurant }: LiveOrdersTabProps) {
                           )}
                         </div>
 
-                        {unreadyIndices.length > 1 && (
+                        <div className="flex flex-wrap items-center gap-2 pt-1">
+                          {unreadyIndices.length > 1 && (
+                            <button
+                              type="button"
+                              disabled={updatingItemKey === batchKey}
+                              onClick={() => handleMarkStationItemsReady(order, unreadyIndices)}
+                              className="flex-1 min-h-[42px] py-2.5 px-3 rounded-xl bg-zinc-950 text-white text-xs font-extrabold hover:bg-zinc-800 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                            >
+                              <CheckCheck className="w-4 h-4 text-emerald-400" />
+                              <span>
+                                {isEn
+                                  ? `Mark All ${stMeta.shortLabel_en} Ready`
+                                  : `تجهيز كل أصناف ${stMeta.shortLabel} (${unreadyIndices.length})`}
+                              </span>
+                            </button>
+                          )}
+
                           <button
                             type="button"
-                            disabled={updatingItemKey === batchKey}
-                            onClick={() => handleMarkStationItemsReady(order, unreadyIndices)}
-                            className="w-full min-h-[42px] py-2.5 px-3 rounded-xl bg-zinc-950 text-white text-xs font-extrabold hover:bg-zinc-800 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                            disabled={printingKdsOrderId === order.id}
+                            onClick={() =>
+                              handlePrintKdsTicket(
+                                order,
+                                stMeta,
+                                stItems.map((x) => x.item)
+                              )
+                            }
+                            className="min-h-[42px] py-2.5 px-3 rounded-xl border border-zinc-300 bg-white hover:bg-zinc-50 text-zinc-900 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
                           >
-                            <CheckCheck className="w-4 h-4 text-emerald-400" />
-                            <span>
-                              {isEn
-                                ? `Mark All ${stMeta.shortLabel_en} Items Ready`
-                                : `تجهيز كل أصناف ${stMeta.shortLabel} (${unreadyIndices.length})`}
-                            </span>
+                            <Printer className="w-4 h-4" />
+                            <span>{isEn ? 'Print Ticket' : 'طباعة التذكرة'}</span>
                           </button>
-                        )}
+                        </div>
                       </article>
                     );
                   })}
@@ -943,7 +1213,7 @@ export function LiveOrdersTab({ restaurant }: LiveOrdersTabProps) {
                           <button
                             type="button"
                             disabled={updatingCallId === call.id}
-                            onClick={() => handleCallStatusChange(call.id, 'acknowledged')}
+                            onClick={() => handleCallStatusChange(call, 'acknowledged')}
                             className="flex-1 py-2 px-2.5 rounded-lg bg-blue-600 text-white text-[11px] font-bold hover:bg-blue-700 cursor-pointer disabled:opacity-50"
                           >
                             {isEn ? 'On the Way' : 'جاري التلبية'}
@@ -952,7 +1222,7 @@ export function LiveOrdersTab({ restaurant }: LiveOrdersTabProps) {
                         <button
                           type="button"
                           disabled={updatingCallId === call.id}
-                          onClick={() => handleCallStatusChange(call.id, 'resolved')}
+                          onClick={() => handleCallStatusChange(call, 'resolved')}
                           className="flex-1 py-2 px-2.5 rounded-lg bg-emerald-600 text-white text-[11px] font-bold hover:bg-emerald-700 flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50"
                         >
                           <CheckCheck className="w-3.5 h-3.5" />
@@ -1022,8 +1292,13 @@ export function LiveOrdersTab({ restaurant }: LiveOrdersTabProps) {
                       <div className="space-y-2 max-h-56 overflow-y-auto pe-1">
                         {group.orders.flatMap((ord) =>
                           ord.items.map((it, idx) => {
-                            const st = resolveOrderItemStation(it, itemMap, categoryMap);
-                            const stMeta = STATION_META_MAP[st];
+                            const st = resolveOrderItemStation(
+                              it,
+                              itemMap,
+                              categoryMap,
+                              effectiveStations[0]?.stationId || 'kitchen'
+                            );
+                            const stMeta = resolveStationMeta(st);
                             const prepState = ord.itemProgress?.[String(idx)] || 'pending';
                             return (
                               <div
@@ -1091,6 +1366,15 @@ export function LiveOrdersTab({ restaurant }: LiveOrdersTabProps) {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-zinc-100">
+                      <button
+                        type="button"
+                        onClick={() => openSplitCheckForTableGroup(group)}
+                        className="min-h-[42px] px-3.5 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-950 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <Scissors className="w-4 h-4" />
+                        <span>{isEn ? 'Split Check' : 'تقسيم الشيك'}</span>
+                      </button>
+
                       <button
                         type="button"
                         onClick={() => {
@@ -1226,8 +1510,13 @@ export function LiveOrdersTab({ restaurant }: LiveOrdersTabProps) {
 
                         <div className="space-y-2">
                           {order.items.map((item, idx) => {
-                            const itemSt = resolveOrderItemStation(item, itemMap, categoryMap);
-                            const stMeta = STATION_META_MAP[itemSt];
+                            const itemSt = resolveOrderItemStation(
+                              item,
+                              itemMap,
+                              categoryMap,
+                              effectiveStations[0]?.stationId || 'kitchen'
+                            );
+                            const stMeta = resolveStationMeta(itemSt);
                             const prepState = order.itemProgress?.[String(idx)] || 'pending';
                             return (
                               <div
@@ -1337,7 +1626,28 @@ export function LiveOrdersTab({ restaurant }: LiveOrdersTabProps) {
                           </span>
                         </div>
 
+                        {order.lastUpdatedByName && (
+                          <p className="text-[11px] text-zinc-500 font-semibold">
+                            {order.status === 'completed' && order.closedByName
+                              ? isEn
+                                ? `Closed by: ${order.closedByName}`
+                                : `أُغلق بواسطة: ${order.closedByName}`
+                              : isEn
+                                ? `Last updated by: ${order.lastUpdatedByName}`
+                                : `آخر تحديث: ${order.lastUpdatedByName}`}
+                          </p>
+                        )}
+
                         <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setSplitCheckOrder(order)}
+                            className="py-2 px-3 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-950 text-xs font-extrabold flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <Scissors className="w-3.5 h-3.5" />
+                            <span>{isEn ? 'Split Check' : 'تقسيم الشيك'}</span>
+                          </button>
+
                           <button
                             type="button"
                             onClick={() => {
@@ -1356,7 +1666,7 @@ export function LiveOrdersTab({ restaurant }: LiveOrdersTabProps) {
                                 <button
                                   type="button"
                                   disabled={updatingId === order.id}
-                                  onClick={() => handleStatusChange(order.id, 'preparing')}
+                                  onClick={() => handleStatusChange(order, 'preparing')}
                                   className="flex-1 py-2 px-3 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 cursor-pointer disabled:opacity-50"
                                 >
                                   {t.admin.orders.btnStartPreparing}
@@ -1366,7 +1676,7 @@ export function LiveOrdersTab({ restaurant }: LiveOrdersTabProps) {
                                 <button
                                   type="button"
                                   disabled={updatingId === order.id}
-                                  onClick={() => handleStatusChange(order.id, 'completed')}
+                                  onClick={() => handleStatusChange(order, 'completed')}
                                   className="flex-1 py-2 px-3 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 cursor-pointer flex items-center justify-center gap-1 disabled:opacity-50"
                                 >
                                   <Check className="w-3.5 h-3.5" />
@@ -1376,7 +1686,7 @@ export function LiveOrdersTab({ restaurant }: LiveOrdersTabProps) {
                               <button
                                 type="button"
                                 disabled={updatingId === order.id}
-                                onClick={() => handleStatusChange(order.id, 'cancelled')}
+                                onClick={() => handleStatusChange(order, 'cancelled')}
                                 className="py-2 px-3 rounded-xl border border-red-200 text-red-700 text-xs font-bold hover:bg-red-50 cursor-pointer flex items-center gap-1 disabled:opacity-50"
                               >
                                 <XCircle className="w-3.5 h-3.5" />
@@ -1571,6 +1881,27 @@ export function LiveOrdersTab({ restaurant }: LiveOrdersTabProps) {
           </div>
         </div>
       )}
+
+      <ThermalPrinterSettingsModal
+        isOpen={printerModalOpen}
+        onClose={() => setPrinterModalOpen(false)}
+        restaurant={restaurant}
+        onProfileChanged={(prof) => setPrinterStatusLabel(prof?.name || '')}
+      />
+
+      <SplitCheckPrintModal
+        isOpen={Boolean(splitCheckOrder)}
+        onClose={() => setSplitCheckOrder(null)}
+        order={splitCheckOrder}
+        restaurant={restaurant}
+        stations={effectiveStations}
+        itemsMap={itemMap}
+        categoriesMap={categoryMap}
+        onOpenPrinterSettings={() => {
+          setSplitCheckOrder(null);
+          setPrinterModalOpen(true);
+        }}
+      />
     </div>
   );
 }

@@ -4,6 +4,8 @@ import { testConnection } from './lib/firebase';
 import { AdminPortal } from './pages/AdminPortal';
 import { LandingPage } from './pages/LandingPage';
 import { PublicMenuPage } from './pages/PublicMenuPage';
+import { StaffOnboardingPage } from './pages/StaffOnboardingPage';
+import { StaffPortalPage } from './pages/StaffPortalPage';
 import { SuperAdminPortal } from './pages/SuperAdminPortal';
 
 function getCurrentPath(): string {
@@ -39,6 +41,16 @@ export default function App() {
 
     if (pathname === '/admin' || pathname.startsWith('/admin/')) {
       return <AdminPortal onNavigate={navigate} />;
+    }
+
+    if (pathname.startsWith('/staff/')) {
+      const parts = pathname.replace(/^\/staff\//, '').split('/').filter(Boolean);
+      const slug = decodeURIComponent(parts[0] || '');
+      const subRoute = (parts[1] || '').toLowerCase();
+      if (subRoute === 'onboarding') {
+        return <StaffOnboardingPage slug={slug} onNavigate={navigate} />;
+      }
+      return <StaffPortalPage slug={slug} onNavigate={navigate} />;
     }
 
     if (pathname.startsWith('/menu/')) {
