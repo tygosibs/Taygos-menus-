@@ -165,9 +165,27 @@ export interface Restaurant {
   currency: string;
   isOpen: boolean;
   isSuspended?: boolean;
+  ownerBirthday?: string;
+  appliedPlatformPromoCode?: string;
+  appliedPlatformPromoSummary?: string;
+  appliedPlatformPromoSummary_en?: string;
   offers?: MenuOffer[];
   promoCodes?: PromoCode[];
   loyaltyConfig?: LoyaltyConfig;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+}
+
+export type PlatformPromoDiscountType = 'percent' | 'fixed' | 'free_month';
+
+export interface PlatformPromoCode {
+  id: string;
+  code: string;
+  discountType: PlatformPromoDiscountType;
+  discountValue: number;
+  description?: string;
+  description_en?: string;
+  isActive: boolean;
   createdAt?: unknown;
   updatedAt?: unknown;
 }
@@ -372,11 +390,26 @@ export interface ThemeMeta {
   badge_en?: string;
 }
 
+export type LandingSectionId =
+  | 'hero'
+  | 'themes'
+  | 'features'
+  | 'operations'
+  | 'loyalty'
+  | 'pricing'
+  | 'tygos_promo';
+
+export interface LandingSectionConfig {
+  id: LandingSectionId;
+  isVisible: boolean;
+}
+
 export interface LandingFeature {
   title: string;
   title_en?: string;
   description: string;
   description_en?: string;
+  isVisible?: boolean;
 }
 
 export interface LandingPricingPlan {
@@ -391,17 +424,61 @@ export interface LandingPricingPlan {
   features: string[];
   features_en?: string[];
   highlighted: boolean;
+  isVisible?: boolean;
 }
 
 export interface PlatformLandingSettings {
+  sections?: LandingSectionConfig[];
+  heroBadge?: string;
+  heroBadge_en?: string;
   heroTitle: string;
   heroTitle_en?: string;
   heroSubtitle: string;
   heroSubtitle_en?: string;
   ctaButtonText: string;
   ctaButtonText_en?: string;
+  heroSecondaryBtnText?: string;
+  heroSecondaryBtnText_en?: string;
+  themesTitle?: string;
+  themesTitle_en?: string;
+  themesSubtitle?: string;
+  themesSubtitle_en?: string;
+  featuresTitle?: string;
+  featuresTitle_en?: string;
+  featuresSubtitle?: string;
+  featuresSubtitle_en?: string;
   features: LandingFeature[];
+  operationsBadge?: string;
+  operationsBadge_en?: string;
+  operationsTitle?: string;
+  operationsTitle_en?: string;
+  operationsSubtitle?: string;
+  operationsSubtitle_en?: string;
+  operationsBullets?: string[];
+  operationsBullets_en?: string[];
+  loyaltyBadge?: string;
+  loyaltyBadge_en?: string;
+  loyaltyTitle?: string;
+  loyaltyTitle_en?: string;
+  loyaltySubtitle?: string;
+  loyaltySubtitle_en?: string;
+  loyaltyBullets?: string[];
+  loyaltyBullets_en?: string[];
+  pricingTitle?: string;
+  pricingTitle_en?: string;
+  pricingSubtitle?: string;
+  pricingSubtitle_en?: string;
+  pricingCtaText?: string;
+  pricingCtaText_en?: string;
   pricingPlans: LandingPricingPlan[];
+  tygosBadge?: string;
+  tygosBadge_en?: string;
+  tygosTitle?: string;
+  tygosTitle_en?: string;
+  tygosSubtitle?: string;
+  tygosSubtitle_en?: string;
+  tygosCtaText?: string;
+  tygosCtaText_en?: string;
   supportWhatsapp: string;
   footerText: string;
   footerText_en?: string;

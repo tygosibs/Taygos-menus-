@@ -24,5 +24,7 @@ export const DIRTY_DOZEN_CASES: DirtyDozenCase[] = [
   { id: 'DD-15', description: 'Cross-tenant hall write or tableCount > 200', path: '/halls/hall_1', operation: 'create', expected: 'PERMISSION_DENIED' },
   { id: 'DD-16', description: 'Customer loyalty list scraping or resetting firstOrderDiscountUsed', path: '/restaurants/rest_1/customers/01012345678', operation: 'update', expected: 'PERMISSION_DENIED' },
   { id: 'DD-17', description: 'Poisoned loyaltyConfig percent > 50 or shadow key', path: '/restaurants/rest_1', operation: 'update', expected: 'PERMISSION_DENIED' },
+  { id: 'DD-18', description: 'Non-SuperAdmin writing/listing platform_promo_codes or redeeming invalid code', path: '/platform_promo_codes/BDAY50', operation: 'create', expected: 'PERMISSION_DENIED' },
+  { id: 'DD-19', description: 'Malformed ownerBirthday or shadow key in platform_settings/landing', path: '/platform_settings/landing', operation: 'update', expected: 'PERMISSION_DENIED' },
 ];
 

@@ -15,7 +15,7 @@ import {
   where,
   writeBatch,
 } from 'firebase/firestore';
-import { DEFAULT_PLATFORM_LANDING } from '../data/defaultLandingSettings';
+import { DEFAULT_LANDING_SECTIONS, DEFAULT_PLATFORM_LANDING } from '../data/defaultLandingSettings';
 import { getStarterSeedData } from '../data/demoRestaurants';
 import {
   ActiveTheme,
@@ -28,6 +28,8 @@ import {
   ItemBadge,
   ItemPrepState,
   ItemSize,
+  LandingSectionConfig,
+  LandingSectionId,
   LoyaltyConfig,
   MenuColorMode,
   MenuItem,
@@ -37,6 +39,8 @@ import {
   OrderStatus,
   OrderType,
   PlatformLandingSettings,
+  PlatformPromoCode,
+  PlatformPromoDiscountType,
   PrepStation,
   PromoCode,
   Restaurant,
@@ -52,6 +56,7 @@ import {
   DEFAULT_LOYALTY_CONFIG,
   mergeFavoriteItems,
   normalizeCustomerPhone,
+  parseIsoBirthday,
 } from './customerLoyaltyUtils';
 import { db, handleFirestoreError, OperationType } from './firebase';
 
@@ -72,6 +77,12 @@ export function sanitizeSlug(raw: string): string {
     .replace(/^-+|-+$/g, '')
     .replace(/-{2,}/g, '-')
     .slice(0, 64);
+}
+
+export function normalizeIsoBirthday(raw?: string): string {
+  const clean = (raw || '').trim();
+  if (!clean) return '';
+  return parseIsoBirthday(clean) ? clean : '';
 }
 
 export async function ensureUserProfile(
@@ -133,6 +144,7 @@ export interface CreateRestaurantInput {
   tagline?: string;
   tagline_en?: string;
   whatsappNumber: string;
+  ownerBirthday?: string;
   logoUrl?: string;
   activeTheme: ActiveTheme;
   primaryColor: string;
@@ -152,6 +164,7 @@ export async function createRestaurant(input: CreateRestaurantInput): Promise<Re
     : '#A61C1C';
   const safeTaxRate = Math.max(0, Math.min(100, Number(input.taxRate) || 0));
   const safeServiceCharge = Math.max(0, Math.min(100, Number(input.serviceCharge) || 0));
+  const cleanOwnerBirthday = normalizeIsoBirthday(input.ownerBirthday);
 
   try {
     const batch = writeBatch(db);
@@ -187,6 +200,9 @@ export async function createRestaurant(input: CreateRestaurantInput): Promise<Re
     }
     if (input.logoUrl?.trim()) {
       restPayload.logoUrl = input.logoUrl.trim().slice(0, 300000);
+    }
+    if (cleanOwnerBirthday) {
+      restPayload.ownerBirthday = cleanOwnerBirthday;
     }
 
     batch.set(doc(db, 'restaurants', restId), restPayload);
@@ -418,6 +434,7 @@ export async function updateRestaurantSettings(
     tagline: string;
     tagline_en?: string;
     whatsappNumber: string;
+    ownerBirthday?: string;
     logoUrl: string;
     shareTitle?: string;
     shareTitle_en?: string;
@@ -456,6 +473,10 @@ export async function updateRestaurantSettings(
       : cleanHex(restaurant.descriptionColor);
   const safePriceColor =
     updates.priceColor !== undefined ? cleanHex(updates.priceColor) : cleanHex(restaurant.priceColor);
+  const cleanOwnerBirthday =
+    updates.ownerBirthday !== undefined
+      ? normalizeIsoBirthday(updates.ownerBirthday)
+      : normalizeIsoBirthday(restaurant.ownerBirthday);
 
   try {
     const batch = writeBatch(db);
@@ -483,6 +504,7 @@ export async function updateRestaurantSettings(
       tagline: updates.tagline.trim().slice(0, 500),
       tagline_en: cleanTaglineEn,
       whatsappNumber: updates.whatsappNumber.trim().slice(0, 24),
+      ownerBirthday: cleanOwnerBirthday,
       logoUrl: updates.logoUrl.trim().slice(0, 300000),
       shareTitle: cleanShareTitle,
       shareTitle_en: cleanShareTitleEn,
@@ -506,6 +528,7 @@ export async function updateRestaurantSettings(
     return {
       ...restaurant,
       ...updates,
+      ownerBirthday: cleanOwnerBirthday,
       name_en: cleanNameEn,
       tagline_en: cleanTaglineEn,
       shareTitle: cleanShareTitle,
@@ -1319,6 +1342,41 @@ export async function deleteRestaurantAccountCompletely(
   }
 }
 
+const VALID_LANDING_SECTION_IDS = new Set<LandingSectionId>([
+  'hero',
+  'themes',
+  'features',
+  'operations',
+  'loyalty',
+  'pricing',
+  'tygos_promo',
+]);
+
+export function normalizeLandingSections(
+  incoming?: LandingSectionConfig[]
+): LandingSectionConfig[] {
+  const seen = new Set<LandingSectionId>();
+  const result: LandingSectionConfig[] = [];
+
+  if (Array.isArray(incoming)) {
+    for (const sec of incoming) {
+      if (sec && VALID_LANDING_SECTION_IDS.has(sec.id) && !seen.has(sec.id)) {
+        seen.add(sec.id);
+        result.push({ id: sec.id, isVisible: sec.isVisible !== false });
+      }
+    }
+  }
+
+  for (const def of DEFAULT_LANDING_SECTIONS) {
+    if (!seen.has(def.id)) {
+      seen.add(def.id);
+      result.push({ ...def });
+    }
+  }
+
+  return result.slice(0, 10);
+}
+
 export async function fetchPlatformLandingSettings(): Promise<PlatformLandingSettings> {
   try {
     const snap = await getDoc(doc(db, 'platform_settings', 'landing'));
@@ -1326,21 +1384,88 @@ export async function fetchPlatformLandingSettings(): Promise<PlatformLandingSet
       return DEFAULT_PLATFORM_LANDING;
     }
     const data = snap.data() as Partial<PlatformLandingSettings>;
+    const rawFeatures =
+      Array.isArray(data.features) && data.features.length > 0
+        ? data.features
+        : DEFAULT_PLATFORM_LANDING.features;
+    const rawPlans =
+      Array.isArray(data.pricingPlans) && data.pricingPlans.length > 0
+        ? data.pricingPlans
+        : DEFAULT_PLATFORM_LANDING.pricingPlans;
+
     return {
+      sections: normalizeLandingSections(data.sections),
+      heroBadge: data.heroBadge || DEFAULT_PLATFORM_LANDING.heroBadge,
+      heroBadge_en: data.heroBadge_en || DEFAULT_PLATFORM_LANDING.heroBadge_en,
       heroTitle: data.heroTitle || DEFAULT_PLATFORM_LANDING.heroTitle,
       heroTitle_en: data.heroTitle_en || DEFAULT_PLATFORM_LANDING.heroTitle_en,
       heroSubtitle: data.heroSubtitle || DEFAULT_PLATFORM_LANDING.heroSubtitle,
       heroSubtitle_en: data.heroSubtitle_en || DEFAULT_PLATFORM_LANDING.heroSubtitle_en,
       ctaButtonText: data.ctaButtonText || DEFAULT_PLATFORM_LANDING.ctaButtonText,
       ctaButtonText_en: data.ctaButtonText_en || DEFAULT_PLATFORM_LANDING.ctaButtonText_en,
-      features:
-        Array.isArray(data.features) && data.features.length > 0
-          ? data.features
-          : DEFAULT_PLATFORM_LANDING.features,
-      pricingPlans:
-        Array.isArray(data.pricingPlans) && data.pricingPlans.length > 0
-          ? data.pricingPlans
-          : DEFAULT_PLATFORM_LANDING.pricingPlans,
+      heroSecondaryBtnText:
+        data.heroSecondaryBtnText || DEFAULT_PLATFORM_LANDING.heroSecondaryBtnText,
+      heroSecondaryBtnText_en:
+        data.heroSecondaryBtnText_en || DEFAULT_PLATFORM_LANDING.heroSecondaryBtnText_en,
+      themesTitle: data.themesTitle || DEFAULT_PLATFORM_LANDING.themesTitle,
+      themesTitle_en: data.themesTitle_en || DEFAULT_PLATFORM_LANDING.themesTitle_en,
+      themesSubtitle: data.themesSubtitle || DEFAULT_PLATFORM_LANDING.themesSubtitle,
+      themesSubtitle_en: data.themesSubtitle_en || DEFAULT_PLATFORM_LANDING.themesSubtitle_en,
+      featuresTitle: data.featuresTitle || DEFAULT_PLATFORM_LANDING.featuresTitle,
+      featuresTitle_en: data.featuresTitle_en || DEFAULT_PLATFORM_LANDING.featuresTitle_en,
+      featuresSubtitle: data.featuresSubtitle || DEFAULT_PLATFORM_LANDING.featuresSubtitle,
+      featuresSubtitle_en:
+        data.featuresSubtitle_en || DEFAULT_PLATFORM_LANDING.featuresSubtitle_en,
+      features: rawFeatures.map((f) => ({ ...f, isVisible: f.isVisible !== false })),
+      operationsBadge: data.operationsBadge || DEFAULT_PLATFORM_LANDING.operationsBadge,
+      operationsBadge_en:
+        data.operationsBadge_en || DEFAULT_PLATFORM_LANDING.operationsBadge_en,
+      operationsTitle: data.operationsTitle || DEFAULT_PLATFORM_LANDING.operationsTitle,
+      operationsTitle_en:
+        data.operationsTitle_en || DEFAULT_PLATFORM_LANDING.operationsTitle_en,
+      operationsSubtitle:
+        data.operationsSubtitle || DEFAULT_PLATFORM_LANDING.operationsSubtitle,
+      operationsSubtitle_en:
+        data.operationsSubtitle_en || DEFAULT_PLATFORM_LANDING.operationsSubtitle_en,
+      operationsBullets:
+        Array.isArray(data.operationsBullets) && data.operationsBullets.length > 0
+          ? data.operationsBullets
+          : DEFAULT_PLATFORM_LANDING.operationsBullets,
+      operationsBullets_en:
+        Array.isArray(data.operationsBullets_en) && data.operationsBullets_en.length > 0
+          ? data.operationsBullets_en
+          : DEFAULT_PLATFORM_LANDING.operationsBullets_en,
+      loyaltyBadge: data.loyaltyBadge || DEFAULT_PLATFORM_LANDING.loyaltyBadge,
+      loyaltyBadge_en: data.loyaltyBadge_en || DEFAULT_PLATFORM_LANDING.loyaltyBadge_en,
+      loyaltyTitle: data.loyaltyTitle || DEFAULT_PLATFORM_LANDING.loyaltyTitle,
+      loyaltyTitle_en: data.loyaltyTitle_en || DEFAULT_PLATFORM_LANDING.loyaltyTitle_en,
+      loyaltySubtitle: data.loyaltySubtitle || DEFAULT_PLATFORM_LANDING.loyaltySubtitle,
+      loyaltySubtitle_en:
+        data.loyaltySubtitle_en || DEFAULT_PLATFORM_LANDING.loyaltySubtitle_en,
+      loyaltyBullets:
+        Array.isArray(data.loyaltyBullets) && data.loyaltyBullets.length > 0
+          ? data.loyaltyBullets
+          : DEFAULT_PLATFORM_LANDING.loyaltyBullets,
+      loyaltyBullets_en:
+        Array.isArray(data.loyaltyBullets_en) && data.loyaltyBullets_en.length > 0
+          ? data.loyaltyBullets_en
+          : DEFAULT_PLATFORM_LANDING.loyaltyBullets_en,
+      pricingTitle: data.pricingTitle || DEFAULT_PLATFORM_LANDING.pricingTitle,
+      pricingTitle_en: data.pricingTitle_en || DEFAULT_PLATFORM_LANDING.pricingTitle_en,
+      pricingSubtitle: data.pricingSubtitle || DEFAULT_PLATFORM_LANDING.pricingSubtitle,
+      pricingSubtitle_en:
+        data.pricingSubtitle_en || DEFAULT_PLATFORM_LANDING.pricingSubtitle_en,
+      pricingCtaText: data.pricingCtaText || DEFAULT_PLATFORM_LANDING.pricingCtaText,
+      pricingCtaText_en: data.pricingCtaText_en || DEFAULT_PLATFORM_LANDING.pricingCtaText_en,
+      pricingPlans: rawPlans.map((p) => ({ ...p, isVisible: p.isVisible !== false })),
+      tygosBadge: data.tygosBadge || DEFAULT_PLATFORM_LANDING.tygosBadge,
+      tygosBadge_en: data.tygosBadge_en || DEFAULT_PLATFORM_LANDING.tygosBadge_en,
+      tygosTitle: data.tygosTitle || DEFAULT_PLATFORM_LANDING.tygosTitle,
+      tygosTitle_en: data.tygosTitle_en || DEFAULT_PLATFORM_LANDING.tygosTitle_en,
+      tygosSubtitle: data.tygosSubtitle || DEFAULT_PLATFORM_LANDING.tygosSubtitle,
+      tygosSubtitle_en: data.tygosSubtitle_en || DEFAULT_PLATFORM_LANDING.tygosSubtitle_en,
+      tygosCtaText: data.tygosCtaText || DEFAULT_PLATFORM_LANDING.tygosCtaText,
+      tygosCtaText_en: data.tygosCtaText_en || DEFAULT_PLATFORM_LANDING.tygosCtaText_en,
       supportWhatsapp: data.supportWhatsapp ?? DEFAULT_PLATFORM_LANDING.supportWhatsapp,
       footerText: data.footerText || DEFAULT_PLATFORM_LANDING.footerText,
       footerText_en: data.footerText_en || DEFAULT_PLATFORM_LANDING.footerText_en,
@@ -1372,6 +1497,7 @@ export async function savePlatformLandingSettings(
         title_en: (f.title_en || '').trim().slice(0, 120),
         description: (f.description || '').trim().slice(0, 300),
         description_en: (f.description_en || '').trim().slice(0, 300),
+        isVisible: f.isVisible !== false,
       }))
       .filter((f) => f.title.length > 0);
 
@@ -1395,10 +1521,20 @@ export async function savePlatformLandingSettings(
           .filter(Boolean)
           .slice(0, 10),
         highlighted: Boolean(p.highlighted),
+        isVisible: p.isVisible !== false,
       }))
       .filter((p) => p.name.length > 0);
 
+    const cleanBullets = (arr?: string[]) =>
+      (arr || [])
+        .map((line) => String(line || '').trim().slice(0, 240))
+        .filter(Boolean)
+        .slice(0, 8);
+
     await setDoc(doc(db, 'platform_settings', 'landing'), {
+      sections: normalizeLandingSections(settings.sections),
+      heroBadge: (settings.heroBadge || '').trim().slice(0, 120),
+      heroBadge_en: (settings.heroBadge_en || '').trim().slice(0, 120),
       heroTitle:
         settings.heroTitle.trim().slice(0, 200) || DEFAULT_PLATFORM_LANDING.heroTitle,
       heroTitle_en: (settings.heroTitle_en || '').trim().slice(0, 200),
@@ -1408,8 +1544,48 @@ export async function savePlatformLandingSettings(
       ctaButtonText:
         settings.ctaButtonText.trim().slice(0, 80) || DEFAULT_PLATFORM_LANDING.ctaButtonText,
       ctaButtonText_en: (settings.ctaButtonText_en || '').trim().slice(0, 80),
+      heroSecondaryBtnText: (settings.heroSecondaryBtnText || '').trim().slice(0, 80),
+      heroSecondaryBtnText_en: (settings.heroSecondaryBtnText_en || '').trim().slice(0, 80),
+      themesTitle: (settings.themesTitle || '').trim().slice(0, 160),
+      themesTitle_en: (settings.themesTitle_en || '').trim().slice(0, 160),
+      themesSubtitle: (settings.themesSubtitle || '').trim().slice(0, 400),
+      themesSubtitle_en: (settings.themesSubtitle_en || '').trim().slice(0, 400),
+      featuresTitle: (settings.featuresTitle || '').trim().slice(0, 160),
+      featuresTitle_en: (settings.featuresTitle_en || '').trim().slice(0, 160),
+      featuresSubtitle: (settings.featuresSubtitle || '').trim().slice(0, 400),
+      featuresSubtitle_en: (settings.featuresSubtitle_en || '').trim().slice(0, 400),
       features: cleanFeatures,
+      operationsBadge: (settings.operationsBadge || '').trim().slice(0, 120),
+      operationsBadge_en: (settings.operationsBadge_en || '').trim().slice(0, 120),
+      operationsTitle: (settings.operationsTitle || '').trim().slice(0, 200),
+      operationsTitle_en: (settings.operationsTitle_en || '').trim().slice(0, 200),
+      operationsSubtitle: (settings.operationsSubtitle || '').trim().slice(0, 500),
+      operationsSubtitle_en: (settings.operationsSubtitle_en || '').trim().slice(0, 500),
+      operationsBullets: cleanBullets(settings.operationsBullets),
+      operationsBullets_en: cleanBullets(settings.operationsBullets_en),
+      loyaltyBadge: (settings.loyaltyBadge || '').trim().slice(0, 120),
+      loyaltyBadge_en: (settings.loyaltyBadge_en || '').trim().slice(0, 120),
+      loyaltyTitle: (settings.loyaltyTitle || '').trim().slice(0, 200),
+      loyaltyTitle_en: (settings.loyaltyTitle_en || '').trim().slice(0, 200),
+      loyaltySubtitle: (settings.loyaltySubtitle || '').trim().slice(0, 500),
+      loyaltySubtitle_en: (settings.loyaltySubtitle_en || '').trim().slice(0, 500),
+      loyaltyBullets: cleanBullets(settings.loyaltyBullets),
+      loyaltyBullets_en: cleanBullets(settings.loyaltyBullets_en),
+      pricingTitle: (settings.pricingTitle || '').trim().slice(0, 160),
+      pricingTitle_en: (settings.pricingTitle_en || '').trim().slice(0, 160),
+      pricingSubtitle: (settings.pricingSubtitle || '').trim().slice(0, 400),
+      pricingSubtitle_en: (settings.pricingSubtitle_en || '').trim().slice(0, 400),
+      pricingCtaText: (settings.pricingCtaText || '').trim().slice(0, 80),
+      pricingCtaText_en: (settings.pricingCtaText_en || '').trim().slice(0, 80),
       pricingPlans: cleanPlans,
+      tygosBadge: (settings.tygosBadge || '').trim().slice(0, 120),
+      tygosBadge_en: (settings.tygosBadge_en || '').trim().slice(0, 120),
+      tygosTitle: (settings.tygosTitle || '').trim().slice(0, 200),
+      tygosTitle_en: (settings.tygosTitle_en || '').trim().slice(0, 200),
+      tygosSubtitle: (settings.tygosSubtitle || '').trim().slice(0, 500),
+      tygosSubtitle_en: (settings.tygosSubtitle_en || '').trim().slice(0, 500),
+      tygosCtaText: (settings.tygosCtaText || '').trim().slice(0, 80),
+      tygosCtaText_en: (settings.tygosCtaText_en || '').trim().slice(0, 80),
       supportWhatsapp: settings.supportWhatsapp.trim().slice(0, 32),
       footerText:
         settings.footerText.trim().slice(0, 200) || DEFAULT_PLATFORM_LANDING.footerText,
@@ -1423,6 +1599,191 @@ export async function savePlatformLandingSettings(
     });
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+// ============================================================
+// Platform SaaS Promo Codes (Super Admin CRUD + Owner Redemption)
+// ============================================================
+
+export function sanitizePlatformPromoCode(raw: string): string {
+  return (raw || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9_-]/g, '')
+    .slice(0, 32);
+}
+
+export function formatPlatformPromoSummary(
+  promo: Pick<PlatformPromoCode, 'discountType' | 'discountValue' | 'description' | 'description_en'>
+): { summary: string; summary_en: string } {
+  const val = Math.max(0, Number(promo.discountValue) || 0);
+  const defaultAr =
+    promo.discountType === 'percent'
+      ? `خصم ${val}% على اشتراك المنصة`
+      : promo.discountType === 'fixed'
+        ? `خصم ${val} ج.م على باقة الاشتراك`
+        : val > 1
+          ? `${val} شهور اشتراك مجانية هدية`
+          : 'شهر اشتراك مجاني هدية من المنصة';
+  const defaultEn =
+    promo.discountType === 'percent'
+      ? `${val}% off platform subscription`
+      : promo.discountType === 'fixed'
+        ? `${val} EGP off subscription`
+        : val > 1
+          ? `${val} free subscription months gift`
+          : '1 free subscription month gift';
+
+  return {
+    summary: (promo.description?.trim() || defaultAr).slice(0, 160),
+    summary_en: (promo.description_en?.trim() || defaultEn).slice(0, 160),
+  };
+}
+
+export async function fetchPlatformPromoCodes(): Promise<PlatformPromoCode[]> {
+  const path = 'platform_promo_codes';
+  try {
+    const snap = await getDocs(collection(db, 'platform_promo_codes'));
+    return snap.docs
+      .map((d) => ({ ...(d.data() as PlatformPromoCode), id: d.id }))
+      .sort((a, b) => getMillis(b.createdAt) - getMillis(a.createdAt));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, path);
+  }
+}
+
+export async function savePlatformPromoCode(input: {
+  isEditing?: boolean;
+  code: string;
+  discountType: PlatformPromoDiscountType;
+  discountValue: number;
+  description?: string;
+  description_en?: string;
+  isActive: boolean;
+}): Promise<PlatformPromoCode> {
+  const cleanCode = sanitizePlatformPromoCode(input.code);
+  if (cleanCode.length < 2) {
+    throw new Error('يجب أن يتكون كود الخصم من حرفين أو أرقام إنجليزية على الأقل (مثال: BDAY50)');
+  }
+  const safeType: PlatformPromoDiscountType =
+    input.discountType === 'fixed' || input.discountType === 'free_month'
+      ? input.discountType
+      : 'percent';
+  const maxVal = safeType === 'percent' ? 100 : safeType === 'free_month' ? 24 : 100000;
+  const safeVal = Math.max(
+    0,
+    Math.min(maxVal, safeType === 'free_month' ? Math.max(1, Math.round(Number(input.discountValue) || 1)) : Number(input.discountValue) || 0)
+  );
+  const cleanDesc = (input.description || '').trim().slice(0, 200);
+  const cleanDescEn = (input.description_en || '').trim().slice(0, 200);
+  const path = `platform_promo_codes/${cleanCode}`;
+
+  try {
+    const docRef = doc(db, 'platform_promo_codes', cleanCode);
+    const existingSnap = await getDoc(docRef);
+
+    if (!existingSnap.exists()) {
+      await setDoc(docRef, {
+        id: cleanCode,
+        code: cleanCode,
+        discountType: safeType,
+        discountValue: safeVal,
+        description: cleanDesc,
+        description_en: cleanDescEn,
+        isActive: Boolean(input.isActive),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    } else {
+      await updateDoc(docRef, {
+        discountType: safeType,
+        discountValue: safeVal,
+        description: cleanDesc,
+        description_en: cleanDescEn,
+        isActive: Boolean(input.isActive),
+        updatedAt: serverTimestamp(),
+      });
+    }
+
+    const freshSnap = await getDoc(docRef);
+    return { ...(freshSnap.data() as PlatformPromoCode), id: cleanCode };
+  } catch (error) {
+    handleFirestoreError(error, input.isEditing ? OperationType.UPDATE : OperationType.CREATE, path);
+  }
+}
+
+export async function togglePlatformPromoCodeStatus(
+  promoId: string,
+  isActive: boolean
+): Promise<void> {
+  const cleanCode = sanitizePlatformPromoCode(promoId);
+  if (cleanCode.length < 2) return;
+  const path = `platform_promo_codes/${cleanCode}`;
+  try {
+    await updateDoc(doc(db, 'platform_promo_codes', cleanCode), {
+      isActive: Boolean(isActive),
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function deletePlatformPromoCode(promoId: string): Promise<void> {
+  const cleanCode = sanitizePlatformPromoCode(promoId);
+  if (cleanCode.length < 2) return;
+  const path = `platform_promo_codes/${cleanCode}`;
+  try {
+    await deleteDoc(doc(db, 'platform_promo_codes', cleanCode));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
+export async function redeemPlatformPromoCodeForOwner(
+  restaurantId: string,
+  rawCode: string,
+  lang: 'ar' | 'en' = 'ar'
+): Promise<{ code: string; summary: string; summary_en: string }> {
+  const cleanCode = sanitizePlatformPromoCode(rawCode);
+  if (cleanCode.length < 2) {
+    throw new Error(
+      lang === 'en'
+        ? 'Please enter a valid promo code (e.g. BDAY50).'
+        : 'يرجى إدخال كود خصم صحيح باللغة الإنجليزية (مثال: BDAY50).'
+    );
+  }
+
+  const promoSnap = await getDoc(doc(db, 'platform_promo_codes', cleanCode));
+  if (!promoSnap.exists()) {
+    throw new Error(
+      lang === 'en'
+        ? 'This promo code does not exist.'
+        : 'كود الخصم هذا غير موجود. تأكد من كتابته بشكل صحيح.'
+    );
+  }
+  const promo = promoSnap.data() as PlatformPromoCode;
+  if (!promo.isActive) {
+    throw new Error(
+      lang === 'en'
+        ? 'This promo code is currently inactive or expired.'
+        : 'عذراً، هذا الكود متوقف حالياً أو منتهي الصلاحية.'
+    );
+  }
+
+  const { summary, summary_en } = formatPlatformPromoSummary(promo);
+  const restPath = `restaurants/${restaurantId}`;
+  try {
+    await updateDoc(doc(db, 'restaurants', restaurantId), {
+      appliedPlatformPromoCode: cleanCode,
+      appliedPlatformPromoSummary: summary,
+      appliedPlatformPromoSummary_en: summary_en,
+      updatedAt: serverTimestamp(),
+    });
+    return { code: cleanCode, summary, summary_en };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, restPath);
   }
 }
 

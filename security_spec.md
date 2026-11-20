@@ -10,6 +10,7 @@
 7. **Service Call Isolation**: `/service_calls/{callId}` allows public creation only with `status == 'pending'` against an existing restaurant (`ownerId` matched), while `get`, `list`, `update`, and `delete` are strictly isolated to the restaurant owner or Super Admin with terminal locking at `resolved`.
 8. **Halls & Station Routing Integrity**: `/halls/{hallId}` enforces bounded `tableCount` (`1..200`) and strict owner/Super Admin write isolation (`ownerId == request.auth.uid`). Category and MenuItem `station` values are constrained to `['kitchen', 'bar', 'pastry']`.
 9. **Customer Loyalty PII Isolation & Discount Integrity**: `/restaurants/{restaurantId}/customers/{customerPhone}` restricts `list` queries strictly to the restaurant owner or Super Admin (preventing scraping), enforces numeric `customerPhone` doc IDs, binds `totalOrders` increments to `<= +1` per order, and locks `firstOrderDiscountUsed` monotonically (`false -> true` only).
+10. **Platform SaaS Promo Codes & Owner Birthday Validation**: `/platform_promo_codes/{promoId}` restricts `list`, `create`, `update`, and `delete` strictly to the Super Admin (`tygosibs@gmail.com`). Verified owners can only `get` a specific uppercase promo code ID and cannot redeem an inactive or non-existent code onto `/restaurants/{restaurantId}` (`exists` + `isActive == true` check enforced in Firestore Rules). `ownerBirthday` is constrained to strict `YYYY-MM-DD` or empty string.
 
 ## 2. The "Dirty Dozen" Attack Payloads
 1. **DD-01**: Creating a restaurant with `ownerId != request.auth.uid` -> `PERMISSION_DENIED`.
@@ -29,4 +30,6 @@
 15. **DD-15**: Creating or updating a `halls` document under another restaurant's `restaurantId` or `tableCount > 200` -> `PERMISSION_DENIED`.
 16. **DD-16**: Reverting `firstOrderDiscountUsed` from `true` to `false` or jumping `totalOrders` by `> 1` on `/restaurants/{restaurantId}/customers/{customerPhone}` -> `PERMISSION_DENIED`.
 17. **DD-17**: Setting `loyaltyConfig.firstOrderDiscountPercent > 50`, `punchCardDiscountPercent > 50`, or injecting an unknown shadow key into `loyaltyConfig` on `/restaurants/{restaurantId}` -> `PERMISSION_DENIED`.
+18. **DD-18**: Non-SuperAdmin creating/listing `/platform_promo_codes/{promoId}` or redeeming an inactive/non-existent code in `/restaurants/{restaurantId}` -> `PERMISSION_DENIED`.
+19. **DD-19**: Writing malformed `ownerBirthday` (non-`YYYY-MM-DD`) or shadow key into `platform_settings/landing` -> `PERMISSION_DENIED`.
 

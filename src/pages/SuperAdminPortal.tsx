@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   Code2,
   Copy,
+  Gift,
   Globe,
   LayoutTemplate,
   Loader2,
@@ -21,6 +22,7 @@ import { LanguageToggleButton } from '../components/LanguageToggleButton';
 import { ConfirmSignOutModal } from '../components/ConfirmSignOutModal';
 import { OwnerAuthCard } from '../components/auth/OwnerAuthCard';
 import { LandingCmsTab } from '../components/superadmin/LandingCmsTab';
+import { PlatformPromosTab } from '../components/superadmin/PlatformPromosTab';
 import { TenantsManagerTab } from '../components/superadmin/TenantsManagerTab';
 import { ThemeInjectorTab } from '../components/superadmin/ThemeInjectorTab';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -30,7 +32,7 @@ interface SuperAdminPortalProps {
   onNavigate: (path: string) => void;
 }
 
-type SuperAdminTab = 'tenants' | 'themes' | 'landing' | 'domain';
+type SuperAdminTab = 'tenants' | 'promos' | 'themes' | 'landing' | 'domain';
 
 export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
   const { lang, t, dir, isRtl } = useLanguage();
@@ -182,6 +184,11 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
 
   const navItems: { id: SuperAdminTab; label: string; icon: typeof Building2 }[] = [
     { id: 'tenants', label: t.superAdmin.tabs.tenants, icon: Building2 },
+    {
+      id: 'promos',
+      label: isEn ? 'SaaS Promo Codes' : 'أكواد الخصم والهدايا',
+      icon: Gift,
+    },
     { id: 'themes', label: t.superAdmin.tabs.themeInjector, icon: Code2 },
     { id: 'landing', label: t.superAdmin.tabs.cms, icon: LayoutTemplate },
     {
@@ -335,6 +342,7 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
           {activeTab === 'tenants' && (
             <TenantsManagerTab onOpenPublicMenu={(path) => onNavigate(path)} />
           )}
+          {activeTab === 'promos' && <PlatformPromosTab />}
           {activeTab === 'themes' && <ThemeInjectorTab />}
           {activeTab === 'landing' && <LandingCmsTab />}
           {activeTab === 'domain' && (

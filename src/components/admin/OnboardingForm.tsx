@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
+  Cake,
   Check,
   Code2,
   Eye,
@@ -50,6 +51,7 @@ export function OnboardingForm({ ownerId, ownerDisplayName, onCreated }: Onboard
   const [tagline, setTagline] = useState('');
   const [taglineEn, setTaglineEn] = useState('');
   const [whatsappNumber, setWhatsappNumber] = useState('');
+  const [ownerBirthday, setOwnerBirthday] = useState('');
   const [currency, setCurrency] = useState('ج.م');
   const [taxRate, setTaxRate] = useState(14);
   const [serviceCharge, setServiceCharge] = useState(12);
@@ -180,6 +182,7 @@ export function OnboardingForm({ ownerId, ownerDisplayName, onCreated }: Onboard
         tagline,
         tagline_en: taglineEn,
         whatsappNumber,
+        ownerBirthday,
         logoUrl,
         activeTheme,
         primaryColor,
@@ -486,6 +489,25 @@ export function OnboardingForm({ ownerId, ownerDisplayName, onCreated }: Onboard
                   className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm font-mono-num text-left focus:outline-none focus:border-zinc-500"
                 />
               </div>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-amber-50/60 border border-amber-200/80 space-y-1.5">
+              <label className="flex items-center gap-1.5 text-xs font-extrabold text-amber-950">
+                <Cake className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>
+                  {isEn
+                    ? 'Your Birthday (for exclusive platform gifts & discounts 🎂)'
+                    : 'تاريخ ميلادك (للحصول على هدايا وخصومات حصرية من المنصة 🎂)'}
+                </span>
+              </label>
+              <input
+                type="date"
+                dir="ltr"
+                value={ownerBirthday}
+                onChange={(e) => setOwnerBirthday(e.target.value)}
+                max={new Date().toISOString().split('T')[0]}
+                className="w-full sm:w-64 px-3.5 py-2 rounded-xl border border-amber-200 bg-white text-sm font-mono-num focus:outline-none focus:border-amber-500"
+              />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

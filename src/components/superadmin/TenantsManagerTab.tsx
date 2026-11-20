@@ -1,15 +1,19 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
+  Cake,
   Check,
   CheckCircle2,
   ExternalLink,
+  Gift,
   Languages,
   Loader2,
   Mail,
+  MessageCircle,
   Palette,
   PauseCircle,
   Phone,
+  PhoneCall,
   PlayCircle,
   RefreshCw,
   Save,
@@ -24,12 +28,19 @@ import {
 import { useLanguage } from '../../contexts/LanguageContext';
 import { getThemeMeta } from '../../data/themes';
 import {
+  buildOwnerGiftWhatsappUrl,
+  formatWhatsappInternationalPhone,
+  getDaysUntilIsoBirthday,
+} from '../../lib/customerLoyaltyUtils';
+import {
   deleteRestaurantAccountCompletely,
   fetchAllTenantsForSuperAdmin,
+  fetchPlatformPromoCodes,
+  formatPlatformPromoSummary,
   toggleRestaurantSuspension,
   updateRestaurantBilingualInfoForSuperAdmin,
 } from '../../lib/firestoreService';
-import { Restaurant, UserProfile } from '../../types/menu';
+import { PlatformPromoCode, Restaurant, UserProfile } from '../../types/menu';
 import { MenuBuilderTab } from '../admin/MenuBuilderTab';
 import { OffersPromosTab } from '../admin/OffersPromosTab';
 import { ThemeCustomizerTab } from '../admin/ThemeCustomizerTab';
@@ -42,8 +53,11 @@ type StatusFilter = 'all' | 'active' | 'suspended';
 
 export function TenantsManagerTab({ onOpenPublicMenu }: TenantsManagerTabProps) {
   const { t, dir, lang, loc } = useLanguage();
+  const isEn = lang === 'en';
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [usersByUid, setUsersByUid] = useState<Record<string, UserProfile>>({});
+  const [platformPromos, setPlatformPromos] = useState<PlatformPromoCode[]>([]);
+  const [selectedGiftPromoCode, setSelectedGiftPromoCode] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -67,9 +81,15 @@ export function TenantsManagerTab({ onOpenPublicMenu }: TenantsManagerTabProps) 
     setLoading(true);
     setError(null);
     try {
-      const res = await fetchAllTenantsForSuperAdmin();
+      const [res, promos] = await Promise.all([
+        fetchAllTenantsForSuperAdmin(),
+        fetchPlatformPromoCodes().catch(() => [] as PlatformPromoCode[]),
+      ]);
       setRestaurants(res.restaurants);
       setUsersByUid(res.usersByUid);
+      setPlatformPromos(promos);
+      const firstActive = promos.find((p) => p.isActive);
+      setSelectedGiftPromoCode((prev) => prev || firstActive?.code || '');
     } catch (err) {
       setError(err instanceof Error ? err.message : t.auth.errGeneric);
     } finally {
@@ -102,6 +122,33 @@ export function TenantsManagerTab({ onOpenPublicMenu }: TenantsManagerTabProps) 
     const active = total - suspended;
     return { total, active, suspended };
   }, [restaurants]);
+
+  const activePlatformPromos = useMemo(
+    () => platformPromos.filter((p) => p.isActive),
+    [platformPromos]
+  );
+
+  const selectedGiftPromoObj = useMemo(
+    () => activePlatformPromos.find((p) => p.code === selectedGiftPromoCode) || null,
+    [activePlatformPromos, selectedGiftPromoCode]
+  );
+
+  const selectedPromoSummary = useMemo(() => {
+    if (!selectedGiftPromoObj) return '';
+    const { summary, summary_en } = formatPlatformPromoSummary(selectedGiftPromoObj);
+    return isEn ? summary_en : summary;
+  }, [selectedGiftPromoObj, isEn]);
+
+  const upcomingOwnerBirthdays = useMemo(() => {
+    return restaurants
+      .flatMap((rest) => {
+        const daysUntil = getDaysUntilIsoBirthday(rest.ownerBirthday);
+        if (daysUntil === null) return [];
+        const owner: UserProfile | undefined = usersByUid[rest.ownerId];
+        return [{ restaurant: rest, owner, daysUntil }];
+      })
+      .sort((a, b) => a.daysUntil - b.daysUntil);
+  }, [restaurants, usersByUid]);
 
   const filteredRestaurants = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -244,6 +291,138 @@ export function TenantsManagerTab({ onOpenPublicMenu }: TenantsManagerTabProps) 
           </div>
         </div>
       </div>
+
+      {/* Proactive 3-Day Restaurant Owner Birthday Radar */}
+      {!loading && (
+        <section className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50/90 via-white to-orange-50/40 p-5 space-y-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <span className="w-10 h-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
+                <Cake className="w-5 h-5" />
+              </span>
+              <div>
+                <h2 className="text-sm sm:text-base font-extrabold text-zinc-950">
+                  {isEn
+                    ? `🎂 Upcoming Restaurant Owner Birthdays (Next 3 Days · ${upcomingOwnerBirthdays.length})`
+                    : `🎂 أعياد ميلاد أصحاب المطاعم خلال الـ 3 أيام القادمة (${upcomingOwnerBirthdays.length})`}
+                </h2>
+                <p className="text-xs text-zinc-600 mt-0.5">
+                  {isEn
+                    ? 'Celebrate partner birthdays with 1-click WhatsApp gift promo codes or a direct appreciation call.'
+                    : 'أرسل تهنئة وكود خصم هدية عبر واتساب أو تواصل هاتفياً مباشرة مع شركائك أصحاب المطاعم.'}
+                </p>
+              </div>
+            </div>
+
+            {activePlatformPromos.length > 0 && (
+              <div className="flex items-center gap-2 shrink-0">
+                <label className="text-[11px] font-bold text-amber-950 whitespace-nowrap">
+                  {isEn ? 'Gift Code:' : 'كود الهدية المرفق:'}
+                </label>
+                <select
+                  value={selectedGiftPromoCode}
+                  onChange={(e) => setSelectedGiftPromoCode(e.target.value)}
+                  className="px-3 py-2 rounded-xl border border-amber-300 bg-white text-xs font-mono-num font-bold text-zinc-900 focus:outline-none"
+                >
+                  <option value="">{isEn ? 'None (Greeting Only)' : 'بدون كود (تهنئة فقط)'}</option>
+                  {activePlatformPromos.map((p) => (
+                    <option key={p.id} value={p.code}>
+                      {p.code}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+
+          {upcomingOwnerBirthdays.length === 0 ? (
+            <p className="text-xs text-zinc-600 bg-white/80 border border-amber-100 rounded-xl p-3.5">
+              {isEn
+                ? 'No restaurant owner birthdays fall within the next 3 days.'
+                : 'لا توجد أعياد ميلاد مسجلة لأصحاب المطاعم خلال الـ 3 أيام القادمة حالياً.'}
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {upcomingOwnerBirthdays.map(({ restaurant: bRest, owner: bOwner, daysUntil }) => {
+                const ownerDisplay = bOwner?.displayName || (isEn ? 'Partner' : 'شريك النجاح');
+                const restDisplay = loc(bRest.name, bRest.name_en);
+                const intlPhone = formatWhatsappInternationalPhone(bRest.whatsappNumber);
+                const telHref = intlPhone ? `tel:+${intlPhone}` : `tel:${bRest.whatsappNumber}`;
+                const waGiftHref = buildOwnerGiftWhatsappUrl({
+                  rawPhone: bRest.whatsappNumber,
+                  ownerName: ownerDisplay,
+                  restaurantName: restDisplay,
+                  daysUntil,
+                  promoCode: selectedGiftPromoCode,
+                  promoSummary: selectedPromoSummary,
+                  lang,
+                });
+                const countdownBadge = isEn
+                  ? daysUntil === 0
+                    ? 'Today 🎂'
+                    : daysUntil === 1
+                      ? 'Tomorrow'
+                      : `In ${daysUntil} days`
+                  : daysUntil === 0
+                    ? 'اليوم عيد ميلاده! 🎂'
+                    : daysUntil === 1
+                      ? 'باقي يوم واحد 🎈'
+                      : daysUntil === 2
+                        ? 'باقي يومين 🎈'
+                        : `باقي ${daysUntil} أيام 🎈`;
+
+                return (
+                  <div
+                    key={bRest.id}
+                    className="bg-white border border-amber-200 rounded-2xl p-4 flex flex-col justify-between gap-3 shadow-xs"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-extrabold text-zinc-950 truncate">
+                          {ownerDisplay} · <span className="text-amber-800">{restDisplay}</span>
+                        </p>
+                        <p className="text-[11px] font-mono-num text-zinc-500 mt-0.5" dir="ltr">
+                          {bRest.ownerBirthday} · {bRest.whatsappNumber}
+                        </p>
+                      </div>
+                      <span className="px-2.5 py-1 rounded-lg bg-amber-100 text-amber-900 text-[11px] font-extrabold shrink-0">
+                        {countdownBadge}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-zinc-100">
+                      <a
+                        href={waGiftHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-1 min-h-[38px] px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold flex items-center justify-center gap-1.5 transition-colors"
+                      >
+                        <Gift className="w-3.5 h-3.5 shrink-0" />
+                        <span>
+                          {selectedGiftPromoCode
+                            ? isEn
+                              ? `Send Birthday + ${selectedGiftPromoCode}`
+                              : `أرسل تهنئة وكود ${selectedGiftPromoCode} 🎁`
+                            : isEn
+                              ? 'Send Birthday Greeting'
+                              : 'أرسل تهنئة عيد الميلاد 💬'}
+                        </span>
+                      </a>
+                      <a
+                        href={telHref}
+                        className="min-h-[38px] px-3 py-2 rounded-xl border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-zinc-900 text-xs font-bold flex items-center gap-1.5"
+                      >
+                        <PhoneCall className="w-3.5 h-3.5 text-zinc-700" />
+                        <span>{isEn ? 'Call' : 'اتصال'}</span>
+                      </a>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      )}
 
       {/* Search & Filter Toolbar */}
       <div className="bg-white border border-zinc-200 rounded-2xl p-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
@@ -393,6 +572,73 @@ export function TenantsManagerTab({ onOpenPublicMenu }: TenantsManagerTabProps) 
                         {lang === 'en' ? themeMeta.englishName : themeMeta.name}
                       </span>
                     </div>
+
+                    <div className="flex items-center gap-2 text-zinc-700 min-w-0">
+                      <Cake className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                      <span className="truncate font-mono-num" dir="ltr">
+                        {rest.ownerBirthday || (isEn ? 'No birthday' : 'غير مسجل')}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 text-zinc-700 min-w-0">
+                      <Gift className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      <span className="truncate">
+                        {rest.appliedPlatformPromoCode ? (
+                          <span className="font-mono-num font-bold text-emerald-700" dir="ltr">
+                            {rest.appliedPlatformPromoCode}
+                          </span>
+                        ) : (
+                          <span className="text-zinc-400">
+                            {isEn ? 'No SaaS promo' : 'بدون كود خصم منصة'}
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Direct Contact & Gift WhatsApp Shortcuts */}
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    {(() => {
+                      const intlDigits = formatWhatsappInternationalPhone(rest.whatsappNumber);
+                      const telHref = intlDigits ? `tel:+${intlDigits}` : `tel:${rest.whatsappNumber}`;
+                      const waDirectHref = buildOwnerGiftWhatsappUrl({
+                        rawPhone: rest.whatsappNumber,
+                        ownerName: owner?.displayName || (isEn ? 'Partner' : 'شريكنا العزيز'),
+                        restaurantName: displayRestName,
+                        daysUntil: getDaysUntilIsoBirthday(rest.ownerBirthday),
+                        promoCode: selectedGiftPromoCode,
+                        promoSummary: selectedPromoSummary,
+                        lang,
+                      });
+                      return (
+                        <>
+                          <a
+                            href={telHref}
+                            className="px-3 py-1.5 rounded-xl border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-zinc-800 text-[11px] font-bold flex items-center gap-1.5"
+                          >
+                            <PhoneCall className="w-3.5 h-3.5 text-zinc-700" />
+                            <span>{isEn ? 'Direct Call' : 'اتصال مباشر'}</span>
+                          </a>
+                          <a
+                            href={waDirectHref}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[11px] font-extrabold flex items-center gap-1.5"
+                          >
+                            <MessageCircle className="w-3.5 h-3.5 text-emerald-700" />
+                            <span>
+                              {selectedGiftPromoCode
+                                ? isEn
+                                  ? `WhatsApp Gift (${selectedGiftPromoCode})`
+                                  : `واتساب هدية (${selectedGiftPromoCode})`
+                                : isEn
+                                  ? 'WhatsApp Discounts & Offers'
+                                  : 'واتساب الهدايا والخصومات 🎁'}
+                            </span>
+                          </a>
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
 

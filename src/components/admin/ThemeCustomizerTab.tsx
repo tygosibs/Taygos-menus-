@@ -1,10 +1,12 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Cake,
   Check,
   Code2,
   Columns,
   ExternalLink,
   Eye,
+  Gift,
   Loader2,
   Monitor,
   Moon,
@@ -14,6 +16,7 @@ import {
   Smartphone,
   Sparkles,
   Sun,
+  Tag,
   Upload,
   Wand2,
 } from 'lucide-react';
@@ -25,6 +28,8 @@ import { CONTRAST_TYPOGRAPHY_PRESETS } from '../../lib/contrastUtils';
 import {
   fetchActiveCustomThemes,
   isSlugAvailable,
+  redeemPlatformPromoCodeForOwner,
+  sanitizePlatformPromoCode,
   sanitizeSlug,
   subscribeCategories,
   subscribeMenuItems,
@@ -100,6 +105,7 @@ export function ThemeCustomizerTab({
   const [tagline, setTagline] = useState(restaurant.tagline || '');
   const [taglineEn, setTaglineEn] = useState(restaurant.tagline_en || '');
   const [whatsappNumber, setWhatsappNumber] = useState(restaurant.whatsappNumber);
+  const [ownerBirthday, setOwnerBirthday] = useState(restaurant.ownerBirthday || '');
   const [currency, setCurrency] = useState(restaurant.currency);
   const [logoUrl, setLogoUrl] = useState(restaurant.logoUrl || '');
   const [shareTitle, setShareTitle] = useState(restaurant.shareTitle || '');
@@ -113,6 +119,14 @@ export function ThemeCustomizerTab({
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsMsg, setSettingsMsg] = useState<string | null>(null);
   const [settingsError, setSettingsError] = useState<string | null>(null);
+
+  // Platform SaaS Promo Redemption
+  const [platformPromoInput, setPlatformPromoInput] = useState(
+    restaurant.appliedPlatformPromoCode || ''
+  );
+  const [redeemingPromo, setRedeemingPromo] = useState(false);
+  const [promoMsg, setPromoMsg] = useState<string | null>(null);
+  const [promoError, setPromoError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchActiveCustomThemes().then(setCustomThemes);
@@ -145,6 +159,8 @@ export function ThemeCustomizerTab({
     setTagline(restaurant.tagline || '');
     setTaglineEn(restaurant.tagline_en || '');
     setWhatsappNumber(restaurant.whatsappNumber);
+    setOwnerBirthday(restaurant.ownerBirthday || '');
+    setPlatformPromoInput(restaurant.appliedPlatformPromoCode || '');
     setCurrency(restaurant.currency);
     setLogoUrl(restaurant.logoUrl || '');
     setShareTitle(restaurant.shareTitle || '');
@@ -156,6 +172,8 @@ export function ThemeCustomizerTab({
     setThemeErrorMsg(null);
     setSettingsMsg(null);
     setSettingsError(null);
+    setPromoMsg(null);
+    setPromoError(null);
   }, [
     restaurant.id,
     restaurant.activeTheme,
@@ -174,6 +192,8 @@ export function ThemeCustomizerTab({
     restaurant.tagline,
     restaurant.tagline_en,
     restaurant.whatsappNumber,
+    restaurant.ownerBirthday,
+    restaurant.appliedPlatformPromoCode,
     restaurant.currency,
     restaurant.logoUrl,
     restaurant.shareTitle,
@@ -424,6 +444,7 @@ export function ThemeCustomizerTab({
         tagline,
         tagline_en: taglineEn,
         whatsappNumber,
+        ownerBirthday,
         logoUrl,
         shareTitle,
         shareTitle_en: shareTitleEn,
@@ -451,6 +472,42 @@ export function ThemeCustomizerTab({
       );
     } finally {
       setSavingSettings(false);
+    }
+  };
+
+  const handleRedeemPlatformPromo = async (e: FormEvent) => {
+    e.preventDefault();
+    setPromoError(null);
+    setPromoMsg(null);
+    setRedeemingPromo(true);
+    try {
+      const res = await redeemPlatformPromoCodeForOwner(
+        restaurant.id,
+        platformPromoInput,
+        lang
+      );
+      onRestaurantUpdated({
+        ...restaurant,
+        appliedPlatformPromoCode: res.code,
+        appliedPlatformPromoSummary: res.summary,
+        appliedPlatformPromoSummary_en: res.summary_en,
+      });
+      setPlatformPromoInput(res.code);
+      setPromoMsg(
+        isEn
+          ? `Promo code ${res.code} activated: ${res.summary_en}`
+          : `تم تفعيل كود الخصم (${res.code}) بنجاح: ${res.summary}`
+      );
+    } catch (err) {
+      setPromoError(
+        err instanceof Error
+          ? err.message
+          : isEn
+            ? 'Could not apply promo code'
+            : 'تعذر تفعيل كود الخصم'
+      );
+    } finally {
+      setRedeemingPromo(false);
     }
   };
 
@@ -1073,6 +1130,71 @@ export function ThemeCustomizerTab({
         </div>
       </section>
 
+      {/* Platform SaaS Promo Code Redemption Card */}
+      <form
+        onSubmit={handleRedeemPlatformPromo}
+        className="bg-white border border-amber-200 rounded-2xl p-4 sm:p-5 space-y-3 shadow-xs"
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <span className="w-10 h-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
+              <Gift className="w-5 h-5" />
+            </span>
+            <div>
+              <h3 className="text-sm font-extrabold text-zinc-950">
+                {isEn
+                  ? 'Platform Gift & Subscription Promo Code'
+                  : 'تفعيل كود خصم أو هدية اشتراك المنصة 🎁'}
+              </h3>
+              <p className="text-xs text-zinc-600 mt-0.5">
+                {isEn
+                  ? 'Have a Sufra QR birthday gift or discount code (e.g. BDAY50)? Apply it directly to your account.'
+                  : 'إذا وصلك كود خصم أو هدية عيد ميلاد من إدارة منصة سُفرة (مثل BDAY50)، أدخله هنا لتفعيله على اشتراكك فوراً.'}
+              </p>
+            </div>
+          </div>
+
+          {restaurant.appliedPlatformPromoCode && (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-extrabold shrink-0">
+              <Tag className="w-3.5 h-3.5" />
+              <span className="font-mono-num" dir="ltr">
+                {restaurant.appliedPlatformPromoCode}
+              </span>
+              <span>
+                · {loc(restaurant.appliedPlatformPromoSummary || '', restaurant.appliedPlatformPromoSummary_en)}
+              </span>
+            </span>
+          )}
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+          <input
+            type="text"
+            dir="ltr"
+            maxLength={32}
+            value={platformPromoInput}
+            onChange={(e) => setPlatformPromoInput(sanitizePlatformPromoCode(e.target.value))}
+            placeholder="BDAY50"
+            className="flex-1 sm:max-w-xs px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm font-mono-num font-bold uppercase focus:outline-none focus:border-zinc-900"
+          />
+          <button
+            type="submit"
+            disabled={redeemingPromo || platformPromoInput.trim().length < 2}
+            className="min-h-[42px] px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+          >
+            {redeemingPromo ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Check className="w-4 h-4" />
+            )}
+            <span>{isEn ? 'Apply Platform Code' : 'تفعيل كود المنصة'}</span>
+          </button>
+        </div>
+
+        {promoMsg && <p className="text-xs font-bold text-emerald-700">{promoMsg}</p>}
+        {promoError && <p className="text-xs font-bold text-rose-600">{promoError}</p>}
+      </form>
+
       {/* 3. Bilingual Store Settings Form */}
       <form
         onSubmit={handleSaveSettings}
@@ -1225,6 +1347,25 @@ export function ThemeCustomizerTab({
               />
             </div>
           </div>
+        </div>
+
+        <div className="p-3.5 rounded-xl bg-amber-50/60 border border-amber-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <label className="flex items-center gap-2 text-xs font-extrabold text-amber-950">
+            <Cake className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>
+              {isEn
+                ? 'Your Birthday (for exclusive platform gifts & discounts 🎂)'
+                : 'تاريخ ميلادك (للحصول على هدايا وخصومات حصرية من المنصة 🎂)'}
+            </span>
+          </label>
+          <input
+            type="date"
+            dir="ltr"
+            value={ownerBirthday}
+            onChange={(e) => setOwnerBirthday(e.target.value)}
+            max={new Date().toISOString().split('T')[0]}
+            className="w-full sm:w-56 px-3.5 py-2 rounded-xl border border-amber-200 bg-white text-sm font-mono-num focus:outline-none focus:border-amber-500"
+          />
         </div>
 
         <div className="flex flex-wrap items-center gap-4">

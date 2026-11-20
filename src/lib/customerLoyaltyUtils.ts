@@ -160,6 +160,71 @@ export function getDaysUntilUpcomingBirthday(
   return null;
 }
 
+export function parseIsoBirthday(
+  isoDate?: string
+): { day: number; month: number; year: number } | null {
+  const clean = (isoDate || '').trim();
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(clean);
+  if (!m) return null;
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  if (year < 1920 || year > 2025 || month < 1 || month > 12 || day < 1 || day > 31) {
+    return null;
+  }
+  return { day, month, year };
+}
+
+export function getDaysUntilIsoBirthday(
+  isoDate?: string,
+  now: Date = new Date()
+): number | null {
+  const parsed = parseIsoBirthday(isoDate);
+  if (!parsed) return null;
+  return getDaysUntilUpcomingBirthday(parsed.day, parsed.month, now);
+}
+
+export function buildOwnerGiftWhatsappUrl(params: {
+  rawPhone: string;
+  ownerName: string;
+  restaurantName: string;
+  daysUntil?: number | null;
+  promoCode?: string;
+  promoSummary?: string;
+  lang: 'ar' | 'en';
+}): string {
+  const waPhone = formatWhatsappInternationalPhone(params.rawPhone);
+  const { ownerName, restaurantName, daysUntil, promoCode, promoSummary, lang } = params;
+  const hasPromo = Boolean(promoCode && promoCode.trim());
+  const cleanCode = (promoCode || '').trim().toUpperCase();
+  const cleanSummary = (promoSummary || '').trim();
+
+  if (lang === 'en') {
+    const greeting =
+      daysUntil === 0
+        ? `Happy Birthday, ${ownerName}! 🎂🎉 Wishing you and "${restaurantName}" endless success.`
+        : daysUntil !== null && daysUntil !== undefined && daysUntil <= 3
+          ? `Happy early Birthday (${daysUntil} day${daysUntil === 1 ? '' : 's'} away!), ${ownerName}! 🎂🎉 We celebrate "${restaurantName}" with you.`
+          : `Hello ${ownerName} 👋 Greetings from the Sufra QR team! Thank you for trusting us with "${restaurantName}".`;
+    const giftPart = hasPromo
+      ? ` As a special gift from Sufra QR, enjoy code *${cleanCode}*${cleanSummary ? ` (${cleanSummary})` : ''} — activate it right inside your restaurant dashboard!`
+      : ` Check your Sufra QR dashboard for our latest platform offers and updates.`;
+    return `https://wa.me/${waPhone}?text=${encodeURIComponent(greeting + giftPart)}`;
+  }
+
+  const greeting =
+    daysUntil === 0
+      ? `كل سنة وحضرتك طيب وبألف خير يا أستاذ ${ownerName}! 🎂🎉 أسرة منصة سُفرة QR بتتمنالك ولمطعم "${restaurantName}" مزيد من النجاح والتألق.`
+      : daysUntil !== null && daysUntil !== undefined && daysUntil <= 3
+        ? `كل سنة وحضرتك طيب مقدماً يا أستاذ ${ownerName}! 🎂🎈 فاضل ${daysUntil === 1 ? 'يوم واحد' : daysUntil === 2 ? 'يومين' : `${daysUntil} أيام`} على عيد ميلادك، وحبّينا نحتفل معاك كشريك نجاح في مطعم "${restaurantName}".`
+        : `أهلاً بحضرتك يا أستاذ ${ownerName} 👋 فريق منصة سُفرة QR بيتمنالك دوام التوفيق في إدارة مطعم "${restaurantName}".`;
+  const giftPart = hasPromo
+    ? ` وبنقدملك كهدية خاصة كود الخصم الحصري: *${cleanCode}*${cleanSummary ? ` (${cleanSummary})` : ''} — تقدر تفعّله مباشرة من لوحة تحكم مطعمك!`
+    : ` يسعدنا دايماً متابعة نجاح مطعمك وتقديم كل جديد لرفع مبيعاتك.`;
+
+  return `https://wa.me/${waPhone}?text=${encodeURIComponent(greeting + giftPart)}`;
+}
+
 export function getLoyaltyTimestampMillis(ts: unknown): number {
   if (!ts) return 0;
   if (typeof ts === 'number') return ts;

@@ -5,12 +5,14 @@ import {
   BellRing,
   Cake,
   Calculator,
+  Check,
   CheckCircle2,
   ExternalLink,
   Gift,
   Home,
   Layers,
   LayoutGrid,
+  Loader2,
   LogOut,
   MessageCircle,
   PackageCheck,
@@ -47,6 +49,8 @@ import {
   ensureUserProfile,
   fetchOwnerRestaurant,
   fetchPlatformLandingSettings,
+  redeemPlatformPromoCodeForOwner,
+  sanitizePlatformPromoCode,
   subscribeOwnerOrders,
   subscribeOwnerServiceCalls,
   subscribeRestaurantCustomers,
@@ -80,6 +84,11 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
   const [newOrderToast, setNewOrderToast] = useState<string | null>(null);
   const [newCallToast, setNewCallToast] = useState<string | null>(null);
   const [tygosModalOpen, setTygosModalOpen] = useState(false);
+  const [promoModalOpen, setPromoModalOpen] = useState(false);
+  const [promoCodeInput, setPromoCodeInput] = useState('');
+  const [redeemingPromo, setRedeemingPromo] = useState(false);
+  const [promoMsg, setPromoMsg] = useState<string | null>(null);
+  const [promoError, setPromoError] = useState<string | null>(null);
   const [supportWhatsapp, setSupportWhatsapp] = useState(DEFAULT_PLATFORM_LANDING.supportWhatsapp);
   const orderInitRef = useRef(false);
   const knownOrderIdsRef = useRef<Set<string>>(new Set());
@@ -502,6 +511,38 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
             <p className="text-[11px] font-mono-num text-zinc-500 truncate" dir="ltr">
               /menu/{restaurant.slug}
             </p>
+            <div className="pt-1.5 border-t border-zinc-200/80 flex items-center justify-between gap-2">
+              {restaurant.appliedPlatformPromoCode ? (
+                <span className="text-[11px] font-bold text-emerald-700 truncate flex items-center gap-1">
+                  <Gift className="w-3.5 h-3.5 shrink-0" />
+                  <span className="font-mono-num" dir="ltr">
+                    {restaurant.appliedPlatformPromoCode}
+                  </span>
+                </span>
+              ) : (
+                <span className="text-[11px] text-zinc-500 truncate">
+                  {isEn ? 'Have a promo code?' : 'لديك كود خصم من المنصة؟'}
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setPromoCodeInput(restaurant.appliedPlatformPromoCode || '');
+                  setPromoMsg(null);
+                  setPromoError(null);
+                  setPromoModalOpen(true);
+                }}
+                className="text-[11px] font-extrabold text-amber-700 hover:text-amber-900 underline underline-offset-2 shrink-0 cursor-pointer"
+              >
+                {restaurant.appliedPlatformPromoCode
+                  ? isEn
+                    ? 'Change'
+                    : 'تغيير'
+                  : isEn
+                    ? 'Redeem'
+                    : 'تفعيل 🎁'}
+              </button>
+            </div>
           </div>
 
           {/* 2-column mobile / 3-column tablet grid so ALL 6 dashboard sections fit cleanly without horizontal overflow */}
@@ -956,6 +997,134 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Platform Promo Code Redemption Modal */}
+      {promoModalOpen && (
+        <div
+          className="print:hidden fixed inset-0 z-50 bg-zinc-950/60 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={() => setPromoModalOpen(false)}
+        >
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setPromoError(null);
+              setPromoMsg(null);
+              setRedeemingPromo(true);
+              try {
+                const res = await redeemPlatformPromoCodeForOwner(
+                  restaurant.id,
+                  promoCodeInput,
+                  lang
+                );
+                setRestaurant((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        appliedPlatformPromoCode: res.code,
+                        appliedPlatformPromoSummary: res.summary,
+                        appliedPlatformPromoSummary_en: res.summary_en,
+                      }
+                    : prev
+                );
+                setPromoMsg(
+                  isEn
+                    ? `Code ${res.code} activated: ${res.summary_en}`
+                    : `تم تفعيل كود الخصم (${res.code}) بنجاح: ${res.summary}`
+                );
+              } catch (err) {
+                setPromoError(
+                  err instanceof Error
+                    ? err.message
+                    : isEn
+                      ? 'Could not apply code'
+                      : 'تعذر تفعيل الكود'
+                );
+              } finally {
+                setRedeemingPromo(false);
+              }
+            }}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl border border-zinc-200 max-w-md w-full p-5 sm:p-6 space-y-4 shadow-2xl"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-1">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-100 text-amber-900 text-[11px] font-extrabold">
+                  <Gift className="w-3.5 h-3.5" />
+                  <span>{isEn ? 'Platform SaaS Gift' : 'هدية وكود خصم المنصة'}</span>
+                </span>
+                <h3 className="text-base font-extrabold text-zinc-950 pt-1">
+                  {isEn ? 'Redeem Subscription Promo Code' : 'تفعيل كود خصم اشتراك سُفرة'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPromoModalOpen(false)}
+                aria-label={isEn ? 'Close' : 'إغلاق'}
+                className="w-9 h-9 rounded-xl border border-zinc-200 text-zinc-600 hover:bg-zinc-100 flex items-center justify-center cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {restaurant.appliedPlatformPromoCode && (
+              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 font-bold flex items-center gap-2">
+                <Check className="w-4 h-4 text-emerald-700 shrink-0" />
+                <span>
+                  <span className="font-mono-num" dir="ltr">
+                    {restaurant.appliedPlatformPromoCode}
+                  </span>{' '}
+                  —{' '}
+                  {loc(
+                    restaurant.appliedPlatformPromoSummary || '',
+                    restaurant.appliedPlatformPromoSummary_en
+                  )}
+                </span>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-bold text-zinc-700 mb-1.5">
+                {isEn ? 'Promo Code' : 'كود الخصم أو الهدية'}
+              </label>
+              <input
+                type="text"
+                dir="ltr"
+                required
+                maxLength={32}
+                value={promoCodeInput}
+                onChange={(e) => setPromoCodeInput(sanitizePlatformPromoCode(e.target.value))}
+                placeholder="BDAY50"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm font-mono-num font-bold uppercase focus:outline-none focus:border-zinc-900"
+              />
+            </div>
+
+            {promoMsg && <p className="text-xs font-bold text-emerald-700">{promoMsg}</p>}
+            {promoError && <p className="text-xs font-bold text-rose-600">{promoError}</p>}
+
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setPromoModalOpen(false)}
+                className="px-4 py-2.5 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-700 hover:bg-zinc-50 cursor-pointer"
+              >
+                {isEn ? 'Close' : 'إغلاق'}
+              </button>
+              <button
+                type="submit"
+                disabled={redeemingPromo || promoCodeInput.trim().length < 2}
+                className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-extrabold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {redeemingPromo ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Check className="w-4 h-4" />
+                )}
+                <span>{isEn ? 'Activate Code' : 'تفعيل الكود'}</span>
+              </button>
+            </div>
+          </form>
         </div>
       )}
 

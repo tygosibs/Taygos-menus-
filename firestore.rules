@@ -99,7 +99,9 @@ service cloud.firestore {
           'shareDescription', 'shareDescription_en', 'activeTheme', 'primaryColor',
           'colorMode', 'headingColor', 'descriptionColor', 'priceColor', 'menuColumns',
           'taxRate', 'serviceCharge', 'deliveryFee', 'currency',
-          'isOpen', 'isSuspended', 'offers', 'promoCodes', 'loyaltyConfig', 'createdAt', 'updatedAt'
+          'isOpen', 'isSuspended', 'ownerBirthday',
+          'appliedPlatformPromoCode', 'appliedPlatformPromoSummary', 'appliedPlatformPromoSummary_en',
+          'offers', 'promoCodes', 'loyaltyConfig', 'createdAt', 'updatedAt'
         ]) &&
         isValidId(data.id) &&
         data.id == restId &&
@@ -128,6 +130,14 @@ service cloud.firestore {
         data.currency is string && data.currency.size() >= 1 && data.currency.size() <= 16 &&
         data.isOpen is bool &&
         (!('isSuspended' in data) || data.isSuspended is bool) &&
+        (!('ownerBirthday' in data) || (
+          data.ownerBirthday is string &&
+          data.ownerBirthday.size() <= 16 &&
+          (data.ownerBirthday == '' || data.ownerBirthday.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$'))
+        )) &&
+        (!('appliedPlatformPromoCode' in data) || (data.appliedPlatformPromoCode is string && data.appliedPlatformPromoCode.size() <= 32)) &&
+        (!('appliedPlatformPromoSummary' in data) || (data.appliedPlatformPromoSummary is string && data.appliedPlatformPromoSummary.size() <= 160)) &&
+        (!('appliedPlatformPromoSummary_en' in data) || (data.appliedPlatformPromoSummary_en is string && data.appliedPlatformPromoSummary_en.size() <= 160)) &&
         (!('offers' in data) || (data.offers is list && data.offers.size() <= 12 && (data.offers.size() == 0 || data.offers[0] is map))) &&
         (!('promoCodes' in data) || (data.promoCodes is list && data.promoCodes.size() <= 20 && (data.promoCodes.size() == 0 || data.promoCodes[0] is map))) &&
         (!('loyaltyConfig' in data) || (
@@ -368,20 +378,74 @@ service cloud.firestore {
           'pricingPlans', 'supportWhatsapp', 'footerText', 'updatedAt'
         ]) &&
         data.keys().hasOnly([
+          'sections', 'heroBadge', 'heroBadge_en',
           'heroTitle', 'heroTitle_en', 'heroSubtitle', 'heroSubtitle_en',
-          'ctaButtonText', 'ctaButtonText_en', 'features',
-          'pricingPlans', 'supportWhatsapp', 'footerText', 'footerText_en',
+          'ctaButtonText', 'ctaButtonText_en', 'heroSecondaryBtnText', 'heroSecondaryBtnText_en',
+          'themesTitle', 'themesTitle_en', 'themesSubtitle', 'themesSubtitle_en',
+          'featuresTitle', 'featuresTitle_en', 'featuresSubtitle', 'featuresSubtitle_en', 'features',
+          'operationsBadge', 'operationsBadge_en', 'operationsTitle', 'operationsTitle_en',
+          'operationsSubtitle', 'operationsSubtitle_en', 'operationsBullets', 'operationsBullets_en',
+          'loyaltyBadge', 'loyaltyBadge_en', 'loyaltyTitle', 'loyaltyTitle_en',
+          'loyaltySubtitle', 'loyaltySubtitle_en', 'loyaltyBullets', 'loyaltyBullets_en',
+          'pricingTitle', 'pricingTitle_en', 'pricingSubtitle', 'pricingSubtitle_en',
+          'pricingCtaText', 'pricingCtaText_en', 'pricingPlans',
+          'tygosBadge', 'tygosBadge_en', 'tygosTitle', 'tygosTitle_en',
+          'tygosSubtitle', 'tygosSubtitle_en', 'tygosCtaText', 'tygosCtaText_en',
+          'supportWhatsapp', 'footerText', 'footerText_en',
           'platformLogoUrl', 'shareTitle', 'shareTitle_en',
           'shareDescription', 'shareDescription_en', 'updatedAt'
         ]) &&
+        (!('sections' in data) || (data.sections is list && data.sections.size() <= 10 && (data.sections.size() == 0 || data.sections[0] is map))) &&
+        (!('heroBadge' in data) || (data.heroBadge is string && data.heroBadge.size() <= 120)) &&
+        (!('heroBadge_en' in data) || (data.heroBadge_en is string && data.heroBadge_en.size() <= 120)) &&
         data.heroTitle is string && data.heroTitle.size() >= 1 && data.heroTitle.size() <= 200 &&
         (!('heroTitle_en' in data) || (data.heroTitle_en is string && data.heroTitle_en.size() <= 200)) &&
         data.heroSubtitle is string && data.heroSubtitle.size() >= 1 && data.heroSubtitle.size() <= 600 &&
         (!('heroSubtitle_en' in data) || (data.heroSubtitle_en is string && data.heroSubtitle_en.size() <= 600)) &&
         data.ctaButtonText is string && data.ctaButtonText.size() >= 1 && data.ctaButtonText.size() <= 80 &&
         (!('ctaButtonText_en' in data) || (data.ctaButtonText_en is string && data.ctaButtonText_en.size() <= 80)) &&
+        (!('heroSecondaryBtnText' in data) || (data.heroSecondaryBtnText is string && data.heroSecondaryBtnText.size() <= 80)) &&
+        (!('heroSecondaryBtnText_en' in data) || (data.heroSecondaryBtnText_en is string && data.heroSecondaryBtnText_en.size() <= 80)) &&
+        (!('themesTitle' in data) || (data.themesTitle is string && data.themesTitle.size() <= 160)) &&
+        (!('themesTitle_en' in data) || (data.themesTitle_en is string && data.themesTitle_en.size() <= 160)) &&
+        (!('themesSubtitle' in data) || (data.themesSubtitle is string && data.themesSubtitle.size() <= 400)) &&
+        (!('themesSubtitle_en' in data) || (data.themesSubtitle_en is string && data.themesSubtitle_en.size() <= 400)) &&
+        (!('featuresTitle' in data) || (data.featuresTitle is string && data.featuresTitle.size() <= 160)) &&
+        (!('featuresTitle_en' in data) || (data.featuresTitle_en is string && data.featuresTitle_en.size() <= 160)) &&
+        (!('featuresSubtitle' in data) || (data.featuresSubtitle is string && data.featuresSubtitle.size() <= 400)) &&
+        (!('featuresSubtitle_en' in data) || (data.featuresSubtitle_en is string && data.featuresSubtitle_en.size() <= 400)) &&
         data.features is list && data.features.size() <= 12 && (data.features.size() == 0 || data.features[0] is map) &&
+        (!('operationsBadge' in data) || (data.operationsBadge is string && data.operationsBadge.size() <= 120)) &&
+        (!('operationsBadge_en' in data) || (data.operationsBadge_en is string && data.operationsBadge_en.size() <= 120)) &&
+        (!('operationsTitle' in data) || (data.operationsTitle is string && data.operationsTitle.size() <= 200)) &&
+        (!('operationsTitle_en' in data) || (data.operationsTitle_en is string && data.operationsTitle_en.size() <= 200)) &&
+        (!('operationsSubtitle' in data) || (data.operationsSubtitle is string && data.operationsSubtitle.size() <= 500)) &&
+        (!('operationsSubtitle_en' in data) || (data.operationsSubtitle_en is string && data.operationsSubtitle_en.size() <= 500)) &&
+        (!('operationsBullets' in data) || (data.operationsBullets is list && data.operationsBullets.size() <= 8 && (data.operationsBullets.size() == 0 || data.operationsBullets[0] is string))) &&
+        (!('operationsBullets_en' in data) || (data.operationsBullets_en is list && data.operationsBullets_en.size() <= 8 && (data.operationsBullets_en.size() == 0 || data.operationsBullets_en[0] is string))) &&
+        (!('loyaltyBadge' in data) || (data.loyaltyBadge is string && data.loyaltyBadge.size() <= 120)) &&
+        (!('loyaltyBadge_en' in data) || (data.loyaltyBadge_en is string && data.loyaltyBadge_en.size() <= 120)) &&
+        (!('loyaltyTitle' in data) || (data.loyaltyTitle is string && data.loyaltyTitle.size() <= 200)) &&
+        (!('loyaltyTitle_en' in data) || (data.loyaltyTitle_en is string && data.loyaltyTitle_en.size() <= 200)) &&
+        (!('loyaltySubtitle' in data) || (data.loyaltySubtitle is string && data.loyaltySubtitle.size() <= 500)) &&
+        (!('loyaltySubtitle_en' in data) || (data.loyaltySubtitle_en is string && data.loyaltySubtitle_en.size() <= 500)) &&
+        (!('loyaltyBullets' in data) || (data.loyaltyBullets is list && data.loyaltyBullets.size() <= 8 && (data.loyaltyBullets.size() == 0 || data.loyaltyBullets[0] is string))) &&
+        (!('loyaltyBullets_en' in data) || (data.loyaltyBullets_en is list && data.loyaltyBullets_en.size() <= 8 && (data.loyaltyBullets_en.size() == 0 || data.loyaltyBullets_en[0] is string))) &&
+        (!('pricingTitle' in data) || (data.pricingTitle is string && data.pricingTitle.size() <= 160)) &&
+        (!('pricingTitle_en' in data) || (data.pricingTitle_en is string && data.pricingTitle_en.size() <= 160)) &&
+        (!('pricingSubtitle' in data) || (data.pricingSubtitle is string && data.pricingSubtitle.size() <= 400)) &&
+        (!('pricingSubtitle_en' in data) || (data.pricingSubtitle_en is string && data.pricingSubtitle_en.size() <= 400)) &&
+        (!('pricingCtaText' in data) || (data.pricingCtaText is string && data.pricingCtaText.size() <= 80)) &&
+        (!('pricingCtaText_en' in data) || (data.pricingCtaText_en is string && data.pricingCtaText_en.size() <= 80)) &&
         data.pricingPlans is list && data.pricingPlans.size() <= 6 && (data.pricingPlans.size() == 0 || data.pricingPlans[0] is map) &&
+        (!('tygosBadge' in data) || (data.tygosBadge is string && data.tygosBadge.size() <= 120)) &&
+        (!('tygosBadge_en' in data) || (data.tygosBadge_en is string && data.tygosBadge_en.size() <= 120)) &&
+        (!('tygosTitle' in data) || (data.tygosTitle is string && data.tygosTitle.size() <= 200)) &&
+        (!('tygosTitle_en' in data) || (data.tygosTitle_en is string && data.tygosTitle_en.size() <= 200)) &&
+        (!('tygosSubtitle' in data) || (data.tygosSubtitle is string && data.tygosSubtitle.size() <= 500)) &&
+        (!('tygosSubtitle_en' in data) || (data.tygosSubtitle_en is string && data.tygosSubtitle_en.size() <= 500)) &&
+        (!('tygosCtaText' in data) || (data.tygosCtaText is string && data.tygosCtaText.size() <= 80)) &&
+        (!('tygosCtaText_en' in data) || (data.tygosCtaText_en is string && data.tygosCtaText_en.size() <= 80)) &&
         data.supportWhatsapp is string && data.supportWhatsapp.size() <= 32 &&
         data.footerText is string && data.footerText.size() >= 1 && data.footerText.size() <= 200 &&
         (!('footerText_en' in data) || (data.footerText_en is string && data.footerText_en.size() <= 200)) &&
@@ -390,6 +454,29 @@ service cloud.firestore {
         (!('shareTitle_en' in data) || (data.shareTitle_en is string && data.shareTitle_en.size() <= 140)) &&
         (!('shareDescription' in data) || (data.shareDescription is string && data.shareDescription.size() <= 300)) &&
         (!('shareDescription_en' in data) || (data.shareDescription_en is string && data.shareDescription_en.size() <= 300)) &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidPromoCodeId(promoId) {
+      return promoId is string && promoId.size() >= 2 && promoId.size() <= 32 && promoId.matches('^[A-Z0-9_\\-]+$');
+    }
+
+    function isValidPlatformPromoCode(data, promoId) {
+      return data.keys().hasAll([
+          'id', 'code', 'discountType', 'discountValue', 'isActive', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'code', 'discountType', 'discountValue', 'description', 'description_en', 'isActive', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidPromoCodeId(promoId) &&
+        data.id == promoId &&
+        data.code == promoId &&
+        data.discountType in ['percent', 'fixed', 'free_month'] &&
+        data.discountValue is number && data.discountValue >= 0 && data.discountValue <= 100000 &&
+        (!('description' in data) || (data.description is string && data.description.size() <= 200)) &&
+        (!('description_en' in data) || (data.description_en is string && data.description_en.size() <= 200)) &&
+        data.isActive is bool &&
+        data.createdAt is timestamp &&
         data.updatedAt is timestamp;
     }
 
@@ -484,10 +571,18 @@ service cloud.firestore {
               incoming().diff(existing()).affectedKeys().hasOnly([
                 'name', 'name_en', 'tagline', 'tagline_en', 'slug', 'whatsappNumber', 'logoUrl',
                 'shareTitle', 'shareTitle_en', 'shareDescription', 'shareDescription_en',
-                'currency', 'isOpen', 'activeTheme', 'taxRate', 'serviceCharge', 'deliveryFee',
+                'currency', 'isOpen', 'ownerBirthday', 'activeTheme', 'taxRate', 'serviceCharge', 'deliveryFee',
                 'primaryColor', 'colorMode', 'headingColor', 'descriptionColor', 'priceColor',
                 'menuColumns', 'updatedAt'
-              ])
+              ]) ||
+              (
+                incoming().diff(existing()).affectedKeys().hasOnly([
+                  'appliedPlatformPromoCode', 'appliedPlatformPromoSummary', 'appliedPlatformPromoSummary_en', 'updatedAt'
+                ]) &&
+                isValidPromoCodeId(incoming().appliedPlatformPromoCode) &&
+                exists(/databases/$(database)/documents/platform_promo_codes/$(incoming().appliedPlatformPromoCode)) &&
+                get(/databases/$(database)/documents/platform_promo_codes/$(incoming().appliedPlatformPromoCode)).data.isActive == true
+              )
             )
           ) || (
             isSuperAdmin() && (
@@ -503,9 +598,12 @@ service cloud.firestore {
               incoming().diff(existing()).affectedKeys().hasOnly([
                 'name', 'name_en', 'tagline', 'tagline_en', 'slug', 'whatsappNumber', 'logoUrl',
                 'shareTitle', 'shareTitle_en', 'shareDescription', 'shareDescription_en',
-                'currency', 'isOpen', 'isSuspended', 'activeTheme', 'taxRate', 'serviceCharge', 'deliveryFee',
+                'currency', 'isOpen', 'isSuspended', 'ownerBirthday', 'activeTheme', 'taxRate', 'serviceCharge', 'deliveryFee',
                 'primaryColor', 'colorMode', 'headingColor', 'descriptionColor', 'priceColor',
                 'menuColumns', 'updatedAt'
+              ]) ||
+              incoming().diff(existing()).affectedKeys().hasOnly([
+                'appliedPlatformPromoCode', 'appliedPlatformPromoSummary', 'appliedPlatformPromoSummary_en', 'updatedAt'
               ])
             )
           )
@@ -891,6 +989,23 @@ service cloud.firestore {
           ])
         );
       allow delete: if isSuperAdmin() && isValidId(themeId);
+    }
+
+    // 11. Platform SaaS Promo Codes collection (Super Admin full CRUD; verified owners single-code get only)
+    match /platform_promo_codes/{promoId} {
+      allow get: if isVerifiedAccount() && isValidPromoCodeId(promoId);
+      allow list: if isSuperAdmin();
+      allow create: if isSuperAdmin() &&
+        isValidPlatformPromoCode(incoming(), promoId) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isSuperAdmin() &&
+        isValidPlatformPromoCode(incoming(), promoId) &&
+        incoming().id == existing().id &&
+        incoming().code == existing().code &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time;
+      allow delete: if isSuperAdmin() && isValidPromoCodeId(promoId);
     }
   }
 }
