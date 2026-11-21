@@ -34,6 +34,7 @@ import { LiveOrdersTab } from '../components/admin/LiveOrdersTab';
 import { MenuBuilderTab } from '../components/admin/MenuBuilderTab';
 import { OffersPromosTab } from '../components/admin/OffersPromosTab';
 import { OnboardingForm } from '../components/admin/OnboardingForm';
+import { OwnerShiftReportTab } from '../components/admin/OwnerShiftReportTab';
 import { QrGeneratorTab } from '../components/admin/QrGeneratorTab';
 import { StaffManagementTab } from '../components/admin/StaffManagementTab';
 import { ThemeCustomizerTab } from '../components/admin/ThemeCustomizerTab';
@@ -64,7 +65,16 @@ interface AdminPortalProps {
   onNavigate: (path: string) => void;
 }
 
-type AdminTab = 'orders' | 'captain' | 'staff' | 'customers' | 'menu' | 'offers' | 'theme' | 'qr';
+type AdminTab =
+  | 'orders'
+  | 'captain'
+  | 'staff'
+  | 'reports'
+  | 'customers'
+  | 'menu'
+  | 'offers'
+  | 'theme'
+  | 'qr';
 
 export function AdminPortal({ onNavigate }: AdminPortalProps) {
   const { lang, t, dir, loc } = useLanguage();
@@ -471,6 +481,12 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
       label: isEn ? 'Manager & Staff RBAC' : 'المدير والكادر والصلاحيات',
       shortLabel: isEn ? 'Staff & Roles' : 'الكادر والصلاحيات',
       icon: ShieldCheck,
+    },
+    {
+      id: 'reports',
+      label: isEn ? 'Shifts, Treasury & Reports' : 'تقرير الورديات والحسابات',
+      shortLabel: isEn ? 'Shifts & Vault' : 'الورديات والحسابات',
+      icon: Calculator,
     },
     {
       id: 'customers',
@@ -919,6 +935,7 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
                 name: user.displayName || restaurant.name,
                 role: 'owner',
               }}
+              onRestaurantUpdated={(updated) => setRestaurant(updated)}
             />
           )}
           {activeTab === 'staff' && (
@@ -930,6 +947,18 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
                 name: user.displayName || restaurant.name,
                 role: 'owner',
               }}
+              onRestaurantUpdated={(updated) => setRestaurant(updated)}
+            />
+          )}
+          {activeTab === 'reports' && (
+            <OwnerShiftReportTab
+              restaurant={restaurant}
+              actor={{
+                uid: user.uid,
+                name: user.displayName || restaurant.name,
+                role: 'owner',
+              }}
+              onRestaurantUpdated={(updated) => setRestaurant(updated)}
             />
           )}
           {activeTab === 'customers' && (

@@ -17,7 +17,7 @@ import {
   X,
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
-import { deleteHall, saveHall, subscribeHalls } from '../../lib/firestoreService';
+import { deleteHall, getHallTableNumbers, saveHall, subscribeHalls } from '../../lib/firestoreService';
 import {
   resolveRestaurantShareDescription,
   resolveRestaurantShareTitle,
@@ -31,17 +31,38 @@ interface QrGeneratorTabProps {
 }
 
 interface GeneratedTableQr {
-  tableNum: number;
+  tableNum: string;
   url: string;
   dataUrl: string;
 }
 
-const HALL_PRESETS: Array<{ name: string; name_en: string; tableCount: number }> = [
-  { name: 'الصالة الرئيسية', name_en: 'Main Hall', tableCount: 12 },
-  { name: 'الدور الثاني', name_en: 'Second Floor', tableCount: 10 },
-  { name: 'التراس الخارجي', name_en: 'Outdoor Terrace', tableCount: 8 },
-  { name: 'قسم العائلات VIP', name_en: 'VIP Family Section', tableCount: 6 },
+const HALL_PRESETS: Array<{ name: string; name_en: string; hallType: string; tableCount: number }> = [
+  { name: 'الصالة الرئيسية', name_en: 'Main Hall', hallType: 'صالة داخلية', tableCount: 12 },
+  { name: 'الدور الثاني', name_en: 'Second Floor', hallType: 'دور علوي', tableCount: 10 },
+  { name: 'التراس الخارجي', name_en: 'Outdoor Terrace', hallType: 'تراس خارجي', tableCount: 8 },
+  { name: 'قسم العائلات VIP', name_en: 'VIP Family Section', hallType: 'قسم عائلات VIP', tableCount: 6 },
 ];
+
+function buildRangeCsv(count: number, skip13 = false): string {
+  const safe = Math.max(1, Math.min(200, Math.round(Number(count) || 1)));
+  const nums: string[] = [];
+  for (let i = 1; i <= safe; i++) {
+    if (skip13 && i === 13) continue;
+    nums.push(String(i));
+  }
+  return nums.join(', ');
+}
+
+function parseTableNumbersCsv(raw: string): string[] {
+  return Array.from(
+    new Set(
+      raw
+        .split(/[,،\n\s]+/)
+        .map((s) => s.trim().slice(0, 20))
+        .filter((s) => s.length > 0)
+    )
+  ).slice(0, 200);
+}
 
 export function QrGeneratorTab({ restaurant }: QrGeneratorTabProps) {
   const { lang, dir, t, loc } = useLanguage();
@@ -52,7 +73,7 @@ export function QrGeneratorTab({ restaurant }: QrGeneratorTabProps) {
   const [bulkCountInput, setBulkCountInput] = useState<number>(10);
   const [generatedTables, setGeneratedTables] = useState<GeneratedTableQr[]>([]);
   const [generatingBulk, setGeneratingBulk] = useState(false);
-  const [bulkCopiedNum, setBulkCopiedNum] = useState<number | null>(null);
+  const [bulkCopiedNum, setBulkCopiedNum] = useState<string | null>(null);
   const [printTarget, setPrintTarget] = useState<'single' | 'bulk'>('single');
 
   // Hall modal state
@@ -60,12 +81,15 @@ export function QrGeneratorTab({ restaurant }: QrGeneratorTabProps) {
   const [editingHall, setEditingHall] = useState<Hall | null>(null);
   const [hallNameInput, setHallNameInput] = useState('');
   const [hallNameEnInput, setHallNameEnInput] = useState('');
+  const [hallTypeInput, setHallTypeInput] = useState('');
   const [hallTablesInput, setHallTablesInput] = useState(10);
+  const [tableNumbersText, setTableNumbersText] = useState('1, 2, 3, 4, 5, 6, 7, 8, 9, 10');
   const [savingHall, setSavingHall] = useState(false);
   const [hallError, setHallError] = useState<string | null>(null);
 
   // Single QR state
   const [hallLabel, setHallLabel] = useState('');
+  const [hallTypeSingleLabel, setHallTypeSingleLabel] = useState('');
   const [tableLabel, setTableLabel] = useState('');
   const [copied, setCopied] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -96,8 +120,9 @@ export function QrGeneratorTab({ restaurant }: QrGeneratorTabProps) {
 
   useEffect(() => {
     if (activeHall) {
-      setBulkCountInput(activeHall.tableCount || 10);
+      setBulkCountInput(getHallTableNumbers(activeHall).length);
       setHallLabel(activeHall.name);
+      setHallTypeSingleLabel(activeHall.hallType || '');
     }
   }, [activeHall]);
 
@@ -113,30 +138,30 @@ export function QrGeneratorTab({ restaurant }: QrGeneratorTabProps) {
   );
 
   const generateBulkTables = useCallback(
-    async (hallNameVal: string, count: number) => {
-      const safeCount = Math.max(1, Math.min(200, Math.round(Number(count) || 1)));
+    async (hallNameVal: string, tableNumbers: string[]) => {
+      const safeNums =
+        tableNumbers.length > 0 ? tableNumbers.slice(0, 200) : ['1'];
       setGeneratingBulk(true);
       try {
         const results: GeneratedTableQr[] = [];
         const BATCH = 12;
-        for (let start = 1; start <= safeCount; start += BATCH) {
-          const end = Math.min(safeCount, start + BATCH - 1);
-          const batchPromises: Promise<GeneratedTableQr>[] = [];
-          for (let num = start; num <= end; num++) {
-            const url = buildTableUrl(hallNameVal, String(num));
-            batchPromises.push(
-              QRCode.toDataURL(url, {
+        for (let start = 0; start < safeNums.length; start += BATCH) {
+          const slice = safeNums.slice(start, start + BATCH);
+          const chunk = await Promise.all(
+            slice.map(async (numStr) => {
+              const url = buildTableUrl(hallNameVal, numStr);
+              const dataUrl = await QRCode.toDataURL(url, {
                 width: 340,
                 margin: 2,
                 color: { dark: '#09090B', light: '#FFFFFF' },
-              }).then((dataUrl) => ({
-                tableNum: num,
+              });
+              return {
+                tableNum: numStr,
                 url,
                 dataUrl,
-              }))
-            );
-          }
-          const chunk = await Promise.all(batchPromises);
+              };
+            })
+          );
           results.push(...chunk);
         }
         setGeneratedTables(results);
@@ -153,48 +178,85 @@ export function QrGeneratorTab({ restaurant }: QrGeneratorTabProps) {
       setGeneratedTables([]);
       return;
     }
-    void generateBulkTables(activeHall.name, activeHall.tableCount);
+    void generateBulkTables(activeHall.name, getHallTableNumbers(activeHall));
   }, [activeHall, generateBulkTables]);
 
   const handleBulkGenerateAndSave = async () => {
     const safeCount = Math.max(1, Math.min(200, Math.round(Number(bulkCountInput) || 1)));
     setBulkCountInput(safeCount);
     if (activeHall) {
-      if (safeCount !== activeHall.tableCount) {
+      const existingNums = getHallTableNumbers(activeHall);
+      const hadSkip13 = existingNums.length >= 13 && !existingNums.includes('13');
+      const nextNums = parseTableNumbersCsv(buildRangeCsv(safeCount, hadSkip13));
+      if (safeCount !== existingNums.length) {
         try {
           await saveHall(restaurant.id, restaurant.ownerId, {
             id: activeHall.id,
             name: activeHall.name,
             name_en: activeHall.name_en,
-            tableCount: safeCount,
+            hallType: activeHall.hallType,
+            tableCount: nextNums.length,
+            tableNumbers: nextNums,
             sortOrder: activeHall.sortOrder,
           });
         } catch {
           // Still render QR codes locally even if transient error
         }
       }
-      await generateBulkTables(activeHall.name, safeCount);
+      await generateBulkTables(activeHall.name, nextNums);
     } else {
-      await generateBulkTables(hallLabel.trim(), safeCount);
+      await generateBulkTables(
+        hallLabel.trim(),
+        parseTableNumbersCsv(buildRangeCsv(safeCount, false))
+      );
     }
   };
 
-  const openNewHallModal = (preset?: { name: string; name_en: string; tableCount: number }) => {
+  const openNewHallModal = (preset?: {
+    name: string;
+    name_en: string;
+    hallType: string;
+    tableCount: number;
+  }) => {
+    const count = preset?.tableCount || 10;
     setEditingHall(null);
     setHallNameInput(preset?.name || '');
     setHallNameEnInput(preset?.name_en || '');
-    setHallTablesInput(preset?.tableCount || 10);
+    setHallTypeInput(preset?.hallType || '');
+    setHallTablesInput(count);
+    setTableNumbersText(buildRangeCsv(count, false));
     setHallError(null);
     setHallModalOpen(true);
   };
 
   const openEditHallModal = (hall: Hall) => {
+    const nums = getHallTableNumbers(hall);
     setEditingHall(hall);
     setHallNameInput(hall.name);
     setHallNameEnInput(hall.name_en || '');
-    setHallTablesInput(hall.tableCount || 10);
+    setHallTypeInput(hall.hallType || '');
+    setHallTablesInput(nums.length);
+    setTableNumbersText(nums.join(', '));
     setHallError(null);
     setHallModalOpen(true);
+  };
+
+  const handleToggleSkip13InModal = () => {
+    const current = parseTableNumbersCsv(tableNumbersText);
+    if (current.includes('13')) {
+      const filtered = current.filter((n) => n !== '13');
+      setTableNumbersText(filtered.join(', '));
+      setHallTablesInput(filtered.length);
+    } else {
+      const added = [...current, '13'].sort((a, b) => {
+        const na = Number(a);
+        const nb = Number(b);
+        if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb;
+        return a.localeCompare(b);
+      });
+      setTableNumbersText(added.join(', '));
+      setHallTablesInput(added.length);
+    }
   };
 
   const handleSaveHall = async (e: FormEvent) => {
@@ -203,11 +265,20 @@ export function QrGeneratorTab({ restaurant }: QrGeneratorTabProps) {
     setSavingHall(true);
     setHallError(null);
     try {
+      const parsedNums = parseTableNumbersCsv(tableNumbersText);
+      const count =
+        parsedNums.length > 0
+          ? parsedNums.length
+          : Math.max(1, Math.min(200, Math.round(Number(hallTablesInput) || 1)));
+      const finalNums =
+        parsedNums.length > 0 ? parsedNums : parseTableNumbersCsv(buildRangeCsv(count, false));
       await saveHall(restaurant.id, restaurant.ownerId, {
         id: editingHall?.id,
         name: hallNameInput.trim(),
         name_en: hallNameEnInput.trim(),
-        tableCount: Math.max(1, Math.min(200, Math.round(Number(hallTablesInput) || 1))),
+        hallType: hallTypeInput.trim(),
+        tableCount: finalNums.length,
+        tableNumbers: finalNums,
         sortOrder: editingHall?.sortOrder ?? halls.length + 1,
       });
       setHallModalOpen(false);
@@ -221,6 +292,7 @@ export function QrGeneratorTab({ restaurant }: QrGeneratorTabProps) {
   const handleQuickCreatePreset = async (preset: {
     name: string;
     name_en: string;
+    hallType: string;
     tableCount: number;
   }) => {
     setSavingHall(true);
@@ -228,7 +300,9 @@ export function QrGeneratorTab({ restaurant }: QrGeneratorTabProps) {
       await saveHall(restaurant.id, restaurant.ownerId, {
         name: preset.name,
         name_en: preset.name_en,
+        hallType: preset.hallType,
         tableCount: preset.tableCount,
+        tableNumbers: parseTableNumbersCsv(buildRangeCsv(preset.tableCount, false)),
         sortOrder: halls.length + 1,
       });
     } finally {
@@ -393,7 +467,8 @@ export function QrGeneratorTab({ restaurant }: QrGeneratorTabProps) {
                         selected ? 'text-zinc-300' : 'text-zinc-500'
                       }`}
                     >
-                      {hall.tableCount} {isEn ? 'tables' : 'ترابيزة'} (1 → {hall.tableCount})
+                      {getHallTableNumbers(hall).length} {isEn ? 'tables' : 'ترابيزة'}
+                      {hall.hallType ? ` · ${hall.hallType}` : ''}
                     </p>
                   </div>
                   <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
@@ -539,30 +614,47 @@ export function QrGeneratorTab({ restaurant }: QrGeneratorTabProps) {
                   key={tbl.tableNum}
                   className="break-inside-avoid rounded-2xl border-2 border-dashed border-zinc-300 bg-white p-3.5 text-center space-y-2.5 flex flex-col justify-between"
                 >
+                  {/* Top: Welcome Header AR / EN */}
                   <div className="space-y-0.5">
-                    <p className="text-[11px] font-extrabold text-zinc-900 truncate">{displayName}</p>
-                    {activeBulkHallLabel && (
-                      <p className="text-[10px] font-bold text-zinc-500 truncate">
-                        {activeBulkHallLabel}
-                      </p>
-                    )}
-                    <p
-                      className="text-xs font-extrabold font-mono-num"
-                      style={{ color: restaurant.primaryColor }}
-                    >
-                      {isEn ? `Table #${tbl.tableNum}` : `ترابيزة ${tbl.tableNum}`}
+                    <p className="text-[10px] font-extrabold text-zinc-700 leading-tight">
+                      مرحباً بكم في {restaurant.name}
+                    </p>
+                    <p className="text-[9px] font-bold text-zinc-400 leading-tight" dir="ltr">
+                      Welcome to {restaurant.name_en || restaurant.name}
                     </p>
                   </div>
 
-                  <img
-                    src={tbl.dataUrl}
-                    alt={`QR Table ${tbl.tableNum}`}
-                    className="w-28 h-28 mx-auto rounded-lg border border-zinc-100 bg-white"
-                  />
+                  {/* Center: Large Prominent Table Number + QR Code */}
+                  <div className="space-y-1.5">
+                    <div
+                      className="text-2xl sm:text-3xl font-extrabold font-mono-num leading-none"
+                      style={{ color: restaurant.primaryColor }}
+                    >
+                      {tbl.tableNum}
+                    </div>
+                    <img
+                      src={tbl.dataUrl}
+                      alt={`QR Table ${tbl.tableNum}`}
+                      className="w-28 h-28 mx-auto rounded-lg border border-zinc-100 bg-white"
+                    />
+                  </div>
 
-                  <p className="text-[9px] text-zinc-500 leading-tight">
-                    {isEn ? 'Scan to view menu & order' : 'امسح الكود للطلب من الترابيزة'}
-                  </p>
+                  {/* Bottom: Hall Name & Hall Type */}
+                  <div className="space-y-0.5 pt-1 border-t border-zinc-100">
+                    {activeBulkHallLabel && (
+                      <p className="text-[11px] font-extrabold text-zinc-900 truncate">
+                        {activeBulkHallLabel}
+                      </p>
+                    )}
+                    {activeHall?.hallType && (
+                      <p className="text-[10px] font-bold text-zinc-500 truncate">
+                        {activeHall.hallType}
+                      </p>
+                    )}
+                    <p className="text-[9px] text-zinc-400 leading-tight">
+                      {isEn ? 'Scan to view menu & order' : 'امسح الكود للطلب من الترابيزة'}
+                    </p>
+                  </div>
 
                   <div className="flex items-center justify-center gap-1.5 pt-1 print:hidden">
                     <a
@@ -699,7 +791,8 @@ export function QrGeneratorTab({ restaurant }: QrGeneratorTabProps) {
               printTarget === 'single' ? 'qr-print-area' : ''
             } bg-white border border-zinc-200 rounded-3xl p-8 w-full max-w-sm text-center space-y-5 shadow-sm`}
           >
-            <div className="space-y-2">
+            {/* Top Welcome */}
+            <div className="space-y-1.5">
               {restaurant.logoUrl && (
                 <SafeImage
                   src={restaurant.logoUrl}
@@ -707,34 +800,44 @@ export function QrGeneratorTab({ restaurant }: QrGeneratorTabProps) {
                   className="w-16 h-16 rounded-2xl object-cover mx-auto border border-zinc-200"
                 />
               )}
-              <h3 className="text-xl font-extrabold text-zinc-950">{displayName}</h3>
-              {(hallLabel.trim() || tableLabel.trim()) && (
-                <p
-                  className="text-sm font-bold font-mono-num"
+              <p className="text-sm font-extrabold text-zinc-900">
+                مرحباً بكم في {restaurant.name}
+              </p>
+              <p className="text-xs font-bold text-zinc-500" dir="ltr">
+                Welcome to {restaurant.name_en || restaurant.name}
+              </p>
+            </div>
+
+            {/* Large Center Table Number */}
+            {tableLabel.trim() && (
+              <div className="py-1">
+                <span className="block text-[11px] font-bold text-zinc-400">
+                  {isEn ? 'TABLE NO.' : 'ترابيزة رقم'}
+                </span>
+                <span
+                  className="text-5xl font-extrabold font-mono-num leading-none"
                   style={{ color: restaurant.primaryColor }}
                 >
-                  {[
-                    hallLabel.trim(),
-                    tableLabel.trim()
-                      ? isEn
-                        ? `Table ${tableLabel.trim()}`
-                        : `ترابيزة ${tableLabel.trim()}`
-                      : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </p>
-              )}
-            </div>
+                  {tableLabel.trim()}
+                </span>
+              </div>
+            )}
 
             <div className="p-4 rounded-2xl border-2 border-dashed border-zinc-200 inline-block bg-white">
               <canvas ref={canvasRef} className="mx-auto block" />
             </div>
 
-            <div className="space-y-1">
-              <p className="text-sm font-bold text-zinc-900">{t.admin.qr.cardScanPrompt}</p>
-              <p className="text-xs text-zinc-500">{t.admin.qr.cardFooter}</p>
-              <p className="text-[11px] font-mono-num text-zinc-400 pt-1" dir="ltr">
+            {/* Bottom Hall Name & Hall Type */}
+            <div className="space-y-1 pt-2 border-t border-zinc-100">
+              {hallLabel.trim() && (
+                <p className="text-sm font-extrabold text-zinc-950">{hallLabel.trim()}</p>
+              )}
+              {hallTypeSingleLabel.trim() && (
+                <p className="text-xs font-bold text-zinc-500">{hallTypeSingleLabel.trim()}</p>
+              )}
+              <p className="text-xs font-bold text-zinc-700 pt-1">{t.admin.qr.cardScanPrompt}</p>
+              <p className="text-[11px] text-zinc-500">{t.admin.qr.cardFooter}</p>
+              <p className="text-[11px] font-mono-num text-zinc-400 pt-0.5" dir="ltr">
                 /menu/{restaurant.slug}
               </p>
             </div>
@@ -795,7 +898,9 @@ export function QrGeneratorTab({ restaurant }: QrGeneratorTabProps) {
                       onClick={() => {
                         setHallNameInput(p.name);
                         setHallNameEnInput(p.name_en);
+                        setHallTypeInput(p.hallType);
                         setHallTablesInput(p.tableCount);
+                        setTableNumbersText(buildRangeCsv(p.tableCount, false));
                       }}
                       className="px-2.5 py-1 rounded-lg border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-[11px] font-bold text-zinc-800 cursor-pointer"
                     >
@@ -838,18 +943,74 @@ export function QrGeneratorTab({ restaurant }: QrGeneratorTabProps) {
               </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-bold mb-1">
-                {isEn ? 'Tables Count in This Hall (1 – 200) *' : 'عدد الترابيزات في هذه الصالة (1 – 200) *'}
-              </label>
-              <input
-                type="number"
-                min={1}
-                max={200}
-                required
-                value={hallTablesInput}
-                onChange={(e) => setHallTablesInput(Number(e.target.value))}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm font-mono-num font-bold"
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold mb-1">
+                  {isEn ? 'Hall Type / Zone' : 'نوع الصالة / القسم'}
+                </label>
+                <input
+                  type="text"
+                  value={hallTypeInput}
+                  onChange={(e) => setHallTypeInput(e.target.value)}
+                  placeholder="مثال: صالة داخلية / تراس / VIP"
+                  maxLength={60}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold mb-1">
+                  {isEn ? 'Tables Count (1 – 200)' : 'عدد الترابيزات (1 – 200)'}
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={200}
+                  required
+                  value={hallTablesInput}
+                  onChange={(e) => {
+                    const cnt = Math.max(1, Math.min(200, Math.round(Number(e.target.value) || 1)));
+                    setHallTablesInput(cnt);
+                    const hadSkip13 =
+                      parseTableNumbersCsv(tableNumbersText).length >= 13 &&
+                      !parseTableNumbersCsv(tableNumbersText).includes('13');
+                    setTableNumbersText(buildRangeCsv(cnt, hadSkip13));
+                  }}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm font-mono-num font-bold"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-xs font-bold text-zinc-800">
+                  {isEn ? 'Custom Table Numbers (comma-separated)' : 'أرقام الترابيزات المخصصة'}
+                </label>
+                <button
+                  type="button"
+                  onClick={handleToggleSkip13InModal}
+                  className={`px-2.5 py-1 rounded-lg border text-[11px] font-extrabold cursor-pointer ${
+                    !parseTableNumbersCsv(tableNumbersText).includes('13')
+                      ? 'bg-amber-100 border-amber-300 text-amber-950'
+                      : 'bg-zinc-100 border-zinc-200 text-zinc-700 hover:bg-zinc-200'
+                  }`}
+                >
+                  {!parseTableNumbersCsv(tableNumbersText).includes('13')
+                    ? 'رقم 13 مخفي ✓ (إعادة)'
+                    : 'إخفاء رقم 13'}
+                </button>
+              </div>
+              <textarea
+                rows={2}
+                dir="ltr"
+                value={tableNumbersText}
+                onChange={(e) => {
+                  setTableNumbersText(e.target.value);
+                  const count = parseTableNumbersCsv(e.target.value).length;
+                  if (count > 0) setHallTablesInput(count);
+                }}
+                placeholder="1, 2, 3, ... 12, 14, 15"
+                className="w-full px-3 py-2 rounded-xl border border-zinc-200 text-xs font-mono-num"
               />
             </div>
 

@@ -189,7 +189,7 @@ service cloud.firestore {
           'taxRate', 'serviceCharge', 'deliveryFee', 'currency',
           'isOpen', 'isSuspended', 'ownerBirthday',
           'appliedPlatformPromoCode', 'appliedPlatformPromoSummary', 'appliedPlatformPromoSummary_en',
-          'offers', 'promoCodes', 'loyaltyConfig', 'createdAt', 'updatedAt'
+          'offers', 'promoCodes', 'loyaltyConfig', 'operationsConfig', 'treasuryState', 'createdAt', 'updatedAt'
         ]) &&
         isValidId(data.id) &&
         data.id == restId &&
@@ -251,6 +251,29 @@ service cloud.firestore {
           (!('birthdayOfferText_en' in data.loyaltyConfig) || (data.loyaltyConfig.birthdayOfferText_en is string && data.loyaltyConfig.birthdayOfferText_en.size() <= 220)) &&
           (!('birthdayDiscountPercent' in data.loyaltyConfig) || (data.loyaltyConfig.birthdayDiscountPercent is number && data.loyaltyConfig.birthdayDiscountPercent >= 0 && data.loyaltyConfig.birthdayDiscountPercent <= 50)) &&
           (!('birthdayWhatsappMessage' in data.loyaltyConfig) || (data.loyaltyConfig.birthdayWhatsappMessage is string && data.loyaltyConfig.birthdayWhatsappMessage.size() <= 400))
+        )) &&
+        (!('operationsConfig' in data) || (
+          data.operationsConfig is map &&
+          data.operationsConfig.keys().hasOnly([
+            'shiftSlots', 'defaultCashierFloat', 'tableOverdueMinutes',
+            'tableColors', 'managerPermissions', 'showPricesByRole'
+          ]) &&
+          (!('shiftSlots' in data.operationsConfig) || (data.operationsConfig.shiftSlots is list && data.operationsConfig.shiftSlots.size() >= 1 && data.operationsConfig.shiftSlots.size() <= 4)) &&
+          (!('defaultCashierFloat' in data.operationsConfig) || (data.operationsConfig.defaultCashierFloat is number && data.operationsConfig.defaultCashierFloat >= 0 && data.operationsConfig.defaultCashierFloat <= 1000000)) &&
+          (!('tableOverdueMinutes' in data.operationsConfig) || (data.operationsConfig.tableOverdueMinutes is number && data.operationsConfig.tableOverdueMinutes >= 10 && data.operationsConfig.tableOverdueMinutes <= 1440)) &&
+          (!('tableColors' in data.operationsConfig) || data.operationsConfig.tableColors is map) &&
+          (!('managerPermissions' in data.operationsConfig) || data.operationsConfig.managerPermissions is map) &&
+          (!('showPricesByRole' in data.operationsConfig) || data.operationsConfig.showPricesByRole is map)
+        )) &&
+        (!('treasuryState' in data) || (
+          data.treasuryState is map &&
+          data.treasuryState.keys().hasOnly([
+            'managerCustodyBalance', 'ownerVaultCashBalance', 'ownerVaultVisaTotal',
+            'lastUpdatedByUid', 'lastUpdatedByName', 'updatedAt'
+          ]) &&
+          data.treasuryState.managerCustodyBalance is number && data.treasuryState.managerCustodyBalance >= -1000000 && data.treasuryState.managerCustodyBalance <= 100000000 &&
+          data.treasuryState.ownerVaultCashBalance is number && data.treasuryState.ownerVaultCashBalance >= -1000000 && data.treasuryState.ownerVaultCashBalance <= 100000000 &&
+          data.treasuryState.ownerVaultVisaTotal is number && data.treasuryState.ownerVaultVisaTotal >= 0 && data.treasuryState.ownerVaultVisaTotal <= 100000000
         )) &&
         data.createdAt is timestamp &&
         data.updatedAt is timestamp;
@@ -359,9 +382,14 @@ service cloud.firestore {
           'id', 'restaurantId', 'ownerId', 'orderNumber', 'customerName',
           'customerPhone', 'orderType', 'hallName', 'tableNumber', 'sessionId',
           'isGroupOrder', 'guestChecks', 'deliveryAddress',
-          'notes', 'items', 'subtotal', 'serviceCharge', 'deliveryFee',
-          'discountAmount', 'promoCode', 'taxAmount', 'total',
-          'status', 'itemProgress', 'itemProgressBy',
+          'notes', 'tableNotes', 'items', 'subtotal', 'serviceCharge', 'deliveryFee',
+          'discountAmount', 'manualDiscountAmount', 'manualDiscountPercent', 'manualDiscountReason',
+          'promoCode', 'taxAmount', 'total',
+          'status', 'shiftId', 'paymentMethod', 'cashPaidAmount', 'visaPaidAmount',
+          'customerCashTendered', 'changeReturned', 'drawerVariance',
+          'cancelReason', 'adjustmentHistory', 'closedAt',
+          'superAdminUnlocked', 'superAdminUnlockedBy',
+          'itemProgress', 'itemProgressBy',
           'createdByUid', 'createdByName', 'createdByRole',
           'lastUpdatedByUid', 'lastUpdatedByName', 'lastUpdatedByRole',
           'closedByUid', 'closedByName', 'closedByRole',
@@ -386,15 +414,31 @@ service cloud.firestore {
         (!('guestChecks' in data) || (data.guestChecks is list && data.guestChecks.size() <= 30 && (data.guestChecks.size() == 0 || data.guestChecks[0] is map))) &&
         (!('deliveryAddress' in data) || (data.deliveryAddress is string && data.deliveryAddress.size() <= 300)) &&
         (!('notes' in data) || (data.notes is string && data.notes.size() <= 400)) &&
+        (!('tableNotes' in data) || (data.tableNotes is string && data.tableNotes.size() <= 400)) &&
         data.items is list && data.items.size() >= 1 && data.items.size() <= 80 && data.items[0] is map &&
         data.subtotal is number && data.subtotal >= 0 && data.subtotal <= 1000000 &&
         data.serviceCharge is number && data.serviceCharge >= 0 && data.serviceCharge <= 1000000 &&
         (!('deliveryFee' in data) || (data.deliveryFee is number && data.deliveryFee >= 0 && data.deliveryFee <= 100000)) &&
         (!('discountAmount' in data) || (data.discountAmount is number && data.discountAmount >= 0 && data.discountAmount <= 1000000)) &&
+        (!('manualDiscountAmount' in data) || (data.manualDiscountAmount is number && data.manualDiscountAmount >= 0 && data.manualDiscountAmount <= 1000000)) &&
+        (!('manualDiscountPercent' in data) || (data.manualDiscountPercent is number && data.manualDiscountPercent >= 0 && data.manualDiscountPercent <= 100)) &&
+        (!('manualDiscountReason' in data) || (data.manualDiscountReason is string && data.manualDiscountReason.size() <= 300)) &&
         (!('promoCode' in data) || (data.promoCode is string && data.promoCode.size() <= 32)) &&
         data.taxAmount is number && data.taxAmount >= 0 && data.taxAmount <= 1000000 &&
         data.total is number && data.total >= 0 && data.total <= 1000000 &&
         data.status in ['pending', 'preparing', 'completed', 'cancelled'] &&
+        (!('shiftId' in data) || data.shiftId == '' || isValidId(data.shiftId)) &&
+        (!('paymentMethod' in data) || (data.paymentMethod in ['cash', 'visa', 'split'])) &&
+        (!('cashPaidAmount' in data) || (data.cashPaidAmount is number && data.cashPaidAmount >= 0 && data.cashPaidAmount <= 1000000)) &&
+        (!('visaPaidAmount' in data) || (data.visaPaidAmount is number && data.visaPaidAmount >= 0 && data.visaPaidAmount <= 1000000)) &&
+        (!('customerCashTendered' in data) || (data.customerCashTendered is number && data.customerCashTendered >= 0 && data.customerCashTendered <= 1000000)) &&
+        (!('changeReturned' in data) || (data.changeReturned is number && data.changeReturned >= 0 && data.changeReturned <= 1000000)) &&
+        (!('drawerVariance' in data) || (data.drawerVariance is number && data.drawerVariance >= -100000 && data.drawerVariance <= 100000)) &&
+        (!('cancelReason' in data) || (data.cancelReason is string && data.cancelReason.size() <= 300)) &&
+        (!('adjustmentHistory' in data) || (data.adjustmentHistory is list && data.adjustmentHistory.size() <= 50 && (data.adjustmentHistory.size() == 0 || data.adjustmentHistory[0] is map))) &&
+        (!('closedAt' in data) || data.closedAt is timestamp) &&
+        (!('superAdminUnlocked' in data) || data.superAdminUnlocked is bool) &&
+        (!('superAdminUnlockedBy' in data) || (data.superAdminUnlockedBy is string && data.superAdminUnlockedBy.size() <= 128)) &&
         (!('itemProgress' in data) || (data.itemProgress is map && data.itemProgress.size() <= 80)) &&
         (!('itemProgressBy' in data) || (data.itemProgressBy is map && data.itemProgressBy.size() <= 80)) &&
         (!('createdByUid' in data) || (data.createdByUid is string && data.createdByUid.size() <= 128)) &&
@@ -469,7 +513,8 @@ service cloud.firestore {
         ]) &&
         data.keys().hasOnly([
           'uid', 'restaurantId', 'ownerId', 'role', 'allowedScreens', 'allowedStations',
-          'defaultScreen', 'defaultStationId', 'hallId', 'isActive', 'mustChangePassword', 'updatedAt'
+          'defaultScreen', 'defaultStationId', 'hallId', 'isActive', 'mustChangePassword',
+          'suspendedType', 'suspendedUntil', 'updatedAt'
         ]) &&
         isValidId(data.uid) &&
         data.uid == staffUid &&
@@ -484,6 +529,8 @@ service cloud.firestore {
         (!('hallId' in data) || data.hallId == '' || isValidId(data.hallId)) &&
         data.isActive is bool &&
         data.mustChangePassword is bool &&
+        (!('suspendedType' in data) || (data.suspendedType in ['', 'timed', 'indefinite'])) &&
+        (!('suspendedUntil' in data) || data.suspendedUntil == null || data.suspendedUntil is timestamp) &&
         data.updatedAt is timestamp;
     }
 
@@ -496,8 +543,9 @@ service cloud.firestore {
         data.keys().hasOnly([
           'uid', 'restaurantId', 'ownerId', 'name', 'username', 'phone',
           'email', 'authEmail', 'jobTitle', 'role', 'allowedScreens', 'allowedStations',
-          'defaultScreen', 'defaultStationId', 'hallId', 'hallName', 'isActive', 'mustChangePassword', 'activeInviteHash',
-          'createdBy', 'lastLoginAt', 'passwordChangedAt', 'createdAt', 'updatedAt'
+          'defaultScreen', 'defaultStationId', 'hallId', 'hallName', 'isActive', 'mustChangePassword',
+          'suspendedType', 'suspendedUntil', 'suspendedReason', 'suspendedByRole', 'suspendedByName',
+          'activeInviteHash', 'createdBy', 'lastLoginAt', 'passwordChangedAt', 'createdAt', 'updatedAt'
         ]) &&
         isValidId(data.uid) &&
         data.uid == staffUid &&
@@ -520,6 +568,11 @@ service cloud.firestore {
         (!('hallName' in data) || (data.hallName is string && data.hallName.size() <= 80)) &&
         data.isActive is bool &&
         data.mustChangePassword is bool &&
+        (!('suspendedType' in data) || (data.suspendedType in ['', 'timed', 'indefinite'])) &&
+        (!('suspendedUntil' in data) || data.suspendedUntil == null || data.suspendedUntil is timestamp) &&
+        (!('suspendedReason' in data) || (data.suspendedReason is string && data.suspendedReason.size() <= 300)) &&
+        (!('suspendedByRole' in data) || (data.suspendedByRole in ['', 'owner', 'manager'])) &&
+        (!('suspendedByName' in data) || (data.suspendedByName is string && data.suspendedByName.size() <= 100)) &&
         (!('activeInviteHash' in data) || (data.activeInviteHash is string && data.activeInviteHash.size() <= 128)) &&
         isValidId(data.createdBy) &&
         (!('lastLoginAt' in data) || data.lastLoginAt is timestamp) &&
@@ -610,11 +663,17 @@ service cloud.firestore {
         data.restaurantId == restaurantId &&
         isValidId(data.ownerId) &&
         data.eventType in [
-          'staff_created', 'staff_updated', 'staff_deleted', 'invite_created', 'invite_used',
+          'staff_created', 'staff_updated', 'staff_deleted',
+          'staff_suspended', 'staff_unsuspended', 'staff_promoted',
+          'invite_created', 'invite_used',
           'password_changed', 'staff_login', 'order_created', 'order_status_updated',
-          'kds_item_updated', 'table_closed', 'service_call_handled',
+          'order_modified', 'order_cancelled', 'instant_discount_applied',
+          'kds_item_updated', 'menu_item_paused', 'table_closed', 'service_call_handled',
           'station_created', 'station_updated', 'station_deleted',
-          'shift_started', 'shift_ended', 'station_uncovered_alert', 'domain_verified'
+          'shift_started', 'shift_ended',
+          'drawer_expense_added', 'cash_handover_recorded', 'treasury_transferred',
+          'float_adjusted', 'superadmin_shift_unlocked',
+          'station_uncovered_alert', 'domain_verified'
         ] &&
         isValidId(data.actorUid) &&
         data.actorName is string && data.actorName.size() >= 1 && data.actorName.size() <= 100 &&
@@ -664,7 +723,12 @@ service cloud.firestore {
         ]) &&
         data.keys().hasOnly([
           'id', 'restaurantId', 'ownerId', 'staffId', 'staffName', 'stationId', 'stationName',
-          'hallId', 'status', 'ordersHandled', 'itemsMarkedReady', 'serviceCallsHandled',
+          'hallId', 'shiftSlotId', 'shiftSlotName', 'status',
+          'ordersHandled', 'itemsMarkedReady', 'serviceCallsHandled',
+          'openingFloat', 'carriedOverCash', 'carriedFromShiftId',
+          'cashSales', 'visaSales', 'drawerExpensesTotal', 'drawerVarianceTotal', 'expectedCashHandover',
+          'handedOverToUid', 'handedOverToName', 'handedOverToRole', 'handoverNote',
+          'handoverOpenTables', 'handoverStatus', 'extendedHours', 'superAdminUnlocked',
           'startedAt', 'endedAt', 'updatedAt'
         ]) &&
         isValidId(data.id) &&
@@ -677,13 +741,78 @@ service cloud.firestore {
         isValidStation(data.stationId) &&
         data.stationName is string && data.stationName.size() >= 1 && data.stationName.size() <= 80 &&
         (!('hallId' in data) || data.hallId == '' || isValidId(data.hallId)) &&
+        (!('shiftSlotId' in data) || (data.shiftSlotId is string && data.shiftSlotId.size() <= 40)) &&
+        (!('shiftSlotName' in data) || (data.shiftSlotName is string && data.shiftSlotName.size() <= 80)) &&
         data.status in ['active', 'completed'] &&
         data.ordersHandled is number && data.ordersHandled >= 0 && data.ordersHandled <= 1000000 &&
         data.itemsMarkedReady is number && data.itemsMarkedReady >= 0 && data.itemsMarkedReady <= 1000000 &&
         data.serviceCallsHandled is number && data.serviceCallsHandled >= 0 && data.serviceCallsHandled <= 1000000 &&
+        (!('openingFloat' in data) || (data.openingFloat is number && data.openingFloat >= 0 && data.openingFloat <= 1000000)) &&
+        (!('carriedOverCash' in data) || (data.carriedOverCash is number && data.carriedOverCash >= 0 && data.carriedOverCash <= 10000000)) &&
+        (!('carriedFromShiftId' in data) || data.carriedFromShiftId == '' || isValidId(data.carriedFromShiftId)) &&
+        (!('cashSales' in data) || (data.cashSales is number && data.cashSales >= 0 && data.cashSales <= 10000000)) &&
+        (!('visaSales' in data) || (data.visaSales is number && data.visaSales >= 0 && data.visaSales <= 10000000)) &&
+        (!('drawerExpensesTotal' in data) || (data.drawerExpensesTotal is number && data.drawerExpensesTotal >= 0 && data.drawerExpensesTotal <= 10000000)) &&
+        (!('drawerVarianceTotal' in data) || (data.drawerVarianceTotal is number && data.drawerVarianceTotal >= -1000000 && data.drawerVarianceTotal <= 1000000)) &&
+        (!('expectedCashHandover' in data) || (data.expectedCashHandover is number && data.expectedCashHandover >= -1000000 && data.expectedCashHandover <= 10000000)) &&
+        (!('handedOverToUid' in data) || data.handedOverToUid == '' || isValidId(data.handedOverToUid)) &&
+        (!('handedOverToName' in data) || (data.handedOverToName is string && data.handedOverToName.size() <= 100)) &&
+        (!('handedOverToRole' in data) || (data.handedOverToRole in ['', 'cashier', 'manager', 'owner'])) &&
+        (!('handoverNote' in data) || (data.handoverNote is string && data.handoverNote.size() <= 300)) &&
+        (!('handoverOpenTables' in data) || (data.handoverOpenTables is list && data.handoverOpenTables.size() <= 100)) &&
+        (!('handoverStatus' in data) || (data.handoverStatus in ['none', 'handed_to_cashier', 'handed_to_manager', 'handed_to_owner', 'self_continued'])) &&
+        (!('extendedHours' in data) || (data.extendedHours is number && data.extendedHours >= 0 && data.extendedHours <= 24)) &&
+        (!('superAdminUnlocked' in data) || data.superAdminUnlocked is bool) &&
         data.startedAt is timestamp &&
         (!('endedAt' in data) || data.endedAt is timestamp) &&
         data.updatedAt is timestamp;
+    }
+
+    function isValidDrawerExpenseShape(data, restaurantId, expenseId) {
+      return data.keys().hasAll([
+          'id', 'restaurantId', 'ownerId', 'shiftId', 'cashierUid', 'cashierName', 'amount', 'description', 'createdAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'restaurantId', 'ownerId', 'shiftId', 'cashierUid', 'cashierName', 'amount', 'description', 'note', 'createdAt'
+        ]) &&
+        isValidId(data.id) &&
+        data.id == expenseId &&
+        isValidId(data.restaurantId) &&
+        data.restaurantId == restaurantId &&
+        isValidId(data.ownerId) &&
+        isValidId(data.shiftId) &&
+        isValidId(data.cashierUid) &&
+        data.cashierName is string && data.cashierName.size() >= 1 && data.cashierName.size() <= 100 &&
+        data.amount is number && data.amount > 0 && data.amount <= 1000000 &&
+        data.description is string && data.description.size() >= 1 && data.description.size() <= 200 &&
+        (!('note' in data) || (data.note is string && data.note.size() <= 300)) &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidTreasuryTransferShape(data, restaurantId, transferId) {
+      return data.keys().hasAll([
+          'id', 'restaurantId', 'ownerId', 'fromType', 'toType', 'fromUid', 'fromName', 'toName', 'amountCash', 'createdAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'restaurantId', 'ownerId', 'fromType', 'toType', 'fromUid', 'fromName', 'toUid', 'toName',
+          'shiftId', 'amountCash', 'amountVisa', 'note', 'createdAt'
+        ]) &&
+        isValidId(data.id) &&
+        data.id == transferId &&
+        isValidId(data.restaurantId) &&
+        data.restaurantId == restaurantId &&
+        isValidId(data.ownerId) &&
+        data.fromType in ['cashier_shift', 'manager_custody', 'owner_adjustment'] &&
+        data.toType in ['cashier_shift', 'manager_custody', 'owner_vault'] &&
+        isValidId(data.fromUid) &&
+        data.fromName is string && data.fromName.size() >= 1 && data.fromName.size() <= 100 &&
+        (!('toUid' in data) || data.toUid == '' || isValidId(data.toUid)) &&
+        data.toName is string && data.toName.size() >= 1 && data.toName.size() <= 100 &&
+        (!('shiftId' in data) || data.shiftId == '' || isValidId(data.shiftId)) &&
+        data.amountCash is number && data.amountCash >= -1000000 && data.amountCash <= 100000000 &&
+        (!('amountVisa' in data) || (data.amountVisa is number && data.amountVisa >= 0 && data.amountVisa <= 100000000)) &&
+        (!('note' in data) || (data.note is string && data.note.size() <= 300)) &&
+        data.createdAt is timestamp;
     }
 
     function isValidStaffDeviceShape(data, restaurantId, deviceId) {
@@ -722,7 +851,7 @@ service cloud.firestore {
           'id', 'restaurantId', 'ownerId', 'name', 'tableCount', 'sortOrder', 'createdAt', 'updatedAt'
         ]) &&
         data.keys().hasOnly([
-          'id', 'restaurantId', 'ownerId', 'name', 'name_en', 'tableCount', 'sortOrder', 'createdAt', 'updatedAt'
+          'id', 'restaurantId', 'ownerId', 'name', 'name_en', 'hallType', 'tableCount', 'tableNumbers', 'sortOrder', 'createdAt', 'updatedAt'
         ]) &&
         isValidId(data.id) &&
         data.id == hallId &&
@@ -730,7 +859,9 @@ service cloud.firestore {
         isValidId(data.ownerId) &&
         data.name is string && data.name.size() >= 1 && data.name.size() <= 80 &&
         (!('name_en' in data) || (data.name_en is string && data.name_en.size() <= 80)) &&
+        (!('hallType' in data) || (data.hallType is string && data.hallType.size() <= 60)) &&
         data.tableCount is number && data.tableCount >= 1 && data.tableCount <= 200 &&
+        (!('tableNumbers' in data) || (data.tableNumbers is list && data.tableNumbers.size() >= 1 && data.tableNumbers.size() <= 200 && data.tableNumbers[0] is string)) &&
         data.sortOrder is number && data.sortOrder >= 0 && data.sortOrder <= 10000 &&
         data.createdAt is timestamp &&
         data.updatedAt is timestamp;
@@ -925,6 +1056,9 @@ service cloud.firestore {
             existing().ownerId == request.auth.uid && (
               incoming().diff(existing()).affectedKeys().hasOnly(['activeTheme', 'updatedAt']) ||
               incoming().diff(existing()).affectedKeys().hasOnly(['loyaltyConfig', 'updatedAt']) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['operationsConfig', 'updatedAt']) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['treasuryState', 'updatedAt']) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['operationsConfig', 'treasuryState', 'updatedAt']) ||
               incoming().diff(existing()).affectedKeys().hasOnly(['offers', 'promoCodes', 'updatedAt']) ||
               incoming().diff(existing()).affectedKeys().hasOnly(['offers', 'promoCodes', 'loyaltyConfig', 'updatedAt']) ||
               incoming().diff(existing()).affectedKeys().hasOnly([
@@ -949,9 +1083,20 @@ service cloud.firestore {
               )
             )
           ) || (
+            isActiveManagerForRestaurant(restaurantId) && (
+              incoming().diff(existing()).affectedKeys().hasOnly(['operationsConfig', 'updatedAt']) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['treasuryState', 'updatedAt']) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['operationsConfig', 'treasuryState', 'updatedAt'])
+            )
+          ) || (
+            staffHasScreen(restaurantId, 'cashier') &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['treasuryState', 'updatedAt'])
+          ) || (
             isSuperAdmin() && (
               incoming().diff(existing()).affectedKeys().hasOnly(['isSuspended', 'updatedAt']) ||
               incoming().diff(existing()).affectedKeys().hasOnly(['loyaltyConfig', 'updatedAt']) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['operationsConfig', 'updatedAt']) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['treasuryState', 'updatedAt']) ||
               incoming().diff(existing()).affectedKeys().hasOnly(['offers', 'promoCodes', 'updatedAt']) ||
               incoming().diff(existing()).affectedKeys().hasOnly(['offers', 'promoCodes', 'loyaltyConfig', 'updatedAt']) ||
               incoming().diff(existing()).affectedKeys().hasOnly([
@@ -1040,7 +1185,9 @@ service cloud.firestore {
           exists(/databases/$(database)/documents/restaurants/$(restaurantId));
         allow list: if isValidId(restaurantId) && (
           isSuperAdmin() ||
-          (isVerifiedAccount() && resource.data.ownerId == request.auth.uid)
+          (isVerifiedAccount() && resource.data.ownerId == request.auth.uid) ||
+          staffHasScreen(restaurantId, 'captain') ||
+          staffHasScreen(restaurantId, 'cashier')
         );
         allow create: if isValidId(restaurantId) &&
           isValidPhoneId(customerPhone) &&
@@ -1144,6 +1291,23 @@ service cloud.firestore {
                 'isActive', 'mustChangePassword', 'passwordChangedAt', 'lastLoginAt', 'updatedAt'
               ])
             ) || (
+              // Auto-lift expired timed suspension upon staff re-login
+              isSignedIn() &&
+              request.auth.uid == staffUid &&
+              existing().isActive == false &&
+              existing().suspendedType == 'timed' &&
+              existing().suspendedUntil != null &&
+              existing().suspendedUntil <= request.time &&
+              incoming().isActive == true &&
+              incoming().suspendedType == '' &&
+              incoming().suspendedUntil == null &&
+              incoming().suspendedReason == '' &&
+              incoming().lastLoginAt == request.time &&
+              incoming().diff(existing()).affectedKeys().hasOnly([
+                'isActive', 'suspendedType', 'suspendedUntil', 'suspendedReason',
+                'suspendedByRole', 'suspendedByName', 'lastLoginAt', 'updatedAt'
+              ])
+            ) || (
               // Active employee login timestamp or forced password update
               isSignedIn() &&
               request.auth.uid == staffUid &&
@@ -1165,7 +1329,7 @@ service cloud.firestore {
             (
               isActiveManagerForRestaurant(restaurantId) &&
               (existing().role != 'manager' || request.auth.uid == staffUid) &&
-              incoming().role == existing().role &&
+              (existing().role == 'manager' ? incoming().role == 'manager' : incoming().role != 'manager') &&
               (existing().role == 'manager' || !('staff_management' in incoming().allowedScreens))
             )
           );
@@ -1394,39 +1558,79 @@ service cloud.firestore {
           incoming().startedAt == existing().startedAt &&
           incoming().updatedAt == request.time && (
             (
+              // Super Admin override ONLY for closed shifts
+              isSuperAdmin()
+            ) || (
+              // Closing an active shift with handover details
               existing().status == 'active' &&
               incoming().status == 'completed' &&
               incoming().endedAt == request.time &&
-              incoming().diff(existing()).affectedKeys().hasOnly(['status', 'endedAt', 'updatedAt']) && (
-                isSuperAdmin() ||
+              incoming().diff(existing()).affectedKeys().hasOnly([
+                'status', 'endedAt', 'updatedAt',
+                'cashSales', 'visaSales', 'drawerExpensesTotal', 'drawerVarianceTotal', 'expectedCashHandover',
+                'handedOverToUid', 'handedOverToName', 'handedOverToRole', 'handoverNote',
+                'handoverOpenTables', 'handoverStatus', 'extendedHours'
+              ]) && (
                 isOwnerOfRestaurant(restaurantId) ||
                 isActiveManagerForRestaurant(restaurantId) ||
                 (isActiveStaffForRestaurant(restaurantId) && existing().staffId == request.auth.uid)
               )
             ) || (
+              // Owner or Manager adjusting cashier float or shift slot on active shift
               existing().status == 'active' &&
               incoming().status == 'active' &&
-              isActiveStaffForRestaurant(restaurantId) &&
-              existing().staffId == request.auth.uid && (
+              (isOwnerOfRestaurant(restaurantId) || isActiveManagerForRestaurant(restaurantId)) &&
+              incoming().diff(existing()).affectedKeys().hasOnly([
+                'openingFloat', 'extendedHours', 'shiftSlotId', 'shiftSlotName', 'updatedAt'
+              ])
+            ) || (
+              // Active shift operational & financial counters
+              existing().status == 'active' &&
+              incoming().status == 'active' &&
+              isActiveStaffForRestaurant(restaurantId) && (
                 (
-                  incoming().diff(existing()).affectedKeys().hasOnly(['ordersHandled', 'updatedAt']) &&
-                  incoming().ordersHandled >= existing().ordersHandled &&
-                  incoming().ordersHandled <= existing().ordersHandled + 50
+                  existing().staffId == request.auth.uid && (
+                    (
+                      incoming().diff(existing()).affectedKeys().hasOnly(['ordersHandled', 'updatedAt']) &&
+                      incoming().ordersHandled >= existing().ordersHandled &&
+                      incoming().ordersHandled <= existing().ordersHandled + 50
+                    ) || (
+                      incoming().diff(existing()).affectedKeys().hasOnly(['itemsMarkedReady', 'updatedAt']) &&
+                      incoming().itemsMarkedReady >= existing().itemsMarkedReady &&
+                      incoming().itemsMarkedReady <= existing().itemsMarkedReady + 50
+                    ) || (
+                      incoming().diff(existing()).affectedKeys().hasOnly(['serviceCallsHandled', 'updatedAt']) &&
+                      incoming().serviceCallsHandled >= existing().serviceCallsHandled &&
+                      incoming().serviceCallsHandled <= existing().serviceCallsHandled + 50
+                    ) || (
+                      incoming().diff(existing()).affectedKeys().hasOnly(['extendedHours', 'updatedAt'])
+                    ) || (
+                      incoming().diff(existing()).affectedKeys().hasOnly([
+                        'ordersHandled', 'cashSales', 'visaSales', 'drawerVarianceTotal', 'expectedCashHandover', 'updatedAt'
+                      ])
+                    ) || (
+                      incoming().diff(existing()).affectedKeys().hasOnly([
+                        'cashSales', 'visaSales', 'drawerVarianceTotal', 'expectedCashHandover', 'updatedAt'
+                      ])
+                    ) || (
+                      incoming().diff(existing()).affectedKeys().hasOnly([
+                        'drawerExpensesTotal', 'expectedCashHandover', 'updatedAt'
+                      ])
+                    )
+                  )
                 ) || (
-                  incoming().diff(existing()).affectedKeys().hasOnly(['itemsMarkedReady', 'updatedAt']) &&
-                  incoming().itemsMarkedReady >= existing().itemsMarkedReady &&
-                  incoming().itemsMarkedReady <= existing().itemsMarkedReady + 50
-                ) || (
-                  incoming().diff(existing()).affectedKeys().hasOnly(['serviceCallsHandled', 'updatedAt']) &&
-                  incoming().serviceCallsHandled >= existing().serviceCallsHandled &&
-                  incoming().serviceCallsHandled <= existing().serviceCallsHandled + 50
+                  // Owner or Manager acting inside an active shift (e.g. closing an order on Cashier)
+                  (isOwnerOfRestaurant(restaurantId) || isActiveManagerForRestaurant(restaurantId)) &&
+                  incoming().diff(existing()).affectedKeys().hasOnly([
+                    'ordersHandled', 'cashSales', 'visaSales', 'drawerVarianceTotal', 'expectedCashHandover', 'updatedAt'
+                  ])
                 )
               )
             )
           );
         allow delete: if isValidId(restaurantId) && isValidId(shiftId) && (
           isSuperAdmin() ||
-          isOwnerOfRestaurant(restaurantId)
+          (isOwnerOfRestaurant(restaurantId) && existing().status == 'active')
         );
       }
 
@@ -1478,6 +1682,52 @@ service cloud.firestore {
           (isSignedIn() && existing().staffId == request.auth.uid)
         );
       }
+
+      // 3g-5. Cashier Shift Drawer Expenses subcollection (immutable once recorded)
+      match /drawer_expenses/{expenseId} {
+        allow get, list: if isValidId(restaurantId) && (
+          isSuperAdmin() ||
+          isOwnerOfRestaurant(restaurantId) ||
+          isActiveManagerForRestaurant(restaurantId) ||
+          staffHasScreen(restaurantId, 'cashier')
+        );
+        allow create: if isValidId(restaurantId) &&
+          isValidId(expenseId) &&
+          isValidDrawerExpenseShape(incoming(), restaurantId, expenseId) &&
+          incoming().createdAt == request.time &&
+          exists(/databases/$(database)/documents/restaurants/$(restaurantId)) &&
+          get(/databases/$(database)/documents/restaurants/$(restaurantId)).data.ownerId == incoming().ownerId && (
+            isSuperAdmin() ||
+            isOwnerOfRestaurant(restaurantId) ||
+            isActiveManagerForRestaurant(restaurantId) ||
+            (staffHasScreen(restaurantId, 'cashier') && incoming().cashierUid == request.auth.uid)
+          );
+        allow update: if false;
+        allow delete: if isSuperAdmin();
+      }
+
+      // 3g-6. Treasury Transfers & Handovers subcollection (immutable once recorded)
+      match /treasury_transfers/{transferId} {
+        allow get, list: if isValidId(restaurantId) && (
+          isSuperAdmin() ||
+          isOwnerOfRestaurant(restaurantId) ||
+          isActiveManagerForRestaurant(restaurantId) ||
+          staffHasScreen(restaurantId, 'cashier')
+        );
+        allow create: if isValidId(restaurantId) &&
+          isValidId(transferId) &&
+          isValidTreasuryTransferShape(incoming(), restaurantId, transferId) &&
+          incoming().createdAt == request.time &&
+          exists(/databases/$(database)/documents/restaurants/$(restaurantId)) &&
+          get(/databases/$(database)/documents/restaurants/$(restaurantId)).data.ownerId == incoming().ownerId && (
+            isSuperAdmin() ||
+            isOwnerOfRestaurant(restaurantId) ||
+            isActiveManagerForRestaurant(restaurantId) ||
+            (staffHasScreen(restaurantId, 'cashier') && incoming().fromUid == request.auth.uid)
+          );
+        allow update: if false;
+        allow delete: if isSuperAdmin();
+      }
     }
 
     // 3h. Top-level Staff RBAC Access Map (indexed strictly by staffUid for fast cross-collection rules)
@@ -1508,6 +1758,23 @@ service cloud.firestore {
         incoming().ownerId == existing().ownerId &&
         incoming().updatedAt == request.time && (
           (
+            // Auto-lift expired timed suspension upon staff re-login
+            isSignedIn() &&
+            request.auth.uid == staffUid &&
+            existing().isActive == false &&
+            existing().suspendedType == 'timed' &&
+            existing().suspendedUntil != null &&
+            existing().suspendedUntil <= request.time &&
+            incoming().role == existing().role &&
+            incoming().allowedScreens == existing().allowedScreens &&
+            incoming().defaultScreen == existing().defaultScreen &&
+            incoming().isActive == true &&
+            incoming().suspendedType == '' &&
+            incoming().suspendedUntil == null &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'isActive', 'suspendedType', 'suspendedUntil', 'updatedAt'
+            ])
+          ) || (
             isSignedIn() &&
             request.auth.uid == staffUid &&
             existing().mustChangePassword == true &&
@@ -1534,7 +1801,7 @@ service cloud.firestore {
           (
             isActiveManagerForRestaurant(existing().restaurantId) &&
             (existing().role != 'manager' || request.auth.uid == staffUid) &&
-            incoming().role == existing().role &&
+            (existing().role == 'manager' ? incoming().role == 'manager' : incoming().role != 'manager') &&
             (existing().role == 'manager' || !('staff_management' in incoming().allowedScreens))
           )
         );
@@ -1558,6 +1825,9 @@ service cloud.firestore {
                 isVerifiedAccount() &&
                 incoming().ownerId == request.auth.uid &&
                 get(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)).data.ownerId == request.auth.uid
+              ) || (
+                isActiveManagerForRestaurant(incoming().restaurantId) &&
+                get(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)).data.ownerId == incoming().ownerId
               ) || (
                 isSuperAdmin() &&
                 get(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)).data.ownerId == incoming().ownerId
@@ -1590,6 +1860,7 @@ service cloud.firestore {
             existing().ownerId == request.auth.uid &&
             get(/databases/$(database)/documents/restaurants/$(existing().restaurantId)).data.ownerId == request.auth.uid
           ) ||
+          isActiveManagerForRestaurant(existing().restaurantId) ||
           isSuperAdmin()
         );
       allow delete: if isValidId(categoryId) && (
@@ -1597,7 +1868,7 @@ service cloud.firestore {
           isVerifiedAccount() &&
           existing().ownerId == request.auth.uid &&
           get(/databases/$(database)/documents/restaurants/$(existing().restaurantId)).data.ownerId == request.auth.uid
-        )
+        ) || isActiveManagerForRestaurant(existing().restaurantId)
       );
     }
 
@@ -1615,6 +1886,9 @@ service cloud.firestore {
                 isVerifiedAccount() &&
                 incoming().ownerId == request.auth.uid &&
                 get(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)).data.ownerId == request.auth.uid
+              ) || (
+                isActiveManagerForRestaurant(incoming().restaurantId) &&
+                get(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)).data.ownerId == incoming().ownerId
               ) || (
                 isSuperAdmin() &&
                 get(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)).data.ownerId == incoming().ownerId
@@ -1643,7 +1917,8 @@ service cloud.firestore {
         exists(/databases/$(database)/documents/restaurants/$(existing().restaurantId)) && (
           (
             (
-              isSuperAdmin() || (
+              isSuperAdmin() ||
+              isActiveManagerForRestaurant(existing().restaurantId) || (
                 isVerifiedAccount() &&
                 existing().ownerId == request.auth.uid &&
                 get(/databases/$(database)/documents/restaurants/$(existing().restaurantId)).data.ownerId == request.auth.uid
@@ -1667,7 +1942,8 @@ service cloud.firestore {
           )
         );
       allow delete: if isValidId(itemId) && (
-        isSuperAdmin() || (
+        isSuperAdmin() ||
+        isActiveManagerForRestaurant(existing().restaurantId) || (
           isVerifiedAccount() &&
           existing().ownerId == request.auth.uid &&
           get(/databases/$(database)/documents/restaurants/$(existing().restaurantId)).data.ownerId == request.auth.uid
@@ -1699,36 +1975,89 @@ service cloud.firestore {
         incoming().restaurantId == existing().restaurantId &&
         incoming().createdAt == existing().createdAt &&
         incoming().updatedAt == request.time &&
-        !(existing().status in ['completed', 'cancelled']) &&
         exists(/databases/$(database)/documents/restaurants/$(existing().restaurantId)) && (
           (
-            (
+            // Closed / cancelled orders are IMMUTABLE except via Super Admin or explicit SuperAdmin unlock or while linked shift is still active (Owner/Manager)
+            (existing().status in ['completed', 'cancelled']) && (
               isSuperAdmin() ||
               (
-                isVerifiedAccount() &&
-                existing().ownerId == request.auth.uid &&
-                get(/databases/$(database)/documents/restaurants/$(existing().restaurantId)).data.ownerId == request.auth.uid
-              ) ||
-              staffHasScreen(existing().restaurantId, 'cashier')
-            ) && (
-              incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']) ||
-              incoming().diff(existing()).affectedKeys().hasOnly(['status', 'lastUpdatedByUid', 'lastUpdatedByName', 'lastUpdatedByRole', 'updatedAt']) ||
-              incoming().diff(existing()).affectedKeys().hasOnly(['status', 'lastUpdatedByUid', 'lastUpdatedByName', 'lastUpdatedByRole', 'closedByUid', 'closedByName', 'closedByRole', 'updatedAt']) ||
-              incoming().diff(existing()).affectedKeys().hasOnly(['itemProgress', 'updatedAt']) ||
-              incoming().diff(existing()).affectedKeys().hasOnly(['itemProgress', 'status', 'updatedAt']) ||
-              incoming().diff(existing()).affectedKeys().hasOnly(['itemProgress', 'itemProgressBy', 'lastUpdatedByUid', 'lastUpdatedByName', 'lastUpdatedByRole', 'updatedAt']) ||
-              incoming().diff(existing()).affectedKeys().hasOnly(['itemProgress', 'itemProgressBy', 'status', 'lastUpdatedByUid', 'lastUpdatedByName', 'lastUpdatedByRole', 'updatedAt'])
+                (
+                  existing().superAdminUnlocked == true ||
+                  (
+                    'shiftId' in existing() &&
+                    existing().shiftId != '' &&
+                    exists(/databases/$(database)/documents/restaurants/$(existing().restaurantId)/staff_shifts/$(existing().shiftId)) &&
+                    get(/databases/$(database)/documents/restaurants/$(existing().restaurantId)/staff_shifts/$(existing().shiftId)).data.status == 'active'
+                  )
+                ) && (
+                  (
+                    isVerifiedAccount() &&
+                    existing().ownerId == request.auth.uid &&
+                    get(/databases/$(database)/documents/restaurants/$(existing().restaurantId)).data.ownerId == request.auth.uid
+                  ) ||
+                  isActiveManagerForRestaurant(existing().restaurantId)
+                )
+              )
             )
           ) || (
-            (
-              staffHasAnyStationAccess(existing().restaurantId) ||
-              staffHasScreen(existing().restaurantId, 'captain')
-            ) &&
-            !(incoming().status in ['completed', 'cancelled']) && (
-              incoming().diff(existing()).affectedKeys().hasOnly(['itemProgress', 'updatedAt']) ||
-              incoming().diff(existing()).affectedKeys().hasOnly(['itemProgress', 'status', 'updatedAt']) ||
-              incoming().diff(existing()).affectedKeys().hasOnly(['itemProgress', 'itemProgressBy', 'lastUpdatedByUid', 'lastUpdatedByName', 'lastUpdatedByRole', 'updatedAt']) ||
-              incoming().diff(existing()).affectedKeys().hasOnly(['itemProgress', 'itemProgressBy', 'status', 'lastUpdatedByUid', 'lastUpdatedByName', 'lastUpdatedByRole', 'updatedAt'])
+            // Open orders (pending / preparing)
+            !(existing().status in ['completed', 'cancelled']) && (
+              (
+                (
+                  isSuperAdmin() ||
+                  (
+                    isVerifiedAccount() &&
+                    existing().ownerId == request.auth.uid &&
+                    get(/databases/$(database)/documents/restaurants/$(existing().restaurantId)).data.ownerId == request.auth.uid
+                  ) ||
+                  isActiveManagerForRestaurant(existing().restaurantId) ||
+                  staffHasScreen(existing().restaurantId, 'cashier')
+                ) && (
+                  incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']) ||
+                  incoming().diff(existing()).affectedKeys().hasOnly(['status', 'lastUpdatedByUid', 'lastUpdatedByName', 'lastUpdatedByRole', 'updatedAt']) ||
+                  incoming().diff(existing()).affectedKeys().hasOnly(['status', 'lastUpdatedByUid', 'lastUpdatedByName', 'lastUpdatedByRole', 'closedByUid', 'closedByName', 'closedByRole', 'updatedAt']) ||
+                  incoming().diff(existing()).affectedKeys().hasOnly([
+                    'status', 'shiftId', 'paymentMethod', 'cashPaidAmount', 'visaPaidAmount',
+                    'customerCashTendered', 'changeReturned', 'drawerVariance', 'closedAt',
+                    'lastUpdatedByUid', 'lastUpdatedByName', 'lastUpdatedByRole',
+                    'closedByUid', 'closedByName', 'closedByRole', 'updatedAt'
+                  ]) ||
+                  incoming().diff(existing()).affectedKeys().hasOnly(['itemProgress', 'updatedAt']) ||
+                  incoming().diff(existing()).affectedKeys().hasOnly(['itemProgress', 'status', 'updatedAt']) ||
+                  incoming().diff(existing()).affectedKeys().hasOnly(['itemProgress', 'itemProgressBy', 'lastUpdatedByUid', 'lastUpdatedByName', 'lastUpdatedByRole', 'updatedAt']) ||
+                  incoming().diff(existing()).affectedKeys().hasOnly(['itemProgress', 'itemProgressBy', 'status', 'lastUpdatedByUid', 'lastUpdatedByName', 'lastUpdatedByRole', 'updatedAt']) ||
+                  (
+                    (
+                      isSuperAdmin() ||
+                      (
+                        isVerifiedAccount() &&
+                        existing().ownerId == request.auth.uid &&
+                        get(/databases/$(database)/documents/restaurants/$(existing().restaurantId)).data.ownerId == request.auth.uid
+                      ) ||
+                      isActiveManagerForRestaurant(existing().restaurantId)
+                    ) &&
+                    incoming().diff(existing()).affectedKeys().hasOnly([
+                      'items', 'subtotal', 'serviceCharge', 'deliveryFee', 'discountAmount',
+                      'manualDiscountAmount', 'manualDiscountPercent', 'manualDiscountReason',
+                      'taxAmount', 'total', 'notes', 'tableNotes', 'cancelReason',
+                      'adjustmentHistory', 'status', 'shiftId', 'closedAt',
+                      'closedByUid', 'closedByName', 'closedByRole',
+                      'lastUpdatedByUid', 'lastUpdatedByName', 'lastUpdatedByRole', 'updatedAt'
+                    ])
+                  )
+                )
+              ) || (
+                (
+                  staffHasAnyStationAccess(existing().restaurantId) ||
+                  staffHasScreen(existing().restaurantId, 'captain')
+                ) &&
+                !(incoming().status in ['completed', 'cancelled']) && (
+                  incoming().diff(existing()).affectedKeys().hasOnly(['itemProgress', 'updatedAt']) ||
+                  incoming().diff(existing()).affectedKeys().hasOnly(['itemProgress', 'status', 'updatedAt']) ||
+                  incoming().diff(existing()).affectedKeys().hasOnly(['itemProgress', 'itemProgressBy', 'lastUpdatedByUid', 'lastUpdatedByName', 'lastUpdatedByRole', 'updatedAt']) ||
+                  incoming().diff(existing()).affectedKeys().hasOnly(['itemProgress', 'itemProgressBy', 'status', 'lastUpdatedByUid', 'lastUpdatedByName', 'lastUpdatedByRole', 'updatedAt'])
+                )
+              )
             )
           )
         );
@@ -1795,7 +2124,7 @@ service cloud.firestore {
             incoming().ownerId == request.auth.uid &&
             get(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)).data.ownerId == request.auth.uid
           ) || (
-            staffHasScreen(incoming().restaurantId, 'halls') &&
+            (staffHasScreen(incoming().restaurantId, 'halls') || isActiveManagerForRestaurant(incoming().restaurantId)) &&
             get(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)).data.ownerId == incoming().ownerId
           ) || (
             isSuperAdmin() &&
@@ -1810,21 +2139,25 @@ service cloud.firestore {
         incoming().createdAt == existing().createdAt &&
         incoming().updatedAt == request.time &&
         incoming().diff(existing()).affectedKeys().hasOnly([
-          'name', 'name_en', 'tableCount', 'sortOrder', 'updatedAt'
+          'name', 'name_en', 'hallType', 'tableCount', 'tableNumbers', 'sortOrder', 'updatedAt'
         ]) &&
         exists(/databases/$(database)/documents/restaurants/$(existing().restaurantId)) && (
           isSuperAdmin() || (
             isVerifiedAccount() &&
             existing().ownerId == request.auth.uid &&
             get(/databases/$(database)/documents/restaurants/$(existing().restaurantId)).data.ownerId == request.auth.uid
-          ) || staffHasScreen(existing().restaurantId, 'halls')
+          ) ||
+          staffHasScreen(existing().restaurantId, 'halls') ||
+          isActiveManagerForRestaurant(existing().restaurantId)
         );
       allow delete: if isValidId(hallId) && (
         isSuperAdmin() || (
           isVerifiedAccount() &&
           existing().ownerId == request.auth.uid &&
           get(/databases/$(database)/documents/restaurants/$(existing().restaurantId)).data.ownerId == request.auth.uid
-        ) || staffHasScreen(existing().restaurantId, 'halls')
+        ) ||
+        staffHasScreen(existing().restaurantId, 'halls') ||
+        isActiveManagerForRestaurant(existing().restaurantId)
       );
     }
 

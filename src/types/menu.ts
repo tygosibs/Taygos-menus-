@@ -168,6 +168,62 @@ export interface CustomerProfile {
   updatedAt?: unknown;
 }
 
+export interface ShiftSlotConfig {
+  id: string;
+  name: string;
+  nameEn?: string;
+  startTime: string;
+  endTime: string;
+}
+
+export interface TableGridColors {
+  empty: string;
+  occupied: string;
+  billRequested: string;
+  overdue: string;
+}
+
+export interface ManagerPermissions {
+  canEditMenu: boolean;
+  canPauseItems: boolean;
+  canEditOpenOrders: boolean;
+  canCancelOpenOrders: boolean;
+  canEditClosedChecks: boolean;
+  canApplyInstantDiscount: boolean;
+  canViewShiftReports: boolean;
+  canEditDrawerFloat: boolean;
+  canManageStaff: boolean;
+  canConfigureOperations: boolean;
+  canToggleScreenPrices: boolean;
+}
+
+export interface ShowPricesByRole {
+  cashier: boolean;
+  manager: boolean;
+  kitchen: boolean;
+  bar: boolean;
+  pastry: boolean;
+  captain: boolean;
+}
+
+export interface OperationsConfig {
+  shiftSlots: ShiftSlotConfig[];
+  defaultCashierFloat: number;
+  tableOverdueMinutes: number;
+  tableColors: TableGridColors;
+  managerPermissions: ManagerPermissions;
+  showPricesByRole: ShowPricesByRole;
+}
+
+export interface TreasuryState {
+  managerCustodyBalance: number;
+  ownerVaultCashBalance: number;
+  ownerVaultVisaTotal: number;
+  lastUpdatedByUid?: string;
+  lastUpdatedByName?: string;
+  updatedAt?: number;
+}
+
 export interface Restaurant {
   id: string;
   ownerId: string;
@@ -202,6 +258,8 @@ export interface Restaurant {
   offers?: MenuOffer[];
   promoCodes?: PromoCode[];
   loyaltyConfig?: LoyaltyConfig;
+  operationsConfig?: OperationsConfig;
+  treasuryState?: TreasuryState;
   createdAt?: unknown;
   updatedAt?: unknown;
 }
@@ -324,7 +382,7 @@ export type StaffScreen =
 export interface StaffActorInfo {
   uid: string;
   name: string;
-  role: 'owner' | StaffRole;
+  role: 'owner' | 'superadmin' | StaffRole;
 }
 
 export interface ItemProgressActorEntry {
@@ -335,6 +393,18 @@ export interface ItemProgressActorEntry {
   station?: PrepStation;
   stationId?: string;
   updatedAt: number;
+}
+
+export type OrderPaymentMethod = 'cash' | 'visa' | 'split';
+
+export interface OrderAdjustmentEntry {
+  at: number;
+  actorUid: string;
+  actorName: string;
+  actorRole: string;
+  action: 'items_modified' | 'discount_applied' | 'notes_updated' | 'order_cancelled' | 'superadmin_unlocked';
+  reason: string;
+  details?: string;
 }
 
 export interface Order {
@@ -352,15 +422,31 @@ export interface Order {
   guestChecks?: GuestCheckSummary[];
   deliveryAddress?: string;
   notes?: string;
+  tableNotes?: string;
   items: OrderItemPayload[];
   subtotal: number;
   serviceCharge: number;
   deliveryFee?: number;
   discountAmount?: number;
+  manualDiscountAmount?: number;
+  manualDiscountPercent?: number;
+  manualDiscountReason?: string;
   promoCode?: string;
   taxAmount: number;
   total: number;
   status: OrderStatus;
+  shiftId?: string;
+  paymentMethod?: OrderPaymentMethod;
+  cashPaidAmount?: number;
+  visaPaidAmount?: number;
+  customerCashTendered?: number;
+  changeReturned?: number;
+  drawerVariance?: number;
+  cancelReason?: string;
+  adjustmentHistory?: OrderAdjustmentEntry[];
+  closedAt?: unknown;
+  superAdminUnlocked?: boolean;
+  superAdminUnlockedBy?: string;
   itemProgress?: Record<string, ItemPrepState>;
   itemProgressBy?: Record<string, ItemProgressActorEntry>;
   createdByUid?: string;
@@ -433,6 +519,8 @@ export interface ServiceCall {
   updatedAt?: unknown;
 }
 
+export type SuspensionType = 'timed' | 'indefinite' | '';
+
 export interface StaffMember {
   uid: string;
   restaurantId: string;
@@ -452,6 +540,11 @@ export interface StaffMember {
   hallName?: string;
   isActive: boolean;
   mustChangePassword: boolean;
+  suspendedType?: SuspensionType;
+  suspendedUntil?: unknown;
+  suspendedReason?: string;
+  suspendedByRole?: 'owner' | 'manager' | '';
+  suspendedByName?: string;
   activeInviteHash?: string;
   createdBy: string;
   lastLoginAt?: unknown;
@@ -503,6 +596,8 @@ export interface StaffAccess {
   hallId?: string;
   isActive: boolean;
   mustChangePassword: boolean;
+  suspendedType?: SuspensionType;
+  suspendedUntil?: unknown;
   updatedAt?: unknown;
 }
 
@@ -524,6 +619,12 @@ export interface StaffDevice {
 }
 
 export type StaffShiftStatus = 'active' | 'completed';
+export type HandoverStatus =
+  | 'none'
+  | 'handed_to_cashier'
+  | 'handed_to_manager'
+  | 'handed_to_owner'
+  | 'self_continued';
 
 export interface StaffShift {
   id: string;
@@ -534,26 +635,81 @@ export interface StaffShift {
   stationId: string;
   stationName: string;
   hallId?: string;
+  shiftSlotId?: string;
+  shiftSlotName?: string;
   status: StaffShiftStatus;
   ordersHandled: number;
   itemsMarkedReady: number;
   serviceCallsHandled: number;
+  openingFloat?: number;
+  carriedOverCash?: number;
+  carriedFromShiftId?: string;
+  cashSales?: number;
+  visaSales?: number;
+  drawerExpensesTotal?: number;
+  drawerVarianceTotal?: number;
+  expectedCashHandover?: number;
+  handedOverToUid?: string;
+  handedOverToName?: string;
+  handedOverToRole?: 'cashier' | 'manager' | 'owner' | '';
+  handoverNote?: string;
+  handoverOpenTables?: string[];
+  handoverStatus?: HandoverStatus;
+  extendedHours?: number;
+  superAdminUnlocked?: boolean;
   startedAt?: unknown;
   endedAt?: unknown;
   updatedAt?: unknown;
+}
+
+export interface DrawerExpense {
+  id: string;
+  restaurantId: string;
+  ownerId: string;
+  shiftId: string;
+  cashierUid: string;
+  cashierName: string;
+  amount: number;
+  description: string;
+  note?: string;
+  createdAt?: unknown;
+}
+
+export interface TreasuryTransfer {
+  id: string;
+  restaurantId: string;
+  ownerId: string;
+  fromType: 'cashier_shift' | 'manager_custody' | 'owner_adjustment';
+  toType: 'cashier_shift' | 'manager_custody' | 'owner_vault';
+  fromUid: string;
+  fromName: string;
+  toUid?: string;
+  toName: string;
+  shiftId?: string;
+  amountCash: number;
+  amountVisa?: number;
+  note?: string;
+  createdAt?: unknown;
 }
 
 export type StaffAuditEventType =
   | 'staff_created'
   | 'staff_updated'
   | 'staff_deleted'
+  | 'staff_suspended'
+  | 'staff_unsuspended'
+  | 'staff_promoted'
   | 'invite_created'
   | 'invite_used'
   | 'password_changed'
   | 'staff_login'
   | 'order_created'
   | 'order_status_updated'
+  | 'order_modified'
+  | 'order_cancelled'
+  | 'instant_discount_applied'
   | 'kds_item_updated'
+  | 'menu_item_paused'
   | 'table_closed'
   | 'service_call_handled'
   | 'station_created'
@@ -561,6 +717,11 @@ export type StaffAuditEventType =
   | 'station_deleted'
   | 'shift_started'
   | 'shift_ended'
+  | 'drawer_expense_added'
+  | 'cash_handover_recorded'
+  | 'treasury_transferred'
+  | 'float_adjusted'
+  | 'superadmin_shift_unlocked'
   | 'station_uncovered_alert'
   | 'domain_verified';
 
@@ -586,7 +747,9 @@ export interface Hall {
   ownerId: string;
   name: string;
   name_en?: string;
+  hallType?: string;
   tableCount: number;
+  tableNumbers?: string[];
   sortOrder: number;
   createdAt?: unknown;
   updatedAt?: unknown;

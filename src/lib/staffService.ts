@@ -13,6 +13,7 @@ import {
   query,
   serverTimestamp,
   Timestamp,
+  updateDoc,
   where,
   writeBatch,
 } from 'firebase/firestore';
@@ -950,6 +951,7 @@ export async function updateStaffPermissionsAndProfile(params: {
 
   await batch.commit();
 
+  const roleChanged = nextRole !== staff.role;
   try {
     const auditBatch = writeBatch(db);
     const logId = makeStaffDocId('slog');
@@ -957,14 +959,16 @@ export async function updateStaffPermissionsAndProfile(params: {
       id: logId,
       restaurantId,
       ownerId: staff.ownerId,
-      eventType: 'staff_updated' satisfies StaffAuditEventType,
+      eventType: (roleChanged ? 'staff_promoted' : 'staff_updated') satisfies StaffAuditEventType,
       actorUid: actor.uid,
       actorName: actor.name.slice(0, 100),
       actorRole: actor.role,
       targetUid: staff.uid,
       targetName: nextName,
       screen: 'staff_management',
-      details: nextActive
+      details: roleChanged
+        ? `تم تعديل/ترقية المسمى الوظيفي للموظف ${nextName} إلى (${nextRole}${nextJobTitle ? ` - ${nextJobTitle}` : ''})`
+        : nextActive
         ? `تم تحديث صلاحيات وبيانات ${nextName} (${nextRole})`
         : `تم إيقاف حساب ${nextName} مؤقتاً`,
       createdAt: serverTimestamp(),
@@ -972,6 +976,187 @@ export async function updateStaffPermissionsAndProfile(params: {
     await auditBatch.commit();
   } catch {
     // Non-fatal audit logging
+  }
+}
+
+export function resolveStaffSuspensionState(staff: StaffMember): {
+  isSuspended: boolean;
+  isExpiredTimed: boolean;
+  message: string;
+} {
+  const actorLabel =
+    staff.suspendedByRole === 'owner'
+      ? 'صاحب المطعم'
+      : staff.suspendedByRole === 'manager'
+      ? 'المدير'
+      : 'إدارة المطعم';
+  const actorNamePart = staff.suspendedByName ? ` (${staff.suspendedByName})` : '';
+  const reasonPart = staff.suspendedReason?.trim()
+    ? ` — السبب: ${staff.suspendedReason.trim()}`
+    : '';
+
+  if (staff.suspendedType === 'indefinite' && !staff.isActive) {
+    return {
+      isSuspended: true,
+      isExpiredTimed: false,
+      message: `تم إيقاف شاشتك بواسطة ${actorLabel}${actorNamePart} لأجل غير مسمى${reasonPart} — برجاء مراجعته.`,
+    };
+  }
+
+  if (staff.suspendedType === 'timed') {
+    const untilMs = getTsMillis(staff.suspendedUntil);
+    if (untilMs > Date.now() && !staff.isActive) {
+      const formatted = new Date(untilMs).toLocaleString('ar-EG', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      });
+      return {
+        isSuspended: true,
+        isExpiredTimed: false,
+        message: `تم إيقاف شاشتك بواسطة ${actorLabel}${actorNamePart} حتى ${formatted}${reasonPart} — برجاء مراجعته.`,
+      };
+    }
+    if (!staff.isActive && untilMs > 0 && untilMs <= Date.now()) {
+      return {
+        isSuspended: false,
+        isExpiredTimed: true,
+        message: '',
+      };
+    }
+  }
+
+  if (!staff.isActive) {
+    return {
+      isSuspended: true,
+      isExpiredTimed: false,
+      message: staff.mustChangePassword
+        ? 'هذا الحساب بانتظار التفعيل عبر رابط الدعوة QR.'
+        : `تم إيقاف شاشتك بواسطة ${actorLabel}${actorNamePart}${reasonPart} — برجاء مراجعته.`,
+    };
+  }
+
+  return {
+    isSuspended: false,
+    isExpiredTimed: false,
+    message: '',
+  };
+}
+
+export async function suspendStaffMember(params: {
+  restaurantId: string;
+  staff: StaffMember;
+  actor: StaffActorInfo;
+  suspendedType: 'timed' | 'indefinite';
+  durationHours?: number;
+  suspendedUntilMs?: number;
+  reason: string;
+}): Promise<void> {
+  const { restaurantId, staff, actor, suspendedType, reason } = params;
+  const cleanReason = reason.trim().slice(0, 300);
+  if (!cleanReason) {
+    throw new Error('يرجى كتابة سبب إيقاف الموظف.');
+  }
+
+  let untilTs: Timestamp | null = null;
+  let durationLabel = 'لأجل غير مسمى';
+  if (suspendedType === 'timed') {
+    const targetMs =
+      typeof params.suspendedUntilMs === 'number' && params.suspendedUntilMs > Date.now()
+        ? params.suspendedUntilMs
+        : Date.now() + Math.max(1, Number(params.durationHours) || 24) * 60 * 60 * 1000;
+    untilTs = Timestamp.fromMillis(targetMs);
+    durationLabel = `حتى ${new Date(targetMs).toLocaleString('ar-EG', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    })}`;
+  }
+
+  const byRole: 'owner' | 'manager' = actor.role === 'owner' ? 'owner' : 'manager';
+  const batch = writeBatch(db);
+  batch.update(doc(db, 'restaurants', restaurantId, 'staff', staff.uid), {
+    isActive: false,
+    suspendedType,
+    suspendedUntil: untilTs,
+    suspendedReason: cleanReason,
+    suspendedByRole: byRole,
+    suspendedByName: actor.name.trim().slice(0, 100),
+    updatedAt: serverTimestamp(),
+  });
+  batch.update(doc(db, 'staff_access', staff.uid), {
+    isActive: false,
+    suspendedType,
+    suspendedUntil: untilTs,
+    updatedAt: serverTimestamp(),
+  });
+  await batch.commit();
+
+  try {
+    const logId = makeStaffDocId('slog');
+    const logBatch = writeBatch(db);
+    logBatch.set(doc(db, 'restaurants', restaurantId, 'staff_audit_logs', logId), {
+      id: logId,
+      restaurantId,
+      ownerId: staff.ownerId,
+      eventType: 'staff_suspended' satisfies StaffAuditEventType,
+      actorUid: actor.uid,
+      actorName: actor.name.slice(0, 100),
+      actorRole: actor.role,
+      targetUid: staff.uid,
+      targetName: staff.name,
+      screen: 'staff_management',
+      details: `إيقاف ${staff.name} (${durationLabel}) — السبب: ${cleanReason}`,
+      createdAt: serverTimestamp(),
+    });
+    await logBatch.commit();
+  } catch {
+    // Non-fatal
+  }
+}
+
+export async function unsuspendStaffMember(params: {
+  restaurantId: string;
+  staff: StaffMember;
+  actor: StaffActorInfo;
+}): Promise<void> {
+  const { restaurantId, staff, actor } = params;
+  const batch = writeBatch(db);
+  batch.update(doc(db, 'restaurants', restaurantId, 'staff', staff.uid), {
+    isActive: true,
+    suspendedType: '',
+    suspendedUntil: null,
+    suspendedReason: '',
+    suspendedByRole: '',
+    suspendedByName: '',
+    updatedAt: serverTimestamp(),
+  });
+  batch.update(doc(db, 'staff_access', staff.uid), {
+    isActive: true,
+    suspendedType: '',
+    suspendedUntil: null,
+    updatedAt: serverTimestamp(),
+  });
+  await batch.commit();
+
+  try {
+    const logId = makeStaffDocId('slog');
+    const logBatch = writeBatch(db);
+    logBatch.set(doc(db, 'restaurants', restaurantId, 'staff_audit_logs', logId), {
+      id: logId,
+      restaurantId,
+      ownerId: staff.ownerId,
+      eventType: 'staff_unsuspended' satisfies StaffAuditEventType,
+      actorUid: actor.uid,
+      actorName: actor.name.slice(0, 100),
+      actorRole: actor.role,
+      targetUid: staff.uid,
+      targetName: staff.name,
+      screen: 'staff_management',
+      details: `تم رفع الإيقاف وإعادة تفعيل شاشة ${staff.name}`,
+      createdAt: serverTimestamp(),
+    });
+    await logBatch.commit();
+  } catch {
+    // Non-fatal
   }
 }
 
@@ -1366,24 +1551,57 @@ export async function loginStaffMember(params: {
       throw new Error('هذا الحساب لا ينتمي إلى كادر هذا المطعم.');
     }
 
-    const staff = { ...(staffSnap.data() as StaffMember), uid: staffSnap.id };
+    let staff = { ...(staffSnap.data() as StaffMember), uid: staffSnap.id };
     if (staff.restaurantId !== restaurant.id) {
       await signOut(auth);
       throw new Error('عزل المطاعم: لا يمكن فتح مطعم آخر بهذا الحساب.');
     }
-    if (!staff.isActive) {
+
+    const suspState = resolveStaffSuspensionState(staff);
+    if (suspState.isExpiredTimed) {
+      // Timed suspension expired: lift it atomically so worker can resume immediately
+      const liftBatch = writeBatch(db);
+      liftBatch.update(doc(db, 'restaurants', restaurant.id, 'staff', staff.uid), {
+        isActive: true,
+        suspendedType: '',
+        suspendedUntil: null,
+        suspendedReason: '',
+        suspendedByRole: '',
+        suspendedByName: '',
+        lastLoginAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      liftBatch.update(doc(db, 'staff_access', staff.uid), {
+        isActive: true,
+        suspendedType: '',
+        suspendedUntil: null,
+        updatedAt: serverTimestamp(),
+      });
+      await liftBatch.commit();
+      staff = {
+        ...staff,
+        isActive: true,
+        suspendedType: '',
+        suspendedUntil: null,
+        suspendedReason: '',
+        suspendedByRole: '',
+        suspendedByName: '',
+      };
+    } else if (suspState.isSuspended) {
       await signOut(auth);
-      throw new Error('هذا الحساب موقوف حالياً أو بانتظار التفعيل عبر رابط الدعوة.');
+      throw new Error(suspState.message);
     }
 
     resetLoginFailures(restaurant.slug, lockKey);
 
     try {
+      if (!suspState.isExpiredTimed) {
+        await updateDoc(doc(db, 'restaurants', restaurant.id, 'staff', staff.uid), {
+          lastLoginAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
       const batch = writeBatch(db);
-      batch.update(doc(db, 'restaurants', restaurant.id, 'staff', staff.uid), {
-        lastLoginAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
       const logId = makeStaffDocId('slog');
       batch.set(doc(db, 'restaurants', restaurant.id, 'staff_audit_logs', logId), {
         id: logId,

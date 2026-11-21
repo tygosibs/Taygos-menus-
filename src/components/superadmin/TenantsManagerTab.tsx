@@ -4,10 +4,13 @@ import {
   Cake,
   Check,
   CheckCircle2,
+  Clock,
   ExternalLink,
+  FileSpreadsheet,
   Gift,
   Languages,
   Loader2,
+  Lock,
   Mail,
   MessageCircle,
   Palette,
@@ -21,6 +24,7 @@ import {
   Store,
   Tag,
   Trash2,
+  Unlock,
   User as UserIcon,
   UtensilsCrossed,
   X,
@@ -32,6 +36,7 @@ import {
   formatWhatsappInternationalPhone,
   getDaysUntilIsoBirthday,
 } from '../../lib/customerLoyaltyUtils';
+import { auth } from '../../lib/firebase';
 import {
   deleteRestaurantAccountCompletely,
   fetchAllTenantsForSuperAdmin,
@@ -40,7 +45,11 @@ import {
   toggleRestaurantSuspension,
   updateRestaurantBilingualInfoForSuperAdmin,
 } from '../../lib/firestoreService';
-import { PlatformPromoCode, Restaurant, UserProfile } from '../../types/menu';
+import {
+  subscribeAllRestaurantShifts,
+  superAdminUnlockShiftAndOrders,
+} from '../../lib/operationsService';
+import { PlatformPromoCode, Restaurant, StaffShift, UserProfile } from '../../types/menu';
 import { MenuBuilderTab } from '../admin/MenuBuilderTab';
 import { OffersPromosTab } from '../admin/OffersPromosTab';
 import { ThemeCustomizerTab } from '../admin/ThemeCustomizerTab';
@@ -77,6 +86,12 @@ export function TenantsManagerTab({ onOpenPublicMenu }: TenantsManagerTabProps) 
   const [deleteTarget, setDeleteTarget] = useState<Restaurant | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  // Shifts Audit & Super Admin Unlock Drawer state
+  const [shiftsAuditRestaurant, setShiftsAuditRestaurant] = useState<Restaurant | null>(null);
+  const [auditShifts, setAuditShifts] = useState<StaffShift[]>([]);
+  const [unlockingShiftId, setUnlockingShiftId] = useState<string | null>(null);
+  const [auditFeedback, setAuditFeedback] = useState<string | null>(null);
+
   const loadTenants = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -102,11 +117,26 @@ export function TenantsManagerTab({ onOpenPublicMenu }: TenantsManagerTabProps) 
   }, [loadTenants]);
 
   useEffect(() => {
-    if (!conciergeRestaurant && !deleteTarget) return;
+    if (!shiftsAuditRestaurant) {
+      setAuditShifts([]);
+      return;
+    }
+    const unsub = subscribeAllRestaurantShifts(
+      shiftsAuditRestaurant.id,
+      setAuditShifts,
+      (err) => setAuditFeedback(err.message)
+    );
+    return () => unsub();
+  }, [shiftsAuditRestaurant]);
+
+  useEffect(() => {
+    if (!conciergeRestaurant && !deleteTarget && !shiftsAuditRestaurant) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (deleteTarget && !deleting) {
           setDeleteTarget(null);
+        } else if (shiftsAuditRestaurant) {
+          setShiftsAuditRestaurant(null);
         } else if (conciergeRestaurant) {
           setConciergeRestaurant(null);
         }
@@ -114,7 +144,7 @@ export function TenantsManagerTab({ onOpenPublicMenu }: TenantsManagerTabProps) 
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [conciergeRestaurant, deleteTarget, deleting]);
+  }, [conciergeRestaurant, deleteTarget, deleting, shiftsAuditRestaurant]);
 
   const stats = useMemo(() => {
     const total = restaurants.length;
@@ -242,6 +272,32 @@ export function TenantsManagerTab({ onOpenPublicMenu }: TenantsManagerTabProps) 
       setError(err instanceof Error ? err.message : t.auth.errGeneric);
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleUnlockClosedShift = async (shift: StaffShift) => {
+    if (!shiftsAuditRestaurant) return;
+    setUnlockingShiftId(shift.id);
+    setAuditFeedback(null);
+    try {
+      await superAdminUnlockShiftAndOrders({
+        restaurantId: shiftsAuditRestaurant.id,
+        shift,
+        superAdminActor: {
+          uid: auth.currentUser?.uid || 'superadmin',
+          name: auth.currentUser?.displayName || auth.currentUser?.email || 'Super Admin',
+          role: 'superadmin',
+        },
+      });
+      setAuditFeedback(
+        isEn
+          ? `Unlocked shift (${shift.stationName} - ${shift.staffName}) for emergency audit edit.`
+          : `تم فك قفل الوردية (${shift.stationName} · ${shift.staffName}) بنجاح وإتاحة التعديل عليها.`
+      );
+    } catch (err) {
+      setAuditFeedback(err instanceof Error ? err.message : t.auth.errGeneric);
+    } finally {
+      setUnlockingShiftId(null);
     }
   };
 
@@ -644,14 +700,28 @@ export function TenantsManagerTab({ onOpenPublicMenu }: TenantsManagerTabProps) 
 
                 {/* Account Controls */}
                 <div className="pt-3 border-t border-zinc-100 flex flex-wrap items-center justify-between gap-2">
-                  <button
-                    type="button"
-                    onClick={() => openConcierge(rest)}
-                    className="px-3.5 py-2 rounded-xl bg-zinc-950 text-white text-xs font-bold hover:bg-zinc-800 flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <UtensilsCrossed className="w-3.5 h-3.5" />
-                    <span>{t.superAdmin.tenants.conciergeBtn}</span>
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => openConcierge(rest)}
+                      className="px-3.5 py-2 rounded-xl bg-zinc-950 text-white text-xs font-bold hover:bg-zinc-800 flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <UtensilsCrossed className="w-3.5 h-3.5" />
+                      <span>{t.superAdmin.tenants.conciergeBtn}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAuditFeedback(null);
+                        setShiftsAuditRestaurant(rest);
+                      }}
+                      className="px-3 py-2 rounded-xl border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-900 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <FileSpreadsheet className="w-3.5 h-3.5" />
+                      <span>{isEn ? 'Shifts Audit' : 'تدقيق الورديات المغلقة'}</span>
+                    </button>
+                  </div>
 
                   <div className="flex items-center gap-2">
                     <button
@@ -919,6 +989,161 @@ export function TenantsManagerTab({ onOpenPublicMenu }: TenantsManagerTabProps) 
                   }}
                   onOpenPublicMenu={onOpenPublicMenu}
                 />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Closed Shifts Audit & Unlock Drawer */}
+      {shiftsAuditRestaurant && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-[2px] flex justify-end"
+          onClick={() => setShiftsAuditRestaurant(null)}
+        >
+          <div
+            dir={dir}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-3xl bg-[#F5F6F8] h-full overflow-y-auto shadow-2xl flex flex-col"
+          >
+            <div className="sticky top-0 z-20 bg-white border-b border-zinc-200 px-5 py-4 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-bold text-indigo-700">
+                  {isEn ? 'Super Admin Financial Audit' : 'التدقيق المالي وفك قفل الورديات المغلقة'}
+                </p>
+                <h3 className="text-base font-extrabold text-zinc-950">
+                  {loc(shiftsAuditRestaurant.name, shiftsAuditRestaurant.name_en)}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShiftsAuditRestaurant(null)}
+                className="w-10 h-10 rounded-xl bg-zinc-100 text-zinc-700 hover:bg-zinc-200 flex items-center justify-center cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {auditFeedback && (
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-900">
+                  {auditFeedback}
+                </div>
+              )}
+
+              {auditShifts.length === 0 ? (
+                <div className="bg-white border border-zinc-200 rounded-2xl p-8 text-center space-y-2">
+                  <Clock className="w-8 h-8 text-zinc-300 mx-auto" />
+                  <p className="text-xs font-bold text-zinc-600">
+                    {isEn ? 'No recorded shifts yet.' : 'لا توجد ورديات مسجلة لهذا المطعم حتى الآن.'}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {auditShifts.map((sh) => {
+                    const isCompleted = sh.status === 'completed';
+                    return (
+                      <div
+                        key={sh.id}
+                        className="bg-white border border-zinc-200 rounded-2xl p-4 space-y-3"
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-sm font-extrabold text-zinc-950">
+                                {sh.staffName}
+                              </span>
+                              <span className="px-2 py-0.5 rounded-md bg-zinc-100 text-zinc-800 text-[11px] font-bold">
+                                {sh.stationName}
+                              </span>
+                              {sh.shiftSlotName && (
+                                <span className="px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-900 text-[11px] font-bold">
+                                  {sh.shiftSlotName}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-zinc-500 mt-1">
+                              {sh.handedOverToName
+                                ? `تم التسليم إلى: ${sh.handedOverToName}`
+                                : 'الوردية مفتوحة أو بدون تسليم مسجل'}
+                            </p>
+                          </div>
+
+                          <span
+                            className={`px-2.5 py-1 rounded-lg border text-[11px] font-extrabold flex items-center gap-1 ${
+                              isCompleted
+                                ? 'bg-zinc-100 border-zinc-300 text-zinc-800'
+                                : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                            }`}
+                          >
+                            {isCompleted ? (
+                              <>
+                                <Lock className="w-3 h-3" />
+                                <span>مغلقة 🔒</span>
+                              </>
+                            ) : (
+                              <>
+                                <Unlock className="w-3 h-3" />
+                                <span>{sh.superAdminUnlocked ? 'مفتوحة استثنائياً 🔓' : 'نشطة'}</span>
+                              </>
+                            )}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
+                          <div className="p-2 rounded-xl bg-zinc-50 border border-zinc-200">
+                            <span className="text-[10px] text-zinc-500 block">مبيعات الكاش</span>
+                            <strong className="font-mono-num text-emerald-800">
+                              {(sh.cashSales || 0).toFixed(2)}
+                            </strong>
+                          </div>
+                          <div className="p-2 rounded-xl bg-zinc-50 border border-zinc-200">
+                            <span className="text-[10px] text-zinc-500 block">مبيعات الفيزا</span>
+                            <strong className="font-mono-num text-blue-800">
+                              {(sh.visaSales || 0).toFixed(2)}
+                            </strong>
+                          </div>
+                          <div className="p-2 rounded-xl bg-zinc-50 border border-zinc-200">
+                            <span className="text-[10px] text-zinc-500 block">مصروفات الدرج</span>
+                            <strong className="font-mono-num text-rose-700">
+                              -{(sh.drawerExpensesTotal || 0).toFixed(2)}
+                            </strong>
+                          </div>
+                          <div className="p-2 rounded-xl bg-zinc-50 border border-zinc-200">
+                            <span className="text-[10px] text-zinc-500 block">فرق الدرج</span>
+                            <strong className="font-mono-num">
+                              {(sh.drawerVarianceTotal || 0).toFixed(2)}
+                            </strong>
+                          </div>
+                          <div className="p-2 rounded-xl bg-zinc-950 text-white">
+                            <span className="text-[10px] text-zinc-400 block">صافي التسليم</span>
+                            <strong className="font-mono-num text-amber-400">
+                              {(sh.expectedCashHandover || 0).toFixed(2)}
+                            </strong>
+                          </div>
+                        </div>
+
+                        {isCompleted && (
+                          <div className="flex justify-end pt-1">
+                            <button
+                              type="button"
+                              disabled={unlockingShiftId === sh.id}
+                              onClick={() => handleUnlockClosedShift(sh)}
+                              className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-extrabold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                            >
+                              {unlockingShiftId === sh.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Unlock className="w-3.5 h-3.5" />
+                              )}
+                              <span>فك قفل الوردية للتعديل 🔓</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </div>
           </div>

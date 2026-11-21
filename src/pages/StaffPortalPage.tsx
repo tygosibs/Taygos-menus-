@@ -1,9 +1,12 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { doc, onSnapshot } from 'firebase/firestore';
 import {
   AlertCircle,
+  Crown,
   Eye,
   EyeOff,
+  FileSpreadsheet,
   KeyRound,
   LayoutGrid,
   Loader2,
@@ -11,13 +14,18 @@ import {
   LogOut,
   QrCode,
   Receipt,
+  ShieldAlert,
   ShieldCheck,
   UserCheck,
+  Utensils,
 } from 'lucide-react';
 import { ConfirmSignOutModal } from '../components/ConfirmSignOutModal';
 import { PWAInstallButton } from '../components/PWAInstallButton';
 import { CaptainWaiterTab } from '../components/admin/CaptainWaiterTab';
 import { LiveOrdersTab } from '../components/admin/LiveOrdersTab';
+import { ManagerSupervisionDashboard } from '../components/admin/ManagerSupervisionDashboard';
+import { MenuBuilderTab } from '../components/admin/MenuBuilderTab';
+import { OwnerShiftReportTab } from '../components/admin/OwnerShiftReportTab';
 import { QrGeneratorTab } from '../components/admin/QrGeneratorTab';
 import { StaffManagementTab } from '../components/admin/StaffManagementTab';
 import { StaffShiftBar } from '../components/admin/StaffShiftBar';
@@ -26,8 +34,18 @@ import {
   deactivateStaffDevice,
   registerStaffDeviceAndFcm,
 } from '../lib/fcmNotificationService';
-import { auth } from '../lib/firebase';
-import { subscribeMyActiveShifts } from '../lib/shiftsService';
+import { auth, db } from '../lib/firebase';
+import {
+  getResolvedOperationsConfig,
+  getTimestampMillis,
+  subscribeAllRestaurantShifts,
+  subscribeDrawerExpenses,
+  subscribeTreasuryTransfers,
+} from '../lib/operationsService';
+import {
+  subscribeAllActiveRestaurantShifts,
+  subscribeMyActiveShifts,
+} from '../lib/shiftsService';
 import {
   classifyLoginIdentifier,
   getSavedStaffScreen,
@@ -40,6 +58,10 @@ import {
   fetchRestaurantBySlugForStaff,
   getMyStaffProfile,
   loginStaffMember,
+  resolveStaffSuspensionState,
+  subscribeRestaurantStaff,
+  subscribeStaffAuditLogs,
+  unsuspendStaffMember,
 } from '../lib/staffService';
 import { subscribeRestaurantStations } from '../lib/stationsService';
 import {
@@ -55,18 +77,23 @@ import {
   tryAutoReconnectSavedPrinter,
 } from '../lib/thermalPrinterService';
 import {
+  DrawerExpense,
   Restaurant,
   RestaurantStation,
   StaffActorInfo,
+  StaffAuditLog,
   StaffMember,
   StaffScreen,
   StaffShift,
+  TreasuryTransfer,
 } from '../types/menu';
 
 interface StaffPortalPageProps {
   slug: string;
   onNavigate: (path: string) => void;
 }
+
+type ManagerPortalMode = 'supervision' | 'menu_editor' | 'shift_reports' | 'screen';
 
 function getScreenIcon(scr: StaffScreen, stations: StationMeta[]) {
   if (scr === 'staff_management') return ShieldCheck;
@@ -106,13 +133,29 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
   const [authUid, setAuthUid] = useState<string | null>(null);
 
   const [staff, setStaff] = useState<StaffMember | null>(null);
+  const [suspendedNotice, setSuspendedNotice] = useState<string | null>(null);
   const [loadingStaff, setLoadingStaff] = useState(false);
   const [mismatchAuthNotice, setMismatchAuthNotice] = useState(false);
+
   const [activeScreen, setActiveScreen] = useState<StaffScreen>('cashier');
+  const [managerMode, setManagerMode] = useState<ManagerPortalMode>('supervision');
+  const [supervisoryOverride, setSupervisoryOverride] = useState<{
+    screen: StaffScreen;
+    supervisory?: boolean;
+    coveringStaffName?: string;
+  } | null>(null);
   const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
 
   const [dynamicStations, setDynamicStations] = useState<RestaurantStation[]>([]);
   const [myActiveShifts, setMyActiveShifts] = useState<StaffShift[]>([]);
+  const [allActiveShifts, setAllActiveShifts] = useState<StaffShift[]>([]);
+  const [allRestaurantShifts, setAllRestaurantShifts] = useState<StaffShift[]>([]);
+  const [restaurantStaffList, setRestaurantStaffList] = useState<StaffMember[]>([]);
+  const [drawerExpenses, setDrawerExpenses] = useState<DrawerExpense[]>([]);
+  const [treasuryTransfers, setTreasuryTransfers] = useState<TreasuryTransfer[]>([]);
+  const [auditLogs, setAuditLogs] = useState<StaffAuditLog[]>([]);
+  const [openHandoverSignal, setOpenHandoverSignal] = useState(0);
+
   const [printerModalOpen, setPrinterModalOpen] = useState(false);
   const [printerLabel, setPrinterLabel] = useState<string>(() => {
     const conn = getActivePrinterConnection();
@@ -150,6 +193,22 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
     };
   }, [slug]);
 
+  const restaurantId = restaurant?.id;
+
+  // Live subscribe to restaurant document once staff is signed in so operationsConfig & treasuryState update immediately
+  useEffect(() => {
+    if (!restaurantId || !authUid) return;
+    return onSnapshot(
+      doc(db, 'restaurants', restaurantId),
+      (snap) => {
+        if (snap.exists()) {
+          setRestaurant({ ...(snap.data() as Restaurant), id: snap.id });
+        }
+      },
+      () => {}
+    );
+  }, [restaurantId, authUid]);
+
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
       setAuthUid(u?.uid || null);
@@ -159,9 +218,10 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
   }, []);
 
   useEffect(() => {
-    if (!authReady || !restaurant) return;
+    if (!authReady || !restaurantId) return;
     if (!authUid) {
       setStaff(null);
+      setSuspendedNotice(null);
       setMismatchAuthNotice(false);
       return;
     }
@@ -169,18 +229,47 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
     let mounted = true;
     setLoadingStaff(true);
     setMismatchAuthNotice(false);
-    getMyStaffProfile(restaurant.id, authUid)
-      .then((profile) => {
+    setSuspendedNotice(null);
+
+    getMyStaffProfile(restaurantId, authUid)
+      .then(async (profile) => {
         if (!mounted) return;
-        if (!profile || profile.restaurantId !== restaurant.id || !profile.isActive) {
+        if (!profile || profile.restaurantId !== restaurantId) {
           setStaff(null);
           setMismatchAuthNotice(true);
           return;
         }
-        setStaff(profile);
+
+        const suspState = resolveStaffSuspensionState(profile);
+        let effectiveProfile = profile;
+        if (suspState.isExpiredTimed) {
+          effectiveProfile = { ...profile, isActive: true, suspendedType: undefined, suspendedReason: '' };
+          void unsuspendStaffMember({
+            restaurantId,
+            staff: profile,
+            actor: { uid: profile.uid, name: profile.name, role: profile.role },
+          }).catch(() => {});
+        } else if (suspState.isSuspended && !profile.mustChangePassword) {
+          setStaff(null);
+          setSuspendedNotice(suspState.message);
+          return;
+        }
+
+        setStaff(effectiveProfile);
         setMismatchAuthNotice(false);
-        const initial = resolveInitialScreenWithQuery(restaurant.id, profile);
+        setSuspendedNotice(null);
+
+        const initial = resolveInitialScreenWithQuery(restaurantId, effectiveProfile);
         setActiveScreen(initial);
+        const urlScr =
+          typeof window !== 'undefined'
+            ? (new URLSearchParams(window.location.search).get('screen') || '').trim()
+            : '';
+        if (effectiveProfile.role === 'manager' && !urlScr) {
+          setManagerMode('supervision');
+        } else {
+          setManagerMode('screen');
+        }
       })
       .finally(() => {
         if (mounted) setLoadingStaff(false);
@@ -188,29 +277,63 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
     return () => {
       mounted = false;
     };
-  }, [authReady, authUid, restaurant]);
+  }, [authReady, authUid, restaurantId]);
 
   useEffect(() => {
-    if (!restaurant?.id) return;
-    return subscribeRestaurantStations(restaurant.id, setDynamicStations, () => {});
-  }, [restaurant?.id]);
+    if (!restaurantId) return;
+    return subscribeRestaurantStations(restaurantId, setDynamicStations, () => {});
+  }, [restaurantId]);
 
   useEffect(() => {
-    if (!restaurant?.id || !staff?.uid) {
+    if (!restaurantId || !staff?.uid) {
       setMyActiveShifts([]);
       return;
     }
-    return subscribeMyActiveShifts(restaurant.id, staff.uid, setMyActiveShifts);
-  }, [restaurant?.id, staff?.uid]);
+    return subscribeMyActiveShifts(restaurantId, staff.uid, setMyActiveShifts);
+  }, [restaurantId, staff?.uid]);
+
+  useEffect(() => {
+    if (!restaurantId || !staff?.uid) {
+      setAllActiveShifts([]);
+      setAllRestaurantShifts([]);
+      setRestaurantStaffList([]);
+      setDrawerExpenses([]);
+      setTreasuryTransfers([]);
+      setAuditLogs([]);
+      return;
+    }
+    const isManagerOrCashier =
+      staff.role === 'manager' ||
+      staff.role === 'cashier' ||
+      staff.allowedScreens?.includes('cashier');
+
+    const unsubs: Array<() => void> = [];
+    unsubs.push(subscribeAllActiveRestaurantShifts(restaurantId, setAllActiveShifts, () => {}));
+
+    if (isManagerOrCashier) {
+      unsubs.push(subscribeAllRestaurantShifts(restaurantId, setAllRestaurantShifts, () => {}));
+      unsubs.push(subscribeRestaurantStaff(restaurantId, setRestaurantStaffList, () => {}));
+      unsubs.push(subscribeDrawerExpenses(restaurantId, setDrawerExpenses, () => {}));
+    }
+    if (staff.role === 'manager') {
+      unsubs.push(subscribeTreasuryTransfers(restaurantId, setTreasuryTransfers, () => {}));
+      unsubs.push(subscribeStaffAuditLogs(restaurantId, setAuditLogs, () => {}));
+    }
+
+    return () => {
+      unsubs.forEach((u) => u());
+    };
+  }, [restaurantId, staff?.uid, staff?.role, staff?.allowedScreens]);
 
   useEffect(() => {
     if (!restaurant?.id || !staff?.uid || staff.mustChangePassword) return;
     const activeStationsFromShifts = myActiveShifts.map((s) => s.stationId).filter(Boolean);
-    const activeStationsFallback = (staff.allowedStations && staff.allowedStations.length > 0)
-      ? staff.allowedStations
-      : (staff.allowedScreens || [])
-          .map((scr) => screenToStationId(scr))
-          .filter((id): id is string => Boolean(id));
+    const activeStationsFallback =
+      staff.allowedStations && staff.allowedStations.length > 0
+        ? staff.allowedStations
+        : (staff.allowedScreens || [])
+            .map((scr) => screenToStationId(scr))
+            .filter((id): id is string => Boolean(id));
     void registerStaffDeviceAndFcm({
       restaurantId: restaurant.id,
       ownerId: restaurant.ownerId,
@@ -233,6 +356,9 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
     [dynamicStations]
   );
 
+  const opsConfig = useMemo(() => getResolvedOperationsConfig(restaurant), [restaurant]);
+  const managerPerms = opsConfig.managerPermissions;
+
   const detectedIdentifier = useMemo(() => {
     if (!identifier.trim()) return null;
     const c = classifyLoginIdentifier(identifier);
@@ -243,10 +369,19 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
         : 'اسم مستخدم';
   }, [identifier]);
 
+  const lastClosedCashierShift = useMemo(() => {
+    return (
+      allRestaurantShifts.find(
+        (s) => s.stationId === 'cashier' && s.status === 'completed'
+      ) || null
+    );
+  }, [allRestaurantShifts]);
+
   const handleLoginSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!restaurant) return;
     setLoginError(null);
+    setSuspendedNotice(null);
     setLoggingIn(true);
     try {
       const loggedStaff = await loginStaffMember({
@@ -258,17 +393,39 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
       setMismatchAuthNotice(false);
       const initial = resolveInitialScreenWithQuery(restaurant.id, loggedStaff);
       setActiveScreen(initial);
+      if (loggedStaff.role === 'manager') {
+        setManagerMode('supervision');
+      } else {
+        setManagerMode('screen');
+      }
       setPassword('');
     } catch (err) {
-      setLoginError(err instanceof Error ? err.message : 'تعذر تسجيل الدخول.');
+      const msg = err instanceof Error ? err.message : 'تعذر تسجيل الدخول.';
+      if (msg.includes('تم إيقاف شاشتك')) {
+        setSuspendedNotice(msg);
+      }
+      setLoginError(msg);
     } finally {
       setLoggingIn(false);
     }
   };
 
-  const handleScreenChange = (scr: StaffScreen) => {
+  const handleScreenChange = (
+    scr: StaffScreen,
+    opts?: { supervisory?: boolean; coveringStaffName?: string }
+  ) => {
     if (!restaurant || !staff || !staff.allowedScreens.includes(scr)) return;
     setActiveScreen(scr);
+    setManagerMode('screen');
+    if (opts) {
+      setSupervisoryOverride({
+        screen: scr,
+        supervisory: opts.supervisory,
+        coveringStaffName: opts.coveringStaffName,
+      });
+    } else {
+      setSupervisoryOverride(null);
+    }
     saveStaffScreen(restaurant.id, staff.uid, scr);
   };
 
@@ -323,6 +480,47 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
           >
             العودة للرئيسية
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Dedicated Suspension Block Screen
+  if (suspendedNotice && !staff) {
+    return (
+      <div dir="rtl" className="min-h-screen bg-[#F5F6F8] flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white border-2 border-rose-300 rounded-3xl p-6 sm:p-7 shadow-xl text-center space-y-4">
+          <span className="w-14 h-14 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+            <ShieldAlert className="w-7 h-7" />
+          </span>
+          <div className="space-y-1">
+            <h1 className="text-lg font-extrabold text-zinc-950">{restaurant.name}</h1>
+            <p className="text-xs font-bold text-rose-700">تم تقييد الدخول لهذه الشاشة</p>
+          </div>
+          <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-xs sm:text-sm font-extrabold text-rose-950 leading-relaxed">
+            {suspendedNotice}
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+            {authUid && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSuspendedNotice(null);
+                  void signOut(auth);
+                }}
+                className="min-h-[42px] px-4 py-2 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-extrabold cursor-pointer"
+              >
+                تسجيل الخروج والعودة
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setSuspendedNotice(null)}
+              className="min-h-[42px] px-4 py-2 rounded-xl border border-zinc-300 text-zinc-700 text-xs font-bold hover:bg-zinc-50 cursor-pointer"
+            >
+              الدخول بحساب آخر
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -440,7 +638,8 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
                 {restaurant.name} — دخول الكادر
               </h1>
               <p className="text-xs text-zinc-500 leading-relaxed">
-                سجّل الدخول باستخدام <strong>اسم المستخدم</strong> أو <strong>رقم الهاتف</strong> أو <strong>البريد الإلكتروني</strong> وكلمة المرور.
+                سجّل الدخول باستخدام <strong>اسم المستخدم</strong> أو <strong>رقم الهاتف</strong> أو{' '}
+                <strong>البريد الإلكتروني</strong> وكلمة المرور.
               </p>
             </div>
 
@@ -527,6 +726,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
 
   // Authenticated Active Staff Workspace (strictly screen-isolated)
   const roleMeta = STAFF_ROLE_META[staff.role] || STAFF_ROLE_META.cashier;
+  const isManager = staff.role === 'manager';
   const allowedScreens = staff.allowedScreens || [];
   const safeCurrentScreen: StaffScreen = allowedScreens.includes(activeScreen)
     ? activeScreen
@@ -536,12 +736,44 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
   const currentStationId = screenToStationId(safeCurrentScreen)
     ? cleanStationId(screenToStationId(safeCurrentScreen) || '')
     : undefined;
+  const currentShiftKey = currentStationId || safeCurrentScreen;
+
+  // Determine if another staff member covers this screen while Manager is supervising
+  const liveCoveringShift =
+    allActiveShifts.find(
+      (sh) => sh.stationId === currentShiftKey && sh.staffId !== staff.uid
+    ) || null;
+  const isSupervisoryHere = Boolean(
+    isManager &&
+      managerMode === 'screen' &&
+      (supervisoryOverride?.screen === safeCurrentScreen
+        ? supervisoryOverride.supervisory
+        : Boolean(liveCoveringShift))
+  );
+  const coveringName =
+    supervisoryOverride?.screen === safeCurrentScreen && supervisoryOverride.coveringStaffName
+      ? supervisoryOverride.coveringStaffName
+      : liveCoveringShift?.staffName;
+
+  // Determine Active Cashier Shift (for cashier or manager viewing cashier)
+  const myCashierShift =
+    myActiveShifts.find((sh) => sh.stationId === 'cashier') || null;
+  const activeCashierShift =
+    myCashierShift ||
+    allActiveShifts.find((sh) => sh.stationId === 'cashier') ||
+    null;
 
   const actor: StaffActorInfo = {
     uid: staff.uid,
     name: staff.name,
     role: staff.role,
   };
+
+  const canShowShiftBar =
+    !isManager ||
+    (managerMode === 'screen' &&
+      safeCurrentScreen !== 'staff_management' &&
+      safeCurrentScreen !== 'halls');
 
   return (
     <div dir="rtl" className="min-h-screen bg-[#F5F6F8] text-zinc-900 flex flex-col">
@@ -592,16 +824,72 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
             </div>
           </div>
 
-          {/* Multi-Screen Switcher ("تغيير الشاشة") when staff has >1 allowedScreen */}
+          {/* Navigation Strip: Manager gets Supervision Console + Menu + Shift Reports + Screens; regular staff gets their allowedScreens */}
           <div className="flex flex-wrap items-center justify-between lg:justify-end gap-2">
-            {allowedScreens.length > 1 && (
-              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
-                <span className="text-[11px] font-bold text-zinc-400 shrink-0 hidden sm:inline">
-                  تغيير الشاشة:
-                </span>
+            {(isManager || allowedScreens.length > 1) && (
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 max-w-full">
+                {isManager && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setManagerMode('supervision');
+                        setSupervisoryOverride(null);
+                      }}
+                      className={`min-h-[36px] px-3 py-1.5 rounded-xl text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
+                        managerMode === 'supervision'
+                          ? 'bg-indigo-700 text-white shadow-2xs'
+                          : 'bg-indigo-50 text-indigo-900 hover:bg-indigo-100'
+                      }`}
+                    >
+                      <Crown className="w-3.5 h-3.5" />
+                      <span>لوحة الإشراف</span>
+                    </button>
+
+                    {(managerPerms.canEditMenu || managerPerms.canPauseItems) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setManagerMode('menu_editor');
+                          setSupervisoryOverride(null);
+                        }}
+                        className={`min-h-[36px] px-3 py-1.5 rounded-xl text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
+                          managerMode === 'menu_editor'
+                            ? 'bg-zinc-950 text-white shadow-2xs'
+                            : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
+                        }`}
+                      >
+                        <Utensils className="w-3.5 h-3.5" />
+                        <span>المنيو والأصناف</span>
+                      </button>
+                    )}
+
+                    {managerPerms.canViewShiftReports && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setManagerMode('shift_reports');
+                          setSupervisoryOverride(null);
+                        }}
+                        className={`min-h-[36px] px-3 py-1.5 rounded-xl text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
+                          managerMode === 'shift_reports'
+                            ? 'bg-zinc-950 text-white shadow-2xs'
+                            : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
+                        }`}
+                      >
+                        <FileSpreadsheet className="w-3.5 h-3.5" />
+                        <span>تقرير الورديات</span>
+                      </button>
+                    )}
+                  </>
+                )}
+
                 {allowedScreens.map((scr) => {
+                  if (scr === 'staff_management' && isManager && !managerPerms.canManageStaff) {
+                    return null;
+                  }
                   const Icon = getScreenIcon(scr, effectiveStations);
-                  const isActive = safeCurrentScreen === scr;
+                  const isActive = managerMode === 'screen' && safeCurrentScreen === scr;
                   const meta = getScreenMetaDynamic(scr, effectiveStations);
                   return (
                     <button
@@ -639,52 +927,101 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
 
       {/* Isolated Screen Body */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 space-y-4">
-        <StaffShiftBar
-          restaurant={restaurant}
-          staff={staff}
-          activeScreen={safeCurrentScreen}
-          screenLabel={currentScreenMeta.shortAr}
-          stationId={currentStationId}
-          allStations={effectiveStations}
-          myActiveShifts={myActiveShifts}
-          onOpenPrinterSettings={() => setPrinterModalOpen(true)}
-          printerLabel={printerLabel}
-        />
-
-        {safeCurrentScreen === 'staff_management' && staff.role === 'manager' && (
-          <StaffManagementTab restaurant={restaurant} mode="manager" actor={actor} />
-        )}
-
-        {safeCurrentScreen === 'cashier' && (
-          <LiveOrdersTab
+        {canShowShiftBar && (
+          <StaffShiftBar
             restaurant={restaurant}
-            allowedStations={['cashier']}
-            initialStation="cashier"
-            staffMode
-            actor={actor}
+            staff={staff}
+            activeScreen={safeCurrentScreen}
+            screenLabel={currentScreenMeta.shortAr}
+            stationId={currentStationId}
+            allStations={effectiveStations}
+            myActiveShifts={myActiveShifts}
+            onOpenPrinterSettings={() => setPrinterModalOpen(true)}
+            printerLabel={printerLabel}
+            supervisoryMode={isSupervisoryHere}
+            coveringStaffName={coveringName}
+            lastClosedCashierShift={lastClosedCashierShift}
+            onRequestCashierHandoverModal={() => setOpenHandoverSignal((n) => n + 1)}
+            onSwitchCashierNextSlot={() => setOpenHandoverSignal((n) => n + 1)}
           />
         )}
 
-        {currentStationId && (
-          <LiveOrdersTab
+        {isManager && managerMode === 'supervision' ? (
+          <ManagerSupervisionDashboard
             restaurant={restaurant}
-            allowedStations={[currentStationId]}
-            initialStation={currentStationId}
-            staffMode
             actor={actor}
+            activeShifts={allActiveShifts}
+            dynamicStations={dynamicStations}
+            treasuryTransfers={treasuryTransfers}
+            onNavigateScreen={(scr, opts) => handleScreenChange(scr, opts)}
+            onRestaurantUpdated={(updated) => setRestaurant(updated)}
           />
-        )}
-
-        {safeCurrentScreen === 'captain' && (
-          <CaptainWaiterTab
+        ) : isManager && managerMode === 'menu_editor' ? (
+          <MenuBuilderTab restaurant={restaurant} />
+        ) : isManager && managerMode === 'shift_reports' ? (
+          <OwnerShiftReportTab
             restaurant={restaurant}
-            defaultHallName={staff.hallName}
-            staffMode
             actor={actor}
+            shiftsOverride={allRestaurantShifts}
+            expensesOverride={drawerExpenses}
+            auditLogsOverride={auditLogs}
+            transfersOverride={treasuryTransfers}
+            onRestaurantUpdated={(updated) => setRestaurant(updated)}
           />
-        )}
+        ) : (
+          <>
+            {safeCurrentScreen === 'staff_management' && isManager && managerPerms.canManageStaff && (
+              <StaffManagementTab
+                restaurant={restaurant}
+                mode="manager"
+                actor={actor}
+                onRestaurantUpdated={(updated) => setRestaurant(updated)}
+              />
+            )}
 
-        {safeCurrentScreen === 'halls' && <QrGeneratorTab restaurant={restaurant} />}
+            {safeCurrentScreen === 'cashier' && (
+              <LiveOrdersTab
+                restaurant={restaurant}
+                allowedStations={['cashier']}
+                initialStation="cashier"
+                staffMode
+                actor={actor}
+                activeCashierShift={activeCashierShift}
+                allShifts={allRestaurantShifts}
+                staffList={restaurantStaffList}
+                expenses={drawerExpenses}
+                supervisoryMode={isSupervisoryHere}
+                coveringStaffName={coveringName}
+                hideHistoryArchive={staff.role === 'cashier'}
+                openHandoverSignal={openHandoverSignal}
+              />
+            )}
+
+            {currentStationId && (
+              <LiveOrdersTab
+                restaurant={restaurant}
+                allowedStations={[currentStationId]}
+                initialStation={currentStationId}
+                staffMode
+                actor={actor}
+                supervisoryMode={isSupervisoryHere}
+                coveringStaffName={coveringName}
+              />
+            )}
+
+            {safeCurrentScreen === 'captain' && (
+              <CaptainWaiterTab
+                restaurant={restaurant}
+                defaultHallName={staff.hallName}
+                staffMode
+                actor={actor}
+                onRestaurantUpdated={(updated) => setRestaurant(updated)}
+              />
+            )}
+
+            {safeCurrentScreen === 'halls' && <QrGeneratorTab restaurant={restaurant} />}
+          </>
+        )}
       </main>
 
       <ThermalPrinterSettingsModal
@@ -708,3 +1045,4 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
     </div>
   );
 }
+

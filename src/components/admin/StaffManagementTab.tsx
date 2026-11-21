@@ -13,12 +13,17 @@ import {
   KeyRound,
   Layers,
   Loader2,
+  Lock,
   Mail,
   MessageCircle,
+  PauseCircle,
   Plus,
   Printer,
   QrCode,
+  Save,
+  ShieldAlert,
   ShieldCheck,
+  Sliders,
   Trash2,
   UserCheck,
   UserPlus,
@@ -27,6 +32,10 @@ import {
   X,
 } from 'lucide-react';
 import { subscribeHalls } from '../../lib/firestoreService';
+import {
+  getResolvedOperationsConfig,
+  updateRestaurantOperationsConfig,
+} from '../../lib/operationsService';
 import { subscribeAllActiveRestaurantShifts } from '../../lib/shiftsService';
 import {
   getDefaultScreensForRole,
@@ -40,9 +49,12 @@ import {
   createManagerOrStaffAccount,
   deleteRestaurantStaffMember,
   regenerateStaffInvite,
+  resolveStaffSuspensionState,
   sendStaffPasswordResetByEmail,
   subscribeRestaurantStaff,
   subscribeStaffAuditLogs,
+  suspendStaffMember,
+  unsuspendStaffMember,
   updateStaffPermissionsAndProfile,
 } from '../../lib/staffService';
 import { subscribeRestaurantStations } from '../../lib/stationsService';
@@ -55,6 +67,7 @@ import {
 } from '../../lib/stationUtils';
 import {
   Hall,
+  ManagerPermissions,
   Restaurant,
   RestaurantStation,
   StaffActorInfo,
@@ -63,6 +76,7 @@ import {
   StaffRole,
   StaffScreen,
   StaffShift,
+  SuspensionType,
 } from '../../types/menu';
 import { AuthorizedDomainsCard } from './AuthorizedDomainsCard';
 import { StaffPortalShareCard } from './StaffPortalShareCard';
@@ -72,18 +86,49 @@ interface StaffManagementTabProps {
   restaurant: Restaurant;
   mode: 'owner' | 'manager';
   actor: StaffActorInfo;
+  onRestaurantUpdated?: (updated: Restaurant) => void;
 }
+
+const MANAGER_PERMISSION_LABELS: Array<{
+  key: keyof ManagerPermissions;
+  label: string;
+  hint: string;
+}> = [
+  { key: 'canEditMenu', label: 'تعديل وإضافة أصناف المنيو', hint: 'إنشاء وتعديل الأسعار والأصناف والتصنيفات' },
+  { key: 'canPauseItems', label: 'إيقاف/تفعيل الأصناف المؤقت', hint: 'إخفاء صنف ناقص من المنيو وإعادة تفعيله' },
+  { key: 'canEditOpenOrders', label: 'تعديل طلبات الترابيزات المفتوحة', hint: 'إضافة/إزالة أصناف أو كتابة ملاحظات الطاولة' },
+  { key: 'canCancelOpenOrders', label: 'إلغاء الطلبات المفتوحة مع سبب', hint: 'إلغاء طلب قيد التشغيل بتوثيق السبب' },
+  { key: 'canEditClosedChecks', label: 'تعديل شيكات مغلقة قبل التسليم', hint: 'تصحيح فاتورة مغلقة في نفس الوردية قبل الإقفال' },
+  { key: 'canApplyInstantDiscount', label: 'منح خصومات فورية خاصة', hint: 'خصم مبلغ أو نسبة مع تدوين السبب' },
+  { key: 'canViewShiftReports', label: 'عرض تقرير الورديات اليومي', hint: 'متابعة الحضور والمبيعات وصافي الدرج' },
+  { key: 'canEditDrawerFloat', label: 'تعديل عهدة الدرج (الافتتاحية)', hint: 'رفع أو خفض رصيد بداية الوردية للكاشير' },
+  { key: 'canManageStaff', label: 'إضافة وترقية وإيقاف الموظفين', hint: 'تعيين وإيقاف (مؤقت/مفتوح) وفصل الموظفين' },
+  { key: 'canConfigureOperations', label: 'ضبط مواعيد الورديات وألوان الطاولات', hint: 'تعديل جدول الورديات ووقت تأخير الترابيزة' },
+  { key: 'canToggleScreenPrices', label: 'إظهار/إخفاء الأسعار على الشاشات', hint: 'التحكم بظهور الأسعار في المطبخ/البار/الكابتن' },
+];
 
 const AUDIT_LABELS: Record<string, string> = {
   staff_created: 'إنشاء عضو كادر',
   staff_updated: 'تحديث بيانات / صلاحيات',
   staff_deleted: 'حذف عضو كادر',
+  staff_suspended: 'إيقاف شاشة موظف',
+  staff_unsuspended: 'رفع إيقاف موظف',
+  staff_promoted: 'ترقية / تغيير وظيفة موظف',
   invite_created: 'إصدار دعوة QR',
   invite_used: 'تفعيل حساب بدعوة QR',
   password_changed: 'تغيير كلمة المرور',
   staff_login: 'تسجيل دخول كادر',
   order_created: 'إنشاء طلب',
   order_status_updated: 'تحديث حالة طلب',
+  order_modified: 'تعديل طلب إداري',
+  order_cancelled: 'إلغاء طلب بسبب',
+  instant_discount_applied: 'خصم إداري فوري',
+  menu_item_paused: 'إيقاف/تفعيل صنف بالمنيو',
+  drawer_expense_added: 'مصروف من درج الكاشير',
+  cash_handover_recorded: 'تسليم وردية وعهدة كاشير',
+  treasury_transferred: 'توريد للخزنة الرئيسية',
+  float_adjusted: 'تعديل عهدة الدرج',
+  superadmin_shift_unlocked: 'فتح استثنائي للوردية (سوبر أدمن)',
   kds_item_updated: 'تحديث شاشة تحضير (KDS)',
   table_closed: 'إقفال حساب طاولة',
   service_call_handled: 'تلبية نداء طاولة',
@@ -113,7 +158,17 @@ function formatAuditTime(ts: unknown): string {
   });
 }
 
-export function StaffManagementTab({ restaurant, mode, actor }: StaffManagementTabProps) {
+export function StaffManagementTab({
+  restaurant,
+  mode,
+  actor,
+  onRestaurantUpdated,
+}: StaffManagementTabProps) {
+  const opsConfig = useMemo(() => getResolvedOperationsConfig(restaurant), [restaurant]);
+  const [managerPermsOpen, setManagerPermsOpen] = useState(false);
+  const [draftManagerPerms, setDraftManagerPerms] = useState<ManagerPermissions>(() => opsConfig.managerPermissions);
+  const [savingManagerPerms, setSavingManagerPerms] = useState(false);
+
   const [staffList, setStaffList] = useState<StaffMember[]>([]);
   const [auditLogs, setAuditLogs] = useState<StaffAuditLog[]>([]);
   const [halls, setHalls] = useState<Hall[]>([]);
@@ -124,6 +179,14 @@ export function StaffManagementTab({ restaurant, mode, actor }: StaffManagementT
   const [subView, setSubView] = useState<'members' | 'stations' | 'audit'>('members');
   const [roleFilter, setRoleFilter] = useState<'all' | StaffRole>('all');
   const [confirmDeleteUid, setConfirmDeleteUid] = useState<string | null>(null);
+
+  // Suspension Modal State
+  const [suspendTarget, setSuspendTarget] = useState<StaffMember | null>(null);
+  const [suspendType, setSuspendType] = useState<SuspensionType>('timed');
+  const [suspendHours, setSuspendHours] = useState<number>(24);
+  const [suspendCustomUntil, setSuspendCustomUntil] = useState<string>('');
+  const [suspendReason, setSuspendReason] = useState<string>('');
+  const [suspending, setSuspending] = useState(false);
 
   // Form Modal State (Add Manager / Add Employee / Edit Staff)
   const [formOpen, setFormOpen] = useState(false);
@@ -153,6 +216,10 @@ export function StaffManagementTab({ restaurant, mode, actor }: StaffManagementT
   const [inviteModalData, setInviteModalData] = useState<CreatedStaffResult | null>(null);
   const [inviteCopied, setInviteCopied] = useState(false);
   const inviteCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    setDraftManagerPerms(opsConfig.managerPermissions);
+  }, [opsConfig.managerPermissions]);
 
   useEffect(() => {
     setLoading(true);
@@ -458,7 +525,28 @@ export function StaffManagementTab({ restaurant, mode, actor }: StaffManagementT
     }
   };
 
-  const handleToggleActive = async (member: StaffMember) => {
+  const handleSaveManagerPerms = async () => {
+    setSavingManagerPerms(true);
+    setActionError(null);
+    setActionMsg(null);
+    try {
+      const nextCfg = { ...opsConfig, managerPermissions: draftManagerPerms };
+      await updateRestaurantOperationsConfig({
+        restaurantId: restaurant.id,
+        ownerId: restaurant.ownerId,
+        config: nextCfg,
+        actor,
+      });
+      onRestaurantUpdated?.({ ...restaurant, operationsConfig: nextCfg });
+      setActionMsg('تم حفظ صلاحيات المدير وتطبيقها لحظياً على حسابه.');
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'تعذر حفظ صلاحيات المدير.');
+    } finally {
+      setSavingManagerPerms(false);
+    }
+  };
+
+  const openSuspendModal = (member: StaffMember) => {
     if (mode === 'manager' && member.role === 'manager' && member.uid !== actor.uid) {
       setActionError('لا يمكن للمدير إيقاف مدير آخر. يتم هذا من حساب المالك فقط.');
       return;
@@ -467,23 +555,61 @@ export function StaffManagementTab({ restaurant, mode, actor }: StaffManagementT
       setActionError('لا يمكنك إيقاف حسابك الحالي أثناء تسجيل الدخول.');
       return;
     }
+    setSuspendTarget(member);
+    setSuspendType('timed');
+    setSuspendHours(24);
+    setSuspendCustomUntil('');
+    setSuspendReason('');
+    setActionError(null);
+  };
+
+  const handleConfirmSuspend = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!suspendTarget) return;
+    if (!suspendReason.trim()) {
+      setActionError('يجب كتابة سبب واضح لإيقاف الموظف ليظهر له عند محاولة الدخول.');
+      return;
+    }
+    setSuspending(true);
+    setActionError(null);
+    setActionMsg(null);
+    try {
+      const customMs = suspendCustomUntil ? new Date(suspendCustomUntil).getTime() : 0;
+      await suspendStaffMember({
+        restaurantId: restaurant.id,
+        staff: suspendTarget,
+        actor,
+        suspendedType: suspendType === 'indefinite' ? 'indefinite' : 'timed',
+        durationHours: suspendType === 'timed' && !customMs ? suspendHours : undefined,
+        suspendedUntilMs: suspendType === 'timed' && customMs > Date.now() ? customMs : undefined,
+        reason: suspendReason.trim(),
+      });
+      setActionMsg(`تم إيقاف شاشة "${suspendTarget.name}" بنجاح وتسجيل السبب في السجل.`);
+      setSuspendTarget(null);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'تعذر إيقاف الموظف.');
+    } finally {
+      setSuspending(false);
+    }
+  };
+
+  const handleUnsuspend = async (member: StaffMember) => {
+    if (mode === 'manager' && member.role === 'manager' && member.uid !== actor.uid) {
+      setActionError('لا يمكن للمدير تفعيل مدير آخر. يتم هذا من حساب المالك فقط.');
+      return;
+    }
     setBusyUid(member.uid);
     setActionError(null);
     setActionMsg(null);
     try {
-      await updateStaffPermissionsAndProfile({
+      await unsuspendStaffMember({
         restaurantId: restaurant.id,
         staff: member,
         actor,
-        updates: { isActive: !member.isActive },
       });
-      setActionMsg(
-        !member.isActive
-          ? `تم تفعيل حساب "${member.name}" بنجاح.`
-          : `تم إيقاف حساب "${member.name}" فوراً.`
-      );
+      setActionMsg(`تم رفع الإيقاف وإعادة تفعيل شاشة "${member.name}" بنجاح.`);
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'تعذر تغيير حالة الحساب.');
+      setActionError(err instanceof Error ? err.message : 'تعذر رفع الإيقاف.');
     } finally {
       setBusyUid(null);
     }
@@ -666,6 +792,85 @@ export function StaffManagementTab({ restaurant, mode, actor }: StaffManagementT
 
       {/* Owner-only Authorized Domains Verification Card */}
       <AuthorizedDomainsCard restaurant={restaurant} actor={actor} auditLogs={auditLogs} />
+
+      {/* Owner-only Configurable Manager Permissions Matrix */}
+      {mode === 'owner' && (
+        <section className="bg-white border border-indigo-200 rounded-2xl overflow-hidden shadow-2xs">
+          <button
+            type="button"
+            onClick={() => setManagerPermsOpen((v) => !v)}
+            className="w-full px-4 py-3.5 bg-indigo-50/60 hover:bg-indigo-50 flex items-center justify-between gap-3 text-start cursor-pointer"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0">
+                <Sliders className="w-4 h-4" />
+              </span>
+              <div>
+                <h3 className="text-xs sm:text-sm font-extrabold text-indigo-950">
+                  صلاحيات المدير المصرح بها (تخصيص اختصاصات المدير)
+                </h3>
+                <p className="text-[11px] text-indigo-700">
+                  تحكّم في الصلاحيات الإدارية والتشغيلية الممنوحة للمدير مع إمكانية التعديل في أي وقت
+                </p>
+              </div>
+            </div>
+            <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-200 text-[11px] font-extrabold text-indigo-800 shrink-0">
+              {managerPermsOpen ? 'إخفاء' : 'تعديل الصلاحيات'}
+            </span>
+          </button>
+
+          {managerPermsOpen && (
+            <div className="p-4 sm:p-5 space-y-4 border-t border-indigo-100">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                {MANAGER_PERMISSION_LABELS.map((item) => {
+                  const checked = Boolean(draftManagerPerms[item.key]);
+                  return (
+                    <label
+                      key={item.key}
+                      className={`p-3 rounded-xl border flex items-start gap-2.5 cursor-pointer transition-colors ${
+                        checked
+                          ? 'bg-indigo-50/50 border-indigo-300 text-zinc-950'
+                          : 'bg-zinc-50 border-zinc-200 text-zinc-600'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) =>
+                          setDraftManagerPerms((prev) => ({
+                            ...prev,
+                            [item.key]: e.target.checked,
+                          }))
+                        }
+                        className="mt-0.5 w-4 h-4 accent-indigo-600 shrink-0"
+                      />
+                      <div className="min-w-0">
+                        <p className="text-xs font-extrabold">{item.label}</p>
+                        <p className="text-[11px] text-zinc-500 mt-0.5 leading-snug">{item.hint}</p>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-zinc-100">
+                <p className="text-[11px] text-zinc-500">
+                  تؤثر هذه الإعدادات فوراً على شاشة الإشراف والكاشير والمنيو الخاصة بالمدير.
+                </p>
+                <button
+                  type="button"
+                  disabled={savingManagerPerms}
+                  onClick={handleSaveManagerPerms}
+                  className="min-h-[40px] px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  {savingManagerPerms ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  <span>حفظ صلاحيات المدير</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
 
       {/* Auto Staff Portal Card once a Manager exists (plus owner preview tip if none yet) */}
       {managers.length > 0 ? (
@@ -906,9 +1111,18 @@ export function StaffManagementTab({ restaurant, mode, actor }: StaffManagementT
                             ? 'بانتظار تفعيل QR'
                             : member.isActive
                               ? 'نشط'
-                              : 'موقوف'}
+                              : member.suspendedType === 'timed'
+                                ? 'موقوف مؤقتاً'
+                                : 'موقوف'}
                         </span>
                       </div>
+
+                      {!member.isActive && !member.mustChangePassword && (
+                        <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-[11px] font-bold text-rose-900 flex items-start gap-2">
+                          <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                          <span>{resolveStaffSuspensionState(member).message}</span>
+                        </div>
+                      )}
 
                       {/* Assigned Screens */}
                       <div className="bg-zinc-50 border border-zinc-200/80 rounded-xl p-2.5 space-y-1.5">
@@ -945,7 +1159,7 @@ export function StaffManagementTab({ restaurant, mode, actor }: StaffManagementT
                           className="min-h-[36px] px-3 py-1.5 rounded-xl border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-800 text-xs font-bold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-40"
                         >
                           <Edit3 className="w-3.5 h-3.5" />
-                          <span>تعديل الصلاحيات</span>
+                          <span>تعديل / ترقية</span>
                         </button>
 
                         <button
@@ -972,28 +1186,27 @@ export function StaffManagementTab({ restaurant, mode, actor }: StaffManagementT
 
                         {member.uid !== actor.uid && !isManagerLocked && (
                           <>
-                            <button
-                              type="button"
-                              disabled={isBusy}
-                              onClick={() => handleToggleActive(member)}
-                              className={`min-h-[36px] px-3 py-1.5 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-40 ${
-                                member.isActive
-                                  ? 'border border-amber-300 text-amber-800 hover:bg-amber-50'
-                                  : 'bg-emerald-600 text-white hover:bg-emerald-700'
-                              }`}
-                            >
-                              {member.isActive ? (
-                                <>
-                                  <UserX className="w-3.5 h-3.5" />
-                                  <span>إيقاف</span>
-                                </>
-                              ) : (
-                                <>
-                                  <UserCheck className="w-3.5 h-3.5" />
-                                  <span>تفعيل</span>
-                                </>
-                              )}
-                            </button>
+                            {member.isActive ? (
+                              <button
+                                type="button"
+                                disabled={isBusy}
+                                onClick={() => openSuspendModal(member)}
+                                className="min-h-[36px] px-3 py-1.5 rounded-xl border border-amber-300 bg-amber-50/70 text-amber-900 hover:bg-amber-100 text-xs font-bold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-40"
+                              >
+                                <PauseCircle className="w-3.5 h-3.5" />
+                                <span>إيقاف مؤقت / دائم</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled={isBusy}
+                                onClick={() => handleUnsuspend(member)}
+                                className="min-h-[36px] px-3 py-1.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 text-xs font-bold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-40"
+                              >
+                                <UserCheck className="w-3.5 h-3.5" />
+                                <span>رفع الإيقاف وتفعيل الشاشة</span>
+                              </button>
+                            )}
 
                             <button
                               type="button"
@@ -1002,10 +1215,10 @@ export function StaffManagementTab({ restaurant, mode, actor }: StaffManagementT
                                 setConfirmDeleteUid((prev) => (prev === member.uid ? null : member.uid))
                               }
                               className="min-h-[36px] px-2.5 py-1.5 rounded-xl border border-rose-200 text-rose-700 hover:bg-rose-50 text-xs font-bold inline-flex items-center gap-1 whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-40"
-                              title="حذف الموظف نهائياً"
+                              title="حذف وفصل الموظف نهائياً"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
-                              <span>حذف</span>
+                              <span>فصل وحذف</span>
                             </button>
                           </>
                         )}
@@ -1485,6 +1698,133 @@ export function StaffManagementTab({ restaurant, mode, actor }: StaffManagementT
               </a>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* STAFF SUSPENSION MODAL */}
+      {suspendTarget && (
+        <div
+          className="fixed inset-0 z-50 bg-zinc-950/65 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
+          onClick={() => !suspending && setSuspendTarget(null)}
+        >
+          <form
+            onSubmit={handleConfirmSuspend}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white border border-zinc-200 rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl space-y-4 my-auto"
+          >
+            <div className="flex items-start justify-between gap-3 border-b border-zinc-100 pb-3">
+              <div className="space-y-0.5">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-rose-50 border border-rose-200 text-rose-800 text-[11px] font-extrabold">
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>إيقاف شاشة الموظف</span>
+                </span>
+                <h3 className="text-base font-extrabold text-zinc-950 pt-1">
+                  إيقاف {suspendTarget.name}
+                </h3>
+              </div>
+              <button
+                type="button"
+                disabled={suspending}
+                onClick={() => setSuspendTarget(null)}
+                className="p-1.5 rounded-lg text-zinc-400 hover:bg-zinc-100 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setSuspendType('timed')}
+                className={`p-3 rounded-xl border text-start space-y-0.5 cursor-pointer ${
+                  suspendType === 'timed'
+                    ? 'bg-amber-50 border-amber-500 text-amber-950'
+                    : 'bg-white border-zinc-200 text-zinc-700'
+                }`}
+              >
+                <p className="text-xs font-extrabold">إيقاف محدد المدة</p>
+                <p className="text-[11px] text-zinc-500">يُرفع تلقائياً بانتهاء الوقت</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSuspendType('indefinite')}
+                className={`p-3 rounded-xl border text-start space-y-0.5 cursor-pointer ${
+                  suspendType === 'indefinite'
+                    ? 'bg-rose-50 border-rose-500 text-rose-950'
+                    : 'bg-white border-zinc-200 text-zinc-700'
+                }`}
+              >
+                <p className="text-xs font-extrabold">إيقاف مفتوح</p>
+                <p className="text-[11px] text-zinc-500">حتى تفعيله يدوياً من الإدارة</p>
+              </button>
+            </div>
+
+            {suspendType === 'timed' && (
+              <div className="space-y-2.5 p-3 rounded-2xl bg-zinc-50 border border-zinc-200">
+                <span className="text-xs font-bold text-zinc-800 block">اختر مدة الإيقاف:</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {[2, 6, 24, 72].map((hrs) => (
+                    <button
+                      key={hrs}
+                      type="button"
+                      onClick={() => {
+                        setSuspendHours(hrs);
+                        setSuspendCustomUntil('');
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-extrabold cursor-pointer ${
+                        !suspendCustomUntil && suspendHours === hrs
+                          ? 'bg-zinc-950 text-white'
+                          : 'bg-white border border-zinc-200 text-zinc-700'
+                      }`}
+                    >
+                      {hrs} ساعة
+                    </button>
+                  ))}
+                </div>
+                <label className="block space-y-1 text-[11px] font-bold text-zinc-700">
+                  <span>أو حدد تاريخ وساعة انتهاء الإيقاف:</span>
+                  <input
+                    type="datetime-local"
+                    dir="ltr"
+                    value={suspendCustomUntil}
+                    onChange={(e) => setSuspendCustomUntil(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-zinc-300 text-xs bg-white"
+                  />
+                </label>
+              </div>
+            )}
+
+            <label className="block space-y-1 text-xs font-bold text-zinc-800">
+              <span>سبب الإيقاف (يظهر للموظف عند محاولة الدخول) *</span>
+              <textarea
+                required
+                rows={2}
+                value={suspendReason}
+                onChange={(e) => setSuspendReason(e.target.value)}
+                placeholder="مثال: إجازة / مراجعة إدارية / تأخير متكرر..."
+                className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500"
+              />
+            </label>
+
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                type="submit"
+                disabled={suspending}
+                className="flex-1 min-h-[42px] px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-extrabold inline-flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {suspending ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserX className="w-4 h-4" />}
+                <span>تأكيد إيقاف الشاشة</span>
+              </button>
+              <button
+                type="button"
+                disabled={suspending}
+                onClick={() => setSuspendTarget(null)}
+                className="min-h-[42px] px-4 py-2 rounded-xl border border-zinc-300 text-xs font-bold text-zinc-700 hover:bg-zinc-50 cursor-pointer"
+              >
+                إلغاء
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </div>

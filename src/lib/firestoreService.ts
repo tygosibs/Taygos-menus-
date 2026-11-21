@@ -2471,6 +2471,19 @@ export async function fetchRestaurantHalls(restaurantId: string): Promise<Hall[]
   }
 }
 
+export function getHallTableNumbers(
+  hall: Pick<Hall, 'tableCount' | 'tableNumbers'>
+): string[] {
+  if (Array.isArray(hall.tableNumbers) && hall.tableNumbers.length > 0) {
+    const cleaned = hall.tableNumbers
+      .map((t) => String(t).trim())
+      .filter((t) => t.length > 0);
+    if (cleaned.length > 0) return cleaned;
+  }
+  const count = Math.max(1, Math.min(200, Math.round(Number(hall.tableCount) || 1)));
+  return Array.from({ length: count }, (_, idx) => String(idx + 1));
+}
+
 export async function saveHall(
   restaurantId: string,
   ownerId: string,
@@ -2478,7 +2491,9 @@ export async function saveHall(
     id?: string;
     name: string;
     name_en?: string;
+    hallType?: string;
     tableCount: number;
+    tableNumbers?: string[];
     sortOrder: number;
   }
 ): Promise<void> {
@@ -2487,7 +2502,19 @@ export async function saveHall(
   const path = `halls/${hallId}`;
   const cleanName = data.name.trim().slice(0, 80);
   const cleanNameEn = (data.name_en || '').trim().slice(0, 80);
-  const safeTableCount = Math.max(1, Math.min(200, Math.round(Number(data.tableCount) || 1)));
+  const cleanHallType = (data.hallType || '').trim().slice(0, 60);
+  const cleanTableNumbers = Array.isArray(data.tableNumbers)
+    ? Array.from(
+        new Set(
+          data.tableNumbers
+            .map((t) => String(t).trim().slice(0, 20))
+            .filter((t) => t.length > 0)
+        )
+      ).slice(0, 200)
+    : undefined;
+  const safeTableCount = cleanTableNumbers && cleanTableNumbers.length > 0
+    ? cleanTableNumbers.length
+    : Math.max(1, Math.min(200, Math.round(Number(data.tableCount) || 1)));
   const safeSort = Math.max(0, Math.min(10000, Math.round(Number(data.sortOrder) || 0)));
 
   try {
@@ -2503,15 +2530,24 @@ export async function saveHall(
         updatedAt: serverTimestamp(),
       };
       if (cleanNameEn) payload.name_en = cleanNameEn;
+      if (cleanHallType) payload.hallType = cleanHallType;
+      if (cleanTableNumbers && cleanTableNumbers.length > 0) {
+        payload.tableNumbers = cleanTableNumbers;
+      }
       await setDoc(doc(db, 'halls', hallId), payload);
     } else {
-      await updateDoc(doc(db, 'halls', hallId), {
+      const updateData: Record<string, unknown> = {
         name: cleanName,
         name_en: cleanNameEn,
+        hallType: cleanHallType,
         tableCount: safeTableCount,
         sortOrder: safeSort,
         updatedAt: serverTimestamp(),
-      });
+      };
+      if (cleanTableNumbers && cleanTableNumbers.length > 0) {
+        updateData.tableNumbers = cleanTableNumbers;
+      }
+      await updateDoc(doc(db, 'halls', hallId), updateData);
     }
   } catch (error) {
     handleFirestoreError(error, isNew ? OperationType.CREATE : OperationType.UPDATE, path);

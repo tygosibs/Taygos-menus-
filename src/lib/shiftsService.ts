@@ -86,6 +86,11 @@ export async function startStaffShift(params: {
   stationId: string;
   stationName: string;
   hallId?: string;
+  shiftSlotId?: string;
+  shiftSlotName?: string;
+  openingFloat?: number;
+  carriedOverCash?: number;
+  carriedFromShiftId?: string;
 }): Promise<StaffShift> {
   const {
     restaurantId,
@@ -96,6 +101,11 @@ export async function startStaffShift(params: {
     stationId,
     stationName,
     hallId = '',
+    shiftSlotId,
+    shiftSlotName,
+    openingFloat,
+    carriedOverCash,
+    carriedFromShiftId,
   } = params;
 
   // Prevent duplicate simultaneous active shifts on the same station for this staff member
@@ -113,6 +123,10 @@ export async function startStaffShift(params: {
   }
 
   const shiftId = makeShiftId(staffId, stationId);
+  const isCashier = stationId === 'cashier';
+  const safeFloat = Math.max(0, Number(openingFloat) || 0);
+  const safeCarry = Math.max(0, Number(carriedOverCash) || 0);
+
   const shiftPayload: StaffShift = {
     id: shiftId,
     restaurantId,
@@ -122,10 +136,24 @@ export async function startStaffShift(params: {
     stationId,
     stationName: stationName.slice(0, 80),
     hallId: hallId.slice(0, 128),
+    ...(shiftSlotId ? { shiftSlotId: shiftSlotId.slice(0, 40) } : {}),
+    ...(shiftSlotName ? { shiftSlotName: shiftSlotName.slice(0, 80) } : {}),
     status: 'active',
     ordersHandled: 0,
     itemsMarkedReady: 0,
     serviceCallsHandled: 0,
+    ...(isCashier
+      ? {
+          openingFloat: safeFloat,
+          carriedOverCash: safeCarry,
+          ...(carriedFromShiftId ? { carriedFromShiftId: carriedFromShiftId.slice(0, 128) } : {}),
+          cashSales: 0,
+          visaSales: 0,
+          drawerExpensesTotal: 0,
+          drawerVarianceTotal: 0,
+          expectedCashHandover: Number((safeFloat + safeCarry).toFixed(2)),
+        }
+      : {}),
   };
 
   try {
