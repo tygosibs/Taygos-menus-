@@ -78,38 +78,68 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/staff_access/$(request.auth.uid)).data;
     }
 
+    function isStaffAccessActiveData(data, restId) {
+      return data.restaurantId == restId && data.isActive == true;
+    }
+
+    function isStaffAccessManagerData(data, restId) {
+      return data.restaurantId == restId && data.isActive == true && data.role == 'manager';
+    }
+
+    function isStaffAccessScreenData(data, restId, screenName) {
+      return data.restaurantId == restId && data.isActive == true && screenName in data.allowedScreens;
+    }
+
+    function isStaffAccessStationData(data, restId) {
+      return data.restaurantId == restId &&
+        data.isActive == true && (
+          'kitchen' in data.allowedScreens ||
+          'bar' in data.allowedScreens ||
+          'pastry' in data.allowedScreens ||
+          ('allowedStations' in data && data.allowedStations is list && data.allowedStations.size() > 0)
+        );
+    }
+
+    function isStaffAccessOrderData(data, restId) {
+      return data.restaurantId == restId &&
+        data.isActive == true && (
+          'cashier' in data.allowedScreens ||
+          'captain' in data.allowedScreens ||
+          'kitchen' in data.allowedScreens ||
+          'bar' in data.allowedScreens ||
+          'pastry' in data.allowedScreens ||
+          ('allowedStations' in data && data.allowedStations is list && data.allowedStations.size() > 0)
+        );
+    }
+
     function isActiveStaffForRestaurant(restId) {
       return isSignedIn() &&
         hasStaffAccess() &&
-        staffAccess().restaurantId == restId &&
-        staffAccess().isActive == true;
+        isStaffAccessActiveData(staffAccess(), restId);
     }
 
     function isActiveManagerForRestaurant(restId) {
-      return isActiveStaffForRestaurant(restId) &&
-        staffAccess().role == 'manager';
+      return isSignedIn() &&
+        hasStaffAccess() &&
+        isStaffAccessManagerData(staffAccess(), restId);
     }
 
     function staffHasScreen(restId, screenName) {
-      return isActiveStaffForRestaurant(restId) &&
-        screenName in staffAccess().allowedScreens;
+      return isSignedIn() &&
+        hasStaffAccess() &&
+        isStaffAccessScreenData(staffAccess(), restId, screenName);
     }
 
     function staffHasAnyStationAccess(restId) {
-      return isActiveStaffForRestaurant(restId) && (
-        'kitchen' in staffAccess().allowedScreens ||
-        'bar' in staffAccess().allowedScreens ||
-        'pastry' in staffAccess().allowedScreens ||
-        ('allowedStations' in staffAccess() && staffAccess().allowedStations is list && staffAccess().allowedStations.size() > 0)
-      );
+      return isSignedIn() &&
+        hasStaffAccess() &&
+        isStaffAccessStationData(staffAccess(), restId);
     }
 
     function staffHasAnyOrderScreen(restId) {
-      return isActiveStaffForRestaurant(restId) && (
-        'cashier' in staffAccess().allowedScreens ||
-        'captain' in staffAccess().allowedScreens ||
-        staffHasAnyStationAccess(restId)
-      );
+      return isSignedIn() &&
+        hasStaffAccess() &&
+        isStaffAccessOrderData(staffAccess(), restId);
     }
 
     function isOwnerOfRestaurant(restId) {
@@ -1094,15 +1124,8 @@ service cloud.firestore {
           incoming().createdBy == existing().createdBy &&
           incoming().createdAt == existing().createdAt &&
           incoming().updatedAt == request.time && (
-            isSuperAdmin() ||
-            isOwnerOfRestaurant(restaurantId) ||
             (
-              isActiveManagerForRestaurant(restaurantId) &&
-              (existing().role != 'manager' || request.auth.uid == staffUid) &&
-              incoming().role == existing().role &&
-              (existing().role == 'manager' || !('staff_management' in incoming().allowedScreens))
-            ) || (
-              // Self one-time QR onboarding activation
+              // Self one-time QR onboarding activation (checked first to avoid owner/manager reads)
               isSignedIn() &&
               request.auth.uid == staffUid &&
               existing().mustChangePassword == true &&
@@ -1136,6 +1159,14 @@ service cloud.firestore {
                   ])
                 )
               )
+            ) ||
+            isSuperAdmin() ||
+            isOwnerOfRestaurant(restaurantId) ||
+            (
+              isActiveManagerForRestaurant(restaurantId) &&
+              (existing().role != 'manager' || request.auth.uid == staffUid) &&
+              incoming().role == existing().role &&
+              (existing().role == 'manager' || !('staff_management' in incoming().allowedScreens))
             )
           );
         allow delete: if isValidId(restaurantId) && isValidId(staffUid) && (
@@ -1180,12 +1211,8 @@ service cloud.firestore {
           incoming().tokenHash == existing().tokenHash &&
           incoming().createdAt == existing().createdAt &&
           incoming().updatedAt == request.time && (
-            isSuperAdmin() ||
             (
-              (isOwnerOfRestaurant(restaurantId) || (isActiveManagerForRestaurant(restaurantId) && existing().staffRole != 'manager')) &&
-              incoming().revokedAt == request.time &&
-              incoming().diff(existing()).affectedKeys().hasOnly(['revokedAt', 'updatedAt'])
-            ) || (
+              // Self one-time invite redemption (0 reads short-circuit)
               isSignedIn() &&
               request.auth.uid == existing().staffId &&
               !('usedAt' in existing()) &&
@@ -1194,6 +1221,12 @@ service cloud.firestore {
               incoming().usedAt == request.time &&
               incoming().usedByUid == request.auth.uid &&
               incoming().diff(existing()).affectedKeys().hasOnly(['usedAt', 'usedByUid', 'updatedAt'])
+            ) ||
+            isSuperAdmin() ||
+            (
+              (isOwnerOfRestaurant(restaurantId) || (isActiveManagerForRestaurant(restaurantId) && existing().staffRole != 'manager')) &&
+              incoming().revokedAt == request.time &&
+              incoming().diff(existing()).affectedKeys().hasOnly(['revokedAt', 'updatedAt'])
             )
           );
         allow delete: if isValidId(restaurantId) && isValidId(inviteId) && (
@@ -1215,14 +1248,14 @@ service cloud.firestore {
           isValidStaffLoginIndexShape(incoming(), restaurantId, lookupId) &&
           incoming().createdAt == request.time &&
           incoming().updatedAt == request.time && (
-            isSuperAdmin() ||
-            isOwnerOfRestaurant(restaurantId) ||
-            isActiveManagerForRestaurant(restaurantId) ||
             (
               isSignedIn() &&
               incoming().staffUid == request.auth.uid &&
               getAfter(/databases/$(database)/documents/restaurants/$(restaurantId)/staff/$(request.auth.uid)).data.isActive == true
-            )
+            ) ||
+            isSuperAdmin() ||
+            isOwnerOfRestaurant(restaurantId) ||
+            isActiveManagerForRestaurant(restaurantId)
           );
         allow update: if isValidId(restaurantId) && isValidId(lookupId) &&
           isValidStaffLoginIndexShape(incoming(), restaurantId, lookupId) &&
@@ -1231,23 +1264,24 @@ service cloud.firestore {
           incoming().ownerId == existing().ownerId &&
           incoming().createdAt == existing().createdAt &&
           incoming().updatedAt == request.time && (
-            isSuperAdmin() ||
-            isOwnerOfRestaurant(restaurantId) ||
-            isActiveManagerForRestaurant(restaurantId) ||
             (
+              // Self activation update (0 reads short-circuit)
               isSignedIn() &&
               existing().staffUid == request.auth.uid &&
               incoming().staffUid == request.auth.uid &&
               incoming().authEmail == existing().authEmail &&
               incoming().isActive == true &&
               incoming().diff(existing()).affectedKeys().hasOnly(['isActive', 'updatedAt'])
-            )
+            ) ||
+            isSuperAdmin() ||
+            isOwnerOfRestaurant(restaurantId) ||
+            isActiveManagerForRestaurant(restaurantId)
           );
         allow delete: if isValidId(restaurantId) && isValidId(lookupId) && (
+          (isSignedIn() && existing().staffUid == request.auth.uid) ||
           isSuperAdmin() ||
           isOwnerOfRestaurant(restaurantId) ||
-          isActiveManagerForRestaurant(restaurantId) ||
-          (isSignedIn() && existing().staffUid == request.auth.uid)
+          isActiveManagerForRestaurant(restaurantId)
         );
       }
 
@@ -1269,7 +1303,8 @@ service cloud.firestore {
             (
               isSignedIn() &&
               incoming().actorUid == request.auth.uid &&
-              getAfter(/databases/$(database)/documents/staff_access/$(request.auth.uid)).data.restaurantId == restaurantId
+              getAfter(/databases/$(database)/documents/staff_access/$(request.auth.uid)).data.restaurantId == restaurantId &&
+              getAfter(/databases/$(database)/documents/staff_access/$(request.auth.uid)).data.isActive == true
             )
           );
         allow update: if false;
@@ -1472,14 +1507,7 @@ service cloud.firestore {
         incoming().restaurantId == existing().restaurantId &&
         incoming().ownerId == existing().ownerId &&
         incoming().updatedAt == request.time && (
-          isSuperAdmin() ||
-          isOwnerOfRestaurant(existing().restaurantId) ||
           (
-            isActiveManagerForRestaurant(existing().restaurantId) &&
-            (existing().role != 'manager' || request.auth.uid == staffUid) &&
-            incoming().role == existing().role &&
-            (existing().role == 'manager' || !('staff_management' in incoming().allowedScreens))
-          ) || (
             isSignedIn() &&
             request.auth.uid == staffUid &&
             existing().mustChangePassword == true &&
@@ -1500,6 +1528,14 @@ service cloud.firestore {
             incoming().defaultScreen == existing().defaultScreen &&
             incoming().mustChangePassword == false &&
             incoming().diff(existing()).affectedKeys().hasOnly(['mustChangePassword', 'updatedAt'])
+          ) ||
+          isSuperAdmin() ||
+          isOwnerOfRestaurant(existing().restaurantId) ||
+          (
+            isActiveManagerForRestaurant(existing().restaurantId) &&
+            (existing().role != 'manager' || request.auth.uid == staffUid) &&
+            incoming().role == existing().role &&
+            (existing().role == 'manager' || !('staff_management' in incoming().allowedScreens))
           )
         );
       allow delete: if isValidId(staffUid) && (

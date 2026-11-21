@@ -118,19 +118,32 @@ export function StaffOnboardingPage({ slug, onNavigate }: StaffOnboardingPagePro
     }
     const raw = err.message || '';
     try {
-      const parsed = JSON.parse(raw) as { error?: string };
+      const parsed = JSON.parse(raw) as {
+        error?: string;
+        errorCode?: string | null;
+        path?: string | null;
+        appCheck?: { configured?: boolean; active?: boolean };
+      };
       if (parsed?.error) {
         const lower = parsed.error.toLowerCase();
+        const diagParts = [
+          parsed.errorCode ? `code: ${parsed.errorCode}` : null,
+          parsed.path ? `path: ${parsed.path}` : null,
+          parsed.appCheck !== undefined
+            ? `appCheck: ${parsed.appCheck.configured ? (parsed.appCheck.active ? 'active' : 'failed-init') : 'off'}`
+            : null,
+        ].filter(Boolean);
+        const diagText = diagParts.length > 0 ? ` (${diagParts.join(' | ')})` : '';
         if (lower.includes('permission') || lower.includes('insufficient')) {
-          return 'تم رفض الحفظ بسبب صلاحيات Firestore أو التحقق الأمني (App Check). تأكد من نشر قواعد الأمان وإعدادات النطاق، أو اطلب من صاحب المطعم إصدار دعوة QR جديدة.';
+          return `تم رفض الحفظ بسبب صلاحيات Firestore أو التحقق الأمني (App Check). تأكد من نشر قواعد الأمان وإعدادات النطاق، أو اطلب من صاحب المطعم إصدار دعوة QR جديدة.${diagText}`;
         }
-        return `تعذر حفظ التفعيل: ${parsed.error}`;
+        return `تعذر حفظ التفعيل: ${parsed.error}${diagText}`;
       }
     } catch {
       // plain error message
     }
     if (raw.includes('permission-denied') || raw.includes('Missing or insufficient permissions')) {
-      return 'تم رفض الحفظ بسبب صلاحيات Firestore أو التحقق الأمني (App Check). تأكد من نشر قواعد الأمان وإعدادات النطاق، أو اطلب من صاحب المطعم إصدار دعوة QR جديدة.';
+      return `تم رفض الحفظ بسبب صلاحيات Firestore أو التحقق الأمني (App Check). (${raw})`;
     }
     return raw || 'تعذر تفعيل الحساب. حاول مجدداً.';
   };

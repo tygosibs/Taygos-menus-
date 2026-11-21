@@ -97,8 +97,13 @@ export enum OperationType {
 
 export interface FirestoreErrorInfo {
   error: string;
+  errorCode?: string | null;
   operationType: OperationType;
   path: string | null;
+  appCheck?: {
+    configured: boolean;
+    active: boolean;
+  };
   authInfo: {
     userId?: string | null;
     email?: string | null;
@@ -117,8 +122,14 @@ export function handleFirestoreError(
   operationType: OperationType,
   path: string | null
 ): never {
+  const errCode =
+    error && typeof error === 'object' && 'code' in error && typeof (error as { code?: unknown }).code === 'string'
+      ? (error as { code: string }).code
+      : null;
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
+    errorCode: errCode,
+    appCheck: getAppCheckStatus(),
     authInfo: {
       userId: auth.currentUser?.uid,
       email: auth.currentUser?.email,

@@ -271,23 +271,36 @@ export function OffersPromosTab({
     }
     const raw = err.message || '';
     try {
-      const parsed = JSON.parse(raw) as { error?: string };
+      const parsed = JSON.parse(raw) as {
+        error?: string;
+        errorCode?: string | null;
+        path?: string | null;
+        appCheck?: { configured?: boolean; active?: boolean };
+      };
       if (parsed?.error) {
         const lower = parsed.error.toLowerCase();
+        const diagParts = [
+          parsed.errorCode ? `code: ${parsed.errorCode}` : null,
+          parsed.path ? `path: ${parsed.path}` : null,
+          parsed.appCheck !== undefined
+            ? `appCheck: ${parsed.appCheck.configured ? (parsed.appCheck.active ? 'active' : 'failed-init') : 'off'}`
+            : null,
+        ].filter(Boolean);
+        const diagText = diagParts.length > 0 ? ` (${diagParts.join(' | ')})` : '';
         if (lower.includes('permission') || lower.includes('insufficient')) {
           return isEn
-            ? 'Save rejected by Firestore permissions or App Check. Ensure firestore.rules are deployed and App Check / domain settings are valid for this domain.'
-            : 'تم رفض الحفظ بسبب صلاحيات Firestore أو التحقق الأمني (App Check). تأكد من نشر قواعد الأمان (firestore.rules) وإعدادات App Check لهذا النطاق.';
+            ? `Save rejected by Firestore permissions or App Check. Ensure firestore.rules are deployed and App Check / domain settings are valid for this domain.${diagText}`
+            : `تم رفض الحفظ بسبب صلاحيات Firestore أو التحقق الأمني (App Check). تأكد من نشر قواعد الأمان (firestore.rules) وإعدادات App Check لهذا النطاق.${diagText}`;
         }
-        return parsed.error;
+        return `${parsed.error}${diagText}`;
       }
     } catch {
       // plain error message
     }
     if (raw.includes('permission-denied') || raw.includes('Missing or insufficient permissions')) {
       return isEn
-        ? 'Save rejected by Firestore permissions or App Check. Ensure firestore.rules are deployed and App Check / domain settings are valid for this domain.'
-        : 'تم رفض الحفظ بسبب صلاحيات Firestore أو التحقق الأمني (App Check). تأكد من نشر قواعد الأمان (firestore.rules) وإعدادات App Check لهذا النطاق.';
+        ? `Save rejected by Firestore permissions or App Check. (${raw})`
+        : `تم رفض الحفظ بسبب صلاحيات Firestore أو التحقق الأمني (App Check). (${raw})`;
     }
     return raw || t.auth.errGeneric;
   };

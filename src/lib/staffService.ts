@@ -337,13 +337,48 @@ export async function createManagerOrStaffAccount(
   };
 
   try {
-    const batch = writeBatch(db);
-    batch.set(
-      doc(db, 'restaurants', input.restaurant.id, 'staff', staffUid),
-      staffPayload
-    );
-    batch.set(doc(db, 'staff_access', staffUid), accessPayload);
+    const staffRef = doc(db, 'restaurants', input.restaurant.id, 'staff', staffUid);
+    const accessRef = doc(db, 'staff_access', staffUid);
+    const inviteRef = tokenHash
+      ? doc(db, 'restaurants', input.restaurant.id, 'staff_invites', tokenHash)
+      : null;
 
+    // Batch 1: Core identity & invite docs (<= 3 writes -> stays well under Firestore 20 rule-read limit)
+    const coreBatch = writeBatch(db);
+    coreBatch.set(staffRef, staffPayload);
+    coreBatch.set(accessRef, accessPayload);
+    if (inviteRef && tokenHash) {
+      coreBatch.set(inviteRef, {
+        id: tokenHash,
+        staffId: staffUid,
+        restaurantId: input.restaurant.id,
+        ownerId: input.restaurant.ownerId,
+        restaurantSlug: input.restaurant.slug,
+        restaurantName: input.restaurant.name.slice(0, 120),
+        restaurantName_en: (input.restaurant.name_en || '').slice(0, 120),
+        tokenHash,
+        authEmail,
+        staffName: cleanName,
+        staffUsername: cleanUsername,
+        staffPhone: cleanPhone,
+        staffEmail: cleanEmail,
+        staffRole: input.role,
+        staffJobTitle: cleanJobTitle,
+        staffHallId: (input.hallId || '').trim().slice(0, 128),
+        staffHallName: (input.hallName || '').trim().slice(0, 80),
+        allowedScreens,
+        allowedStations,
+        defaultScreen,
+        defaultStationId,
+        expiresAt: Timestamp.fromMillis(expiresAtMs),
+        createdBy: input.actor.uid,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    }
+    await coreBatch.commit();
+
+    // Batch 2: Login lookup index docs (<= 3 writes)
     const commonLookup = {
       restaurantId: input.restaurant.id,
       ownerId: input.restaurant.ownerId,
@@ -353,97 +388,82 @@ export async function createManagerOrStaffAccount(
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
-    batch.set(
+    const indexBatch = writeBatch(db);
+    indexBatch.set(
       doc(db, 'restaurants', input.restaurant.id, 'staff_login_index', uLookupId),
       { id: uLookupId, ...commonLookup }
     );
-    batch.set(
+    indexBatch.set(
       doc(db, 'restaurants', input.restaurant.id, 'staff_login_index', pLookupId),
       { id: pLookupId, ...commonLookup }
     );
     if (eLookupId) {
-      batch.set(
+      indexBatch.set(
         doc(db, 'restaurants', input.restaurant.id, 'staff_login_index', eLookupId),
         { id: eLookupId, ...commonLookup }
       );
     }
-
-    if (tokenHash) {
-      batch.set(
-        doc(db, 'restaurants', input.restaurant.id, 'staff_invites', tokenHash),
-        {
-          id: tokenHash,
-          staffId: staffUid,
-          restaurantId: input.restaurant.id,
-          ownerId: input.restaurant.ownerId,
-          restaurantSlug: input.restaurant.slug,
-          restaurantName: input.restaurant.name.slice(0, 120),
-          restaurantName_en: (input.restaurant.name_en || '').slice(0, 120),
-          tokenHash,
-          authEmail,
-          staffName: cleanName,
-          staffUsername: cleanUsername,
-          staffPhone: cleanPhone,
-          staffEmail: cleanEmail,
-          staffRole: input.role,
-          staffJobTitle: cleanJobTitle,
-          staffHallId: (input.hallId || '').trim().slice(0, 128),
-          staffHallName: (input.hallName || '').trim().slice(0, 80),
-          allowedScreens,
-          allowedStations,
-          defaultScreen,
-          defaultStationId,
-          expiresAt: Timestamp.fromMillis(expiresAtMs),
-          createdBy: input.actor.uid,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        }
-      );
+    try {
+      await indexBatch.commit();
+    } catch (indexError) {
+      const rollbackBatch = writeBatch(db);
+      rollbackBatch.delete(staffRef);
+      rollbackBatch.delete(accessRef);
+      if (inviteRef) {
+        rollbackBatch.delete(inviteRef);
+      }
+      await rollbackBatch.commit().catch(() => {});
+      throw indexError;
     }
 
-    const logId = makeStaffDocId('slog');
-    batch.set(
-      doc(db, 'restaurants', input.restaurant.id, 'staff_audit_logs', logId),
-      {
-        id: logId,
-        restaurantId: input.restaurant.id,
-        ownerId: input.restaurant.ownerId,
-        eventType: 'staff_created' satisfies StaffAuditEventType,
-        actorUid: input.actor.uid,
-        actorName: input.actor.name.slice(0, 100),
-        actorRole: input.actor.role,
-        targetUid: staffUid,
-        targetName: cleanName,
-        screen: 'staff_management',
-        details: `تم إنشاء حساب ${input.role} (${cleanUsername})`,
-        ...(tokenHash ? { inviteHash: tokenHash } : {}),
-        createdAt: serverTimestamp(),
-      }
-    );
-
-    if (tokenHash) {
-      const inviteLogId = makeStaffDocId('slog');
-      batch.set(
-        doc(db, 'restaurants', input.restaurant.id, 'staff_audit_logs', inviteLogId),
+    // Batch 3: Non-fatal security audit logs
+    try {
+      const auditBatch = writeBatch(db);
+      const logId = makeStaffDocId('slog');
+      auditBatch.set(
+        doc(db, 'restaurants', input.restaurant.id, 'staff_audit_logs', logId),
         {
-          id: inviteLogId,
+          id: logId,
           restaurantId: input.restaurant.id,
           ownerId: input.restaurant.ownerId,
-          eventType: 'invite_created' satisfies StaffAuditEventType,
+          eventType: 'staff_created' satisfies StaffAuditEventType,
           actorUid: input.actor.uid,
           actorName: input.actor.name.slice(0, 100),
           actorRole: input.actor.role,
           targetUid: staffUid,
           targetName: cleanName,
           screen: 'staff_management',
-          details: 'تم إنشاء رابط دعوة QR صالح لمرة واحدة ولمدة 24 ساعة',
-          inviteHash: tokenHash,
+          details: `تم إنشاء حساب ${input.role} (${cleanUsername})`,
+          ...(tokenHash ? { inviteHash: tokenHash } : {}),
           createdAt: serverTimestamp(),
         }
       );
-    }
 
-    await batch.commit();
+      if (tokenHash) {
+        const inviteLogId = makeStaffDocId('slog');
+        auditBatch.set(
+          doc(db, 'restaurants', input.restaurant.id, 'staff_audit_logs', inviteLogId),
+          {
+            id: inviteLogId,
+            restaurantId: input.restaurant.id,
+            ownerId: input.restaurant.ownerId,
+            eventType: 'invite_created' satisfies StaffAuditEventType,
+            actorUid: input.actor.uid,
+            actorName: input.actor.name.slice(0, 100),
+            actorRole: input.actor.role,
+            targetUid: staffUid,
+            targetName: cleanName,
+            screen: 'staff_management',
+            details: 'تم إنشاء رابط دعوة QR صالح لمرة واحدة ولمدة 24 ساعة',
+            inviteHash: tokenHash,
+            createdAt: serverTimestamp(),
+          }
+        );
+      }
+      await auditBatch.commit();
+    } catch {
+      // Non-fatal audit logging
+    }
 
     const staffMember: StaffMember = {
       uid: staffUid,
@@ -508,18 +528,6 @@ export async function regenerateStaffInvite(params: {
   const newUid = authUser.uid;
   const expiresAtMs = Date.now() + 24 * 60 * 60 * 1000;
 
-  let oldInviteExists = false;
-  if (existingStaff.activeInviteHash) {
-    try {
-      const oldInviteSnap = await getDoc(
-        doc(db, 'restaurants', restaurant.id, 'staff_invites', existingStaff.activeInviteHash)
-      );
-      oldInviteExists = oldInviteSnap.exists();
-    } catch {
-      oldInviteExists = false;
-    }
-  }
-
   const [uLookupId, pLookupId, eLookupId] = await Promise.all([
     buildLoginIndexId('u', restaurant.id, existingStaff.username),
     buildLoginIndexId('p', restaurant.id, existingStaff.phone),
@@ -528,24 +536,34 @@ export async function regenerateStaffInvite(params: {
       : Promise.resolve(''),
   ]);
 
+  const uLookupRef = doc(db, 'restaurants', restaurant.id, 'staff_login_index', uLookupId);
+  const pLookupRef = doc(db, 'restaurants', restaurant.id, 'staff_login_index', pLookupId);
+  const eLookupRef = eLookupId
+    ? doc(db, 'restaurants', restaurant.id, 'staff_login_index', eLookupId)
+    : null;
+  const oldStaffRef = doc(db, 'restaurants', restaurant.id, 'staff', existingStaff.uid);
+  const oldAccessRef = doc(db, 'staff_access', existingStaff.uid);
+  const oldInviteRef = existingStaff.activeInviteHash
+    ? doc(db, 'restaurants', restaurant.id, 'staff_invites', existingStaff.activeInviteHash)
+    : null;
+
+  const [oldInviteSnap, oldStaffSnap, oldAccessSnap, uSnap, pSnap, eSnap] = await Promise.all([
+    oldInviteRef ? getDoc(oldInviteRef).catch(() => null) : Promise.resolve(null),
+    getDoc(oldStaffRef).catch(() => null),
+    getDoc(oldAccessRef).catch(() => null),
+    getDoc(uLookupRef).catch(() => null),
+    getDoc(pLookupRef).catch(() => null),
+    eLookupRef ? getDoc(eLookupRef).catch(() => null) : Promise.resolve(null),
+  ]);
+
+  const newStaffRef = doc(db, 'restaurants', restaurant.id, 'staff', newUid);
+  const newAccessRef = doc(db, 'staff_access', newUid);
+  const newInviteRef = doc(db, 'restaurants', restaurant.id, 'staff_invites', tokenHash);
+
   try {
-    const batch = writeBatch(db);
-
-    if (oldInviteExists && existingStaff.activeInviteHash) {
-      batch.update(
-        doc(db, 'restaurants', restaurant.id, 'staff_invites', existingStaff.activeInviteHash),
-        {
-          revokedAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        }
-      );
-    }
-
-    // Remove old staff + access docs so old UID loses access immediately and list stays 1:1 clean
-    batch.delete(doc(db, 'restaurants', restaurant.id, 'staff', existingStaff.uid));
-    batch.delete(doc(db, 'staff_access', existingStaff.uid));
-
-    const newStaffPayload: Record<string, unknown> = {
+    // Batch 1: Create new staff + access + invite (3 writes)
+    const coreBatch = writeBatch(db);
+    coreBatch.set(newStaffRef, {
       uid: newUid,
       restaurantId: restaurant.id,
       ownerId: restaurant.ownerId,
@@ -568,10 +586,8 @@ export async function regenerateStaffInvite(params: {
       createdBy: actor.uid,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    };
-
-    batch.set(doc(db, 'restaurants', restaurant.id, 'staff', newUid), newStaffPayload);
-    batch.set(doc(db, 'staff_access', newUid), {
+    });
+    coreBatch.set(newAccessRef, {
       uid: newUid,
       restaurantId: restaurant.id,
       ownerId: restaurant.ownerId,
@@ -585,32 +601,7 @@ export async function regenerateStaffInvite(params: {
       mustChangePassword: true,
       updatedAt: serverTimestamp(),
     });
-
-    const commonLookup = {
-      restaurantId: restaurant.id,
-      ownerId: restaurant.ownerId,
-      staffUid: newUid,
-      authEmail: newAuthEmail,
-      isActive: false,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    };
-    batch.set(
-      doc(db, 'restaurants', restaurant.id, 'staff_login_index', uLookupId),
-      { id: uLookupId, ...commonLookup }
-    );
-    batch.set(
-      doc(db, 'restaurants', restaurant.id, 'staff_login_index', pLookupId),
-      { id: pLookupId, ...commonLookup }
-    );
-    if (eLookupId) {
-      batch.set(
-        doc(db, 'restaurants', restaurant.id, 'staff_login_index', eLookupId),
-        { id: eLookupId, ...commonLookup }
-      );
-    }
-
-    batch.set(doc(db, 'restaurants', restaurant.id, 'staff_invites', tokenHash), {
+    coreBatch.set(newInviteRef, {
       id: tokenHash,
       staffId: newUid,
       restaurantId: restaurant.id,
@@ -637,25 +628,96 @@ export async function regenerateStaffInvite(params: {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
+    await coreBatch.commit();
 
-    const logId = makeStaffDocId('slog');
-    batch.set(doc(db, 'restaurants', restaurant.id, 'staff_audit_logs', logId), {
-      id: logId,
-      restaurantId: restaurant.id,
-      ownerId: restaurant.ownerId,
-      eventType: 'invite_created' satisfies StaffAuditEventType,
-      actorUid: actor.uid,
-      actorName: actor.name.slice(0, 100),
-      actorRole: actor.role,
-      targetUid: newUid,
-      targetName: existingStaff.name,
-      screen: 'staff_management',
-      details: 'تمت إعادة إصدار رابط دعوة QR جديد وإلغاء الوصول السابق',
-      inviteHash: tokenHash,
-      createdAt: serverTimestamp(),
-    });
+    // Batch 2: Update existing login index docs WITHOUT overwriting createdAt, or create if absent
+    const indexBatch = writeBatch(db);
+    const applyLookup = (
+      ref: ReturnType<typeof doc>,
+      id: string,
+      exists: boolean
+    ) => {
+      if (exists) {
+        indexBatch.update(ref, {
+          staffUid: newUid,
+          authEmail: newAuthEmail,
+          isActive: false,
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        indexBatch.set(ref, {
+          id,
+          restaurantId: restaurant.id,
+          ownerId: restaurant.ownerId,
+          staffUid: newUid,
+          authEmail: newAuthEmail,
+          isActive: false,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+    };
+    applyLookup(uLookupRef, uLookupId, Boolean(uSnap?.exists()));
+    applyLookup(pLookupRef, pLookupId, Boolean(pSnap?.exists()));
+    if (eLookupRef && eLookupId) {
+      applyLookup(eLookupRef, eLookupId, Boolean(eSnap?.exists()));
+    }
+    try {
+      await indexBatch.commit();
+    } catch (indexErr) {
+      const rollbackBatch = writeBatch(db);
+      rollbackBatch.delete(newStaffRef);
+      rollbackBatch.delete(newAccessRef);
+      rollbackBatch.delete(newInviteRef);
+      await rollbackBatch.commit().catch(() => {});
+      throw indexErr;
+    }
 
-    await batch.commit();
+    // Batch 3: Revoke old invite & remove old UID docs (<= 3 writes)
+    const cleanupBatch = writeBatch(db);
+    let hasCleanup = false;
+    if (oldInviteRef && oldInviteSnap?.exists()) {
+      cleanupBatch.update(oldInviteRef, {
+        revokedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      hasCleanup = true;
+    }
+    if (oldStaffSnap?.exists()) {
+      cleanupBatch.delete(oldStaffRef);
+      hasCleanup = true;
+    }
+    if (oldAccessSnap?.exists()) {
+      cleanupBatch.delete(oldAccessRef);
+      hasCleanup = true;
+    }
+    if (hasCleanup) {
+      await cleanupBatch.commit();
+    }
+
+    // Batch 4: Non-fatal audit log
+    try {
+      const auditBatch = writeBatch(db);
+      const logId = makeStaffDocId('slog');
+      auditBatch.set(doc(db, 'restaurants', restaurant.id, 'staff_audit_logs', logId), {
+        id: logId,
+        restaurantId: restaurant.id,
+        ownerId: restaurant.ownerId,
+        eventType: 'invite_created' satisfies StaffAuditEventType,
+        actorUid: actor.uid,
+        actorName: actor.name.slice(0, 100),
+        actorRole: actor.role,
+        targetUid: newUid,
+        targetName: existingStaff.name,
+        screen: 'staff_management',
+        details: 'تمت إعادة إصدار رابط دعوة QR جديد وإلغاء الوصول السابق',
+        inviteHash: tokenHash,
+        createdAt: serverTimestamp(),
+      });
+      await auditBatch.commit();
+    } catch {
+      // Non-fatal audit logging
+    }
 
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const inviteUrl = `${origin}/staff/${restaurant.slug}/onboarding?invite=${encodeURIComponent(inviteToken)}`;
@@ -792,6 +854,7 @@ export async function updateStaffPermissionsAndProfile(params: {
     oldPhoneLookupId = await buildLoginIndexId('p', restaurantId, staff.phone);
   }
 
+  const activeChanged = Boolean(nextActive) !== Boolean(staff.isActive);
   const uLookupId = await buildLoginIndexId('u', restaurantId, staff.username);
   const batch = writeBatch(db);
 
@@ -822,13 +885,22 @@ export async function updateStaffPermissionsAndProfile(params: {
     updatedAt: serverTimestamp(),
   });
 
-  batch.update(doc(db, 'restaurants', restaurantId, 'staff_login_index', uLookupId), {
-    isActive: Boolean(nextActive),
-    updatedAt: serverTimestamp(),
-  });
+  if (activeChanged) {
+    const uSnap = await getDoc(doc(db, 'restaurants', restaurantId, 'staff_login_index', uLookupId));
+    if (uSnap.exists()) {
+      batch.update(doc(db, 'restaurants', restaurantId, 'staff_login_index', uLookupId), {
+        isActive: Boolean(nextActive),
+        updatedAt: serverTimestamp(),
+      });
+    }
+  }
 
   if (newPhoneLookupId) {
-    batch.delete(doc(db, 'restaurants', restaurantId, 'staff_login_index', oldPhoneLookupId));
+    const oldPhoneRef = doc(db, 'restaurants', restaurantId, 'staff_login_index', oldPhoneLookupId);
+    const oldPhoneSnap = await getDoc(oldPhoneRef);
+    if (oldPhoneSnap.exists()) {
+      batch.delete(oldPhoneRef);
+    }
     batch.set(doc(db, 'restaurants', restaurantId, 'staff_login_index', newPhoneLookupId), {
       id: newPhoneLookupId,
       restaurantId,
@@ -839,11 +911,15 @@ export async function updateStaffPermissionsAndProfile(params: {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
-  } else {
-    batch.update(doc(db, 'restaurants', restaurantId, 'staff_login_index', oldPhoneLookupId), {
-      isActive: Boolean(nextActive),
-      updatedAt: serverTimestamp(),
-    });
+  } else if (activeChanged) {
+    const oldPhoneRef = doc(db, 'restaurants', restaurantId, 'staff_login_index', oldPhoneLookupId);
+    const oldPhoneSnap = await getDoc(oldPhoneRef);
+    if (oldPhoneSnap.exists()) {
+      batch.update(oldPhoneRef, {
+        isActive: Boolean(nextActive),
+        updatedAt: serverTimestamp(),
+      });
+    }
   }
 
   if (nextEmail && nextEmail !== (staff.email || '').toLowerCase()) {
@@ -872,25 +948,31 @@ export async function updateStaffPermissionsAndProfile(params: {
     }
   }
 
-  const logId = makeStaffDocId('slog');
-  batch.set(doc(db, 'restaurants', restaurantId, 'staff_audit_logs', logId), {
-    id: logId,
-    restaurantId,
-    ownerId: staff.ownerId,
-    eventType: 'staff_updated' satisfies StaffAuditEventType,
-    actorUid: actor.uid,
-    actorName: actor.name.slice(0, 100),
-    actorRole: actor.role,
-    targetUid: staff.uid,
-    targetName: nextName,
-    screen: 'staff_management',
-    details: nextActive
-      ? `تم تحديث صلاحيات وبيانات ${nextName} (${nextRole})`
-      : `تم إيقاف حساب ${nextName} مؤقتاً`,
-    createdAt: serverTimestamp(),
-  });
-
   await batch.commit();
+
+  try {
+    const auditBatch = writeBatch(db);
+    const logId = makeStaffDocId('slog');
+    auditBatch.set(doc(db, 'restaurants', restaurantId, 'staff_audit_logs', logId), {
+      id: logId,
+      restaurantId,
+      ownerId: staff.ownerId,
+      eventType: 'staff_updated' satisfies StaffAuditEventType,
+      actorUid: actor.uid,
+      actorName: actor.name.slice(0, 100),
+      actorRole: actor.role,
+      targetUid: staff.uid,
+      targetName: nextName,
+      screen: 'staff_management',
+      details: nextActive
+        ? `تم تحديث صلاحيات وبيانات ${nextName} (${nextRole})`
+        : `تم إيقاف حساب ${nextName} مؤقتاً`,
+      createdAt: serverTimestamp(),
+    });
+    await auditBatch.commit();
+  } catch {
+    // Non-fatal audit logging
+  }
 }
 
 export async function fetchStaffInvitePreview(
@@ -987,6 +1069,19 @@ export async function completeStaffOnboarding(params: {
     cleanEmail ? buildLoginIndexId('e', params.restaurant.id, cleanEmail) : Promise.resolve(''),
   ]);
 
+  const uLookupRef = doc(db, 'restaurants', params.restaurant.id, 'staff_login_index', uLookupId);
+  const oldPhoneRef = doc(db, 'restaurants', params.restaurant.id, 'staff_login_index', oldPhoneLookupId);
+  const oldEmailRef =
+    oldEmailLookupId && oldEmailLookupId !== eLookupId
+      ? doc(db, 'restaurants', params.restaurant.id, 'staff_login_index', oldEmailLookupId)
+      : null;
+
+  const [uLookupSnap, oldPhoneSnap, oldEmailSnap] = await Promise.all([
+    getDoc(uLookupRef).catch(() => null),
+    getDoc(oldPhoneRef).catch(() => null),
+    oldEmailRef ? getDoc(oldEmailRef).catch(() => null) : Promise.resolve(null),
+  ]);
+
   const allowPhoneChange = cleanPhone !== latestInvite.staffPhone;
   if (allowPhoneChange) {
     const checkSnap = await getDoc(
@@ -1049,6 +1144,7 @@ export async function completeStaffOnboarding(params: {
     await updatePassword(cred.user, params.newPassword);
   }
 
+  // Phase 1: Core atomic activation batch (only 2-4 rule reads total!)
   const batch = writeBatch(db);
   batch.update(doc(db, 'restaurants', params.restaurant.id, 'staff_invites', tokenHash), {
     usedAt: serverTimestamp(),
@@ -1077,15 +1173,25 @@ export async function completeStaffOnboarding(params: {
     updatedAt: serverTimestamp(),
   });
 
-  batch.update(
-    doc(db, 'restaurants', params.restaurant.id, 'staff_login_index', uLookupId),
-    { isActive: true, updatedAt: serverTimestamp() }
-  );
+  if (uLookupSnap?.exists()) {
+    batch.update(uLookupRef, { isActive: true, updatedAt: serverTimestamp() });
+  } else {
+    batch.set(uLookupRef, {
+      id: uLookupId,
+      restaurantId: params.restaurant.id,
+      ownerId: params.restaurant.ownerId,
+      staffUid: cred.user.uid,
+      authEmail: latestInvite.authEmail,
+      isActive: true,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  }
 
   if (allowPhoneChange) {
-    batch.delete(
-      doc(db, 'restaurants', params.restaurant.id, 'staff_login_index', oldPhoneLookupId)
-    );
+    if (oldPhoneSnap?.exists()) {
+      batch.delete(oldPhoneRef);
+    }
     batch.set(
       doc(db, 'restaurants', params.restaurant.id, 'staff_login_index', newPhoneLookupId),
       {
@@ -1099,17 +1205,23 @@ export async function completeStaffOnboarding(params: {
         updatedAt: serverTimestamp(),
       }
     );
+  } else if (oldPhoneSnap?.exists()) {
+    batch.update(oldPhoneRef, { isActive: true, updatedAt: serverTimestamp() });
   } else {
-    batch.update(
-      doc(db, 'restaurants', params.restaurant.id, 'staff_login_index', oldPhoneLookupId),
-      { isActive: true, updatedAt: serverTimestamp() }
-    );
+    batch.set(oldPhoneRef, {
+      id: oldPhoneLookupId,
+      restaurantId: params.restaurant.id,
+      ownerId: params.restaurant.ownerId,
+      staffUid: cred.user.uid,
+      authEmail: latestInvite.authEmail,
+      isActive: true,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
   }
 
-  if (oldEmailLookupId && oldEmailLookupId !== eLookupId) {
-    batch.delete(
-      doc(db, 'restaurants', params.restaurant.id, 'staff_login_index', oldEmailLookupId)
-    );
+  if (oldEmailRef && oldEmailSnap?.exists()) {
+    batch.delete(oldEmailRef);
   }
 
   if (eLookupId) {
@@ -1133,39 +1245,6 @@ export async function completeStaffOnboarding(params: {
     }
   }
 
-  const logInviteUsed = makeStaffDocId('slog');
-  batch.set(doc(db, 'restaurants', params.restaurant.id, 'staff_audit_logs', logInviteUsed), {
-    id: logInviteUsed,
-    restaurantId: params.restaurant.id,
-    ownerId: params.restaurant.ownerId,
-    eventType: 'invite_used' satisfies StaffAuditEventType,
-    actorUid: cred.user.uid,
-    actorName: cleanName,
-    actorRole: latestInvite.staffRole,
-    targetUid: cred.user.uid,
-    targetName: cleanName,
-    screen: latestInvite.defaultScreen,
-    details: 'تم تفعيل الحساب عبر رابط الدعوة QR لمرة واحدة',
-    inviteHash: tokenHash,
-    createdAt: serverTimestamp(),
-  });
-
-  const logPwChanged = makeStaffDocId('slog');
-  batch.set(doc(db, 'restaurants', params.restaurant.id, 'staff_audit_logs', logPwChanged), {
-    id: logPwChanged,
-    restaurantId: params.restaurant.id,
-    ownerId: params.restaurant.ownerId,
-    eventType: 'password_changed' satisfies StaffAuditEventType,
-    actorUid: cred.user.uid,
-    actorName: cleanName,
-    actorRole: latestInvite.staffRole,
-    targetUid: cred.user.uid,
-    targetName: cleanName,
-    screen: latestInvite.defaultScreen,
-    details: 'تم تعيين كلمة المرور الدائمة من قِبل الموظف',
-    createdAt: serverTimestamp(),
-  });
-
   try {
     await batch.commit();
   } catch (batchError) {
@@ -1178,6 +1257,46 @@ export async function completeStaffOnboarding(params: {
       OperationType.WRITE,
       `restaurants/${params.restaurant.id}/staff/${cred.user.uid}`
     );
+  }
+
+  // Phase 2: Post-activation audit logs (now staff_access isActive == true; non-fatal)
+  try {
+    const auditBatch = writeBatch(db);
+    const logInviteUsed = makeStaffDocId('slog');
+    auditBatch.set(doc(db, 'restaurants', params.restaurant.id, 'staff_audit_logs', logInviteUsed), {
+      id: logInviteUsed,
+      restaurantId: params.restaurant.id,
+      ownerId: params.restaurant.ownerId,
+      eventType: 'invite_used' satisfies StaffAuditEventType,
+      actorUid: cred.user.uid,
+      actorName: cleanName,
+      actorRole: latestInvite.staffRole,
+      targetUid: cred.user.uid,
+      targetName: cleanName,
+      screen: latestInvite.defaultScreen,
+      details: 'تم تفعيل الحساب عبر رابط الدعوة QR لمرة واحدة',
+      inviteHash: tokenHash,
+      createdAt: serverTimestamp(),
+    });
+
+    const logPwChanged = makeStaffDocId('slog');
+    auditBatch.set(doc(db, 'restaurants', params.restaurant.id, 'staff_audit_logs', logPwChanged), {
+      id: logPwChanged,
+      restaurantId: params.restaurant.id,
+      ownerId: params.restaurant.ownerId,
+      eventType: 'password_changed' satisfies StaffAuditEventType,
+      actorUid: cred.user.uid,
+      actorName: cleanName,
+      actorRole: latestInvite.staffRole,
+      targetUid: cred.user.uid,
+      targetName: cleanName,
+      screen: latestInvite.defaultScreen,
+      details: 'تم تعيين كلمة المرور الدائمة من قِبل الموظف',
+      createdAt: serverTimestamp(),
+    });
+    await auditBatch.commit();
+  } catch {
+    // Non-fatal audit logging
   }
 
   const staffSnap = await getDoc(
@@ -1460,49 +1579,90 @@ export async function deleteRestaurantStaffMember(params: {
     staff.email ? buildLoginIndexId('e', restaurantId, staff.email.toLowerCase()) : Promise.resolve(''),
   ]);
 
-  let inviteExists = false;
-  if (staff.activeInviteHash) {
-    try {
-      const invSnap = await getDoc(
-        doc(db, 'restaurants', restaurantId, 'staff_invites', staff.activeInviteHash)
-      );
-      inviteExists = invSnap.exists();
-    } catch {
-      inviteExists = false;
-    }
-  }
+  const staffRef = doc(db, 'restaurants', restaurantId, 'staff', staff.uid);
+  const accessRef = doc(db, 'staff_access', staff.uid);
+  const uLookupRef = doc(db, 'restaurants', restaurantId, 'staff_login_index', uLookupId);
+  const pLookupRef = doc(db, 'restaurants', restaurantId, 'staff_login_index', pLookupId);
+  const eLookupRef = eLookupId
+    ? doc(db, 'restaurants', restaurantId, 'staff_login_index', eLookupId)
+    : null;
+  const inviteRef = staff.activeInviteHash
+    ? doc(db, 'restaurants', restaurantId, 'staff_invites', staff.activeInviteHash)
+    : null;
+
+  const [staffSnap, accessSnap, uSnap, pSnap, eSnap, invSnap] = await Promise.all([
+    getDoc(staffRef).catch(() => null),
+    getDoc(accessRef).catch(() => null),
+    getDoc(uLookupRef).catch(() => null),
+    getDoc(pLookupRef).catch(() => null),
+    eLookupRef ? getDoc(eLookupRef).catch(() => null) : Promise.resolve(null),
+    inviteRef ? getDoc(inviteRef).catch(() => null) : Promise.resolve(null),
+  ]);
 
   try {
-    const batch = writeBatch(db);
-    batch.delete(doc(db, 'restaurants', restaurantId, 'staff', staff.uid));
-    batch.delete(doc(db, 'staff_access', staff.uid));
-    batch.delete(doc(db, 'restaurants', restaurantId, 'staff_login_index', uLookupId));
-    batch.delete(doc(db, 'restaurants', restaurantId, 'staff_login_index', pLookupId));
-    if (eLookupId) {
-      batch.delete(doc(db, 'restaurants', restaurantId, 'staff_login_index', eLookupId));
+    // Batch 1: Core identity & invite revocation (<= 3 writes)
+    const coreBatch = writeBatch(db);
+    let hasCoreOps = false;
+    if (staffSnap?.exists()) {
+      coreBatch.delete(staffRef);
+      hasCoreOps = true;
     }
-    if (inviteExists && staff.activeInviteHash) {
-      batch.update(doc(db, 'restaurants', restaurantId, 'staff_invites', staff.activeInviteHash), {
+    if (accessSnap?.exists()) {
+      coreBatch.delete(accessRef);
+      hasCoreOps = true;
+    }
+    if (inviteRef && invSnap?.exists()) {
+      coreBatch.update(inviteRef, {
         revokedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
+      hasCoreOps = true;
     }
-    const logId = makeStaffDocId('slog');
-    batch.set(doc(db, 'restaurants', restaurantId, 'staff_audit_logs', logId), {
-      id: logId,
-      restaurantId,
-      ownerId: staff.ownerId,
-      eventType: 'staff_deleted' satisfies StaffAuditEventType,
-      actorUid: actor.uid,
-      actorName: actor.name.slice(0, 100),
-      actorRole: actor.role,
-      targetUid: staff.uid,
-      targetName: staff.name,
-      screen: 'staff_management',
-      details: `تم حذف حساب الموظف: ${staff.name} (${staff.username})`,
-      createdAt: serverTimestamp(),
-    });
-    await batch.commit();
+    if (hasCoreOps) {
+      await coreBatch.commit();
+    }
+
+    // Batch 2: Delete existing login lookup entries (<= 3 writes)
+    const indexBatch = writeBatch(db);
+    let hasIndexOps = false;
+    if (uSnap?.exists()) {
+      indexBatch.delete(uLookupRef);
+      hasIndexOps = true;
+    }
+    if (pSnap?.exists()) {
+      indexBatch.delete(pLookupRef);
+      hasIndexOps = true;
+    }
+    if (eLookupRef && eSnap?.exists()) {
+      indexBatch.delete(eLookupRef);
+      hasIndexOps = true;
+    }
+    if (hasIndexOps) {
+      await indexBatch.commit();
+    }
+
+    // Batch 3: Non-fatal audit log
+    try {
+      const auditBatch = writeBatch(db);
+      const logId = makeStaffDocId('slog');
+      auditBatch.set(doc(db, 'restaurants', restaurantId, 'staff_audit_logs', logId), {
+        id: logId,
+        restaurantId,
+        ownerId: staff.ownerId,
+        eventType: 'staff_deleted' satisfies StaffAuditEventType,
+        actorUid: actor.uid,
+        actorName: actor.name.slice(0, 100),
+        actorRole: actor.role,
+        targetUid: staff.uid,
+        targetName: staff.name,
+        screen: 'staff_management',
+        details: `تم حذف حساب الموظف: ${staff.name} (${staff.username})`,
+        createdAt: serverTimestamp(),
+      });
+      await auditBatch.commit();
+    } catch {
+      // Non-fatal audit logging
+    }
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `restaurants/${restaurantId}/staff/${staff.uid}`);
   }
