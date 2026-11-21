@@ -678,10 +678,35 @@ export async function regenerateStaffInvite(params: {
   }
 }
 
-export async function sendStaffPasswordResetByEmail(email: string): Promise<void> {
+export function canResetStaffViaEmail(
+  member: Pick<StaffMember, 'email' | 'authEmail'>
+): boolean {
+  const cleanEmail = (member.email || '').trim().toLowerCase();
+  const cleanAuthEmail = (member.authEmail || '').trim().toLowerCase();
+  if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+    return false;
+  }
+  if (!cleanAuthEmail || cleanAuthEmail.endsWith('@staff.sufra.local')) {
+    return false;
+  }
+  return cleanAuthEmail === cleanEmail;
+}
+
+export async function sendStaffPasswordResetByEmail(
+  email: string,
+  authEmail?: string
+): Promise<void> {
   const cleanEmail = (email || '').trim().toLowerCase();
   if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
     throw new Error('لا يوجد بريد إلكتروني صالح مسجل لهذا الموظف.');
+  }
+  if (authEmail !== undefined) {
+    const cleanAuth = authEmail.trim().toLowerCase();
+    if (!cleanAuth || cleanAuth.endsWith('@staff.sufra.local') || cleanAuth !== cleanEmail) {
+      throw new Error(
+        'هذا الحساب مفعّل بدعوة QR برقم/اسم مستخدم داخلي (@staff.sufra.local). لإعادة تعيين كلمة المرور استخدم زر "دعوة QR جديد / تصفير".'
+      );
+    }
   }
   await sendPasswordResetEmail(auth, cleanEmail);
 }
@@ -916,15 +941,18 @@ export async function completeStaffOnboarding(params: {
     throw new Error(pwCheck.error || 'كلمة المرور غير صالحة.');
   }
 
-  const cleanName = params.name.trim().slice(0, 100) || params.invite.staffName;
+  const cleanName = params.name.trim().slice(0, 100);
   const cleanPhone = normalizeStaffPhone(params.phone || params.invite.staffPhone);
   const cleanEmail = (params.email ?? params.invite.staffEmail ?? '').trim().toLowerCase().slice(0, 254);
   const cleanJobTitle = (params.jobTitle ?? params.invite.staffJobTitle ?? '').trim().slice(0, 80);
   const cleanHallId = (params.hallId ?? params.invite.staffHallId ?? '').trim().slice(0, 128);
   const cleanHallName = (params.hallName ?? params.invite.staffHallName ?? '').trim().slice(0, 80);
 
+  if (cleanName.length < 2) {
+    throw new Error('يرجى إدخال الاسم الكامل (حرفين على الأقل).');
+  }
   if (cleanPhone.length < 6) {
-    throw new Error('يرجى إدخال رقم هاتف صحيح.');
+    throw new Error('يرجى إدخال رقم هاتف صحيح (6 أرقام على الأقل).');
   }
   if (cleanEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
     throw new Error('صيغة البريد الإلكتروني غير صحيحة.');
@@ -949,24 +977,13 @@ export async function completeStaffOnboarding(params: {
     throw new Error('انتهت صلاحية رابط الدعوة (24 ساعة). اطلب من المدير إنشاء دعوة جديدة.');
   }
 
-  const bootstrapPassword = await deriveInviteBootstrapPassword(
-    params.rawInviteToken.trim(),
-    params.restaurant.id
-  );
-  const cred = await signInWithEmailAndPassword(auth, latestInvite.authEmail, bootstrapPassword);
-
-  if (cred.user.uid !== latestInvite.staffId) {
-    await signOut(auth);
-    throw new Error('حدث تعارض في هوية الحساب. اطلب من المدير إعادة إنشاء الدعوة.');
-  }
-
-  // Immediately replace bootstrap password in Firebase Auth with user's chosen strong password
-  await updatePassword(cred.user, params.newPassword);
-
-  const [uLookupId, oldPhoneLookupId, newPhoneLookupId, eLookupId] = await Promise.all([
+  // Pre-compute and verify login index uniqueness BEFORE mutating Firebase Auth credentials
+  const oldCleanEmail = (latestInvite.staffEmail || '').trim().toLowerCase();
+  const [uLookupId, oldPhoneLookupId, newPhoneLookupId, oldEmailLookupId, eLookupId] = await Promise.all([
     buildLoginIndexId('u', params.restaurant.id, latestInvite.staffUsername),
     buildLoginIndexId('p', params.restaurant.id, latestInvite.staffPhone),
     buildLoginIndexId('p', params.restaurant.id, cleanPhone),
+    oldCleanEmail ? buildLoginIndexId('e', params.restaurant.id, oldCleanEmail) : Promise.resolve(''),
     cleanEmail ? buildLoginIndexId('e', params.restaurant.id, cleanEmail) : Promise.resolve(''),
   ]);
 
@@ -975,7 +992,7 @@ export async function completeStaffOnboarding(params: {
     const checkSnap = await getDoc(
       doc(db, 'restaurants', params.restaurant.id, 'staff_login_index', newPhoneLookupId)
     );
-    if (checkSnap.exists() && checkSnap.data()?.staffUid !== cred.user.uid) {
+    if (checkSnap.exists() && checkSnap.data()?.staffUid !== latestInvite.staffId) {
       throw new Error('رقم الهاتف المدخل مسجل لموظف آخر في نفس المطعم.');
     }
   }
@@ -986,11 +1003,50 @@ export async function completeStaffOnboarding(params: {
       doc(db, 'restaurants', params.restaurant.id, 'staff_login_index', eLookupId)
     );
     if (emailCheckSnap.exists()) {
-      if (emailCheckSnap.data()?.staffUid !== cred.user.uid) {
+      if (emailCheckSnap.data()?.staffUid !== latestInvite.staffId) {
         throw new Error('البريد الإلكتروني المدخل مسجل لموظف آخر في نفس المطعم.');
       }
       emailLookupExistsForSelf = true;
     }
+  }
+
+  const bootstrapPassword = await deriveInviteBootstrapPassword(
+    params.rawInviteToken.trim(),
+    params.restaurant.id
+  );
+
+  let cred;
+  let usedBootstrapPassword = true;
+  try {
+    cred = await signInWithEmailAndPassword(auth, latestInvite.authEmail, bootstrapPassword);
+  } catch (bootstrapErr) {
+    const msg = bootstrapErr instanceof Error ? bootstrapErr.message : '';
+    const isCredentialMismatch =
+      msg.includes('auth/invalid-credential') ||
+      msg.includes('auth/wrong-password') ||
+      msg.includes('auth/user-not-found');
+    if (isCredentialMismatch) {
+      // Recover safely if a prior failed attempt already updated Auth password while invite remained unused
+      try {
+        cred = await signInWithEmailAndPassword(auth, latestInvite.authEmail, params.newPassword);
+        usedBootstrapPassword = false;
+      } catch {
+        throw new Error(
+          'تعذّر التحقق من بيانات اعتماد رابط الدعوة (قد يكون الحساب حُذف من المصادقة أو انتهت صلاحية بياناته المؤقتة). اطلب من صاحب المطعم أو المدير إصدار رابط دعوة QR جديد.'
+        );
+      }
+    } else {
+      throw bootstrapErr;
+    }
+  }
+
+  if (cred.user.uid !== latestInvite.staffId) {
+    await signOut(auth);
+    throw new Error('حدث تعارض في هوية الحساب. اطلب من المدير إعادة إنشاء الدعوة.');
+  }
+
+  if (usedBootstrapPassword) {
+    await updatePassword(cred.user, params.newPassword);
   }
 
   const batch = writeBatch(db);
@@ -1050,6 +1106,12 @@ export async function completeStaffOnboarding(params: {
     );
   }
 
+  if (oldEmailLookupId && oldEmailLookupId !== eLookupId) {
+    batch.delete(
+      doc(db, 'restaurants', params.restaurant.id, 'staff_login_index', oldEmailLookupId)
+    );
+  }
+
   if (eLookupId) {
     const emailRef = doc(db, 'restaurants', params.restaurant.id, 'staff_login_index', eLookupId);
     if (emailLookupExistsForSelf) {
@@ -1104,7 +1166,19 @@ export async function completeStaffOnboarding(params: {
     createdAt: serverTimestamp(),
   });
 
-  await batch.commit();
+  try {
+    await batch.commit();
+  } catch (batchError) {
+    if (usedBootstrapPassword) {
+      await updatePassword(cred.user, bootstrapPassword).catch(() => {});
+    }
+    await signOut(auth).catch(() => {});
+    handleFirestoreError(
+      batchError,
+      OperationType.WRITE,
+      `restaurants/${params.restaurant.id}/staff/${cred.user.uid}`
+    );
+  }
 
   const staffSnap = await getDoc(
     doc(db, 'restaurants', params.restaurant.id, 'staff', cred.user.uid)
@@ -1418,7 +1492,7 @@ export async function deleteRestaurantStaffMember(params: {
       id: logId,
       restaurantId,
       ownerId: staff.ownerId,
-      eventType: 'staff_updated' satisfies StaffAuditEventType,
+      eventType: 'staff_deleted' satisfies StaffAuditEventType,
       actorUid: actor.uid,
       actorName: actor.name.slice(0, 100),
       actorRole: actor.role,

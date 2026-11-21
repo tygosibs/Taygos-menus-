@@ -35,6 +35,7 @@ import {
   STAFF_ROLE_META,
 } from '../../lib/staffAuthUtils';
 import {
+  canResetStaffViaEmail,
   CreatedStaffResult,
   createManagerOrStaffAccount,
   deleteRestaurantStaffMember,
@@ -512,15 +513,17 @@ export function StaffManagementTab({ restaurant, mode, actor }: StaffManagementT
   };
 
   const handleSendPasswordReset = async (member: StaffMember) => {
-    if (!member.email) {
-      setActionError('لا يوجد بريد إلكتروني مسجل لهذا الموظف. استخدم زر "دعوة QR جديد / إعادة تعيين".');
+    if (!canResetStaffViaEmail(member)) {
+      setActionError(
+        'هذا الحساب مفعّل بدعوة QR وبمعرّف داخلي (@staff.sufra.local). لإعادة تعيين كلمة المرور استخدم زر "دعوة QR جديدة / تصفير".'
+      );
       return;
     }
     setBusyUid(member.uid);
     setActionError(null);
     setActionMsg(null);
     try {
-      await sendStaffPasswordResetByEmail(member.email);
+      await sendStaffPasswordResetByEmail(member.email || '', member.authEmail);
       setActionMsg(`تم إرسال رابط إعادة تعيين كلمة المرور إلى ${member.email}.`);
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'تعذر إرسال رابط استعادة البريد.');
@@ -955,7 +958,7 @@ export function StaffManagementTab({ restaurant, mode, actor }: StaffManagementT
                           <span>دعوة QR جديدة / تصفير</span>
                         </button>
 
-                        {member.email && (
+                        {canResetStaffViaEmail(member) && (
                           <button
                             type="button"
                             disabled={isBusy || isManagerLocked}
@@ -1007,6 +1010,13 @@ export function StaffManagementTab({ restaurant, mode, actor }: StaffManagementT
                           </>
                         )}
                       </div>
+
+                      {!canResetStaffViaEmail(member) && (
+                        <p className="text-[11px] text-zinc-500">
+                          حساب مُدار بدعوة QR — لتغيير كلمة المرور أو استعادتها استخدم{' '}
+                          <span className="font-bold text-indigo-700">دعوة QR جديدة / تصفير</span>.
+                        </p>
+                      )}
 
                       {confirmDeleteUid === member.uid && (
                         <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 flex flex-wrap items-center justify-between gap-2 text-xs">
@@ -1416,8 +1426,15 @@ export function StaffManagementTab({ restaurant, mode, actor }: StaffManagementT
               </div>
             </div>
 
-            <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-[11px] font-bold text-amber-950 leading-relaxed print:hidden">
-              رابط الدعوة صالح لمرة واحدة فقط ولمدة 24 ساعة. لا يحتوي رمز QR على أي اسم مستخدم أو كلمة مرور — يضبط الموظف كلمة مروره القوية عند المسح.
+            <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-[11px] font-bold text-amber-950 leading-relaxed space-y-1 print:hidden">
+              <p>
+                رابط الدعوة صالح لمرة واحدة فقط ولمدة 24 ساعة. لا يحتوي رمز QR على أي اسم مستخدم أو كلمة مرور — يضبط الموظف كلمة مروره القوية عند المسح.
+              </p>
+              <p className="text-indigo-900">
+                بعد التفعيل، يسجّل المدير أو الموظف دخوله من بوابة الكادر{' '}
+                <span dir="ltr" className="font-mono-num underline">/staff/{restaurant.slug}</span>{' '}
+                (وليس عبر تسجيل دخول جوجل في /admin).
+              </p>
             </div>
 
             <div

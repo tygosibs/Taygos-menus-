@@ -393,40 +393,52 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
           </div>
         </header>
 
-        {staffPortalSlug && (
-          <div className="max-w-3xl mx-auto mt-6 px-4">
-            <div className="bg-indigo-50 border-2 border-indigo-200 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="space-y-1">
-                <p className="text-sm font-extrabold text-indigo-950">
+        {staffPortalSlug ? (
+          <main className="max-w-xl mx-auto mt-10 px-4 pb-12">
+            <div className="bg-white border-2 border-indigo-200 rounded-3xl p-6 sm:p-8 shadow-sm space-y-5 text-center">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-700 flex items-center justify-center mx-auto">
+                <ShieldCheck className="w-6 h-6" />
+              </div>
+              <div className="space-y-2">
+                <h1 className="text-lg sm:text-xl font-extrabold text-zinc-950">
                   {isEn ? 'You are signed in with a Staff Account' : 'أنت مسجّل الآن بحساب كادر / مدير مطعم'}
-                </p>
-                <p className="text-xs text-indigo-800">
+                </h1>
+                <p className="text-xs sm:text-sm text-zinc-600 leading-relaxed">
                   {isEn
-                    ? 'Open your dedicated Staff Portal to access your assigned screens.'
-                    : 'لوحة المالك مخصصة لمالكي المطاعم. افتح بوابة الكادر المخصصة للدخول مباشرة إلى شاشات عملك.'}
+                    ? 'The /admin portal is reserved for restaurant owners. Open your Staff Portal directly, or sign out to switch to an owner account.'
+                    : 'بوابة /admin مخصصة لمالكي المطاعم. افتح بوابة الكادر الخاصة بمطعمك مباشرة، أو سجّل الخروج للدخول بحساب مالك آخر.'}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => onNavigate(`/staff/${staffPortalSlug}`)}
-                className="min-h-[42px] px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold whitespace-nowrap shrink-0 cursor-pointer"
-              >
-                {isEn ? 'Open Staff Portal' : 'الانتقال لبوابة الكادر'}
-              </button>
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 pt-1">
+                <button
+                  type="button"
+                  onClick={() => onNavigate(`/staff/${staffPortalSlug}`)}
+                  className="w-full sm:w-auto min-h-[44px] px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs sm:text-sm font-extrabold whitespace-nowrap cursor-pointer"
+                >
+                  {isEn ? 'Open Staff Portal' : 'الانتقال لبوابة الكادر'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSignOutConfirmOpen(true)}
+                  className="w-full sm:w-auto min-h-[44px] px-5 py-2.5 rounded-xl border border-zinc-300 bg-white hover:bg-zinc-50 text-zinc-800 text-xs sm:text-sm font-bold whitespace-nowrap cursor-pointer"
+                >
+                  {t.admin.signOut}
+                </button>
+              </div>
             </div>
-          </div>
+          </main>
+        ) : (
+          <OnboardingForm
+            ownerId={user.uid}
+            ownerDisplayName={user.displayName || user.email || 'Owner'}
+            onCreated={(created) => {
+              setRestaurant(created);
+              setActiveTab('menu');
+              setJustCreatedBanner(true);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+          />
         )}
-
-        <OnboardingForm
-          ownerId={user.uid}
-          ownerDisplayName={user.displayName || user.email || 'Owner'}
-          onCreated={(created) => {
-            setRestaurant(created);
-            setActiveTab('menu');
-            setJustCreatedBanner(true);
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }}
-        />
         <ConfirmSignOutModal
           open={signOutConfirmOpen}
           onCancel={() => setSignOutConfirmOpen(false)}

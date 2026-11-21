@@ -546,6 +546,7 @@ export interface StaffShift {
 export type StaffAuditEventType =
   | 'staff_created'
   | 'staff_updated'
+  | 'staff_deleted'
   | 'invite_created'
   | 'invite_used'
   | 'password_changed'

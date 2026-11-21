@@ -265,10 +265,64 @@ export function OffersPromosTab({
     }
   };
 
+  const formatSaveError = (err: unknown): string => {
+    if (!(err instanceof Error)) {
+      return t.auth.errGeneric;
+    }
+    const raw = err.message || '';
+    try {
+      const parsed = JSON.parse(raw) as { error?: string };
+      if (parsed?.error) {
+        const lower = parsed.error.toLowerCase();
+        if (lower.includes('permission') || lower.includes('insufficient')) {
+          return isEn
+            ? 'Save rejected by Firestore permissions or App Check. Ensure firestore.rules are deployed and App Check / domain settings are valid for this domain.'
+            : 'تم رفض الحفظ بسبب صلاحيات Firestore أو التحقق الأمني (App Check). تأكد من نشر قواعد الأمان (firestore.rules) وإعدادات App Check لهذا النطاق.';
+        }
+        return parsed.error;
+      }
+    } catch {
+      // plain error message
+    }
+    if (raw.includes('permission-denied') || raw.includes('Missing or insufficient permissions')) {
+      return isEn
+        ? 'Save rejected by Firestore permissions or App Check. Ensure firestore.rules are deployed and App Check / domain settings are valid for this domain.'
+        : 'تم رفض الحفظ بسبب صلاحيات Firestore أو التحقق الأمني (App Check). تأكد من نشر قواعد الأمان (firestore.rules) وإعدادات App Check لهذا النطاق.';
+    }
+    return raw || t.auth.errGeneric;
+  };
+
   const handleSaveAll = async () => {
-    setSaving(true);
     setError(null);
     setSavedToast(false);
+
+    const seenCodes = new Set<string>();
+    for (const p of promoCodes) {
+      const cleanCode = (p.code || '')
+        .trim()
+        .toUpperCase()
+        .replace(/[^A-Z0-9_-]/g, '')
+        .slice(0, 24);
+      if (cleanCode.length < 2) {
+        setError(
+          isEn
+            ? 'Each promo code must contain at least 2 letters or numbers before saving.'
+            : 'يجب أن يحتوي كل كود خصم على حرفين أو رقمين على الأقل قبل الحفظ.'
+        );
+        return;
+      }
+      if (seenCodes.has(cleanCode)) {
+        setError(
+          isEn
+            ? `Duplicate promo code "${cleanCode}". Please use unique promo codes.`
+            : `يوجد تكرار في كود الخصم "${cleanCode}". يرجى استخدام أكواد مختلفة.`
+        );
+        return;
+      }
+      seenCodes.add(cleanCode);
+    }
+
+    setSaving(true);
     try {
       const saved = await updateRestaurantOffersAndPromos(
         restaurant.id,
@@ -293,7 +347,8 @@ export function OffersPromosTab({
       setSavedToast(true);
       setTimeout(() => setSavedToast(false), 3000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t.auth.errGeneric);
+      console.error('Offers/Promos save failed:', err);
+      setError(formatSaveError(err));
     } finally {
       setSaving(false);
     }
@@ -757,6 +812,7 @@ export function OffersPromosTab({
                     <input
                       type="text"
                       dir="ltr"
+                      maxLength={24}
                       value={promo.code}
                       onChange={(e) =>
                         handleUpdatePromo(promo.id, {
@@ -875,6 +931,7 @@ export function OffersPromosTab({
             <input
               type="text"
               dir="rtl"
+              maxLength={200}
               value={loyaltyConfig.promoBannerText}
               onChange={(e) =>
                 setLoyaltyConfig((prev) => ({ ...prev, promoBannerText: e.target.value }))
@@ -889,6 +946,7 @@ export function OffersPromosTab({
             <input
               type="text"
               dir="ltr"
+              maxLength={200}
               value={loyaltyConfig.promoBannerText_en}
               onChange={(e) =>
                 setLoyaltyConfig((prev) => ({ ...prev, promoBannerText_en: e.target.value }))
@@ -993,6 +1051,7 @@ export function OffersPromosTab({
             <input
               type="text"
               dir="rtl"
+              maxLength={140}
               value={loyaltyConfig.punchCardRewardText}
               onChange={(e) =>
                 setLoyaltyConfig((prev) => ({ ...prev, punchCardRewardText: e.target.value }))
@@ -1008,6 +1067,7 @@ export function OffersPromosTab({
             <input
               type="text"
               dir="ltr"
+              maxLength={140}
               value={loyaltyConfig.punchCardRewardText_en}
               onChange={(e) =>
                 setLoyaltyConfig((prev) => ({ ...prev, punchCardRewardText_en: e.target.value }))
@@ -1042,6 +1102,7 @@ export function OffersPromosTab({
             <input
               type="text"
               dir="rtl"
+              maxLength={220}
               value={loyaltyConfig.birthdayOfferText}
               onChange={(e) =>
                 setLoyaltyConfig((prev) => ({ ...prev, birthdayOfferText: e.target.value }))
@@ -1057,6 +1118,7 @@ export function OffersPromosTab({
             <input
               type="text"
               dir="ltr"
+              maxLength={220}
               value={loyaltyConfig.birthdayOfferText_en}
               onChange={(e) =>
                 setLoyaltyConfig((prev) => ({ ...prev, birthdayOfferText_en: e.target.value }))

@@ -15,6 +15,7 @@ import { PWAInstallButton } from '../components/PWAInstallButton';
 import { fetchRestaurantHalls } from '../lib/firestoreService';
 import {
   getScreenMetaDynamic,
+  normalizeStaffPhone,
   saveStaffScreen,
   STAFF_ROLE_META,
   validateStaffPassword,
@@ -111,10 +112,42 @@ export function StaffOnboardingPage({ slug, onNavigate }: StaffOnboardingPagePro
     ? validateStaffPassword(newPassword, confirmPassword || undefined)
     : null;
 
+  const formatOnboardingError = (err: unknown): string => {
+    if (!(err instanceof Error)) {
+      return 'تعذر تفعيل الحساب. حاول مجدداً.';
+    }
+    const raw = err.message || '';
+    try {
+      const parsed = JSON.parse(raw) as { error?: string };
+      if (parsed?.error) {
+        const lower = parsed.error.toLowerCase();
+        if (lower.includes('permission') || lower.includes('insufficient')) {
+          return 'تم رفض الحفظ بسبب صلاحيات Firestore أو التحقق الأمني (App Check). تأكد من نشر قواعد الأمان وإعدادات النطاق، أو اطلب من صاحب المطعم إصدار دعوة QR جديدة.';
+        }
+        return `تعذر حفظ التفعيل: ${parsed.error}`;
+      }
+    } catch {
+      // plain error message
+    }
+    if (raw.includes('permission-denied') || raw.includes('Missing or insufficient permissions')) {
+      return 'تم رفض الحفظ بسبب صلاحيات Firestore أو التحقق الأمني (App Check). تأكد من نشر قواعد الأمان وإعدادات النطاق، أو اطلب من صاحب المطعم إصدار دعوة QR جديدة.';
+    }
+    return raw || 'تعذر تفعيل الحساب. حاول مجدداً.';
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!restaurant || !invite || !rawToken) return;
     setSubmitError(null);
+
+    if (name.trim().length < 2) {
+      setSubmitError('يرجى إدخال الاسم الكامل (حرفين على الأقل).');
+      return;
+    }
+    if (normalizeStaffPhone(phone).length < 6) {
+      setSubmitError('يرجى إدخال رقم هاتف صحيح (6 أرقام على الأقل).');
+      return;
+    }
 
     const check = validateStaffPassword(newPassword, confirmPassword);
     if (!check.valid) {
@@ -141,7 +174,7 @@ export function StaffOnboardingPage({ slug, onNavigate }: StaffOnboardingPagePro
       saveStaffScreen(restaurant.id, staff.uid, staff.defaultScreen);
       setActivatedStaff(staff);
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : 'تعذر تفعيل الحساب. حاول مجدداً.');
+      setSubmitError(formatOnboardingError(err));
     } finally {
       setSubmitting(false);
     }
