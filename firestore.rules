@@ -952,6 +952,45 @@ service cloud.firestore {
         data.updatedAt is timestamp;
     }
 
+    function isValidUiScreenConfig(scr) {
+      return scr is map &&
+        scr.keys().hasAll(['themeId', 'layoutStyle', 'cardRadius', 'cards', 'buttonOverrides']) &&
+        scr.keys().hasOnly(['themeId', 'layoutStyle', 'cardRadius', 'accentColorOverride', 'cards', 'buttonOverrides']) &&
+        scr.themeId in [
+          'obsidian_gold', 'alabaster_editorial', 'emerald_hospitality', 'midnight_sapphire',
+          'espresso_bistro', 'nordic_slate', 'burgundy_velvet', 'saffron_sunrise'
+        ] &&
+        scr.layoutStyle in ['sidebar_cards', 'compact_rail', 'top_deck'] &&
+        scr.cardRadius in ['sharp', 'rounded', 'soft'] &&
+        (!('accentColorOverride' in scr) || (scr.accentColorOverride is string && scr.accentColorOverride.matches('^#[0-9a-fA-F]{6}$'))) &&
+        scr.cards is list && scr.cards.size() >= 1 && scr.cards.size() <= 12 && scr.cards[0] is map &&
+        scr.buttonOverrides is map && scr.buttonOverrides.keys().size() <= 24;
+    }
+
+    function isValidPlatformUiConfig(data) {
+      return data.keys().hasAll([
+          'id', 'version', 'publishedBy', 'refreshNoticeAr', 'refreshNoticeEn', 'screens', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'version', 'publishedBy', 'refreshNoticeAr', 'refreshNoticeEn', 'screens', 'updatedAt'
+        ]) &&
+        data.id == 'ui_config' &&
+        data.version is number && data.version >= 1 && data.version <= 1000000 &&
+        data.publishedBy is string && data.publishedBy.size() >= 3 && data.publishedBy.size() <= 128 &&
+        data.refreshNoticeAr is string && data.refreshNoticeAr.size() >= 1 && data.refreshNoticeAr.size() <= 300 &&
+        data.refreshNoticeEn is string && data.refreshNoticeEn.size() >= 1 && data.refreshNoticeEn.size() <= 300 &&
+        data.screens is map &&
+        data.screens.keys().hasAll(['super_admin', 'owner_admin', 'manager_console', 'cashier_kds', 'captain_waiter', 'landing_page']) &&
+        data.screens.keys().hasOnly(['super_admin', 'owner_admin', 'manager_console', 'cashier_kds', 'captain_waiter', 'landing_page']) &&
+        isValidUiScreenConfig(data.screens.super_admin) &&
+        isValidUiScreenConfig(data.screens.owner_admin) &&
+        isValidUiScreenConfig(data.screens.manager_console) &&
+        isValidUiScreenConfig(data.screens.cashier_kds) &&
+        isValidUiScreenConfig(data.screens.captain_waiter) &&
+        isValidUiScreenConfig(data.screens.landing_page) &&
+        data.updatedAt is timestamp;
+    }
+
     function isValidPromoCodeId(promoId) {
       return promoId is string && promoId.size() >= 2 && promoId.size() <= 32 && promoId.matches('^[A-Z0-9_\\-]+$');
     }
@@ -2161,14 +2200,18 @@ service cloud.firestore {
       );
     }
 
-    // 9. Platform Settings CMS collection (public read for landing page, Super Admin write)
+    // 9. Platform Settings CMS collection (public read for landing & ui_config, Super Admin write)
     match /platform_settings/{settingId} {
-      allow get: if settingId == 'landing';
+      allow get: if settingId in ['landing', 'ui_config'];
       allow list: if isSuperAdmin();
-      allow create, update: if isSuperAdmin() &&
-        settingId == 'landing' &&
-        isValidPlatformLanding(incoming()) &&
-        incoming().updatedAt == request.time;
+      allow create, update: if isSuperAdmin() && (
+        (settingId == 'landing' &&
+          isValidPlatformLanding(incoming()) &&
+          incoming().updatedAt == request.time) ||
+        (settingId == 'ui_config' &&
+          isValidPlatformUiConfig(incoming()) &&
+          incoming().updatedAt == request.time)
+      );
       allow delete: if false;
     }
 

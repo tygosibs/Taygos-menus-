@@ -15,6 +15,7 @@ import {
   LogOut,
   ShieldAlert,
   ShieldCheck,
+  Sparkles,
   Store,
 } from 'lucide-react';
 import firebaseConfig from '../../firebase-applet-config.json';
@@ -25,21 +26,41 @@ import { LandingCmsTab } from '../components/superadmin/LandingCmsTab';
 import { PlatformPromosTab } from '../components/superadmin/PlatformPromosTab';
 import { TenantsManagerTab } from '../components/superadmin/TenantsManagerTab';
 import { ThemeInjectorTab } from '../components/superadmin/ThemeInjectorTab';
+import { UiStudioTab } from '../components/superadmin/UiStudioTab';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useScreenUi } from '../contexts/PlatformUiContext';
 import { auth, isSuperAdminEmail, testConnection } from '../lib/firebase';
 
 interface SuperAdminPortalProps {
   onNavigate: (path: string) => void;
 }
 
-type SuperAdminTab = 'tenants' | 'promos' | 'themes' | 'landing' | 'domain';
+type SuperAdminTab = 'tenants' | 'promos' | 'ui_studio' | 'themes' | 'landing' | 'domain';
+const SUPER_TAB_STORAGE_KEY = 'sufra_superadmin_active_tab';
 
 export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
   const { lang, t, dir, isRtl } = useLanguage();
   const isEn = lang === 'en';
+  const ui = useScreenUi('super_admin');
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
-  const [activeTab, setActiveTab] = useState<SuperAdminTab>('tenants');
+  const [activeTab, setActiveTabState] = useState<SuperAdminTab>(() => {
+    if (typeof window === 'undefined') return 'tenants';
+    const saved = window.sessionStorage.getItem(SUPER_TAB_STORAGE_KEY) as SuperAdminTab | null;
+    if (
+      saved &&
+      ['tenants', 'promos', 'ui_studio', 'themes', 'landing', 'domain'].includes(saved)
+    ) {
+      return saved;
+    }
+    return 'tenants';
+  });
+  const setActiveTab = (tab: SuperAdminTab) => {
+    setActiveTabState(tab);
+    if (typeof window !== 'undefined') {
+      window.sessionStorage.setItem(SUPER_TAB_STORAGE_KEY, tab);
+    }
+  };
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [testingConn, setTestingConn] = useState(false);
   const [connResult, setConnResult] = useState<'idle' | 'ok' | 'error'>('idle');
@@ -182,167 +203,333 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
     );
   }
 
-  const navItems: { id: SuperAdminTab; label: string; icon: typeof Building2 }[] = [
-    { id: 'tenants', label: t.superAdmin.tabs.tenants, icon: Building2 },
-    {
+  const baseNavMap: Record<SuperAdminTab, { id: SuperAdminTab; fallbackLabel: string; icon: typeof Building2 }> = {
+    tenants: { id: 'tenants', fallbackLabel: t.superAdmin.tabs.tenants, icon: Building2 },
+    promos: {
       id: 'promos',
-      label: isEn ? 'SaaS Promo Codes' : 'أكواد الخصم والهدايا',
+      fallbackLabel: isEn ? 'SaaS Promo Codes' : 'أكواد الخصم والهدايا',
       icon: Gift,
     },
-    { id: 'themes', label: t.superAdmin.tabs.themeInjector, icon: Code2 },
-    { id: 'landing', label: t.superAdmin.tabs.cms, icon: LayoutTemplate },
-    {
+    ui_studio: {
+      id: 'ui_studio',
+      fallbackLabel: isEn ? 'UI Studio & Themes' : 'استوديو الواجهات والثيمات',
+      icon: Sparkles,
+    },
+    themes: { id: 'themes', fallbackLabel: t.superAdmin.tabs.themeInjector, icon: Code2 },
+    landing: { id: 'landing', fallbackLabel: t.superAdmin.tabs.cms, icon: LayoutTemplate },
+    domain: {
       id: 'domain',
-      label: isEn ? 'Domain & Firebase' : 'النطاق وربط Firebase',
+      fallbackLabel: isEn ? 'Domain & Firebase' : 'النطاق وربط Firebase',
       icon: Globe,
     },
-  ];
+  };
+
+  const getSuperItem = (id: string) => {
+    const meta = baseNavMap[id as SuperAdminTab];
+    if (!meta) return null;
+    return {
+      ...meta,
+      label: ui.getButtonLabel(id, lang, meta.fallbackLabel),
+    };
+  };
 
   const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'suofra.vercel.app';
   const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://suofra.vercel.app';
+  const isTopDeck = ui.screenConfig.layoutStyle === 'top_deck';
+  const isCompactRail = ui.screenConfig.layoutStyle === 'compact_rail';
+  const theme = ui.theme;
 
   return (
-    <div dir={dir} className="min-h-screen bg-[#F5F6F8] text-zinc-900 flex flex-col lg:flex-row overflow-x-clip max-w-full">
-      {/* Sidebar */}
-      <aside className="lg:w-68 bg-zinc-950 text-white shrink-0 flex flex-col justify-between">
-        <div className="p-5 space-y-6">
-          <div className="flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => onNavigate('/')}
-              className="text-lg font-extrabold text-white cursor-pointer flex items-center gap-2"
-            >
-              <ShieldCheck className="w-5 h-5 text-amber-400" />
-              <span>{t.nav.superAdmin}</span>
-            </button>
-            <div className="lg:hidden flex items-center gap-2">
-              <LanguageToggleButton variant="dark" compact />
+    <div
+      dir={dir}
+      className={`min-h-screen flex flex-col ${isTopDeck ? '' : 'lg:flex-row'} overflow-x-clip max-w-full`}
+      style={{ backgroundColor: theme.canvasBg, color: theme.canvasText }}
+    >
+      {/* Sidebar (or compact rail) */}
+      {!isTopDeck && (
+        <aside
+          className={`${isCompactRail ? 'lg:w-58' : 'lg:w-72'} shrink-0 flex flex-col justify-between border-b lg:border-b-0 lg:border-e`}
+          style={{
+            backgroundColor: theme.sidebarBg,
+            borderColor: theme.sidebarBorder,
+            color: theme.sidebarText,
+          }}
+        >
+          <div className="p-5 space-y-5">
+            <div className="flex items-center justify-between">
               <button
                 type="button"
-                onClick={() => setSignOutConfirmOpen(true)}
-                aria-label={t.admin.signOut}
-                className="p-2 rounded-lg text-zinc-400 hover:bg-zinc-800 cursor-pointer"
+                onClick={() => onNavigate('/')}
+                className="text-lg font-extrabold cursor-pointer flex items-center gap-2"
+                style={{ color: theme.sidebarText }}
               >
-                <LogOut className="w-4 h-4" />
+                <ShieldCheck className="w-5 h-5" style={{ color: theme.accentHex }} />
+                <span>{t.nav.superAdmin}</span>
+              </button>
+              <div className="lg:hidden flex items-center gap-2">
+                <LanguageToggleButton variant={theme.isDarkShell ? 'dark' : 'light'} compact />
+                <button
+                  type="button"
+                  onClick={() => setSignOutConfirmOpen(true)}
+                  aria-label={t.admin.signOut}
+                  className="p-2 rounded-lg opacity-80 hover:opacity-100 cursor-pointer"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            <div
+              className={`p-3.5 border space-y-1 ${ui.radiusClasses.card}`}
+              style={{
+                backgroundColor: theme.isDarkShell ? 'rgba(255,255,255,0.05)' : theme.surfaceSubtleBg,
+                borderColor: theme.sidebarBorder,
+              }}
+            >
+              <p className="text-[11px] font-bold" style={{ color: theme.accentHex }}>
+                Super Admin
+              </p>
+              <p className="text-xs font-mono-num truncate" dir="ltr" style={{ color: theme.sidebarText }}>
+                {user.email}
+              </p>
+            </div>
+
+            <nav className="space-y-3">
+              {ui.visibleCards.map((card) => (
+                <div
+                  key={card.id}
+                  className={
+                    ui.screenConfig.layoutStyle === 'sidebar_cards'
+                      ? `p-2.5 border space-y-1.5 ${ui.radiusClasses.card}`
+                      : 'space-y-1'
+                  }
+                  style={
+                    ui.screenConfig.layoutStyle === 'sidebar_cards'
+                      ? {
+                          backgroundColor: theme.isDarkShell
+                            ? 'rgba(255,255,255,0.035)'
+                            : theme.surfaceSubtleBg,
+                          borderColor: theme.sidebarBorder,
+                        }
+                      : undefined
+                  }
+                >
+                  <p
+                    className="text-[10px] font-extrabold uppercase tracking-wider px-2"
+                    style={{ color: theme.sidebarMuted }}
+                  >
+                    {isEn ? card.titleEn : card.titleAr}
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:flex lg:flex-col gap-1">
+                    {card.buttonIds.map((bid) => {
+                      const item = getSuperItem(bid);
+                      if (!item) return null;
+                      const Icon = item.icon;
+                      const active = activeTab === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setActiveTab(item.id)}
+                          className={`flex items-center justify-center lg:justify-start gap-2 px-3 py-2.5 text-xs font-bold transition-all cursor-pointer min-h-[40px] ${ui.radiusClasses.button}`}
+                          style={
+                            active
+                              ? {
+                                  backgroundColor: theme.sidebarActiveBg,
+                                  color: theme.sidebarActiveText,
+                                }
+                              : {
+                                  color: theme.sidebarText,
+                                }
+                          }
+                        >
+                          <Icon className="w-4 h-4 shrink-0" />
+                          <span className="truncate">{item.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </nav>
+
+            <div className="grid grid-cols-2 gap-2 lg:hidden">
+              <button
+                type="button"
+                onClick={() => onNavigate('/admin')}
+                className={`py-2 px-3 border text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
+                style={{ borderColor: theme.sidebarBorder, color: theme.sidebarText }}
+              >
+                <Store className="w-3.5 h-3.5" />
+                <span className="truncate">{t.superAdmin.backToOwner}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigate('/')}
+                className={`py-2 px-3 border text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
+                style={{ borderColor: theme.sidebarBorder, color: theme.sidebarText }}
+              >
+                {isRtl ? <ArrowRight className="w-3.5 h-3.5" /> : <ArrowLeft className="w-3.5 h-3.5" />}
+                <span className="truncate">{t.superAdmin.backToHome}</span>
               </button>
             </div>
           </div>
 
-          <div className="p-3.5 rounded-xl bg-zinc-900 border border-zinc-800 space-y-1">
-            <p className="text-[11px] font-bold text-amber-400">Super Admin</p>
-            <p className="text-xs font-mono-num text-zinc-200 truncate" dir="ltr">
-              {user.email}
-            </p>
-          </div>
-
-          <nav className="grid grid-cols-2 sm:grid-cols-4 lg:flex lg:flex-col gap-1.5">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const active = activeTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setActiveTab(item.id)}
-                  className={`flex items-center justify-center lg:justify-start gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-colors cursor-pointer min-h-[40px] ${
-                    active
-                      ? 'bg-amber-500 text-zinc-950'
-                      : 'text-zinc-300 bg-zinc-900/60 lg:bg-transparent hover:bg-zinc-900 hover:text-white'
-                  }`}
-                >
-                  <Icon className="w-4 h-4 shrink-0" />
-                  <span className="truncate">{item.label}</span>
-                </button>
-              );
-            })}
-          </nav>
-
-          <div className="grid grid-cols-2 gap-2 lg:hidden">
+          <div className="hidden lg:block p-5 border-t space-y-2" style={{ borderColor: theme.sidebarBorder }}>
             <button
               type="button"
               onClick={() => onNavigate('/admin')}
-              className="py-2 px-3 rounded-xl bg-zinc-900 border border-zinc-800 text-xs font-bold text-zinc-200 hover:bg-zinc-800 flex items-center justify-center gap-1.5 cursor-pointer"
+              className={`w-full py-2.5 px-3 border text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
+              style={{ borderColor: theme.sidebarBorder, color: theme.sidebarText }}
             >
               <Store className="w-3.5 h-3.5" />
-              <span className="truncate">{t.superAdmin.backToOwner}</span>
+              <span>{t.superAdmin.backToOwner}</span>
             </button>
             <button
               type="button"
               onClick={() => onNavigate('/')}
-              className="py-2 px-3 rounded-xl bg-zinc-900 border border-zinc-800 text-xs font-bold text-zinc-200 hover:bg-zinc-800 flex items-center justify-center gap-1.5 cursor-pointer"
+              className={`w-full py-2 px-3 text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer opacity-80 hover:opacity-100 ${ui.radiusClasses.button}`}
+              style={{ color: theme.sidebarText }}
             >
               {isRtl ? <ArrowRight className="w-3.5 h-3.5" /> : <ArrowLeft className="w-3.5 h-3.5" />}
-              <span className="truncate">{t.superAdmin.backToHome}</span>
+              <span>{t.superAdmin.backToHome}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSignOutConfirmOpen(true)}
+              className={`w-full py-2 px-3 text-xs font-semibold text-rose-400 hover:bg-rose-500/10 flex items-center justify-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>{t.admin.signOut}</span>
             </button>
           </div>
-        </div>
-
-        <div className="hidden lg:block p-5 border-t border-zinc-800 space-y-2">
-          <button
-            type="button"
-            onClick={() => onNavigate('/admin')}
-            className="w-full py-2.5 px-3 rounded-xl bg-zinc-900 border border-zinc-800 text-xs font-bold text-zinc-200 hover:bg-zinc-800 flex items-center justify-center gap-1.5 cursor-pointer"
-          >
-            <Store className="w-3.5 h-3.5" />
-            <span>{t.superAdmin.backToOwner}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => onNavigate('/')}
-            className="w-full py-2 px-3 rounded-xl text-xs font-semibold text-zinc-400 hover:text-white hover:bg-zinc-900 flex items-center justify-center gap-1.5 cursor-pointer"
-          >
-            {isRtl ? <ArrowRight className="w-3.5 h-3.5" /> : <ArrowLeft className="w-3.5 h-3.5" />}
-            <span>{t.superAdmin.backToHome}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setSignOutConfirmOpen(true)}
-            className="w-full py-2 px-3 rounded-xl text-xs font-semibold text-zinc-400 hover:text-rose-400 hover:bg-zinc-900 flex items-center justify-center gap-1.5 cursor-pointer"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            <span>{t.admin.signOut}</span>
-          </button>
-        </div>
-      </aside>
+        </aside>
+      )}
 
       {/* Main Content */}
       <div className="flex-1 min-w-0 flex flex-col">
-        <header className="bg-white border-b border-zinc-200 px-4 sm:px-6 py-3.5 flex items-center justify-between gap-3">
-          <div className="text-xs text-zinc-500 flex items-center gap-2 min-w-0 truncate">
+        <header
+          className="border-b px-4 sm:px-6 py-3.5 flex flex-wrap items-center justify-between gap-3"
+          style={{
+            backgroundColor: theme.headerBg,
+            borderColor: theme.headerBorder,
+            color: theme.headerText,
+          }}
+        >
+          <div className="text-xs flex items-center gap-2 min-w-0 truncate" style={{ color: theme.mutedText }}>
             <button
               type="button"
               onClick={() => onNavigate('/')}
-              className="hover:text-zinc-950 font-semibold cursor-pointer shrink-0"
+              className="font-semibold cursor-pointer shrink-0 hover:opacity-80"
+              style={{ color: theme.headerText }}
             >
               {t.brandName}
             </button>
             <span>/</span>
             <span className="hidden sm:inline">{t.nav.superAdmin}</span>
             <span className="hidden sm:inline">/</span>
-            <span className="font-bold text-zinc-900 truncate">
-              {navItems.find((n) => n.id === activeTab)?.label}
+            <span className="font-bold truncate" style={{ color: theme.headerText }}>
+              {getSuperItem(activeTab)?.label}
             </span>
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="hidden lg:block">
+            {isTopDeck && (
+              <button
+                type="button"
+                onClick={() => onNavigate('/admin')}
+                className={`px-3 py-1.5 border text-xs font-bold cursor-pointer ${ui.radiusClasses.button}`}
+                style={{ borderColor: theme.surfaceBorder, color: theme.headerText }}
+              >
+                {t.superAdmin.backToOwner}
+              </button>
+            )}
+            <div className={isTopDeck ? 'block' : 'hidden lg:block'}>
               <LanguageToggleButton />
             </div>
             <button
               type="button"
               onClick={() => onNavigate('/')}
-              className="px-3.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-bold text-zinc-800 hover:bg-zinc-50 cursor-pointer"
+              className={`px-3.5 py-1.5 border text-xs font-bold cursor-pointer ${ui.radiusClasses.button}`}
+              style={{ borderColor: theme.surfaceBorder, color: theme.headerText }}
             >
               {t.superAdmin.backToHome}
             </button>
+            {isTopDeck && (
+              <button
+                type="button"
+                onClick={() => setSignOutConfirmOpen(true)}
+                className={`px-3 py-1.5 border border-rose-200 text-rose-700 text-xs font-bold cursor-pointer ${ui.radiusClasses.button}`}
+              >
+                {t.admin.signOut}
+              </button>
+            )}
           </div>
         </header>
+
+        {/* Top-Deck Mode Card Grid */}
+        {isTopDeck && (
+          <div className="px-4 sm:px-6 pt-4 max-w-6xl w-full mx-auto">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {ui.visibleCards.map((card) => (
+                <div
+                  key={card.id}
+                  className={`p-3 border space-y-2 ${ui.radiusClasses.card}`}
+                  style={{
+                    backgroundColor: theme.surfaceBg,
+                    borderColor: theme.surfaceBorder,
+                    boxShadow: theme.cardShadow,
+                  }}
+                >
+                  <p className="text-[11px] font-extrabold" style={{ color: theme.mutedText }}>
+                    {isEn ? card.titleEn : card.titleAr}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {card.buttonIds.map((bid) => {
+                      const item = getSuperItem(bid);
+                      if (!item) return null;
+                      const Icon = item.icon;
+                      const active = activeTab === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setActiveTab(item.id)}
+                          className={`px-3 py-2 text-xs font-bold flex items-center gap-1.5 cursor-pointer border ${ui.radiusClasses.button}`}
+                          style={
+                            active
+                              ? {
+                                  backgroundColor: theme.accentHex,
+                                  borderColor: theme.accentHex,
+                                  color: theme.accentTextHex,
+                                }
+                              : {
+                                  backgroundColor: theme.surfaceSubtleBg,
+                                  borderColor: theme.surfaceBorder,
+                                  color: theme.surfaceText,
+                                }
+                          }
+                        >
+                          <Icon className="w-3.5 h-3.5 shrink-0" />
+                          <span>{item.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <main className="p-4 sm:p-6 max-w-6xl w-full mx-auto">
           {activeTab === 'tenants' && (
             <TenantsManagerTab onOpenPublicMenu={(path) => onNavigate(path)} />
           )}
           {activeTab === 'promos' && <PlatformPromosTab />}
+          {activeTab === 'ui_studio' && (
+            <UiStudioTab adminEmail={user.email || 'tygosibs@gmail.com'} />
+          )}
           {activeTab === 'themes' && <ThemeInjectorTab />}
           {activeTab === 'landing' && <LandingCmsTab />}
           {activeTab === 'domain' && (

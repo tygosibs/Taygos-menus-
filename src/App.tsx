@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { PlatformUiProvider } from './contexts/PlatformUiContext';
 import { testConnection } from './lib/firebase';
 import { AdminPortal } from './pages/AdminPortal';
 import { LandingPage } from './pages/LandingPage';
@@ -61,5 +62,9 @@ export default function App() {
     return <LandingPage onNavigate={navigate} />;
   };
 
-  return <ErrorBoundary>{renderRoute()}</ErrorBoundary>;
+  return (
+    <ErrorBoundary>
+      <PlatformUiProvider>{renderRoute()}</PlatformUiProvider>
+    </ErrorBoundary>
+  );
 }

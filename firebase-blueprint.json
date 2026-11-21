@@ -831,6 +831,21 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "restaurantId", "ownerId", "staffId", "staffName", "fcmToken", "deviceName", "platform", "activeStations", "topics", "isActive", "lastSeenAt", "createdAt", "updatedAt"]
+    },
+    "PlatformUiConfig": {
+      "title": "PlatformUiConfig",
+      "description": "Global real-time UI layout, card organization, custom button labels, and preset theme configuration managed by Super Admin.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "enum": ["ui_config"] },
+        "version": { "type": "number" },
+        "publishedBy": { "type": "string", "maxLength": 128 },
+        "refreshNoticeAr": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "refreshNoticeEn": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "screens": { "type": "object" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "version", "publishedBy", "refreshNoticeAr", "refreshNoticeEn", "screens", "updatedAt"]
     }
   },
   "firestore": {
@@ -860,7 +875,7 @@
     },
     "/platform_settings/{settingId}": {
       "schema": { "$ref": "#/entities/PlatformLandingSettings" },
-      "description": "Platform-wide landing page CMS settings managed by Super Admin."
+      "description": "Platform-wide landing CMS ('landing') and global UI Studio & theme config ('ui_config') managed by Super Admin."
     },
     "/platform_promo_codes/{promoId}": {
       "schema": { "$ref": "#/entities/PlatformPromoCode" },

@@ -40,6 +40,7 @@ import { StaffManagementTab } from '../components/admin/StaffManagementTab';
 import { ThemeCustomizerTab } from '../components/admin/ThemeCustomizerTab';
 import { OwnerAuthCard } from '../components/auth/OwnerAuthCard';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useScreenUi } from '../contexts/PlatformUiContext';
 import { DEFAULT_PLATFORM_LANDING } from '../data/defaultLandingSettings';
 import {
   buildBirthdayWhatsappUrl,
@@ -76,9 +77,12 @@ type AdminTab =
   | 'theme'
   | 'qr';
 
+const OWNER_TAB_STORAGE_KEY = 'sufra_owner_active_tab';
+
 export function AdminPortal({ onNavigate }: AdminPortalProps) {
   const { lang, t, dir, loc } = useLanguage();
   const isEn = lang === 'en';
+  const ui = useScreenUi('owner_admin');
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -86,7 +90,23 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [staffPortalSlug, setStaffPortalSlug] = useState<string | null>(null);
   const [loadingRestaurant, setLoadingRestaurant] = useState(false);
-  const [activeTab, setActiveTab] = useState<AdminTab>('orders');
+  const [activeTab, setActiveTabState] = useState<AdminTab>(() => {
+    if (typeof window === 'undefined') return 'orders';
+    const saved = window.sessionStorage.getItem(OWNER_TAB_STORAGE_KEY) as AdminTab | null;
+    if (
+      saved &&
+      ['orders', 'captain', 'staff', 'reports', 'customers', 'menu', 'offers', 'theme', 'qr'].includes(saved)
+    ) {
+      return saved;
+    }
+    return 'orders';
+  });
+  const setActiveTab = (tab: AdminTab) => {
+    setActiveTabState(tab);
+    if (typeof window !== 'undefined') {
+      window.sessionStorage.setItem(OWNER_TAB_STORAGE_KEY, tab);
+    }
+  };
   const [justCreatedBanner, setJustCreatedBanner] = useState(false);
   const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
 
@@ -461,65 +481,76 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
     );
   }
 
-  const navItems: { id: AdminTab; label: string; shortLabel: string; icon: typeof BellRing; badge?: number }[] = [
-    {
+  const navMetaMap: Record<
+    AdminTab,
+    { id: AdminTab; label: string; shortLabel: string; icon: typeof BellRing; badge?: number }
+  > = {
+    orders: {
       id: 'orders',
-      label: isEn ? 'Cashier & Multi-KDS' : 'شاشات الكاشير والمطبخ',
-      shortLabel: isEn ? 'Cashier & KDS' : 'الكاشير والمطبخ',
+      label: ui.getButtonLabel('orders', lang, isEn ? 'Cashier & Multi-KDS' : 'شاشات الكاشير والمطبخ'),
+      shortLabel: ui.getButtonLabel('orders', lang, isEn ? 'Cashier & KDS' : 'الكاشير والمطبخ'),
       icon: BellRing,
       badge: pendingOrdersCount > 0 ? pendingOrdersCount : undefined,
     },
-    {
+    captain: {
       id: 'captain',
-      label: isEn ? 'Captain / Waiter Screen' : 'شاشة الكابتن (الويتر)',
-      shortLabel: isEn ? 'Captain Screen' : 'شاشة الكابتن',
+      label: ui.getButtonLabel('captain', lang, isEn ? 'Captain / Waiter Screen' : 'شاشة الكابتن (الويتر)'),
+      shortLabel: ui.getButtonLabel('captain', lang, isEn ? 'Captain Screen' : 'شاشة الكابتن'),
       icon: UserCheck,
       badge: pendingCallsCount > 0 ? pendingCallsCount : undefined,
     },
-    {
+    staff: {
       id: 'staff',
-      label: isEn ? 'Manager & Staff RBAC' : 'المدير والكادر والصلاحيات',
-      shortLabel: isEn ? 'Staff & Roles' : 'الكادر والصلاحيات',
+      label: ui.getButtonLabel('staff', lang, isEn ? 'Manager & Staff RBAC' : 'المدير والكادر والصلاحيات'),
+      shortLabel: ui.getButtonLabel('staff', lang, isEn ? 'Staff & Roles' : 'الكادر والصلاحيات'),
       icon: ShieldCheck,
     },
-    {
+    reports: {
       id: 'reports',
-      label: isEn ? 'Shifts, Treasury & Reports' : 'تقرير الورديات والحسابات',
-      shortLabel: isEn ? 'Shifts & Vault' : 'الورديات والحسابات',
+      label: ui.getButtonLabel('reports', lang, isEn ? 'Shifts, Treasury & Reports' : 'تقرير الورديات والحسابات'),
+      shortLabel: ui.getButtonLabel('reports', lang, isEn ? 'Shifts & Vault' : 'الورديات والحسابات'),
       icon: Calculator,
     },
-    {
+    customers: {
       id: 'customers',
-      label: isEn ? 'Customers (Smart CRM)' : 'عملائي (CRM والتسويق الذكي)',
-      shortLabel: isEn ? 'Customers CRM' : 'عملائي CRM',
+      label: ui.getButtonLabel('customers', lang, isEn ? 'Customers (Smart CRM)' : 'عملائي (CRM والتسويق الذكي)'),
+      shortLabel: ui.getButtonLabel('customers', lang, isEn ? 'Customers CRM' : 'عملائي CRM'),
       icon: Users,
       badge: upcomingBirthdays.length > 0 ? upcomingBirthdays.length : undefined,
     },
-    {
+    menu: {
       id: 'menu',
-      label: isEn ? 'Menu, Sections & Photos' : 'الأقسام والصور والأصناف',
-      shortLabel: isEn ? 'Menu & Photos' : 'القوائم والصور',
+      label: ui.getButtonLabel('menu', lang, isEn ? 'Menu, Sections & Photos' : 'الأقسام والصور والأصناف'),
+      shortLabel: ui.getButtonLabel('menu', lang, isEn ? 'Menu & Photos' : 'القوائم والصور'),
       icon: LayoutGrid,
     },
-    {
+    offers: {
       id: 'offers',
-      label: t.admin.tabs.offers,
-      shortLabel: isEn ? 'Offers & Codes' : 'العروض والأكواد',
+      label: ui.getButtonLabel('offers', lang, t.admin.tabs.offers),
+      shortLabel: ui.getButtonLabel('offers', lang, isEn ? 'Offers & Codes' : 'العروض والأكواد'),
       icon: Tag,
     },
-    {
+    theme: {
       id: 'theme',
-      label: isEn ? 'Themes, Logo & Info' : 'الثيم واللوجو والإعدادات',
-      shortLabel: isEn ? 'Theme & Logo' : 'الثيم واللوجو',
+      label: ui.getButtonLabel('theme', lang, isEn ? 'Themes, Logo & Info' : 'الثيم واللوجو والإعدادات'),
+      shortLabel: ui.getButtonLabel('theme', lang, isEn ? 'Theme & Logo' : 'الثيم واللوجو'),
       icon: Palette,
     },
-    {
+    qr: {
       id: 'qr',
-      label: isEn ? 'Halls & Table QRs' : 'الصالات وأكواد QR',
-      shortLabel: isEn ? 'Halls & QR' : 'الصالات و QR',
+      label: ui.getButtonLabel('qr', lang, isEn ? 'Halls & Table QRs' : 'الصالات وأكواد QR'),
+      shortLabel: ui.getButtonLabel('qr', lang, isEn ? 'Halls & QR' : 'الصالات و QR'),
       icon: QrCode,
     },
-  ];
+  };
+
+  const navItems = ui.orderedButtonIds
+    .map((id) => navMetaMap[id as AdminTab])
+    .filter(Boolean);
+
+  const ownerTheme = ui.theme;
+  const isOwnerTopDeck = ui.screenConfig.layoutStyle === 'top_deck';
+  const isOwnerCompactRail = ui.screenConfig.layoutStyle === 'compact_rail';
 
   const cleanWhatsappDigits = (supportWhatsapp || '').replace(/[^\d]/g, '') || '201000000000';
   const tygosInquiryText = encodeURIComponent(
@@ -529,195 +560,280 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
   );
   const tygosWhatsappHref = `https://wa.me/${cleanWhatsappDigits}?text=${tygosInquiryText}`;
 
+  const handleSelectOwnerTab = (tabId: AdminTab) => {
+    unlockAudioContext();
+    setActiveTab(tabId);
+    if (tabId === 'orders') setNewOrderToast(null);
+    if (tabId === 'captain') setNewCallToast(null);
+  };
+
   return (
-    <div dir={dir} className="min-h-screen bg-[#F5F6F8] text-zinc-900 flex flex-col lg:flex-row overflow-x-clip max-w-full">
+    <div
+      dir={dir}
+      className={`min-h-screen flex flex-col ${isOwnerTopDeck ? '' : 'lg:flex-row'} overflow-x-clip max-w-full`}
+      style={{ backgroundColor: ownerTheme.canvasBg, color: ownerTheme.canvasText }}
+    >
       {/* Sidebar */}
-      <aside className="print:hidden lg:w-68 bg-white border-b lg:border-b-0 lg:border-e border-zinc-200 shrink-0 flex flex-col justify-between">
-        <div className="p-4 sm:p-5 space-y-4 sm:space-y-5">
-          <div className="flex items-center justify-between gap-2">
+      {!isOwnerTopDeck && (
+        <aside
+          className={`print:hidden ${isOwnerCompactRail ? 'lg:w-58' : 'lg:w-72'} border-b lg:border-b-0 lg:border-e shrink-0 flex flex-col justify-between`}
+          style={{
+            backgroundColor: ownerTheme.sidebarBg,
+            borderColor: ownerTheme.sidebarBorder,
+            color: ownerTheme.sidebarText,
+          }}
+        >
+          <div className="p-4 sm:p-5 space-y-4 sm:space-y-5">
+            <div className="flex items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => onNavigate('/')}
+                title={t.nav.home}
+                className="text-base sm:text-lg font-extrabold cursor-pointer flex items-center gap-1.5 hover:opacity-80"
+                style={{ color: ownerTheme.sidebarText }}
+              >
+                <Home className="w-4 h-4" style={{ color: ownerTheme.accentHex }} />
+                <span>{t.brandName}</span>
+              </button>
+              <div className="lg:hidden flex items-center gap-1.5">
+                <LanguageToggleButton variant={ownerTheme.isDarkShell ? 'dark' : 'light'} compact />
+                <button
+                  type="button"
+                  onClick={() => onNavigate(`/menu/${restaurant.slug}?preview=1`)}
+                  className={`px-2.5 py-1.5 border text-xs font-bold flex items-center gap-1 cursor-pointer ${ui.radiusClasses.button}`}
+                  style={{ borderColor: ownerTheme.sidebarBorder, color: ownerTheme.sidebarText }}
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>{isEn ? 'Menu' : 'المنيو'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSignOutConfirmOpen(true)}
+                  aria-label={t.admin.signOut}
+                  className={`px-2.5 py-1.5 border border-rose-300/60 bg-rose-500/15 text-rose-500 text-xs font-bold flex items-center gap-1 cursor-pointer ${ui.radiusClasses.button}`}
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>{isEn ? 'Exit' : 'خروج'}</span>
+                </button>
+              </div>
+            </div>
+
+            <div
+              className={`p-3 sm:p-3.5 border space-y-1.5 ${ui.radiusClasses.card}`}
+              style={{
+                backgroundColor: ownerTheme.isDarkShell
+                  ? 'rgba(255,255,255,0.05)'
+                  : ownerTheme.surfaceSubtleBg,
+                borderColor: ownerTheme.sidebarBorder,
+              }}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-bold truncate" style={{ color: ownerTheme.sidebarText }}>
+                  {loc(restaurant.name, restaurant.name_en)}
+                </p>
+                <span
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded-md shrink-0 ${
+                    restaurant.isOpen
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : 'bg-rose-100 text-rose-800'
+                  }`}
+                >
+                  {restaurant.isOpen ? t.menu.openNow : t.menu.closedNow}
+                </span>
+              </div>
+              <p className="text-[11px] font-mono-num truncate" dir="ltr" style={{ color: ownerTheme.sidebarMuted }}>
+                /menu/{restaurant.slug}
+              </p>
+              <div
+                className="pt-1.5 border-t flex items-center justify-between gap-2"
+                style={{ borderColor: ownerTheme.sidebarBorder }}
+              >
+                {restaurant.appliedPlatformPromoCode ? (
+                  <span className="text-[11px] font-bold text-emerald-500 truncate flex items-center gap-1">
+                    <Gift className="w-3.5 h-3.5 shrink-0" />
+                    <span className="font-mono-num" dir="ltr">
+                      {restaurant.appliedPlatformPromoCode}
+                    </span>
+                  </span>
+                ) : (
+                  <span className="text-[11px] truncate" style={{ color: ownerTheme.sidebarMuted }}>
+                    {isEn ? 'Have a promo code?' : 'لديك كود خصم من المنصة؟'}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPromoCodeInput(restaurant.appliedPlatformPromoCode || '');
+                    setPromoMsg(null);
+                    setPromoError(null);
+                    setPromoModalOpen(true);
+                  }}
+                  className="text-[11px] font-extrabold underline underline-offset-2 shrink-0 cursor-pointer"
+                  style={{ color: ownerTheme.accentHex }}
+                >
+                  {restaurant.appliedPlatformPromoCode
+                    ? isEn
+                      ? 'Change'
+                      : 'تغيير'
+                    : isEn
+                      ? 'Redeem'
+                      : 'تفعيل 🎁'}
+                </button>
+              </div>
+            </div>
+
+            {/* Dynamic Card-Grouped Navigation */}
+            <nav className="space-y-3">
+              {ui.visibleCards.map((card) => (
+                <div
+                  key={card.id}
+                  className={
+                    ui.screenConfig.layoutStyle === 'sidebar_cards'
+                      ? `p-2.5 border space-y-1.5 ${ui.radiusClasses.card}`
+                      : 'space-y-1.5'
+                  }
+                  style={
+                    ui.screenConfig.layoutStyle === 'sidebar_cards'
+                      ? {
+                          backgroundColor: ownerTheme.isDarkShell
+                            ? 'rgba(255,255,255,0.035)'
+                            : ownerTheme.surfaceSubtleBg,
+                          borderColor: ownerTheme.sidebarBorder,
+                        }
+                      : undefined
+                  }
+                >
+                  <p
+                    className="text-[10px] font-extrabold uppercase tracking-wider px-2"
+                    style={{ color: ownerTheme.sidebarMuted }}
+                  >
+                    {isEn ? card.titleEn : card.titleAr}
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:flex lg:flex-col gap-1.5">
+                    {card.buttonIds.map((bid) => {
+                      const item = navMetaMap[bid as AdminTab];
+                      if (!item) return null;
+                      const Icon = item.icon;
+                      const active = activeTab === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => handleSelectOwnerTab(item.id)}
+                          className={`min-h-[42px] flex items-center justify-between gap-2 px-3 py-2 text-xs font-bold transition-all cursor-pointer ${ui.radiusClasses.button}`}
+                          style={
+                            active
+                              ? {
+                                  backgroundColor: ownerTheme.sidebarActiveBg,
+                                  color: ownerTheme.sidebarActiveText,
+                                }
+                              : {
+                                  color: ownerTheme.sidebarText,
+                                }
+                          }
+                        >
+                          <span className="flex items-center gap-2 min-w-0">
+                            <Icon className="w-4 h-4 shrink-0" />
+                            <span className="truncate lg:hidden">{item.shortLabel}</span>
+                            <span className="hidden lg:inline truncate">{item.label}</span>
+                          </span>
+                          {item.badge !== undefined && (
+                            <span
+                              className="font-mono-num text-[10px] font-extrabold px-1.5 py-0.5 rounded-md shrink-0"
+                              style={{
+                                backgroundColor: active ? ownerTheme.sidebarActiveText : ownerTheme.accentHex,
+                                color: active ? ownerTheme.sidebarActiveBg : ownerTheme.accentTextHex,
+                              }}
+                            >
+                              {item.badge}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </nav>
+          </div>
+
+          <div
+            className="hidden lg:block p-5 border-t space-y-2"
+            style={{ borderColor: ownerTheme.sidebarBorder }}
+          >
+            {isSuperAdminEmail(user.email) && (
+              <button
+                type="button"
+                onClick={() => onNavigate('/super-admin')}
+                className={`w-full py-2.5 px-3 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
+                style={{
+                  backgroundColor: ownerTheme.accentHex,
+                  color: ownerTheme.accentTextHex,
+                }}
+              >
+                <ShieldCheck className="w-4 h-4" />
+                <span>{t.admin.superAdminBtn}</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => onNavigate(`/menu/${restaurant.slug}?preview=1`)}
+              className={`w-full py-2.5 px-3 border text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
+              style={{ borderColor: ownerTheme.sidebarBorder, color: ownerTheme.sidebarText }}
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span>{t.admin.viewPublicMenu}</span>
+            </button>
             <button
               type="button"
               onClick={() => onNavigate('/')}
-              title={t.nav.home}
-              className="text-base sm:text-lg font-extrabold text-zinc-950 cursor-pointer flex items-center gap-1.5 hover:opacity-80"
+              className={`w-full py-2 px-3 border text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
+              style={{ borderColor: ownerTheme.sidebarBorder, color: ownerTheme.sidebarText }}
             >
-              <Home className="w-4 h-4 text-zinc-500" />
-              <span>{t.brandName}</span>
+              <Home className="w-3.5 h-3.5" />
+              <span>{t.nav.home}</span>
             </button>
-            <div className="lg:hidden flex items-center gap-1.5">
-              <LanguageToggleButton compact />
-              <button
-                type="button"
-                onClick={() => onNavigate(`/menu/${restaurant.slug}?preview=1`)}
-                className="px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-bold text-zinc-800 hover:bg-zinc-50 flex items-center gap-1 cursor-pointer"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                <span>{isEn ? 'Menu' : 'المنيو'}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setSignOutConfirmOpen(true)}
-                aria-label={t.admin.signOut}
-                className="px-2.5 py-1.5 rounded-lg border border-red-200 bg-red-50/70 text-red-700 hover:bg-red-100 text-xs font-bold flex items-center gap-1 cursor-pointer"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-                <span>{isEn ? 'Exit' : 'خروج'}</span>
-              </button>
-            </div>
-          </div>
-
-          <div className="p-3 sm:p-3.5 rounded-xl bg-zinc-50 border border-zinc-200 space-y-1.5">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs font-bold text-zinc-950 truncate">
-                {loc(restaurant.name, restaurant.name_en)}
-              </p>
-              <span
-                className={`text-[10px] font-bold px-2 py-0.5 rounded-md shrink-0 ${
-                  restaurant.isOpen
-                    ? 'bg-emerald-100 text-emerald-800'
-                    : 'bg-rose-100 text-rose-800'
-                }`}
-              >
-                {restaurant.isOpen ? t.menu.openNow : t.menu.closedNow}
-              </span>
-            </div>
-            <p className="text-[11px] font-mono-num text-zinc-500 truncate" dir="ltr">
-              /menu/{restaurant.slug}
-            </p>
-            <div className="pt-1.5 border-t border-zinc-200/80 flex items-center justify-between gap-2">
-              {restaurant.appliedPlatformPromoCode ? (
-                <span className="text-[11px] font-bold text-emerald-700 truncate flex items-center gap-1">
-                  <Gift className="w-3.5 h-3.5 shrink-0" />
-                  <span className="font-mono-num" dir="ltr">
-                    {restaurant.appliedPlatformPromoCode}
-                  </span>
-                </span>
-              ) : (
-                <span className="text-[11px] text-zinc-500 truncate">
-                  {isEn ? 'Have a promo code?' : 'لديك كود خصم من المنصة؟'}
-                </span>
-              )}
-              <button
-                type="button"
-                onClick={() => {
-                  setPromoCodeInput(restaurant.appliedPlatformPromoCode || '');
-                  setPromoMsg(null);
-                  setPromoError(null);
-                  setPromoModalOpen(true);
-                }}
-                className="text-[11px] font-extrabold text-amber-700 hover:text-amber-900 underline underline-offset-2 shrink-0 cursor-pointer"
-              >
-                {restaurant.appliedPlatformPromoCode
-                  ? isEn
-                    ? 'Change'
-                    : 'تغيير'
-                  : isEn
-                    ? 'Redeem'
-                    : 'تفعيل 🎁'}
-              </button>
-            </div>
-          </div>
-
-          {/* 2-column mobile / 3-column tablet grid so ALL 6 dashboard sections fit cleanly without horizontal overflow */}
-          <nav className="grid grid-cols-2 sm:grid-cols-3 lg:flex lg:flex-col gap-2">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const active = activeTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => {
-                    unlockAudioContext();
-                    setActiveTab(item.id);
-                    if (item.id === 'orders') {
-                      setNewOrderToast(null);
-                    }
-                    if (item.id === 'captain') {
-                      setNewCallToast(null);
-                    }
-                  }}
-                  className={`min-h-[44px] flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
-                    active
-                      ? 'bg-zinc-950 text-white shadow-xs'
-                      : 'bg-zinc-50 lg:bg-transparent border border-zinc-200 lg:border-0 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950'
-                  }`}
-                >
-                  <span className="flex items-center gap-2 min-w-0">
-                    <Icon className="w-4 h-4 shrink-0" />
-                    <span className="truncate lg:hidden">{item.shortLabel}</span>
-                    <span className="hidden lg:inline truncate">{item.label}</span>
-                  </span>
-                  {item.badge !== undefined && (
-                    <span className="font-mono-num text-[10px] font-extrabold px-1.5 py-0.5 rounded-md bg-amber-500 text-zinc-950 shrink-0">
-                      {item.badge}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-
-        <div className="hidden lg:block p-5 border-t border-zinc-200 space-y-2">
-          {isSuperAdminEmail(user.email) && (
             <button
               type="button"
-              onClick={() => onNavigate('/super-admin')}
-              className="w-full py-2.5 px-3 rounded-xl bg-amber-500 text-zinc-950 text-xs font-extrabold hover:bg-amber-400 flex items-center justify-center gap-1.5 cursor-pointer"
+              onClick={() => setSignOutConfirmOpen(true)}
+              className={`w-full py-2 px-3 text-xs font-semibold text-rose-500 hover:bg-rose-500/10 flex items-center justify-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
             >
-              <ShieldCheck className="w-4 h-4" />
-              <span>{t.admin.superAdminBtn}</span>
+              <LogOut className="w-3.5 h-3.5" />
+              <span>{t.admin.signOut}</span>
             </button>
-          )}
-          <button
-            type="button"
-            onClick={() => onNavigate(`/menu/${restaurant.slug}?preview=1`)}
-            className="w-full py-2.5 px-3 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-800 hover:bg-zinc-50 flex items-center justify-center gap-1.5 cursor-pointer"
-          >
-            <ExternalLink className="w-3.5 h-3.5" />
-            <span>{t.admin.viewPublicMenu}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => onNavigate('/')}
-            className="w-full py-2 px-3 rounded-xl border border-zinc-200 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 flex items-center justify-center gap-1.5 cursor-pointer"
-          >
-            <Home className="w-3.5 h-3.5" />
-            <span>{t.nav.home}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setSignOutConfirmOpen(true)}
-            className="w-full py-2 px-3 rounded-xl text-xs font-semibold text-red-600 hover:bg-red-50 flex items-center justify-center gap-1.5 cursor-pointer"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            <span>{t.admin.signOut}</span>
-          </button>
-        </div>
-      </aside>
+          </div>
+        </aside>
+      )}
 
       {/* Main Content Area */}
       <div className="flex-1 min-w-0 flex flex-col justify-between">
         <div>
-          <header className="print:hidden bg-white border-b border-zinc-200 px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
-          <div className="text-xs text-zinc-500 flex items-center gap-2 min-w-0">
+          <header
+            className="print:hidden border-b px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3"
+            style={{
+              backgroundColor: ownerTheme.headerBg,
+              borderColor: ownerTheme.headerBorder,
+              color: ownerTheme.headerText,
+            }}
+          >
+          <div className="text-xs flex items-center gap-2 min-w-0" style={{ color: ownerTheme.mutedText }}>
             <span className="hidden sm:inline">{t.admin.workspaceTitle}</span>
             <span className="hidden sm:inline">/</span>
-            <span className="font-bold text-zinc-900 truncate">
+            <span className="font-bold truncate" style={{ color: ownerTheme.headerText }}>
               {navItems.find((n) => n.id === activeTab)?.label}
             </span>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            <div className="hidden lg:block">
+            <div className={isOwnerTopDeck ? 'block' : 'hidden lg:block'}>
               <LanguageToggleButton />
             </div>
             {isSuperAdminEmail(user.email) && (
               <button
                 type="button"
                 onClick={() => onNavigate('/super-admin')}
-                className="lg:hidden px-3 py-1.5 rounded-lg bg-amber-500 text-zinc-950 text-xs font-bold hover:bg-amber-400 flex items-center gap-1 cursor-pointer"
+                className={`${isOwnerTopDeck ? 'flex' : 'lg:hidden flex'} px-3 py-1.5 text-xs font-bold items-center gap-1 cursor-pointer ${ui.radiusClasses.button}`}
+                style={{ backgroundColor: ownerTheme.accentHex, color: ownerTheme.accentTextHex }}
               >
                 <ShieldCheck className="w-3.5 h-3.5" />
                 <span>{t.admin.superAdminBtn}</span>
@@ -726,7 +842,8 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
             <button
               type="button"
               onClick={() => onNavigate('/')}
-              className="lg:hidden px-3 py-1.5 rounded-lg border border-zinc-200 text-xs font-bold text-zinc-700 hover:bg-zinc-50 flex items-center gap-1 cursor-pointer"
+              className={`${isOwnerTopDeck ? 'flex' : 'lg:hidden flex'} px-3 py-1.5 border text-xs font-bold items-center gap-1 cursor-pointer ${ui.radiusClasses.button}`}
+              style={{ borderColor: ownerTheme.surfaceBorder, color: ownerTheme.headerText }}
             >
               <Home className="w-3.5 h-3.5" />
               <span>{t.nav.home}</span>
@@ -734,13 +851,82 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
             <button
               type="button"
               onClick={() => onNavigate(`/menu/${restaurant.slug}?preview=1`)}
-              className="hidden sm:flex px-3.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-bold text-zinc-800 hover:bg-zinc-50 items-center gap-1.5 cursor-pointer"
+              className={`hidden sm:flex px-3.5 py-1.5 border text-xs font-bold items-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
+              style={{ borderColor: ownerTheme.surfaceBorder, color: ownerTheme.headerText }}
             >
               <ExternalLink className="w-3.5 h-3.5" />
               <span>{t.admin.themes.previewLink}</span>
             </button>
+            {isOwnerTopDeck && (
+              <button
+                type="button"
+                onClick={() => setSignOutConfirmOpen(true)}
+                className={`px-3 py-1.5 border border-rose-200 text-rose-700 text-xs font-bold cursor-pointer ${ui.radiusClasses.button}`}
+              >
+                {t.admin.signOut}
+              </button>
+            )}
           </div>
         </header>
+
+        {isOwnerTopDeck && (
+          <div className="print:hidden px-3 sm:px-6 pt-4 max-w-6xl w-full mx-auto">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {ui.visibleCards.map((card) => (
+                <div
+                  key={card.id}
+                  className={`p-3 border space-y-2 ${ui.radiusClasses.card}`}
+                  style={{
+                    backgroundColor: ownerTheme.surfaceBg,
+                    borderColor: ownerTheme.surfaceBorder,
+                    boxShadow: ownerTheme.cardShadow,
+                  }}
+                >
+                  <p className="text-[11px] font-extrabold" style={{ color: ownerTheme.mutedText }}>
+                    {isEn ? card.titleEn : card.titleAr}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {card.buttonIds.map((bid) => {
+                      const item = navMetaMap[bid as AdminTab];
+                      if (!item) return null;
+                      const Icon = item.icon;
+                      const active = activeTab === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => handleSelectOwnerTab(item.id)}
+                          className={`px-3 py-2 border text-xs font-bold flex items-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
+                          style={
+                            active
+                              ? {
+                                  backgroundColor: ownerTheme.accentHex,
+                                  borderColor: ownerTheme.accentHex,
+                                  color: ownerTheme.accentTextHex,
+                                }
+                              : {
+                                  backgroundColor: ownerTheme.surfaceSubtleBg,
+                                  borderColor: ownerTheme.surfaceBorder,
+                                  color: ownerTheme.surfaceText,
+                                }
+                          }
+                        >
+                          <Icon className="w-3.5 h-3.5 shrink-0" />
+                          <span>{item.shortLabel}</span>
+                          {item.badge !== undefined && (
+                            <span className="font-mono-num text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-black/15">
+                              {item.badge}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <main className="p-3 sm:p-6 max-w-6xl w-full mx-auto space-y-4">
           {justCreatedBanner && (
