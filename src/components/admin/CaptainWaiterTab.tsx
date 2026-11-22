@@ -27,6 +27,7 @@ import {
   X,
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { useScreenUi } from '../../contexts/PlatformUiContext';
 import { showOperationalNotification } from '../../lib/fcmNotificationService';
 import {
   getHallTableNumbers,
@@ -117,6 +118,7 @@ export function CaptainWaiterTab({
 }: CaptainWaiterTabProps) {
   const { lang, dir, loc, formatCurrency } = useLanguage();
   const isEn = lang === 'en';
+  const ui = useScreenUi('captain_waiter');
   const currencyLabel = formatCurrency(restaurant.currency);
 
   const opsConfig = useMemo(() => getResolvedOperationsConfig(restaurant), [restaurant]);
@@ -892,60 +894,114 @@ export function CaptainWaiterTab({
       </div>
 
       {/* Mode Switcher Tabs: Interactive Table Grid (Default), Text-Only Order Pad, Alerts & Ready Dishes */}
-      <div className="bg-white border border-zinc-200 rounded-2xl p-2 flex flex-wrap items-center justify-between gap-2">
+      <div
+        className={`border p-2 flex flex-wrap items-center justify-between gap-2 ${ui.radiusClasses.card}`}
+        style={{
+          backgroundColor: ui.theme.surfaceBg,
+          borderColor: ui.theme.surfaceBorder,
+          boxShadow: ui.theme.cardShadow,
+        }}
+      >
         <div className="flex flex-wrap items-center gap-1.5">
-          {(
-            [
-              { id: 'grid' as const, label: isEn ? 'Live Table Map' : 'خريطة الترابيزات الحية', Icon: Grid },
-              {
-                id: 'pos' as const,
-                label: isEn ? 'Captain Order Pad (No Photos)' : 'نقطة طلب الكابتن (بدون صور)',
-                Icon: ShoppingBag,
-                badge: posCart.length > 0 ? posCart.reduce((s, x) => s + x.quantity, 0) : undefined,
+          {(() => {
+            const tabMap = {
+              grid: {
+                id: 'grid' as const,
+                label: ui.getButtonLabel(
+                  'grid',
+                  lang,
+                  isEn ? 'Live Table Map' : 'خريطة الترابيزات الحية'
+                ),
+                Icon: Grid,
+                badge: undefined as number | undefined,
               },
-              {
+              pos: {
+                id: 'pos' as const,
+                label: ui.getButtonLabel(
+                  'pos',
+                  lang,
+                  isEn ? 'Captain Order Pad (No Photos)' : 'نقطة طلب الكابتن (بدون صور)'
+                ),
+                Icon: ShoppingBag,
+                badge:
+                  posCart.length > 0
+                    ? posCart.reduce((s, x) => s + x.quantity, 0)
+                    : undefined,
+              },
+              calls: {
                 id: 'calls' as const,
-                label: isEn ? 'Calls & Ready Dishes' : 'النداءات والأصناف الجاهزة',
+                label: ui.getButtonLabel(
+                  'calls',
+                  lang,
+                  isEn ? 'Calls & Ready Dishes' : 'النداءات والأصناف الجاهزة'
+                ),
                 Icon: BellRing,
                 badge:
                   activeCalls.length + readyDishes.length > 0
                     ? activeCalls.length + readyDishes.length
                     : undefined,
               },
-            ] as const
-          ).map((tItem) => {
-            const TabIcon = tItem.Icon;
-            const active = captainMode === tItem.id;
-            return (
-              <button
-                key={tItem.id}
-                type="button"
-                onClick={() => setCaptainMode(tItem.id)}
-                className={`min-h-[40px] px-3.5 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 cursor-pointer ${
-                  active
-                    ? 'bg-zinc-950 text-white'
-                    : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
-                }`}
-              >
-                <TabIcon className={`w-4 h-4 ${active ? 'text-amber-400' : 'text-zinc-500'}`} />
-                <span>{tItem.label}</span>
-                {'badge' in tItem && tItem.badge !== undefined && (
-                  <span className="font-mono-num px-1.5 py-0.5 rounded bg-amber-500 text-zinc-950 text-[10px] font-extrabold">
-                    {tItem.badge}
-                  </span>
-                )}
-              </button>
+            };
+            const orderedIds = ui.orderedButtonIds.filter(
+              (id): id is 'grid' | 'pos' | 'calls' => id === 'grid' || id === 'pos' || id === 'calls'
             );
-          })}
+            const list = (orderedIds.length > 0 ? orderedIds : (['grid', 'pos', 'calls'] as const)).map(
+              (id) => tabMap[id]
+            );
+            return list.map((tItem) => {
+              const TabIcon = tItem.Icon;
+              const active = captainMode === tItem.id;
+              return (
+                <button
+                  key={tItem.id}
+                  type="button"
+                  onClick={() => setCaptainMode(tItem.id)}
+                  className={`min-h-[40px] px-3.5 py-2 text-xs font-extrabold flex items-center gap-1.5 cursor-pointer border transition-colors ${ui.radiusClasses.button}`}
+                  style={
+                    active
+                      ? {
+                          backgroundColor: ui.theme.accentHex,
+                          borderColor: ui.theme.accentHex,
+                          color: ui.theme.accentTextHex,
+                        }
+                      : {
+                          backgroundColor: ui.theme.surfaceSubtleBg,
+                          borderColor: ui.theme.surfaceBorder,
+                          color: ui.theme.surfaceText,
+                        }
+                  }
+                >
+                  <TabIcon className="w-4 h-4 shrink-0" />
+                  <span>{tItem.label}</span>
+                  {tItem.badge !== undefined && (
+                    <span
+                      className="font-mono-num px-1.5 py-0.5 rounded text-[10px] font-extrabold"
+                      style={{
+                        backgroundColor: active ? ui.theme.accentTextHex : ui.theme.accentHex,
+                        color: active ? ui.theme.accentHex : ui.theme.accentTextHex,
+                      }}
+                    >
+                      {tItem.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            });
+          })()}
         </div>
 
         {captainMode === 'grid' && (
           <button
             type="button"
             onClick={() => setGridSettingsOpen(true)}
-            className="min-h-[38px] px-3 py-1.5 rounded-xl border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-xs font-bold text-zinc-800 flex items-center gap-1.5 cursor-pointer"
+            className={`min-h-[38px] px-3 py-1.5 border text-xs font-bold flex items-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
+            style={{
+              backgroundColor: ui.theme.surfaceSubtleBg,
+              borderColor: ui.theme.surfaceBorder,
+              color: ui.theme.surfaceText,
+            }}
           >
-            <Settings className="w-3.5 h-3.5 text-zinc-600" />
+            <Settings className="w-3.5 h-3.5" />
             <span>{isEn ? 'Grid Colors & SLA' : 'ألوان الترابيزات ووقت التأخير'}</span>
           </button>
         )}

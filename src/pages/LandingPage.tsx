@@ -30,6 +30,7 @@ import { PWAInstallButton } from '../components/PWAInstallButton';
 import { OwnerAuthCard } from '../components/auth/OwnerAuthCard';
 import { SafeImage } from '../components/SafeImage';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useScreenUi } from '../contexts/PlatformUiContext';
 import { DEFAULT_PLATFORM_LANDING } from '../data/defaultLandingSettings';
 import { DEMO_RESTAURANTS } from '../data/demoRestaurants';
 import { MENU_THEMES } from '../data/themes';
@@ -79,6 +80,7 @@ const LOYALTY_LABELS_EN = [
 
 export function LandingPage({ onNavigate }: LandingPageProps) {
   const { t, dir, lang, isRtl, loc } = useLanguage();
+  const ui = useScreenUi('landing_page');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [cms, setCms] = useState<PlatformLandingSettings>(DEFAULT_PLATFORM_LANDING);
   const [customThemes, setCustomThemes] = useState<CustomTheme[]>([]);
@@ -125,7 +127,26 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
   ];
 
   const flagshipTheme = MENU_THEMES[0];
-  const orderedSections = normalizeLandingSections(cms.sections).filter((s) => s.isVisible !== false);
+  const cmsSections = normalizeLandingSections(cms.sections).filter((s) => s.isVisible !== false);
+  const studioCmsIds: LandingSectionId[] = [
+    'hero',
+    'themes',
+    'features',
+    'operations',
+    'loyalty',
+    'pricing',
+    'tygos_promo',
+  ];
+  const studioOrder = ui.orderedButtonIds.filter((id): id is LandingSectionId =>
+    studioCmsIds.includes(id as LandingSectionId)
+  );
+  const cmsSectionSet = new Set(cmsSections.map((s) => s.id));
+  const orderedSections = [
+    ...studioOrder
+      .filter((id) => cmsSectionSet.has(id) && ui.isButtonVisible(id))
+      .map((id) => ({ id, isVisible: true })),
+    ...cmsSections.filter((s) => !studioOrder.includes(s.id) && ui.isButtonVisible(s.id)),
+  ];
 
   const visibleFeatures = (cms.features || []).filter((f) => f.isVisible !== false);
   const visiblePlans = (cms.pricingPlans || []).filter((p) => p.isVisible !== false);
@@ -865,10 +886,18 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
   return (
     <div
       dir={dir}
-      className="min-h-screen bg-[#FAFAFA] text-zinc-900 flex flex-col overflow-x-clip max-w-full"
+      className="min-h-screen flex flex-col overflow-x-clip max-w-full"
+      style={{ backgroundColor: ui.theme.canvasBg, color: ui.theme.canvasText }}
     >
       {/* 3-Zone Top Bar Contract */}
-      <header className="border-b border-zinc-200 bg-white/95 backdrop-blur-sm sticky top-0 z-30">
+      <header
+        className="border-b backdrop-blur-sm sticky top-0 z-30"
+        style={{
+          backgroundColor: ui.theme.headerBg,
+          borderColor: ui.theme.headerBorder,
+          color: ui.theme.headerText,
+        }}
+      >
         <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-2 sm:gap-8">
           <a
             href="/"
@@ -876,7 +905,8 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
               e.preventDefault();
               onNavigate('/');
             }}
-            className="flex items-center gap-2 text-lg sm:text-xl font-extrabold tracking-tight text-zinc-950 whitespace-nowrap shrink-0"
+            className="flex items-center gap-2 text-lg sm:text-xl font-extrabold tracking-tight whitespace-nowrap shrink-0"
+            style={{ color: ui.theme.headerText }}
           >
             <SafeImage
               src={cms.platformLogoUrl || DEFAULT_PLATFORM_LANDING.platformLogoUrl}
@@ -886,37 +916,47 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             <span>{t.brandName}</span>
           </a>
 
-          <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-zinc-600">
-            <a
-              href="#themes"
-              className="hover:text-zinc-950 transition-colors whitespace-nowrap shrink-0"
-            >
-              {t.nav.themes}
-            </a>
-            <a
-              href="#operations"
-              className="hover:text-zinc-950 transition-colors whitespace-nowrap shrink-0"
-            >
-              {lang === 'en' ? 'Operations' : 'تشغيل الصالة'}
-            </a>
-            <a
-              href="#loyalty"
-              className="hover:text-zinc-950 transition-colors whitespace-nowrap shrink-0"
-            >
-              {lang === 'en' ? 'Loyalty CRM' : 'الولاء والعملاء'}
-            </a>
-            <a
-              href="#pricing"
-              className="hover:text-zinc-950 transition-colors whitespace-nowrap shrink-0"
-            >
-              {t.nav.pricing}
-            </a>
-            <a
-              href="#demos"
-              className="hover:text-zinc-950 transition-colors whitespace-nowrap shrink-0"
-            >
-              {t.landing.viewLiveDemos}
-            </a>
+          <nav className="hidden md:flex items-center gap-6 text-sm font-medium" style={{ color: ui.theme.mutedText }}>
+            {ui.isButtonVisible('themes') && (
+              <a
+                href="#themes"
+                className="hover:opacity-80 transition-colors whitespace-nowrap shrink-0"
+              >
+                {ui.getButtonLabel('themes', lang, t.nav.themes)}
+              </a>
+            )}
+            {ui.isButtonVisible('operations') && (
+              <a
+                href="#operations"
+                className="hover:opacity-80 transition-colors whitespace-nowrap shrink-0"
+              >
+                {ui.getButtonLabel('operations', lang, lang === 'en' ? 'Operations' : 'تشغيل الصالة')}
+              </a>
+            )}
+            {ui.isButtonVisible('loyalty') && (
+              <a
+                href="#loyalty"
+                className="hover:opacity-80 transition-colors whitespace-nowrap shrink-0"
+              >
+                {ui.getButtonLabel('loyalty', lang, lang === 'en' ? 'Loyalty CRM' : 'الولاء والعملاء')}
+              </a>
+            )}
+            {ui.isButtonVisible('pricing') && (
+              <a
+                href="#pricing"
+                className="hover:opacity-80 transition-colors whitespace-nowrap shrink-0"
+              >
+                {ui.getButtonLabel('pricing', lang, t.nav.pricing)}
+              </a>
+            )}
+            {ui.isButtonVisible('demos') && (
+              <a
+                href="#demos"
+                className="hover:opacity-80 transition-colors whitespace-nowrap shrink-0"
+              >
+                {ui.getButtonLabel('demos', lang, t.landing.viewLiveDemos)}
+              </a>
+            )}
           </nav>
 
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
@@ -925,30 +965,38 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
               <button
                 type="button"
                 onClick={() => onNavigate('/super-admin')}
-                className="px-2.5 sm:px-3.5 py-2 rounded-lg bg-amber-500 text-zinc-950 text-xs sm:text-sm font-extrabold hover:bg-amber-400 transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
+                className={`px-2.5 sm:px-3.5 py-2 bg-amber-500 text-zinc-950 text-xs sm:text-sm font-extrabold hover:bg-amber-400 transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${ui.radiusClasses.button}`}
               >
                 <ShieldCheck className="w-4 h-4" />
                 <span className="hidden sm:inline">{t.nav.superAdmin}</span>
               </button>
             )}
-            <button
-              type="button"
-              onClick={() => onNavigate('/admin')}
-              className="px-3 sm:px-4 py-2 rounded-lg bg-zinc-950 text-white text-xs sm:text-sm font-bold hover:bg-zinc-800 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-            >
-              <span className="sm:hidden">
-                {currentUser
-                  ? lang === 'en'
-                    ? 'Dashboard'
-                    : 'لوحة التحكم'
-                  : lang === 'en'
-                  ? 'Start Free'
-                  : 'ابدأ مجاناً'}
-              </span>
-              <span className="hidden sm:inline">
-                {currentUser ? t.nav.ownerDashboard : t.nav.createMenuFree}
-              </span>
-            </button>
+            {ui.isButtonVisible('owner_login') && (
+              <button
+                type="button"
+                onClick={() => onNavigate('/admin')}
+                className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold hover:opacity-90 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${ui.radiusClasses.button}`}
+                style={{
+                  backgroundColor: ui.theme.accentHex,
+                  color: ui.theme.accentTextHex,
+                }}
+              >
+                <span className="sm:hidden">
+                  {currentUser
+                    ? lang === 'en'
+                      ? 'Dashboard'
+                      : 'لوحة التحكم'
+                    : lang === 'en'
+                    ? 'Start Free'
+                    : 'ابدأ مجاناً'}
+                </span>
+                <span className="hidden sm:inline">
+                  {currentUser
+                    ? t.nav.ownerDashboard
+                    : ui.getButtonLabel('owner_login', lang, t.nav.createMenuFree)}
+                </span>
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -957,8 +1005,9 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
       {orderedSections.map((sec) => renderCmsSection(sec.id))}
 
       {/* Live Demo Restaurants Directory */}
-      <section
-        id="demos"
+      {ui.isButtonVisible('demos') && (
+        <section
+          id="demos"
         className="border-t border-zinc-200 bg-[#FAFAFA] py-14 w-full"
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-8">
@@ -1020,8 +1069,10 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
           </div>
         </div>
       </section>
+      )}
 
       {/* Owner Login / Sign-up Portal Section */}
+      {ui.isButtonVisible('owner_login') && (
       <section id="owner-login" className="border-t border-zinc-200 bg-white py-14">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
           <div className="lg:col-span-6 space-y-4">
@@ -1078,6 +1129,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
           </div>
         </div>
       </section>
+      )}
 
       {/* Quiet Footer */}
       <footer className="mt-auto border-t border-zinc-200 bg-white py-6">

@@ -30,6 +30,7 @@ import { QrGeneratorTab } from '../components/admin/QrGeneratorTab';
 import { StaffManagementTab } from '../components/admin/StaffManagementTab';
 import { StaffShiftBar } from '../components/admin/StaffShiftBar';
 import { ThermalPrinterSettingsModal } from '../components/admin/ThermalPrinterSettingsModal';
+import { useScreenUi } from '../contexts/PlatformUiContext';
 import {
   deactivateStaffDevice,
   registerStaffDeviceAndFcm,
@@ -127,6 +128,10 @@ function resolveInitialScreenWithQuery(
 }
 
 export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
+  const managerUi = useScreenUi('manager_console');
+  const cashierUi = useScreenUi('cashier_kds');
+  const captainUi = useScreenUi('captain_waiter');
+
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [loadingRest, setLoadingRest] = useState(true);
   const [authReady, setAuthReady] = useState(false);
@@ -138,7 +143,20 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
   const [mismatchAuthNotice, setMismatchAuthNotice] = useState(false);
 
   const [activeScreen, setActiveScreen] = useState<StaffScreen>('cashier');
-  const [managerMode, setManagerMode] = useState<ManagerPortalMode>('supervision');
+  const [managerMode, setManagerModeState] = useState<ManagerPortalMode>(() => {
+    if (typeof window === 'undefined') return 'supervision';
+    const saved = window.sessionStorage.getItem(`sufra_staff_mgr_mode_${slug}`) as ManagerPortalMode | null;
+    if (saved && ['supervision', 'menu_editor', 'shift_reports', 'screen'].includes(saved)) {
+      return saved;
+    }
+    return 'supervision';
+  });
+  const setManagerMode = (mode: ManagerPortalMode) => {
+    setManagerModeState(mode);
+    if (typeof window !== 'undefined') {
+      window.sessionStorage.setItem(`sufra_staff_mgr_mode_${slug}`, mode);
+    }
+  };
   const [supervisoryOverride, setSupervisoryOverride] = useState<{
     screen: StaffScreen;
     supervisory?: boolean;
@@ -769,16 +787,64 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
     role: staff.role,
   };
 
+  const activePortalUi =
+    isManager
+      ? managerUi
+      : safeCurrentScreen === 'captain'
+        ? captainUi
+        : cashierUi;
+  const portalTheme = activePortalUi.theme;
+
   const canShowShiftBar =
     !isManager ||
     (managerMode === 'screen' &&
       safeCurrentScreen !== 'staff_management' &&
       safeCurrentScreen !== 'halls');
 
+  // Build ordered navigation list for Manager & Staff respecting UI Studio order/labels while enforcing RBAC
+  const orderedManagerNavIds = (() => {
+    const baseAllowed = [
+      'supervision',
+      ...(managerPerms.canEditMenu || managerPerms.canPauseItems ? ['menu_editor'] : []),
+      ...(managerPerms.canViewShiftReports ? ['shift_reports'] : []),
+      ...allowedScreens.filter(
+        (scr) => !(scr === 'staff_management' && !managerPerms.canManageStaff)
+      ),
+    ];
+    if (!isManager) return allowedScreens;
+    const preferredOrder = managerUi.orderedButtonIds;
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const id of preferredOrder) {
+      if (baseAllowed.includes(id) && !seen.has(id)) {
+        seen.add(id);
+        result.push(id);
+      }
+    }
+    for (const id of baseAllowed) {
+      if (!seen.has(id)) {
+        seen.add(id);
+        result.push(id);
+      }
+    }
+    return result;
+  })();
+
   return (
-    <div dir="rtl" className="min-h-screen bg-[#F5F6F8] text-zinc-900 flex flex-col">
+    <div
+      dir="rtl"
+      className="min-h-screen flex flex-col"
+      style={{ backgroundColor: portalTheme.canvasBg, color: portalTheme.canvasText }}
+    >
       {/* Staff Top Operational Header */}
-      <header className="print:hidden bg-white border-b border-zinc-200 px-3 sm:px-6 py-3 sticky top-0 z-30">
+      <header
+        className="print:hidden border-b px-3 sm:px-6 py-3 sticky top-0 z-30"
+        style={{
+          backgroundColor: portalTheme.headerBg,
+          borderColor: portalTheme.headerBorder,
+          color: portalTheme.headerText,
+        }}
+      >
         <div className="max-w-7xl mx-auto flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
@@ -786,16 +852,23 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
                 <img
                   src={restaurant.logoUrl}
                   alt={restaurant.name}
-                  className="w-9 h-9 rounded-xl object-cover border border-zinc-200 shrink-0"
+                  className={`w-9 h-9 object-cover border shrink-0 ${activePortalUi.radiusClasses.button}`}
+                  style={{ borderColor: portalTheme.surfaceBorder }}
                 />
               ) : (
-                <div className="w-9 h-9 rounded-xl bg-zinc-950 text-amber-400 flex items-center justify-center shrink-0">
+                <div
+                  className={`w-9 h-9 flex items-center justify-center shrink-0 ${activePortalUi.radiusClasses.button}`}
+                  style={{
+                    backgroundColor: portalTheme.sidebarBg,
+                    color: portalTheme.accentHex,
+                  }}
+                >
                   <LayoutGrid className="w-4 h-4" />
                 </div>
               )}
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-sm font-extrabold text-zinc-950 truncate">
+                  <span className="text-sm font-extrabold truncate" style={{ color: portalTheme.headerText }}>
                     {restaurant.name}
                   </span>
                   <span
@@ -804,7 +877,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
                     {roleMeta.labelAr}
                   </span>
                 </div>
-                <p className="text-[11px] text-zinc-500 truncate">
+                <p className="text-[11px] truncate" style={{ color: portalTheme.mutedText }}>
                   {staff.name}
                   {staff.hallName ? ` · الصالة: ${staff.hallName}` : ''}
                 </p>
@@ -816,7 +889,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
               <button
                 type="button"
                 onClick={() => setSignOutConfirmOpen(true)}
-                className="px-2.5 py-2 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 text-xs font-bold inline-flex items-center gap-1 cursor-pointer"
+                className={`px-2.5 py-2 border border-rose-200 bg-rose-50 text-rose-700 text-xs font-bold inline-flex items-center gap-1 cursor-pointer ${activePortalUi.radiusClasses.button}`}
               >
                 <LogOut className="w-3.5 h-3.5" />
                 <span>خروج</span>
@@ -828,82 +901,132 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
           <div className="flex flex-wrap items-center justify-between lg:justify-end gap-2">
             {(isManager || allowedScreens.length > 1) && (
               <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 max-w-full">
-                {isManager && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setManagerMode('supervision');
-                        setSupervisoryOverride(null);
-                      }}
-                      className={`min-h-[36px] px-3 py-1.5 rounded-xl text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
-                        managerMode === 'supervision'
-                          ? 'bg-indigo-700 text-white shadow-2xs'
-                          : 'bg-indigo-50 text-indigo-900 hover:bg-indigo-100'
-                      }`}
-                    >
-                      <Crown className="w-3.5 h-3.5" />
-                      <span>لوحة الإشراف</span>
-                    </button>
-
-                    {(managerPerms.canEditMenu || managerPerms.canPauseItems) && (
+                {orderedManagerNavIds.map((navId) => {
+                  if (isManager && navId === 'supervision') {
+                    const isActive = managerMode === 'supervision';
+                    return (
                       <button
+                        key="supervision"
+                        type="button"
+                        onClick={() => {
+                          setManagerMode('supervision');
+                          setSupervisoryOverride(null);
+                        }}
+                        className={`min-h-[36px] px-3 py-1.5 text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors border ${activePortalUi.radiusClasses.button}`}
+                        style={
+                          isActive
+                            ? {
+                                backgroundColor: portalTheme.accentHex,
+                                borderColor: portalTheme.accentHex,
+                                color: portalTheme.accentTextHex,
+                              }
+                            : {
+                                backgroundColor: portalTheme.surfaceSubtleBg,
+                                borderColor: portalTheme.surfaceBorder,
+                                color: portalTheme.surfaceText,
+                              }
+                        }
+                      >
+                        <Crown className="w-3.5 h-3.5" />
+                        <span>{managerUi.getButtonLabel('supervision', 'ar', 'لوحة الإشراف')}</span>
+                      </button>
+                    );
+                  }
+
+                  if (isManager && navId === 'menu_editor') {
+                    const isActive = managerMode === 'menu_editor';
+                    return (
+                      <button
+                        key="menu_editor"
                         type="button"
                         onClick={() => {
                           setManagerMode('menu_editor');
                           setSupervisoryOverride(null);
                         }}
-                        className={`min-h-[36px] px-3 py-1.5 rounded-xl text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
-                          managerMode === 'menu_editor'
-                            ? 'bg-zinc-950 text-white shadow-2xs'
-                            : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
-                        }`}
+                        className={`min-h-[36px] px-3 py-1.5 text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors border ${activePortalUi.radiusClasses.button}`}
+                        style={
+                          isActive
+                            ? {
+                                backgroundColor: portalTheme.accentHex,
+                                borderColor: portalTheme.accentHex,
+                                color: portalTheme.accentTextHex,
+                              }
+                            : {
+                                backgroundColor: portalTheme.surfaceSubtleBg,
+                                borderColor: portalTheme.surfaceBorder,
+                                color: portalTheme.surfaceText,
+                              }
+                        }
                       >
                         <Utensils className="w-3.5 h-3.5" />
-                        <span>المنيو والأصناف</span>
+                        <span>{managerUi.getButtonLabel('menu_editor', 'ar', 'المنيو والأصناف')}</span>
                       </button>
-                    )}
+                    );
+                  }
 
-                    {managerPerms.canViewShiftReports && (
+                  if (isManager && navId === 'shift_reports') {
+                    const isActive = managerMode === 'shift_reports';
+                    return (
                       <button
+                        key="shift_reports"
                         type="button"
                         onClick={() => {
                           setManagerMode('shift_reports');
                           setSupervisoryOverride(null);
                         }}
-                        className={`min-h-[36px] px-3 py-1.5 rounded-xl text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
-                          managerMode === 'shift_reports'
-                            ? 'bg-zinc-950 text-white shadow-2xs'
-                            : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
-                        }`}
+                        className={`min-h-[36px] px-3 py-1.5 text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors border ${activePortalUi.radiusClasses.button}`}
+                        style={
+                          isActive
+                            ? {
+                                backgroundColor: portalTheme.accentHex,
+                                borderColor: portalTheme.accentHex,
+                                color: portalTheme.accentTextHex,
+                              }
+                            : {
+                                backgroundColor: portalTheme.surfaceSubtleBg,
+                                borderColor: portalTheme.surfaceBorder,
+                                color: portalTheme.surfaceText,
+                              }
+                        }
                       >
                         <FileSpreadsheet className="w-3.5 h-3.5" />
-                        <span>تقرير الورديات</span>
+                        <span>{managerUi.getButtonLabel('shift_reports', 'ar', 'تقرير الورديات')}</span>
                       </button>
-                    )}
-                  </>
-                )}
+                    );
+                  }
 
-                {allowedScreens.map((scr) => {
+                  const scr = navId as StaffScreen;
                   if (scr === 'staff_management' && isManager && !managerPerms.canManageStaff) {
                     return null;
                   }
                   const Icon = getScreenIcon(scr, effectiveStations);
                   const isActive = managerMode === 'screen' && safeCurrentScreen === scr;
                   const meta = getScreenMetaDynamic(scr, effectiveStations);
+                  const labelText = isManager
+                    ? managerUi.getButtonLabel(scr, 'ar', meta.shortAr)
+                    : meta.shortAr;
                   return (
                     <button
                       key={scr}
                       type="button"
                       onClick={() => handleScreenChange(scr)}
-                      className={`min-h-[36px] px-3 py-1.5 rounded-xl text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
+                      className={`min-h-[36px] px-3 py-1.5 text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors border ${activePortalUi.radiusClasses.button}`}
+                      style={
                         isActive
-                          ? 'bg-zinc-950 text-white shadow-2xs'
-                          : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
-                      }`}
+                          ? {
+                              backgroundColor: portalTheme.accentHex,
+                              borderColor: portalTheme.accentHex,
+                              color: portalTheme.accentTextHex,
+                            }
+                          : {
+                              backgroundColor: portalTheme.surfaceSubtleBg,
+                              borderColor: portalTheme.surfaceBorder,
+                              color: portalTheme.surfaceText,
+                            }
+                      }
                     >
-                      <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-amber-400' : 'text-zinc-500'}`} />
-                      <span>{meta.shortAr}</span>
+                      <Icon className="w-3.5 h-3.5" />
+                      <span>{labelText}</span>
                     </button>
                   );
                 })}
@@ -915,7 +1038,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
               <button
                 type="button"
                 onClick={() => setSignOutConfirmOpen(true)}
-                className="min-h-[38px] px-3 py-2 rounded-xl border border-rose-200 bg-rose-50/70 hover:bg-rose-100 text-rose-700 text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
+                className={`min-h-[38px] px-3 py-2 border border-rose-200 bg-rose-50/70 hover:bg-rose-100 text-rose-700 text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${activePortalUi.radiusClasses.button}`}
               >
                 <LogOut className="w-3.5 h-3.5" />
                 <span>تسجيل الخروج</span>

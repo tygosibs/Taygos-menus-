@@ -32,6 +32,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { useScreenUi } from '../../contexts/PlatformUiContext';
 import { showOperationalNotification } from '../../lib/fcmNotificationService';
 import {
   subscribeCategories,
@@ -1100,7 +1101,17 @@ export function LiveOrdersTab({
 
   const pendingCount = orders.filter((o) => o.status === 'pending').length;
 
+  const ui = useScreenUi('cashier_kds');
+
   const stationTabs = useMemo(() => {
+    const mapStationToUiId = (stationId: string) => {
+      if (stationId === 'cashier') return 'cashier_station';
+      if (stationId === 'kitchen') return 'kds_kitchen';
+      if (stationId === 'bar') return 'kds_bar';
+      if (stationId === 'pastry') return 'kds_pastry';
+      return null;
+    };
+
     const base: Array<{
       id: StationView;
       label: string;
@@ -1109,19 +1120,27 @@ export function LiveOrdersTab({
     }> = [
       {
         id: 'cashier',
-        label: isEn ? 'Cashier Master View' : 'شاشة الكاشير (Master)',
+        label: ui.getButtonLabel(
+          'cashier_station',
+          lang,
+          isEn ? 'Cashier Master View' : 'شاشة الكاشير (Master)'
+        ),
         icon: Receipt,
         count: activeOrders.length,
       },
-      ...effectiveStations.map((st) => ({
-        id: st.stationId as StationView,
-        label: isEn ? `${st.shortLabel_en} KDS` : st.label,
-        icon: getStationIconComponent(st.icon),
-        count: stationOpenCounts.get(st.stationId) || 0,
-      })),
+      ...effectiveStations.map((st) => {
+        const uiId = mapStationToUiId(st.stationId);
+        const fallbackLabel = isEn ? `${st.shortLabel_en} KDS` : st.label;
+        return {
+          id: st.stationId as StationView,
+          label: uiId ? ui.getButtonLabel(uiId, lang, fallbackLabel) : fallbackLabel,
+          icon: getStationIconComponent(st.icon),
+          count: stationOpenCounts.get(st.stationId) || 0,
+        };
+      }),
     ];
     return base;
-  }, [isEn, activeOrders.length, effectiveStations, stationOpenCounts]);
+  }, [isEn, lang, ui, activeOrders.length, effectiveStations, stationOpenCounts]);
 
   const visibleStationTabs = useMemo(
     () =>
@@ -1163,17 +1182,24 @@ export function LiveOrdersTab({
       }
     >
       {/* Top Bar with Station Switcher, Sound Controls, and Full-Screen Toggle */}
-      <div className="bg-white border border-zinc-200 rounded-2xl p-4 sm:p-5 space-y-4">
+      <div
+        className={`border p-4 sm:p-5 space-y-4 ${ui.radiusClasses.card}`}
+        style={{
+          backgroundColor: ui.theme.surfaceBg,
+          borderColor: ui.theme.surfaceBorder,
+          boxShadow: ui.theme.cardShadow,
+        }}
+      >
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h2 className="text-base sm:text-lg font-extrabold text-zinc-950">
+            <h2 className="text-base sm:text-lg font-extrabold" style={{ color: ui.theme.surfaceText }}>
               {visibleStationTabs.length === 1
                 ? visibleStationTabs[0].label
                 : isEn
                   ? 'Multi-Station Operations & KDS'
                   : 'شاشات التشغيل والمحطات (Cashier & Multi-KDS)'}
             </h2>
-            <p className="text-xs text-zinc-500 mt-0.5 leading-relaxed">
+            <p className="text-xs mt-0.5 leading-relaxed" style={{ color: ui.theme.mutedText }}>
               {t.admin.orders.subtitle}
               {pendingCount > 0 && (
                 <span className="font-mono-num font-bold text-amber-700 ms-2">
@@ -1184,19 +1210,29 @@ export function LiveOrdersTab({
           </div>
 
           <div className="flex flex-wrap items-center gap-2 shrink-0">
-            {activeStation === 'cashier' && (
+            {activeStation === 'cashier' && ui.isButtonVisible('drawer_handover') && (
               <button
                 type="button"
                 onClick={() => {
                   setDrawerFeedback(null);
                   setDrawerModalOpen(true);
                 }}
-                className="min-h-[40px] px-3.5 py-2 rounded-xl bg-zinc-950 text-white text-xs font-extrabold hover:bg-zinc-800 flex items-center gap-1.5 cursor-pointer"
+                className={`min-h-[40px] px-3.5 py-2 text-xs font-extrabold flex items-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
+                style={{
+                  backgroundColor: ui.theme.accentHex,
+                  color: ui.theme.accentTextHex,
+                }}
               >
-                <Wallet className="w-4 h-4 text-amber-400" />
-                <span>{isEn ? 'Drawer & Handover' : 'ح/الدرج والتسليم'}</span>
+                <Wallet className="w-4 h-4" />
+                <span>
+                  {ui.getButtonLabel(
+                    'drawer_handover',
+                    lang,
+                    isEn ? 'Drawer & Handover' : 'ح/الدرج والتسليم'
+                  )}
+                </span>
                 {effectiveActiveCashierShift && (
-                  <span className="font-mono-num px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px]">
+                  <span className="font-mono-num px-1.5 py-0.5 rounded bg-black/15 text-[10px]">
                     {formatMoney(
                       (effectiveActiveCashierShift.openingFloat || 0) +
                         (effectiveActiveCashierShift.carriedOverCash || 0) +
@@ -1290,21 +1326,32 @@ export function LiveOrdersTab({
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveStation(tab.id)}
-                  className={`min-h-[46px] px-3.5 py-2.5 rounded-xl border text-xs font-extrabold transition-all flex items-center justify-between gap-2 cursor-pointer ${
+                  className={`min-h-[46px] px-3.5 py-2.5 border text-xs font-extrabold transition-all flex items-center justify-between gap-2 cursor-pointer ${ui.radiusClasses.button}`}
+                  style={
                     active
-                      ? 'bg-zinc-950 text-white border-zinc-950 shadow-sm'
-                      : 'bg-zinc-50 border-zinc-200 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950'
-                  }`}
+                      ? {
+                          backgroundColor: ui.theme.accentHex,
+                          borderColor: ui.theme.accentHex,
+                          color: ui.theme.accentTextHex,
+                        }
+                      : {
+                          backgroundColor: ui.theme.surfaceSubtleBg,
+                          borderColor: ui.theme.surfaceBorder,
+                          color: ui.theme.surfaceText,
+                        }
+                  }
                 >
                   <span className="flex items-center gap-2 min-w-0">
-                    <TabIcon className={`w-4 h-4 shrink-0 ${active ? 'text-amber-400' : 'text-zinc-500'}`} />
+                    <TabIcon className="w-4 h-4 shrink-0" />
                     <span className="truncate">{tab.label}</span>
                   </span>
                   {tab.count !== undefined && tab.count > 0 && (
                     <span
-                      className={`font-mono-num text-[11px] font-extrabold px-2 py-0.5 rounded-md shrink-0 ${
-                        active ? 'bg-amber-500 text-zinc-950' : 'bg-zinc-200 text-zinc-800'
-                      }`}
+                      className="font-mono-num text-[11px] font-extrabold px-2 py-0.5 rounded-md shrink-0"
+                      style={{
+                        backgroundColor: active ? ui.theme.accentTextHex : ui.theme.accentHex,
+                        color: active ? ui.theme.accentHex : ui.theme.accentTextHex,
+                      }}
                     >
                       {tab.count}
                     </span>
