@@ -969,6 +969,9 @@ export interface SubmitOrderInput {
   serviceCharge: number;
   deliveryFee?: number;
   discountAmount?: number;
+  manualDiscountAmount?: number;
+  manualDiscountPercent?: number;
+  manualDiscountReason?: string;
   promoCode?: string;
   taxAmount: number;
   total: number;
@@ -1022,6 +1025,15 @@ export async function submitPublicOrder(input: SubmitOrderInput): Promise<{ id: 
   }
   if (typeof input.discountAmount === 'number' && input.discountAmount > 0) {
     payload.discountAmount = Number(input.discountAmount.toFixed(2));
+  }
+  if (typeof input.manualDiscountAmount === 'number' && input.manualDiscountAmount > 0) {
+    payload.manualDiscountAmount = Number(input.manualDiscountAmount.toFixed(2));
+  }
+  if (typeof input.manualDiscountPercent === 'number' && input.manualDiscountPercent > 0) {
+    payload.manualDiscountPercent = Number(input.manualDiscountPercent.toFixed(2));
+  }
+  if (input.manualDiscountReason?.trim()) {
+    payload.manualDiscountReason = input.manualDiscountReason.trim().slice(0, 300);
   }
   if (input.promoCode?.trim()) {
     payload.promoCode = input.promoCode.trim().toUpperCase().slice(0, 32);

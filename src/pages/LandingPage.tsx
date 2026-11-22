@@ -201,13 +201,17 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
               <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 pt-1">
                 <button
                   type="button"
-                  onClick={() => onNavigate('/admin')}
+                  onClick={() => onNavigate(isSuperAdmin ? '/super-admin' : '/admin')}
                   className="px-6 py-3.5 rounded-xl bg-zinc-950 text-white text-sm font-bold hover:bg-zinc-800 transition-colors flex items-center gap-2 cursor-pointer whitespace-nowrap"
                 >
                   <span>
-                    {currentUser
-                      ? t.nav.ownerDashboard
-                      : loc(cms.ctaButtonText, cms.ctaButtonText_en)}
+                    {isSuperAdmin
+                      ? lang === 'en'
+                        ? 'Open Super Admin Console'
+                        : 'الدخول للوحة السوبر أدمن'
+                      : currentUser
+                        ? t.nav.ownerDashboard
+                        : loc(cms.ctaButtonText, cms.ctaButtonText_en)}
                   </span>
                   <DirArrow className="w-4 h-4" />
                 </button>
@@ -965,10 +969,10 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
               <button
                 type="button"
                 onClick={() => onNavigate('/super-admin')}
-                className={`px-2.5 sm:px-3.5 py-2 bg-amber-500 text-zinc-950 text-xs sm:text-sm font-extrabold hover:bg-amber-400 transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${ui.radiusClasses.button}`}
+                className={`px-3 sm:px-3.5 py-2 bg-amber-500 text-zinc-950 text-xs sm:text-sm font-extrabold hover:bg-amber-400 transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${ui.radiusClasses.button}`}
               >
-                <ShieldCheck className="w-4 h-4" />
-                <span className="hidden sm:inline">{t.nav.superAdmin}</span>
+                <ShieldCheck className="w-4 h-4 shrink-0" />
+                <span>{lang === 'en' ? 'Super Admin' : 'لوحة السوبر أدمن'}</span>
               </button>
             )}
             {ui.isButtonVisible('owner_login') && (
@@ -977,23 +981,31 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                 onClick={() => onNavigate('/admin')}
                 className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold hover:opacity-90 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${ui.radiusClasses.button}`}
                 style={{
-                  backgroundColor: ui.theme.accentHex,
-                  color: ui.theme.accentTextHex,
+                  backgroundColor: isSuperAdmin ? '#18181b' : ui.theme.accentHex,
+                  color: isSuperAdmin ? '#ffffff' : ui.theme.accentTextHex,
                 }}
               >
                 <span className="sm:hidden">
-                  {currentUser
+                  {isSuperAdmin
                     ? lang === 'en'
-                      ? 'Dashboard'
-                      : 'لوحة التحكم'
-                    : lang === 'en'
-                    ? 'Start Free'
-                    : 'ابدأ مجاناً'}
+                      ? 'Test Store'
+                      : 'المطعم التجريبي'
+                    : currentUser
+                      ? lang === 'en'
+                        ? 'Dashboard'
+                        : 'لوحة التحكم'
+                      : lang === 'en'
+                        ? 'Start Free'
+                        : 'ابدأ مجاناً'}
                 </span>
                 <span className="hidden sm:inline">
-                  {currentUser
-                    ? t.nav.ownerDashboard
-                    : ui.getButtonLabel('owner_login', lang, t.nav.createMenuFree)}
+                  {isSuperAdmin
+                    ? lang === 'en'
+                      ? 'Test Restaurant'
+                      : 'لوحة المطعم التجريبي'
+                    : currentUser
+                      ? t.nav.ownerDashboard
+                      : ui.getButtonLabel('owner_login', lang, t.nav.createMenuFree)}
                 </span>
               </button>
             )}
@@ -1103,28 +1115,47 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                   {t.landing.authSubtitle}
                 </p>
                 <div className="flex flex-col sm:flex-row gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => onNavigate('/admin')}
-                    className="flex-1 py-3 px-4 rounded-xl bg-zinc-950 text-white text-sm font-bold hover:bg-zinc-800 transition-colors flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <span>{t.nav.ownerDashboard}</span>
-                    <DirArrow className="w-4 h-4" />
-                  </button>
                   {isSuperAdmin && (
                     <button
                       type="button"
                       onClick={() => onNavigate('/super-admin')}
-                      className="py-3 px-4 rounded-xl bg-amber-500 text-zinc-950 text-sm font-extrabold hover:bg-amber-400 transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                      className="flex-1 py-3 px-4 rounded-xl bg-amber-500 text-zinc-950 text-sm font-extrabold hover:bg-amber-400 transition-colors flex items-center justify-center gap-2 cursor-pointer"
                     >
                       <ShieldCheck className="w-4 h-4" />
                       <span>{t.nav.superAdmin}</span>
                     </button>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => onNavigate('/admin')}
+                    className={`py-3 px-4 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer ${
+                      isSuperAdmin
+                        ? 'border border-zinc-300 bg-white text-zinc-900 hover:bg-zinc-100'
+                        : 'flex-1 bg-zinc-950 text-white hover:bg-zinc-800'
+                    }`}
+                  >
+                    <span>
+                      {isSuperAdmin
+                        ? lang === 'en'
+                          ? 'Test Restaurant'
+                          : 'لوحة المطعم التجريبي'
+                        : t.nav.ownerDashboard}
+                    </span>
+                    <DirArrow className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
             ) : (
-              <OwnerAuthCard compact onSuccess={() => onNavigate('/admin')} />
+              <OwnerAuthCard
+                compact
+                onSuccess={(u) =>
+                  onNavigate(
+                    isSuperAdminEmail(u?.email || auth.currentUser?.email)
+                      ? '/super-admin'
+                      : '/admin'
+                  )
+                }
+              />
             )}
           </div>
         </div>

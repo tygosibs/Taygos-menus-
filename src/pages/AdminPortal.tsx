@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   ExternalLink,
   Gift,
+  Globe,
   Home,
   Layers,
   LayoutGrid,
@@ -369,7 +370,13 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
               {authError}
             </div>
           )}
-          <OwnerAuthCard />
+          <OwnerAuthCard
+            onSuccess={(u) => {
+              if (isSuperAdminEmail(u?.email)) {
+                onNavigate('/super-admin');
+              }
+            }}
+          />
         </main>
 
         <footer className="text-center text-xs text-zinc-400">
@@ -414,11 +421,11 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
             </button>
             <button
               type="button"
-              onClick={() => onNavigate('/')}
-              aria-label={t.nav.home}
+              onClick={() => onNavigate('/?view=landing')}
+              aria-label={isEn ? 'Landing Preview' : 'معاينة صفحة الهبوط'}
               className="w-9 h-9 rounded-xl border border-zinc-200 text-zinc-600 hover:bg-zinc-100 flex items-center justify-center cursor-pointer"
             >
-              <X className="w-4 h-4" />
+              <Globe className="w-4 h-4" />
             </button>
           </div>
         </header>
@@ -587,7 +594,7 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
             <div className="flex items-center justify-between gap-2">
               <button
                 type="button"
-                onClick={() => onNavigate('/')}
+                onClick={() => setActiveTab('orders')}
                 title={t.nav.home}
                 className="text-base sm:text-lg font-extrabold cursor-pointer flex items-center gap-1.5 hover:opacity-80"
                 style={{ color: ownerTheme.sidebarText }}
@@ -681,6 +688,21 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
                 </button>
               </div>
             </div>
+
+            {isSuperAdminEmail(user.email) && (
+              <button
+                type="button"
+                onClick={() => onNavigate('/super-admin')}
+                className={`w-full py-2.5 px-3 text-xs font-extrabold flex items-center justify-center gap-2 cursor-pointer shadow-xs ${ui.radiusClasses.button}`}
+                style={{
+                  backgroundColor: ownerTheme.accentHex,
+                  color: ownerTheme.accentTextHex,
+                }}
+              >
+                <ShieldCheck className="w-4 h-4 shrink-0" />
+                <span>{t.admin.superAdminBtn}</span>
+              </button>
+            )}
 
             {/* Dynamic Card-Grouped Navigation */}
             <nav className="space-y-3">
@@ -786,12 +808,12 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
             </button>
             <button
               type="button"
-              onClick={() => onNavigate('/')}
+              onClick={() => onNavigate('/?view=landing')}
               className={`w-full py-2 px-3 border text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
               style={{ borderColor: ownerTheme.sidebarBorder, color: ownerTheme.sidebarText }}
             >
-              <Home className="w-3.5 h-3.5" />
-              <span>{t.nav.home}</span>
+              <Globe className="w-3.5 h-3.5" />
+              <span>{isEn ? 'Landing Preview' : 'معاينة صفحة الهبوط'}</span>
             </button>
             <button
               type="button"
@@ -832,21 +854,32 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
               <button
                 type="button"
                 onClick={() => onNavigate('/super-admin')}
-                className={`${isOwnerTopDeck ? 'flex' : 'lg:hidden flex'} px-3 py-1.5 text-xs font-bold items-center gap-1 cursor-pointer ${ui.radiusClasses.button}`}
+                className={`flex px-3 py-1.5 text-xs font-extrabold items-center gap-1.5 cursor-pointer shadow-xs ${ui.radiusClasses.button}`}
                 style={{ backgroundColor: ownerTheme.accentHex, color: ownerTheme.accentTextHex }}
               >
-                <ShieldCheck className="w-3.5 h-3.5" />
+                <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
                 <span>{t.admin.superAdminBtn}</span>
+              </button>
+            )}
+            {activeTab !== 'orders' && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('orders')}
+                className={`flex px-3 py-1.5 border text-xs font-bold items-center gap-1 cursor-pointer ${ui.radiusClasses.button}`}
+                style={{ borderColor: ownerTheme.surfaceBorder, color: ownerTheme.headerText }}
+              >
+                <Home className="w-3.5 h-3.5" />
+                <span>{t.nav.home}</span>
               </button>
             )}
             <button
               type="button"
-              onClick={() => onNavigate('/')}
-              className={`${isOwnerTopDeck ? 'flex' : 'lg:hidden flex'} px-3 py-1.5 border text-xs font-bold items-center gap-1 cursor-pointer ${ui.radiusClasses.button}`}
+              onClick={() => onNavigate('/?view=landing')}
+              className={`${isOwnerTopDeck ? 'flex' : 'hidden sm:flex'} px-3 py-1.5 border text-xs font-bold items-center gap-1 cursor-pointer ${ui.radiusClasses.button}`}
               style={{ borderColor: ownerTheme.surfaceBorder, color: ownerTheme.headerText }}
             >
-              <Home className="w-3.5 h-3.5" />
-              <span>{t.nav.home}</span>
+              <Globe className="w-3.5 h-3.5" />
+              <span>{isEn ? 'Landing' : 'صفحة الهبوط'}</span>
             </button>
             <button
               type="button"
@@ -1111,6 +1144,8 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
                 name: user.displayName || restaurant.name,
                 role: 'owner',
               }}
+              onOpenShiftReports={() => setActiveTab('reports')}
+              onRestaurantUpdated={(updated) => setRestaurant(updated)}
             />
           )}
           {activeTab === 'captain' && (

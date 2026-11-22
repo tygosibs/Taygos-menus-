@@ -111,6 +111,7 @@ export const STAFF_SCREEN_META: Record<string, StaffScreenMeta> = {
     labelAr: 'إدارة الصالات وباركود الطاولات',
     labelEn: 'Halls & Table QR',
     shortAr: 'الصالات',
+    managerOnly: true,
   },
 };
 
@@ -166,10 +167,12 @@ export const EMPLOYEE_ASSIGNABLE_SCREENS: StaffScreen[] = [
   'bar',
   'pastry',
   'captain',
-  'halls',
 ];
 
-export function getManagerScreensForStations(dynamicStations?: StationMeta[]): StaffScreen[] {
+export function getManagerScreensForStations(
+  dynamicStations?: StationMeta[],
+  includeHalls = true
+): StaffScreen[] {
   const stationScreens = (dynamicStations || []).map((st) => stationIdToScreen(st.stationId));
   return Array.from(
     new Set<StaffScreen>([
@@ -177,7 +180,7 @@ export function getManagerScreensForStations(dynamicStations?: StationMeta[]): S
       'cashier',
       ...stationScreens,
       'captain',
-      'halls',
+      ...(includeHalls ? (['halls'] as StaffScreen[]) : []),
     ])
   );
 }

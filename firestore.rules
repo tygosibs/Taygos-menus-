@@ -130,6 +130,16 @@ service cloud.firestore {
         isStaffAccessScreenData(staffAccess(), restId, screenName);
     }
 
+    function managerHasHallsPermission(restId) {
+      return isActiveManagerForRestaurant(restId) &&
+        exists(/databases/$(database)/documents/restaurants/$(restId)) && (
+          !('operationsConfig' in get(/databases/$(database)/documents/restaurants/$(restId)).data) ||
+          !('managerPermissions' in get(/databases/$(database)/documents/restaurants/$(restId)).data.operationsConfig) ||
+          !('canManageHalls' in get(/databases/$(database)/documents/restaurants/$(restId)).data.operationsConfig.managerPermissions) ||
+          get(/databases/$(database)/documents/restaurants/$(restId)).data.operationsConfig.managerPermissions.canManageHalls == true
+        );
+    }
+
     function staffHasAnyStationAccess(restId) {
       return isSignedIn() &&
         hasStaffAccess() &&
@@ -1995,10 +2005,12 @@ service cloud.firestore {
       allow get: if isValidId(orderId) && (
         isSuperAdmin() ||
         (isVerifiedAccount() && existing().ownerId == request.auth.uid) ||
+        isActiveManagerForRestaurant(existing().restaurantId) ||
         staffHasAnyOrderScreen(existing().restaurantId)
       );
       allow list: if isSuperAdmin() ||
         (isVerifiedAccount() && resource.data.ownerId == request.auth.uid) ||
+        isActiveManagerForRestaurant(resource.data.restaurantId) ||
         staffHasAnyOrderScreen(resource.data.restaurantId);
       allow create: if isValidId(orderId) &&
         isValidOrder(incoming(), orderId) &&
@@ -2149,7 +2161,7 @@ service cloud.firestore {
       );
     }
 
-    // 8. Halls / Dining Zones collection (zero-PII public lookup + owner or 'halls' staff write)
+    // 8. Halls / Dining Zones collection (zero-PII public lookup + owner or permitted manager write only)
     match /halls/{hallId} {
       allow get: if isValidId(hallId);
       allow list: if true;
@@ -2163,7 +2175,7 @@ service cloud.firestore {
             incoming().ownerId == request.auth.uid &&
             get(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)).data.ownerId == request.auth.uid
           ) || (
-            (staffHasScreen(incoming().restaurantId, 'halls') || isActiveManagerForRestaurant(incoming().restaurantId)) &&
+            managerHasHallsPermission(incoming().restaurantId) &&
             get(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)).data.ownerId == incoming().ownerId
           ) || (
             isSuperAdmin() &&
@@ -2186,8 +2198,7 @@ service cloud.firestore {
             existing().ownerId == request.auth.uid &&
             get(/databases/$(database)/documents/restaurants/$(existing().restaurantId)).data.ownerId == request.auth.uid
           ) ||
-          staffHasScreen(existing().restaurantId, 'halls') ||
-          isActiveManagerForRestaurant(existing().restaurantId)
+          managerHasHallsPermission(existing().restaurantId)
         );
       allow delete: if isValidId(hallId) && (
         isSuperAdmin() || (
@@ -2195,8 +2206,7 @@ service cloud.firestore {
           existing().ownerId == request.auth.uid &&
           get(/databases/$(database)/documents/restaurants/$(existing().restaurantId)).data.ownerId == request.auth.uid
         ) ||
-        staffHasScreen(existing().restaurantId, 'halls') ||
-        isActiveManagerForRestaurant(existing().restaurantId)
+        managerHasHallsPermission(existing().restaurantId)
       );
     }
 

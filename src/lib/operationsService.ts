@@ -73,6 +73,7 @@ export const DEFAULT_MANAGER_PERMISSIONS: ManagerPermissions = {
   canViewShiftReports: true,
   canEditDrawerFloat: true,
   canManageStaff: true,
+  canManageHalls: true,
   canConfigureOperations: true,
   canToggleScreenPrices: true,
 };

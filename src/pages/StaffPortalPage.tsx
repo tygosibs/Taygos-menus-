@@ -109,21 +109,47 @@ function getScreenIcon(scr: StaffScreen, stations: StationMeta[]) {
   return LayoutGrid;
 }
 
+function computeEffectiveStaffScreens(
+  staff: StaffMember,
+  canManageStaff: boolean,
+  canManageHalls: boolean
+): StaffScreen[] {
+  const isMgr = staff.role === 'manager';
+  const base = (staff.allowedScreens || []).filter((scr) => {
+    if (scr === 'staff_management') return isMgr && canManageStaff;
+    if (scr === 'halls') return isMgr && canManageHalls;
+    return true;
+  });
+  if (isMgr && canManageHalls && !base.includes('halls')) {
+    base.push('halls');
+  }
+  return base.length > 0 ? base : ['cashier'];
+}
+
 function resolveInitialScreenWithQuery(
-  restaurantId: string,
+  restaurant: Restaurant,
   staff: StaffMember
 ): StaffScreen {
+  const perms = getResolvedOperationsConfig(restaurant).managerPermissions;
+  const effectiveAllowed = computeEffectiveStaffScreens(
+    staff,
+    perms.canManageStaff,
+    perms.canManageHalls
+  );
   if (typeof window !== 'undefined') {
     const urlScr = (new URLSearchParams(window.location.search).get('screen') || '').trim();
-    if (urlScr && staff.allowedScreens.includes(urlScr as StaffScreen)) {
+    if (urlScr && effectiveAllowed.includes(urlScr as StaffScreen)) {
       return urlScr as StaffScreen;
     }
   }
+  const safeDefault = effectiveAllowed.includes(staff.defaultScreen)
+    ? staff.defaultScreen
+    : effectiveAllowed[0];
   return getSavedStaffScreen(
-    restaurantId,
+    restaurant.id,
     staff.uid,
-    staff.allowedScreens,
-    staff.defaultScreen
+    effectiveAllowed,
+    safeDefault
   );
 }
 
@@ -277,7 +303,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
         setMismatchAuthNotice(false);
         setSuspendedNotice(null);
 
-        const initial = resolveInitialScreenWithQuery(restaurantId, effectiveProfile);
+        const initial = resolveInitialScreenWithQuery(restaurant, effectiveProfile);
         setActiveScreen(initial);
         const urlScr =
           typeof window !== 'undefined'
@@ -409,7 +435,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
       });
       setStaff(loggedStaff);
       setMismatchAuthNotice(false);
-      const initial = resolveInitialScreenWithQuery(restaurant.id, loggedStaff);
+      const initial = resolveInitialScreenWithQuery(restaurant, loggedStaff);
       setActiveScreen(initial);
       if (loggedStaff.role === 'manager') {
         setManagerMode('supervision');
@@ -432,7 +458,13 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
     scr: StaffScreen,
     opts?: { supervisory?: boolean; coveringStaffName?: string }
   ) => {
-    if (!restaurant || !staff || !staff.allowedScreens.includes(scr)) return;
+    if (!restaurant || !staff) return;
+    const effective = computeEffectiveStaffScreens(
+      staff,
+      managerPerms.canManageStaff,
+      managerPerms.canManageHalls
+    );
+    if (!effective.includes(scr)) return;
     setActiveScreen(scr);
     setManagerMode('screen');
     if (opts) {
@@ -745,7 +777,11 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
   // Authenticated Active Staff Workspace (strictly screen-isolated)
   const roleMeta = STAFF_ROLE_META[staff.role] || STAFF_ROLE_META.cashier;
   const isManager = staff.role === 'manager';
-  const allowedScreens = staff.allowedScreens || [];
+  const allowedScreens = computeEffectiveStaffScreens(
+    staff,
+    managerPerms.canManageStaff,
+    managerPerms.canManageHalls
+  );
   const safeCurrentScreen: StaffScreen = allowedScreens.includes(activeScreen)
     ? activeScreen
     : allowedScreens[0] || 'cashier';
@@ -996,7 +1032,10 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
                   }
 
                   const scr = navId as StaffScreen;
-                  if (scr === 'staff_management' && isManager && !managerPerms.canManageStaff) {
+                  if (scr === 'staff_management' && (!isManager || !managerPerms.canManageStaff)) {
+                    return null;
+                  }
+                  if (scr === 'halls' && (!isManager || !managerPerms.canManageHalls)) {
                     return null;
                   }
                   const Icon = getScreenIcon(scr, effectiveStations);
@@ -1117,6 +1156,12 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
                 coveringStaffName={coveringName}
                 hideHistoryArchive={staff.role === 'cashier'}
                 openHandoverSignal={openHandoverSignal}
+                onOpenShiftReports={
+                  isManager && managerPerms.canViewShiftReports
+                    ? () => setManagerMode('shift_reports')
+                    : undefined
+                }
+                onRestaurantUpdated={(updated) => setRestaurant(updated)}
               />
             )}
 
@@ -1142,7 +1187,9 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
               />
             )}
 
-            {safeCurrentScreen === 'halls' && <QrGeneratorTab restaurant={restaurant} />}
+            {safeCurrentScreen === 'halls' && isManager && managerPerms.canManageHalls && (
+              <QrGeneratorTab restaurant={restaurant} />
+            )}
           </>
         )}
       </main>

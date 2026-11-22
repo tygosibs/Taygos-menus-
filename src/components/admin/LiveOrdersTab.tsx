@@ -12,6 +12,7 @@ import {
   Clock,
   CreditCard,
   Edit3,
+  Grid,
   Lock,
   MapPin,
   Maximize2,
@@ -23,6 +24,7 @@ import {
   Receipt,
   RefreshCw,
   Scissors,
+  ShoppingBag,
   Trash2,
   Users,
   Utensils,
@@ -36,9 +38,11 @@ import { useScreenUi } from '../../contexts/PlatformUiContext';
 import { showOperationalNotification } from '../../lib/fcmNotificationService';
 import {
   subscribeCategories,
+  subscribeHalls,
   subscribeMenuItems,
   subscribeOwnerOrders,
   subscribeOwnerServiceCalls,
+  subscribeRestaurantCustomers,
   updateOrderItemProgress,
   updateOrderStatus,
   updateServiceCallStatus,
@@ -76,7 +80,9 @@ import {
 } from '../../lib/thermalPrinterService';
 import {
   Category,
+  CustomerProfile,
   DrawerExpense,
+  Hall,
   ItemPrepState,
   MenuItem,
   Order,
@@ -93,6 +99,7 @@ import {
   StaffMember,
   StaffShift,
 } from '../../types/menu';
+import { CashierFloorPosPanel } from './CashierFloorPosPanel';
 import { SplitCheckPrintModal } from './SplitCheckPrintModal';
 import { ThermalPrinterSettingsModal } from './ThermalPrinterSettingsModal';
 
@@ -119,9 +126,11 @@ interface LiveOrdersTabProps {
   coveringStaffName?: string;
   hideHistoryArchive?: boolean;
   openHandoverSignal?: number;
+  onOpenShiftReports?: () => void;
+  onRestaurantUpdated?: (updated: Restaurant) => void;
 }
 
-interface AggregatedGuestCheck {
+export interface AggregatedGuestCheck {
   guestName: string;
   itemsCount: number;
   subtotal: number;
@@ -130,7 +139,7 @@ interface AggregatedGuestCheck {
   total: number;
 }
 
-interface TableMasterGroup {
+export interface TableMasterGroup {
   groupKey: string;
   hallName: string;
   tableNumber: string;
@@ -146,7 +155,7 @@ interface TableMasterGroup {
   grandTotal: number;
 }
 
-type SettleTarget =
+export type SettleTarget =
   | { type: 'table'; group: TableMasterGroup }
   | { type: 'order'; order: Order };
 
@@ -162,8 +171,10 @@ export function LiveOrdersTab({
   expenses,
   supervisoryMode = false,
   coveringStaffName,
-  hideHistoryArchive = false,
+  hideHistoryArchive: _hideHistoryArchive = false,
   openHandoverSignal = 0,
+  onOpenShiftReports,
+  onRestaurantUpdated,
 }: LiveOrdersTabProps) {
   const { lang, dir, t, loc, formatCurrency } = useLanguage();
   const isEn = lang === 'en';
@@ -192,6 +203,8 @@ export function LiveOrdersTab({
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [serviceCalls, setServiceCalls] = useState<ServiceCall[]>([]);
+  const [halls, setHalls] = useState<Hall[]>([]);
+  const [customers, setCustomers] = useState<CustomerProfile[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [dynamicStations, setDynamicStations] = useState<RestaurantStation[]>([]);
@@ -200,6 +213,11 @@ export function LiveOrdersTab({
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
+  const [cashierSubView, setCashierSubView] = useState<'orders' | 'tables' | 'pos'>('orders');
+  const [posPrefillTable, setPosPrefillTable] = useState<{
+    hallName: string;
+    tableNumber: string;
+  } | null>(null);
 
   const effectiveShifts = allShifts ?? internalShifts;
   const effectiveExpenses = expenses ?? internalExpenses;
@@ -346,9 +364,17 @@ export function LiveOrdersTab({
   }, []);
 
   useEffect(() => {
+    const canUseCashierExtras =
+      !normalizedAllowedStations || normalizedAllowedStations.includes('cashier');
     const unsubCats = subscribeCategories(restaurant.id, setCategories);
     const unsubItems = subscribeMenuItems(restaurant.id, setMenuItems);
     const unsubStations = subscribeRestaurantStations(restaurant.id, setDynamicStations);
+    const unsubHalls = canUseCashierExtras
+      ? subscribeHalls(restaurant.id, setHalls, () => {})
+      : () => {};
+    const unsubCustomers = canUseCashierExtras
+      ? subscribeRestaurantCustomers(restaurant.id, restaurant.ownerId, setCustomers, () => {})
+      : () => {};
     const unsubShifts = allShifts
       ? () => {}
       : subscribeAllRestaurantShifts(restaurant.id, setInternalShifts, () => {});
@@ -359,10 +385,12 @@ export function LiveOrdersTab({
       unsubCats();
       unsubItems();
       unsubStations();
+      unsubHalls();
+      unsubCustomers();
       unsubShifts();
       unsubExpenses();
     };
-  }, [restaurant.id, allShifts, expenses]);
+  }, [restaurant.id, restaurant.ownerId, allShifts, expenses, normalizedAllowedStations]);
 
   useEffect(() => {
     if (openHandoverSignal > 0) {
@@ -679,23 +707,13 @@ export function LiveOrdersTab({
     return groups;
   }, [activeOrders, isEn]);
 
-  const visibleLedgerOrders = useMemo(() => {
-    if (!hideHistoryArchive) return orders;
-    const shiftId = effectiveActiveCashierShift?.id;
-    const shiftStartMs = effectiveActiveCashierShift
-      ? getTimestampMillis(effectiveActiveCashierShift.startedAt)
-      : 0;
-    return orders.filter((o) => {
-      if (o.status === 'pending' || o.status === 'preparing') return true;
-      if (shiftId && o.shiftId === shiftId) return true;
-      if (shiftStartMs > 0 && getTimestampMillis(o.createdAt) >= shiftStartMs) return true;
-      return false;
-    });
-  }, [orders, hideHistoryArchive, effectiveActiveCashierShift]);
+  const visibleLedgerOrders = activeOrders;
 
   const filteredOrders = useMemo(() => {
-    if (filterStatus === 'all') return visibleLedgerOrders;
-    return visibleLedgerOrders.filter((o) => o.status === filterStatus);
+    if (filterStatus === 'pending' || filterStatus === 'preparing') {
+      return visibleLedgerOrders.filter((o) => o.status === filterStatus);
+    }
+    return visibleLedgerOrders;
   }, [visibleLedgerOrders, filterStatus]);
 
   const handleToggleFullscreen = () => {
@@ -1619,9 +1637,99 @@ export function LiveOrdersTab({
         })()
       ) : (
         /* ============================================================== */
-        /* 1. CASHIER MASTER VIEW                                         */
+        /* 1. CASHIER MASTER VIEW (+ FLOOR MAP & FAST POS)                */
         /* ============================================================== */
         <div className="space-y-6">
+          {/* Cashier Sub-View Switcher */}
+          <div className="bg-white border border-zinc-200 rounded-2xl p-2 flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setCashierSubView('orders')}
+              className={`min-h-[40px] px-3.5 py-2 rounded-xl border text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap cursor-pointer transition-colors ${
+                cashierSubView === 'orders'
+                  ? 'bg-zinc-950 text-white border-zinc-950'
+                  : 'bg-zinc-50 text-zinc-700 border-zinc-200 hover:bg-zinc-100'
+              }`}
+            >
+              <Receipt className="w-4 h-4 shrink-0" />
+              <span>{isEn ? 'Live Orders & Checks' : 'الطلبات والشيكات الحية'}</span>
+              {activeOrders.length > 0 && (
+                <span className="font-mono-num px-1.5 py-0.5 rounded bg-amber-500 text-zinc-950 text-[10px] font-extrabold">
+                  {activeOrders.length}
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setCashierSubView('tables')}
+              className={`min-h-[40px] px-3.5 py-2 rounded-xl border text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap cursor-pointer transition-colors ${
+                cashierSubView === 'tables'
+                  ? 'bg-zinc-950 text-white border-zinc-950'
+                  : 'bg-zinc-50 text-zinc-700 border-zinc-200 hover:bg-zinc-100'
+              }`}
+            >
+              <Grid className="w-4 h-4 shrink-0" />
+              <span>{isEn ? 'Color Floor Map' : 'خريطة الترابيزات الحية بالألوان'}</span>
+              {openTableGroups.length > 0 && (
+                <span className="font-mono-num px-1.5 py-0.5 rounded bg-emerald-500 text-white text-[10px] font-extrabold">
+                  {openTableGroups.length}
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setCashierSubView('pos')}
+              className={`min-h-[40px] px-3.5 py-2 rounded-xl border text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap cursor-pointer transition-colors ${
+                cashierSubView === 'pos'
+                  ? 'bg-zinc-950 text-white border-zinc-950'
+                  : 'bg-zinc-50 text-zinc-700 border-zinc-200 hover:bg-zinc-100'
+              }`}
+            >
+              <ShoppingBag className="w-4 h-4 shrink-0" />
+              <span>{isEn ? 'Cashier Fast POS' : 'نقطة بيع الكاشير (صالة / تيك أواي / دليفري)'}</span>
+            </button>
+          </div>
+
+          {cashierSubView !== 'orders' ? (
+            <CashierFloorPosPanel
+              restaurant={restaurant}
+              halls={halls}
+              orders={activeOrders}
+              serviceCalls={serviceCalls}
+              categories={categories}
+              menuItems={menuItems}
+              customers={customers}
+              effectiveStations={effectiveStations}
+              opsConfig={opsConfig}
+              actor={effectiveActor}
+              openTableGroups={openTableGroups}
+              canEditOpenOrders={canEditOpenOrders}
+              canApplyInstantDiscount={canApplyInstantDiscount}
+              canCancelOpenOrders={canCancelOpenOrders}
+              canConfigureGridColors={isOwnerActor || (isManagerActor && managerPerms.canConfigureOperations)}
+              mode={cashierSubView}
+              prefillPosTable={posPrefillTable}
+              onConsumePrefill={() => setPosPrefillTable(null)}
+              onSelectTablePos={(hallName, tableNumber) => {
+                setPosPrefillTable({ hallName, tableNumber });
+                setCashierSubView('pos');
+              }}
+              onOpenSettlement={(target, preferredMethod) =>
+                openSettlementModal(target, preferredMethod)
+              }
+              onOpenModifyOrder={(order) => openModifyOrderModal(order)}
+              onOpenSplitCheck={(order) => setSplitCheckOrder(order)}
+              onOpenReceipt={({ tableGroup, order }) => {
+                setReceiptModalTable(tableGroup || null);
+                setReceiptModalOrder(order || null);
+              }}
+              onResolveCall={handleCallStatusChange}
+              onRestaurantUpdated={onRestaurantUpdated}
+            />
+          ) : (
+            <>
           {/* Active Captain Calls Strip */}
           {activeCalls.length > 0 && (
             <section className="bg-amber-50/60 border border-amber-200 rounded-2xl p-4 sm:p-5 space-y-3">
@@ -1925,23 +2033,42 @@ export function LiveOrdersTab({
             </section>
           )}
 
-          {/* Individual Orders Ledger (Delivery, Pickup & Completed/Cancelled History) */}
+          {/* Active Individual Orders Ledger (Closed/Cancelled checks auto-move to Reports Archive) */}
           <section className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="text-sm font-extrabold text-zinc-950">
-                {hideHistoryArchive
-                  ? isEn
-                    ? 'Current Shift Orders Ledger'
-                    : 'طلبات الوردية الحالية والطلبات النشطة'
-                  : isEn
-                    ? 'All Orders Ledger'
-                    : 'سجل كافة الطلبات (توصيل / استلام / أرشيف الصالة)'}
-              </h3>
-              {supervisoryMode && coveringStaffName && (
-                <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-lg">
-                  إشراف على وردية: {coveringStaffName}
-                </span>
-              )}
+              <div className="space-y-0.5">
+                <h3 className="text-sm font-extrabold text-zinc-950">
+                  {isEn
+                    ? 'Active Orders & Open Checks'
+                    : 'الطلبات والشيكات المفتوحة حالياً'}
+                </h3>
+                <p className="text-[11px] text-zinc-500">
+                  {isEn
+                    ? 'Settled or cancelled checks leave this screen automatically to keep operations clutter-free.'
+                    : 'تختفي الشيكات تلقائياً من هذه الشاشة فور التحصيل أو الإلغاء لمنع التكدس.'}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {supervisoryMode && coveringStaffName && (
+                  <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-lg">
+                    إشراف على وردية: {coveringStaffName}
+                  </span>
+                )}
+                {onOpenShiftReports && (
+                  <button
+                    type="button"
+                    onClick={onOpenShiftReports}
+                    className="px-3 py-1.5 rounded-xl border border-zinc-300 bg-white hover:bg-zinc-50 text-[11px] font-extrabold text-zinc-800 inline-flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Receipt className="w-3.5 h-3.5 text-amber-600" />
+                    <span>
+                      {isEn
+                        ? 'Closed Checks Archive (Reports)'
+                        : 'مراجعة الشيكات المغلقة بالتقارير ↗'}
+                    </span>
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1">
@@ -1949,8 +2076,6 @@ export function LiveOrdersTab({
                 { id: 'all' as const, label: `${t.admin.orders.filterAll} (${visibleLedgerOrders.length})` },
                 { id: 'pending' as const, label: t.admin.orders.statsPending },
                 { id: 'preparing' as const, label: t.admin.orders.statsPreparing },
-                { id: 'completed' as const, label: t.admin.orders.statusCompleted },
-                { id: 'cancelled' as const, label: t.admin.orders.statusCancelled },
               ].map((tab) => (
                 <button
                   key={tab.id}
@@ -2284,6 +2409,8 @@ export function LiveOrdersTab({
               </div>
             )}
           </section>
+            </>
+          )}
         </div>
       )}
 

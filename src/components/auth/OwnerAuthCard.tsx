@@ -1,5 +1,6 @@
 import { FormEvent, useState } from 'react';
 import {
+  User,
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
@@ -22,7 +23,7 @@ import { auth, googleAuthProvider } from '../../lib/firebase';
 import { ensureUserProfile } from '../../lib/firestoreService';
 
 interface OwnerAuthCardProps {
-  onSuccess?: () => void;
+  onSuccess?: (user?: User) => void;
   compact?: boolean;
 }
 
@@ -148,12 +149,14 @@ export function OwnerAuthCard({ onSuccess, compact = false }: OwnerAuthCardProps
 
     setLoading(true);
     try {
+      let signedInUser: User;
       if (mode === 'register') {
         const displayName =
           fullName.trim() || cleanEmail.split('@')[0] || (isEn ? 'Restaurant Owner' : 'صاحب مطعم');
         const cred = await createUserWithEmailAndPassword(auth, cleanEmail, password);
         await updateProfile(cred.user, { displayName });
         await ensureUserProfile(cred.user.uid, cleanEmail, displayName);
+        signedInUser = cred.user;
       } else {
         const cred = await signInWithEmailAndPassword(auth, cleanEmail, password);
         await ensureUserProfile(
@@ -161,8 +164,9 @@ export function OwnerAuthCard({ onSuccess, compact = false }: OwnerAuthCardProps
           cred.user.email || cleanEmail,
           cred.user.displayName || (isEn ? 'Restaurant Owner' : 'صاحب مطعم')
         );
+        signedInUser = cred.user;
       }
-      onSuccess?.();
+      onSuccess?.(signedInUser);
     } catch (err) {
       setErrorInfo(mapFirebaseAuthError(err, lang));
     } finally {
@@ -181,7 +185,7 @@ export function OwnerAuthCard({ onSuccess, compact = false }: OwnerAuthCardProps
         cred.user.email || '',
         cred.user.displayName || (isEn ? 'Restaurant Owner' : 'صاحب مطعم')
       );
-      onSuccess?.();
+      onSuccess?.(cred.user);
     } catch (err) {
       setErrorInfo(mapFirebaseAuthError(err, lang));
     } finally {

@@ -212,7 +212,7 @@ export async function createManagerOrStaffAccount(
         ? input.allowedScreens.length > 0
           ? input.allowedScreens
           : ['staff_management', 'cashier', 'kitchen', 'bar', 'pastry', 'captain', 'halls']
-        : input.allowedScreens.filter((s) => s !== 'staff_management')
+        : input.allowedScreens.filter((s) => s !== 'staff_management' && s !== 'halls')
     )
   ).slice(0, 30);
 
@@ -806,7 +806,7 @@ export async function updateStaffPermissionsAndProfile(params: {
         ? rawScreens.length > 0
           ? rawScreens
           : ['staff_management', 'cashier', 'kitchen', 'bar', 'pastry', 'captain', 'halls']
-        : rawScreens.filter((s) => s !== 'staff_management')
+        : rawScreens.filter((s) => s !== 'staff_management' && s !== 'halls')
     )
   ).slice(0, 30);
 

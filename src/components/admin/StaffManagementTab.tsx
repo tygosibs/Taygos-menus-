@@ -105,6 +105,7 @@ const MANAGER_PERMISSION_LABELS: Array<{
   { key: 'canManageStaff', label: 'إضافة وترقية وإيقاف الموظفين', hint: 'تعيين وإيقاف (مؤقت/مفتوح) وفصل الموظفين' },
   { key: 'canConfigureOperations', label: 'ضبط مواعيد الورديات وألوان الطاولات', hint: 'تعديل جدول الورديات ووقت تأخير الترابيزة' },
   { key: 'canToggleScreenPrices', label: 'إظهار/إخفاء الأسعار على الشاشات', hint: 'التحكم بظهور الأسعار في المطبخ/البار/الكابتن' },
+  { key: 'canManageHalls', label: 'إدارة الصالات وأكواد QR للطاولات', hint: 'إنشاء وتعديل الصالات وتوليد وطباعة باركود الترابيزات' },
 ];
 
 const AUDIT_LABELS: Record<string, string> = {
@@ -290,8 +291,8 @@ export function StaffManagementTab({
   );
 
   const dynamicManagerScreens = useMemo(
-    () => getManagerScreensForStations(effectiveStations),
-    [effectiveStations]
+    () => getManagerScreensForStations(effectiveStations, opsConfig.managerPermissions.canManageHalls),
+    [effectiveStations, opsConfig.managerPermissions.canManageHalls]
   );
 
   const dynamicEmployeeAssignableScreens = useMemo<StaffScreen[]>(
@@ -299,7 +300,6 @@ export function StaffManagementTab({
       'cashier',
       ...effectiveStations.map((st) => stationIdToScreen(st.stationId)),
       'captain',
-      'halls',
     ],
     [effectiveStations]
   );
@@ -384,8 +384,16 @@ export function StaffManagementTab({
     setJobTitleInput(member.jobTitle || '');
     setRoleInput(member.role);
     setHallIdInput(member.hallId || '');
-    setAllowedScreensInput(member.allowedScreens || ['cashier']);
-    setDefaultScreenInput(member.defaultScreen || member.allowedScreens?.[0] || 'cashier');
+    const sanitizedScreens = (member.allowedScreens || ['cashier']).filter(
+      (s) => member.role === 'manager' || s !== 'halls'
+    );
+    const nextScreens: StaffScreen[] = sanitizedScreens.length > 0 ? sanitizedScreens : ['cashier'];
+    setAllowedScreensInput(nextScreens);
+    const preferredDefault =
+      member.defaultScreen && nextScreens.includes(member.defaultScreen)
+        ? member.defaultScreen
+        : nextScreens[0];
+    setDefaultScreenInput(preferredDefault);
     setUseOneTimeInvite(false);
     setDirectPasswordInput('');
     setFormError(null);
@@ -422,10 +430,13 @@ export function StaffManagementTab({
     const selectedHall = halls.find((h) => h.id === hallIdInput);
     const hallName = selectedHall ? selectedHall.name : editingMember?.hallName || '';
 
-    const finalScreens =
-      formKind === 'manager' || roleInput === 'manager'
-        ? Array.from(new Set([...dynamicManagerScreens, ...allowedScreensInput]))
-        : allowedScreensInput;
+    const isTargetManager = formKind === 'manager' || roleInput === 'manager';
+    const rawCombinedScreens = isTargetManager
+      ? Array.from(new Set([...dynamicManagerScreens, ...allowedScreensInput]))
+      : allowedScreensInput.filter((s) => s !== 'halls' && s !== 'staff_management');
+    const finalScreens = isTargetManager && !opsConfig.managerPermissions.canManageHalls
+      ? rawCombinedScreens.filter((s) => s !== 'halls')
+      : rawCombinedScreens;
 
     const extractedStations = Array.from(
       new Set(
@@ -1296,7 +1307,7 @@ export function StaffManagementTab({
                 </h3>
                 <p className="text-xs text-zinc-500 mt-0.5">
                   {formKind === 'manager'
-                    ? 'يحصل المدير تلقائياً على صلاحيات إدارة الكادر والشاشات والصالات دون صلاحيات المالك الحساسة.'
+                    ? 'يحصل المدير على صلاحيات إدارة الكادر والشاشات دون صلاحيات المالك الحساسة — وتُدار صلاحية الصالات و QR من مصفوفة صلاحيات المدير.'
                     : 'اختر الدور والشاشات المصرّح بها، ثم اختر طريقة التفعيل عبر QR لمرة واحدة أو كلمة مرور مباشرة.'}
                 </p>
               </div>

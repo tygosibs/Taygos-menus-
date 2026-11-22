@@ -193,6 +193,7 @@ export interface ManagerPermissions {
   canViewShiftReports: boolean;
   canEditDrawerFloat: boolean;
   canManageStaff: boolean;
+  canManageHalls: boolean;
   canConfigureOperations: boolean;
   canToggleScreenPrices: boolean;
 }

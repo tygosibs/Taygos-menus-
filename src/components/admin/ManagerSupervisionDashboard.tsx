@@ -300,6 +300,16 @@ export function ManagerSupervisionDashboard({
           <div className="px-3.5 py-2 rounded-xl bg-zinc-50 border border-zinc-200 text-xs font-bold text-zinc-700 font-mono-num">
             الورديات النشطة: <strong className="text-zinc-950">{activeShifts.length}</strong>
           </div>
+          {(isOwner || managerPerms.canManageHalls) && (
+            <button
+              type="button"
+              onClick={() => onNavigateScreen('halls')}
+              className="min-h-[40px] px-4 py-2 rounded-xl border border-zinc-300 bg-white hover:bg-zinc-50 text-xs font-extrabold text-zinc-900 inline-flex items-center gap-1.5 cursor-pointer"
+            >
+              <LayoutGrid className="w-4 h-4 text-amber-600" />
+              <span>الصالات وأكواد QR</span>
+            </button>
+          )}
           {canModifyOperations && (
             <button
               type="button"

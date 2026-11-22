@@ -1,15 +1,20 @@
 import { FormEvent, Fragment, useEffect, useMemo, useState } from 'react';
 import {
+  ArrowUpRight,
   Calendar,
   Columns,
+  Eye,
   FileSpreadsheet,
   Lock,
+  Printer,
+  Receipt,
   Search,
   ShieldAlert,
   Unlock,
   UserCheck,
   Vault,
   Wallet,
+  X,
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { subscribeOwnerOrders } from '../../lib/firestoreService';
@@ -88,7 +93,15 @@ export function OwnerShiftReportTab({
 
   // Daily operational report date
   const todayIso = useMemo(() => toIsoDateLocal(Date.now()), []);
+  const yesterdayIso = useMemo(() => toIsoDateLocal(Date.now() - 86400000), []);
   const [selectedDayIso, setSelectedDayIso] = useState(todayIso);
+
+  // Daily Checks Archive Filters & Check Inspection Modal
+  const [checkStatusFilter, setCheckStatusFilter] = useState<'all' | 'completed' | 'cancelled' | 'open'>('all');
+  const [checkTypeFilter, setCheckTypeFilter] = useState<'all' | 'dine_in' | 'pickup' | 'delivery'>('all');
+  const [checkShiftFilter, setCheckShiftFilter] = useState<string>('all');
+  const [checkSearchQuery, setCheckSearchQuery] = useState('');
+  const [selectedCheckOrder, setSelectedCheckOrder] = useState<Order | null>(null);
 
   // Matrix filter & sticky mode
   const [fromDate, setFromDate] = useState(() => toIsoDateLocal(Date.now() - 13 * 86400000));
@@ -102,6 +115,19 @@ export function OwnerShiftReportTab({
   const [vaultNote, setVaultNote] = useState('');
   const [savingVault, setSavingVault] = useState(false);
   const [vaultMsg, setVaultMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    setCheckShiftFilter('all');
+  }, [selectedDayIso]);
+
+  useEffect(() => {
+    if (!selectedCheckOrder) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSelectedCheckOrder(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectedCheckOrder]);
 
   useEffect(() => {
     if (shiftsOverride) setShifts(shiftsOverride);
@@ -206,10 +232,19 @@ export function OwnerShiftReportTab({
         sensitiveEvents.has(log.eventType)
     );
 
+    const dayOrdersSorted = [...dayOrders].sort(
+      (a, b) =>
+        getTimestampMillis(b.closedAt || b.createdAt) -
+        getTimestampMillis(a.closedAt || a.createdAt)
+    );
+
     return {
       dayShifts,
+      dayCashierShifts,
+      dayOrders: dayOrdersSorted,
       dayOrdersCount: completedDayOrders.length,
       cancelledOrdersCount: dayOrders.filter((o) => o.status === 'cancelled').length,
+      openOrdersCount: dayOrders.filter((o) => o.status === 'pending' || o.status === 'preparing').length,
       cashSales,
       visaSales,
       variance,
@@ -220,6 +255,42 @@ export function OwnerShiftReportTab({
       dayExpensesList,
     };
   }, [shifts, orders, expenses, auditLogs, selectedDayIso]);
+
+  const shiftMap = useMemo(() => new Map(shifts.map((s) => [s.id, s])), [shifts]);
+
+  const filteredDayChecks = useMemo(() => {
+    const q = checkSearchQuery.trim().toLowerCase();
+    return dailySummary.dayOrders.filter((o) => {
+      if (checkStatusFilter === 'completed' && o.status !== 'completed') return false;
+      if (checkStatusFilter === 'cancelled' && o.status !== 'cancelled') return false;
+      if (checkStatusFilter === 'open' && o.status !== 'pending' && o.status !== 'preparing') {
+        return false;
+      }
+      if (checkTypeFilter !== 'all' && o.orderType !== checkTypeFilter) return false;
+      if (checkShiftFilter !== 'all' && o.shiftId !== checkShiftFilter) return false;
+      if (q) {
+        const hay = [
+          o.orderNumber,
+          o.customerName,
+          o.customerPhone,
+          o.tableNumber || '',
+          o.hallName || '',
+          o.closedByName || '',
+          o.createdByName || '',
+        ]
+          .join(' ')
+          .toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [
+    dailySummary.dayOrders,
+    checkStatusFilter,
+    checkTypeFilter,
+    checkShiftFilter,
+    checkSearchQuery,
+  ]);
 
   // Multi-day Shift Matrix rows
   const matrixData = useMemo(() => {
@@ -477,15 +548,39 @@ export function OwnerShiftReportTab({
                   ملخص تشغيل اليوم — {getArabicDayName(selectedDayIso)} ({selectedDayIso})
                 </h3>
                 <p className="text-xs text-zinc-500">
-                  يوضح كل ما تم خلال اليوم من مبيعات وحضور وانصراف الكادر وأي تعديلات أو خصومات.
+                  يوضح كل ما تم خلال اليوم من مبيعات وحضور وانصراف الكادر والشيكات المغلقة والملغاة وأي تعديلات.
                 </p>
               </div>
-              <input
-                type="date"
-                value={selectedDayIso}
-                onChange={(e) => setSelectedDayIso(e.target.value || todayIso)}
-                className="px-3.5 py-2 rounded-xl border border-zinc-300 text-xs font-mono-num font-bold"
-              />
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedDayIso(todayIso)}
+                  className={`px-3 py-2 rounded-xl border text-xs font-extrabold cursor-pointer ${
+                    selectedDayIso === todayIso
+                      ? 'bg-zinc-950 text-white border-zinc-950'
+                      : 'bg-zinc-50 text-zinc-700 border-zinc-200 hover:bg-zinc-100'
+                  }`}
+                >
+                  اليوم
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedDayIso(yesterdayIso)}
+                  className={`px-3 py-2 rounded-xl border text-xs font-extrabold cursor-pointer ${
+                    selectedDayIso === yesterdayIso
+                      ? 'bg-zinc-950 text-white border-zinc-950'
+                      : 'bg-zinc-50 text-zinc-700 border-zinc-200 hover:bg-zinc-100'
+                  }`}
+                >
+                  أمس
+                </button>
+                <input
+                  type="date"
+                  value={selectedDayIso}
+                  onChange={(e) => setSelectedDayIso(e.target.value || todayIso)}
+                  className="px-3.5 py-2 rounded-xl border border-zinc-300 text-xs font-mono-num font-bold"
+                />
+              </div>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -570,6 +665,197 @@ export function OwnerShiftReportTab({
             )}
           </section>
 
+          {/* Daily Checks & Receipts Review Archive */}
+          <section className="bg-white border border-zinc-200 rounded-2xl overflow-hidden">
+            <div className="px-5 py-4 bg-zinc-50 border-b border-zinc-200 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+              <div>
+                <h4 className="text-xs sm:text-sm font-extrabold text-zinc-950 flex items-center gap-2">
+                  <Receipt className="w-4 h-4 text-amber-600" />
+                  <span>
+                    سجل شيكات وفواتير اليوم ({filteredDayChecks.length} من {dailySummary.dayOrders.length})
+                  </span>
+                </h4>
+                <p className="text-[11px] text-zinc-500 mt-0.5">
+                  اضغط على أي شيك لعرض تفاصيل الأصناف والخصومات وطريقة التحصيل أو طباعة نسخة الريسيت.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {(
+                  [
+                    { id: 'all' as const, label: `الكل (${dailySummary.dayOrders.length})` },
+                    { id: 'completed' as const, label: `المحصّلة (${dailySummary.dayOrdersCount})` },
+                    { id: 'cancelled' as const, label: `الملغاة (${dailySummary.cancelledOrdersCount})` },
+                    { id: 'open' as const, label: `المفتوحة (${dailySummary.openOrdersCount})` },
+                  ]
+                ).map((stTab) => (
+                  <button
+                    key={stTab.id}
+                    type="button"
+                    onClick={() => setCheckStatusFilter(stTab.id)}
+                    className={`px-3 py-1.5 rounded-lg text-[11px] font-extrabold cursor-pointer ${
+                      checkStatusFilter === stTab.id
+                        ? 'bg-zinc-950 text-white'
+                        : 'bg-white border border-zinc-200 text-zinc-700 hover:bg-zinc-100'
+                    }`}
+                  >
+                    {stTab.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="px-5 py-3 border-b border-zinc-100 grid grid-cols-1 sm:grid-cols-3 gap-2.5 bg-white">
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-zinc-400 absolute start-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="search"
+                  value={checkSearchQuery}
+                  onChange={(e) => setCheckSearchQuery(e.target.value)}
+                  placeholder="بحث برقم الشيك أو الطاولة أو العميل أو الكاشير..."
+                  className="w-full ps-8 pe-3 py-2 rounded-xl border border-zinc-200 text-xs"
+                />
+              </div>
+
+              <select
+                value={checkTypeFilter}
+                onChange={(e) =>
+                  setCheckTypeFilter(e.target.value as 'all' | 'dine_in' | 'pickup' | 'delivery')
+                }
+                className="px-3 py-2 rounded-xl border border-zinc-200 text-xs font-bold bg-white"
+              >
+                <option value="all">كل أنواع الطلبات</option>
+                <option value="dine_in">صالة (طاولات)</option>
+                <option value="pickup">تيك أواي (استلام)</option>
+                <option value="delivery">دليفري (توصيل)</option>
+              </select>
+
+              <select
+                value={checkShiftFilter}
+                onChange={(e) => setCheckShiftFilter(e.target.value)}
+                className="px-3 py-2 rounded-xl border border-zinc-200 text-xs font-bold bg-white"
+              >
+                <option value="all">كل ورديات هذا اليوم</option>
+                {dailySummary.dayCashierShifts.map((sh) => (
+                  <option key={sh.id} value={sh.id}>
+                    {sh.shiftSlotName || 'وردية'} — {sh.staffName} ({formatShortTime(sh.startedAt)})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {filteredDayChecks.length === 0 ? (
+              <div className="p-8 text-center text-xs text-zinc-500">
+                لا توجد شيكات مطابقة في هذا التاريخ أو الفلتر المحدد.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-start">
+                  <thead className="bg-zinc-50/80 text-zinc-600 border-b border-zinc-200">
+                    <tr>
+                      <th className="py-2.5 px-4 font-extrabold text-start">رقم الشيك</th>
+                      <th className="py-2.5 px-4 font-extrabold text-start">النوع / الطاولة</th>
+                      <th className="py-2.5 px-4 font-extrabold text-start">العميل</th>
+                      <th className="py-2.5 px-4 font-extrabold text-start">الدفع</th>
+                      <th className="py-2.5 px-4 font-extrabold text-start">الإجمالي</th>
+                      <th className="py-2.5 px-4 font-extrabold text-start">الحالة والمُغلق</th>
+                      <th className="py-2.5 px-4 font-extrabold text-start">الوقت</th>
+                      <th className="py-2.5 px-4 font-extrabold text-end">مراجعة</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-100">
+                    {filteredDayChecks.map((ord) => {
+                      const totalDisc =
+                        Number(ord.discountAmount || 0) + Number(ord.manualDiscountAmount || 0);
+                      const typeText =
+                        ord.orderType === 'dine_in'
+                          ? `صالة${ord.hallName ? ` · ${ord.hallName}` : ''} · طاولة ${ord.tableNumber || '-'}`
+                          : ord.orderType === 'delivery'
+                            ? 'دليفري'
+                            : 'تيك أواي';
+                      const payText =
+                        ord.status === 'cancelled'
+                          ? 'ملغي'
+                          : ord.paymentMethod === 'visa'
+                            ? 'فيزا 💳'
+                            : ord.paymentMethod === 'split'
+                              ? 'مختلط'
+                              : ord.status === 'completed'
+                                ? 'كاش 💵'
+                                : 'غير محصّل';
+                      return (
+                        <tr
+                          key={ord.id}
+                          onClick={() => setSelectedCheckOrder(ord)}
+                          className="hover:bg-amber-50/40 cursor-pointer transition-colors"
+                        >
+                          <td className="py-2.5 px-4 font-mono-num font-extrabold text-zinc-950 whitespace-nowrap">
+                            #{ord.orderNumber}
+                          </td>
+                          <td className="py-2.5 px-4 text-zinc-700 font-semibold whitespace-nowrap">
+                            {typeText}
+                          </td>
+                          <td className="py-2.5 px-4 text-zinc-800">
+                            <span className="font-bold">{ord.customerName}</span>
+                            {ord.customerPhone && (
+                              <span className="block text-[10px] font-mono-num text-zinc-400">
+                                {ord.customerPhone}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-4 font-bold text-zinc-700 whitespace-nowrap">
+                            {payText}
+                          </td>
+                          <td className="py-2.5 px-4 font-mono-num whitespace-nowrap">
+                            <span className="font-extrabold text-zinc-950">
+                              {formatMoney(ord.total)}
+                            </span>
+                            {totalDisc > 0 && (
+                              <span className="block text-[10px] text-indigo-700 font-bold">
+                                خصم -{formatMoney(totalDisc)}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-4 whitespace-nowrap">
+                            {ord.status === 'completed' ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-extrabold">
+                                محصّل{ord.closedByName ? ` · ${ord.closedByName}` : ''}
+                              </span>
+                            ) : ord.status === 'cancelled' ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-50 text-rose-800 border border-rose-200 text-[10px] font-extrabold">
+                                ملغي
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-extrabold">
+                                مفتوح الآن
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-4 font-mono-num text-zinc-500 whitespace-nowrap">
+                            {formatShortTime(ord.closedAt || ord.createdAt)}
+                          </td>
+                          <td className="py-2.5 px-4 text-end whitespace-nowrap">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedCheckOrder(ord);
+                              }}
+                              className="px-2.5 py-1 rounded-lg border border-zinc-200 bg-white hover:bg-zinc-950 hover:text-white text-[11px] font-extrabold inline-flex items-center gap-1 cursor-pointer transition-colors"
+                            >
+                              <Eye className="w-3 h-3" />
+                              <span>عرض</span>
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
           {/* Sensitive Audit Events (Modifications / Cancellations / Discounts / Suspensions) */}
           <section className="bg-white border border-zinc-200 rounded-2xl overflow-hidden">
             <div className="px-5 py-3.5 bg-zinc-50 border-b border-zinc-200 flex items-center justify-between">
@@ -642,18 +928,38 @@ export function OwnerShiftReportTab({
               </label>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setStickyMode((m) => (m === 'side_day' ? 'top_header' : 'side_day'))}
-              className="min-h-[40px] px-3.5 py-2 rounded-xl border border-zinc-300 bg-zinc-50 hover:bg-zinc-100 text-xs font-extrabold text-zinc-900 inline-flex items-center gap-1.5 shrink-0 cursor-pointer"
-            >
-              <Columns className="w-4 h-4 text-indigo-600" />
-              <span>
-                {stickyMode === 'side_day'
-                  ? 'التثبيت الحالي: عمود اليوم والتاريخ (اضغط للتبديل للرأس العلوي)'
-                  : 'التثبيت الحالي: الرأس العلوي (اضغط للتبديل لعمود اليوم)'}
-              </span>
-            </button>
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              {[
+                { days: 0, label: 'اليوم' },
+                { days: 6, label: '7 أيام' },
+                { days: 13, label: '14 يوماً' },
+                { days: 29, label: '30 يوماً' },
+              ].map((preset) => (
+                <button
+                  key={preset.label}
+                  type="button"
+                  onClick={() => {
+                    setToDate(todayIso);
+                    setFromDate(toIsoDateLocal(Date.now() - preset.days * 86400000));
+                  }}
+                  className="min-h-[38px] px-3 py-1.5 rounded-xl border border-zinc-200 bg-white hover:bg-zinc-100 text-[11px] font-extrabold text-zinc-800 cursor-pointer"
+                >
+                  {preset.label}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setStickyMode((m) => (m === 'side_day' ? 'top_header' : 'side_day'))}
+                className="min-h-[40px] px-3.5 py-2 rounded-xl border border-zinc-300 bg-zinc-50 hover:bg-zinc-100 text-xs font-extrabold text-zinc-900 inline-flex items-center gap-1.5 shrink-0 cursor-pointer"
+              >
+                <Columns className="w-4 h-4 text-indigo-600" />
+                <span>
+                  {stickyMode === 'side_day'
+                    ? 'التثبيت: عمود اليوم (اضغط للتبديل)'
+                    : 'التثبيت: الرأس العلوي (اضغط للتبديل)'}
+                </span>
+              </button>
+            </div>
           </div>
 
           <div className="overflow-auto max-h-[65vh] border border-zinc-200 rounded-xl">
@@ -729,11 +1035,19 @@ export function OwnerShiftReportTab({
                   matrixData.rows.map((row) => (
                     <tr key={row.iso} className="hover:bg-zinc-50/70">
                       <td
-                        className={`py-2.5 px-3 font-extrabold text-zinc-950 border-e border-zinc-300 bg-white whitespace-nowrap ${
+                        onClick={() => {
+                          setSelectedDayIso(row.iso);
+                          setActiveSubTab('daily');
+                        }}
+                        title="اضغط لعرض تفاصيل هذا اليوم وشيكاته"
+                        className={`py-2.5 px-3 font-extrabold text-zinc-950 border-e border-zinc-300 bg-white hover:bg-amber-50/70 cursor-pointer whitespace-nowrap group ${
                           stickyMode === 'side_day' ? 'sticky right-0 z-10' : ''
                         }`}
                       >
-                        <div>{row.dayName}</div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span>{row.dayName}</span>
+                          <ArrowUpRight className="w-3.5 h-3.5 text-amber-600 opacity-70 group-hover:opacity-100" />
+                        </div>
                         <div className="text-[11px] font-mono-num text-zinc-500">{row.iso}</div>
                       </td>
 
@@ -829,6 +1143,240 @@ export function OwnerShiftReportTab({
           </div>
         </section>
       )}
+
+      {/* Detailed Check & Printable Receipt Inspection Modal */}
+      {selectedCheckOrder && (() => {
+        const linkedShift = selectedCheckOrder.shiftId
+          ? shiftMap.get(selectedCheckOrder.shiftId)
+          : undefined;
+        const isLockedShift =
+          linkedShift?.status === 'completed' && !selectedCheckOrder.superAdminUnlocked;
+        return (
+          <div
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4"
+            onClick={() => setSelectedCheckOrder(null)}
+          >
+            <div
+              dir="rtl"
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-zinc-200 overflow-hidden"
+            >
+              <div className="px-5 py-3.5 bg-zinc-50 border-b border-zinc-200 flex items-center justify-between print:hidden">
+                <div className="flex items-center gap-2">
+                  <Receipt className="w-4 h-4 text-amber-600" />
+                  <span className="text-xs sm:text-sm font-extrabold text-zinc-950">
+                    تفاصيل ومراجعة الشيك #{selectedCheckOrder.orderNumber}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedCheckOrder(null)}
+                  aria-label="إغلاق"
+                  className="w-8 h-8 rounded-lg hover:bg-zinc-200 flex items-center justify-center cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="qr-bulk-print-area p-5 space-y-4 text-zinc-900 bg-white max-h-[72vh] overflow-y-auto print:max-h-none">
+                <div className="text-center border-b border-dashed border-zinc-300 pb-3 space-y-1">
+                  <h3 className="text-base font-extrabold">{restaurant.name}</h3>
+                  <p className="text-xs font-mono-num font-bold text-zinc-700">
+                    شيك رقم #{selectedCheckOrder.orderNumber} ·{' '}
+                    {selectedCheckOrder.orderType === 'dine_in'
+                      ? `صالة${selectedCheckOrder.hallName ? ` (${selectedCheckOrder.hallName})` : ''} · طاولة ${selectedCheckOrder.tableNumber || '-'}`
+                      : selectedCheckOrder.orderType === 'delivery'
+                        ? 'توصيل دليفري'
+                        : 'استلام تيك أواي'}
+                  </p>
+                  <p className="text-[11px] text-zinc-500">
+                    العميل: <strong className="text-zinc-900">{selectedCheckOrder.customerName}</strong>
+                    {selectedCheckOrder.customerPhone ? ` · ${selectedCheckOrder.customerPhone}` : ''}
+                  </p>
+                  <div className="flex flex-wrap items-center justify-center gap-2 pt-1 text-[10px] font-bold">
+                    <span
+                      className={`px-2 py-0.5 rounded-md border ${
+                        selectedCheckOrder.status === 'completed'
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                          : selectedCheckOrder.status === 'cancelled'
+                            ? 'bg-rose-50 text-rose-800 border-rose-200'
+                            : 'bg-amber-50 text-amber-800 border-amber-200'
+                      }`}
+                    >
+                      {selectedCheckOrder.status === 'completed'
+                        ? 'محصّل ومغلق'
+                        : selectedCheckOrder.status === 'cancelled'
+                          ? 'ملغي'
+                          : 'مفتوح'}
+                    </span>
+                    {linkedShift && (
+                      <span className="px-2 py-0.5 rounded-md bg-zinc-100 text-zinc-700 border border-zinc-200 inline-flex items-center gap-1">
+                        {isLockedShift ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
+                        <span>
+                          {linkedShift.shiftSlotName || 'وردية'} ({linkedShift.staffName})
+                        </span>
+                      </span>
+                    )}
+                    <span className="font-mono-num text-zinc-500">
+                      إنشاء: {formatShortTime(selectedCheckOrder.createdAt)}
+                      {selectedCheckOrder.closedAt
+                        ? ` · إقفال: ${formatShortTime(selectedCheckOrder.closedAt)}`
+                        : ''}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Items */}
+                <div className="space-y-2 border-b border-dashed border-zinc-300 pb-3">
+                  {selectedCheckOrder.items.map((item, idx) => (
+                    <div key={`${item.menuItemId}_${idx}`} className="flex items-start justify-between gap-2 text-xs">
+                      <div className="min-w-0">
+                        <p className="font-bold text-zinc-950">
+                          <span className="font-mono-num">{item.quantity}×</span> {item.name}
+                          {item.sizeName ? ` (${item.sizeName})` : ''}
+                          {item.guestName ? ` [${item.guestName}]` : ''}
+                        </p>
+                        {item.addonNames?.length > 0 && (
+                          <p className="text-[11px] text-zinc-500">+ {item.addonNames.join('، ')}</p>
+                        )}
+                        {item.notes && (
+                          <p className="text-[11px] text-amber-700 font-semibold">ملاحظة: {item.notes}</p>
+                        )}
+                      </div>
+                      <span className="font-mono-num font-bold text-zinc-900 shrink-0">
+                        {formatMoney(item.lineTotal)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Financial Totals */}
+                <div className="space-y-1.5 text-xs border-b border-dashed border-zinc-300 pb-3">
+                  <div className="flex justify-between">
+                    <span className="text-zinc-600">المجموع الفرعي</span>
+                    <span className="font-mono-num font-bold">{formatMoney(selectedCheckOrder.subtotal)}</span>
+                  </div>
+                  {Number(selectedCheckOrder.discountAmount || 0) > 0 && (
+                    <div className="flex justify-between text-emerald-700 font-bold">
+                      <span>
+                        خصم العرض{selectedCheckOrder.promoCode ? ` (${selectedCheckOrder.promoCode})` : ''}
+                      </span>
+                      <span className="font-mono-num">-{formatMoney(selectedCheckOrder.discountAmount || 0)}</span>
+                    </div>
+                  )}
+                  {Number(selectedCheckOrder.manualDiscountAmount || 0) > 0 && (
+                    <div className="flex justify-between text-indigo-700 font-bold">
+                      <span>خصم إداري خاص ({selectedCheckOrder.manualDiscountReason || 'إدارة'})</span>
+                      <span className="font-mono-num">
+                        -{formatMoney(selectedCheckOrder.manualDiscountAmount || 0)}
+                      </span>
+                    </div>
+                  )}
+                  {selectedCheckOrder.serviceCharge > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-zinc-600">رسوم الخدمة</span>
+                      <span className="font-mono-num">{formatMoney(selectedCheckOrder.serviceCharge)}</span>
+                    </div>
+                  )}
+                  {Number(selectedCheckOrder.deliveryFee || 0) > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-zinc-600">رسوم التوصيل</span>
+                      <span className="font-mono-num">{formatMoney(selectedCheckOrder.deliveryFee || 0)}</span>
+                    </div>
+                  )}
+                  {selectedCheckOrder.taxAmount > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-zinc-600">الضريبة</span>
+                      <span className="font-mono-num">{formatMoney(selectedCheckOrder.taxAmount)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-sm font-extrabold text-zinc-950 pt-1 border-t border-zinc-200">
+                    <span>الإجمالي النهائي</span>
+                    <span className="font-mono-num">{formatMoney(selectedCheckOrder.total)}</span>
+                  </div>
+                </div>
+
+                {/* Payment & Settlement Info */}
+                {selectedCheckOrder.status === 'completed' && (
+                  <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-200 text-xs space-y-1">
+                    <p className="font-extrabold text-zinc-900">
+                      وسيلة الدفع:{' '}
+                      {selectedCheckOrder.paymentMethod === 'visa'
+                        ? 'فيزا / بطاقة 💳'
+                        : selectedCheckOrder.paymentMethod === 'split'
+                          ? `مختلط (كاش ${formatMoney(selectedCheckOrder.cashPaidAmount || 0)} + فيزا ${formatMoney(selectedCheckOrder.visaPaidAmount || 0)})`
+                          : `كاش 💵 (${formatMoney(selectedCheckOrder.cashPaidAmount ?? selectedCheckOrder.total)})`}
+                    </p>
+                    {typeof selectedCheckOrder.customerCashTendered === 'number' &&
+                      selectedCheckOrder.customerCashTendered > 0 && (
+                        <p className="text-[11px] text-zinc-600 font-mono-num">
+                          المبلغ المستلم: {formatMoney(selectedCheckOrder.customerCashTendered)} · الباقي:{' '}
+                          {formatMoney(selectedCheckOrder.changeReturned || 0)}
+                        </p>
+                      )}
+                    {selectedCheckOrder.closedByName && (
+                      <p className="text-[11px] text-zinc-600">
+                        أُغلق بواسطة: <strong>{selectedCheckOrder.closedByName}</strong>
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {selectedCheckOrder.cancelReason && (
+                  <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-900 font-bold">
+                    سبب الإلغاء: {selectedCheckOrder.cancelReason}
+                  </div>
+                )}
+
+                {(selectedCheckOrder.notes || selectedCheckOrder.tableNotes) && (
+                  <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-950 space-y-1">
+                    {selectedCheckOrder.notes && <p>ملاحظات الطلب: {selectedCheckOrder.notes}</p>}
+                    {selectedCheckOrder.tableNotes && (
+                      <p className="font-bold">ملاحظات الطاولة: {selectedCheckOrder.tableNotes}</p>
+                    )}
+                  </div>
+                )}
+
+                {selectedCheckOrder.adjustmentHistory && selectedCheckOrder.adjustmentHistory.length > 0 && (
+                  <div className="space-y-1.5 pt-1 print:hidden">
+                    <p className="text-[11px] font-extrabold text-zinc-700">سجل التعديلات على هذا الشيك:</p>
+                    <div className="space-y-1">
+                      {selectedCheckOrder.adjustmentHistory.map((adj, i) => (
+                        <div
+                          key={`${adj.at}_${i}`}
+                          className="p-2 rounded-lg bg-zinc-50 border border-zinc-200 text-[11px] text-zinc-700"
+                        >
+                          <span className="font-extrabold text-zinc-900">{adj.actorName}</span>:{' '}
+                          {adj.details || adj.action}
+                          {adj.reason ? ` — (${adj.reason})` : ''}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="px-5 py-3.5 bg-zinc-50 border-t border-zinc-200 flex items-center justify-end gap-2 print:hidden">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="px-4 py-2 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-extrabold inline-flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>طباعة نسخة الشيك</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedCheckOrder(null)}
+                  className="px-4 py-2 rounded-xl border border-zinc-300 bg-white hover:bg-zinc-100 text-xs font-bold text-zinc-800 cursor-pointer"
+                >
+                  إغلاق
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

@@ -259,7 +259,7 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
             <div className="flex items-center justify-between">
               <button
                 type="button"
-                onClick={() => onNavigate('/')}
+                onClick={() => setActiveTab('tenants')}
                 className="text-lg font-extrabold cursor-pointer flex items-center gap-2"
                 style={{ color: theme.sidebarText }}
               >
@@ -361,16 +361,16 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
                 style={{ borderColor: theme.sidebarBorder, color: theme.sidebarText }}
               >
                 <Store className="w-3.5 h-3.5" />
-                <span className="truncate">{t.superAdmin.backToOwner}</span>
+                <span className="truncate">{isEn ? 'Test Restaurant' : 'المطعم التجريبي'}</span>
               </button>
               <button
                 type="button"
-                onClick={() => onNavigate('/')}
+                onClick={() => onNavigate('/?view=landing')}
                 className={`py-2 px-3 border text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
                 style={{ borderColor: theme.sidebarBorder, color: theme.sidebarText }}
               >
-                {isRtl ? <ArrowRight className="w-3.5 h-3.5" /> : <ArrowLeft className="w-3.5 h-3.5" />}
-                <span className="truncate">{t.superAdmin.backToHome}</span>
+                <Globe className="w-3.5 h-3.5" />
+                <span className="truncate">{isEn ? 'Landing Preview' : 'معاينة الهبوط'}</span>
               </button>
             </div>
           </div>
@@ -383,16 +383,16 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
               style={{ borderColor: theme.sidebarBorder, color: theme.sidebarText }}
             >
               <Store className="w-3.5 h-3.5" />
-              <span>{t.superAdmin.backToOwner}</span>
+              <span>{isEn ? 'Open Test Restaurant' : 'فتح المطعم التجريبي'}</span>
             </button>
             <button
               type="button"
-              onClick={() => onNavigate('/')}
+              onClick={() => onNavigate('/?view=landing')}
               className={`w-full py-2 px-3 text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer opacity-80 hover:opacity-100 ${ui.radiusClasses.button}`}
               style={{ color: theme.sidebarText }}
             >
-              {isRtl ? <ArrowRight className="w-3.5 h-3.5" /> : <ArrowLeft className="w-3.5 h-3.5" />}
-              <span>{t.superAdmin.backToHome}</span>
+              <Globe className="w-3.5 h-3.5" />
+              <span>{isEn ? 'Preview Landing Page' : 'معاينة صفحة الهبوط'}</span>
             </button>
             <button
               type="button"
@@ -419,7 +419,7 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
           <div className="text-xs flex items-center gap-2 min-w-0 truncate" style={{ color: theme.mutedText }}>
             <button
               type="button"
-              onClick={() => onNavigate('/')}
+              onClick={() => setActiveTab('tenants')}
               className="font-semibold cursor-pointer shrink-0 hover:opacity-80"
               style={{ color: theme.headerText }}
             >
@@ -434,6 +434,17 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
           </div>
 
           <div className="flex items-center gap-2">
+            {activeTab !== 'tenants' && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('tenants')}
+                className={`px-3 py-1.5 text-xs font-extrabold cursor-pointer flex items-center gap-1 ${ui.radiusClasses.button}`}
+                style={{ backgroundColor: theme.accentHex, color: theme.accentTextHex }}
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>{isEn ? 'Super Admin Home' : 'الرئيسية'}</span>
+              </button>
+            )}
             {isTopDeck && (
               <button
                 type="button"
@@ -441,7 +452,7 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
                 className={`px-3 py-1.5 border text-xs font-bold cursor-pointer ${ui.radiusClasses.button}`}
                 style={{ borderColor: theme.surfaceBorder, color: theme.headerText }}
               >
-                {t.superAdmin.backToOwner}
+                {isEn ? 'Test Restaurant' : 'المطعم التجريبي'}
               </button>
             )}
             <div className={isTopDeck ? 'block' : 'hidden lg:block'}>
@@ -449,11 +460,12 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
             </div>
             <button
               type="button"
-              onClick={() => onNavigate('/')}
-              className={`px-3.5 py-1.5 border text-xs font-bold cursor-pointer ${ui.radiusClasses.button}`}
+              onClick={() => onNavigate('/?view=landing')}
+              className={`px-3.5 py-1.5 border text-xs font-bold flex items-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
               style={{ borderColor: theme.surfaceBorder, color: theme.headerText }}
             >
-              {t.superAdmin.backToHome}
+              <Globe className="w-3.5 h-3.5" />
+              <span>{isEn ? 'Landing Preview' : 'معاينة صفحة الهبوط'}</span>
             </button>
             {isTopDeck && (
               <button
