@@ -42,6 +42,7 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
   const { lang, t, dir, isRtl } = useLanguage();
   const isEn = lang === 'en';
   const ui = useScreenUi('super_admin');
+  const theme = ui.theme;
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [activeTab, setActiveTabState] = useState<SuperAdminTab>(() => {
@@ -99,10 +100,19 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
 
   if (!authReady) {
     return (
-      <div dir={dir} className="min-h-screen bg-zinc-50 flex items-center justify-center p-6">
+      <div
+        dir={dir}
+        className="min-h-screen flex items-center justify-center p-6"
+        style={{ backgroundColor: theme.canvasBg, color: theme.canvasText }}
+      >
         <div className="text-center space-y-2">
-          <div className="w-8 h-8 border-2 border-zinc-900 border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-sm font-semibold text-zinc-600">{t.superAdmin.title}...</p>
+          <div
+            className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin mx-auto"
+            style={{ borderColor: theme.accentHex, borderTopColor: 'transparent' }}
+          />
+          <p className="text-sm font-semibold" style={{ color: theme.mutedText }}>
+            {t.superAdmin.title}...
+          </p>
         </div>
       </div>
     );
@@ -111,22 +121,34 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
   // Gate 1: Require login
   if (!user) {
     return (
-      <div dir={dir} className="min-h-screen bg-[#FAFAFA] flex flex-col justify-between p-6">
+      <div
+        dir={dir}
+        className="min-h-screen flex flex-col justify-between p-6"
+        style={{ backgroundColor: theme.canvasBg, color: theme.canvasText }}
+      >
         <header className="max-w-5xl w-full mx-auto flex items-center justify-between gap-3">
           <button
             type="button"
             onClick={() => onNavigate('/')}
-            className="text-xl font-extrabold text-zinc-950 cursor-pointer flex items-center gap-2"
+            className="text-xl font-extrabold cursor-pointer flex items-center gap-2 hover:opacity-80"
+            style={{ color: theme.canvasText }}
           >
             <span>{t.brandName}</span>
-            <span className="text-xs font-bold text-amber-700">· {t.nav.superAdmin}</span>
+            <span className="text-xs font-bold" style={{ color: theme.highlightHex || '#E8833A' }}>
+              · {t.nav.superAdmin}
+            </span>
           </button>
           <div className="flex items-center gap-3">
             <LanguageToggleButton />
             <button
               type="button"
               onClick={() => onNavigate('/')}
-              className="text-xs font-bold text-zinc-600 hover:text-zinc-950 flex items-center gap-1 cursor-pointer"
+              className={`min-h-[40px] px-3 py-1.5 border text-xs font-bold flex items-center gap-1 cursor-pointer ${ui.radiusClasses.button}`}
+              style={{
+                backgroundColor: theme.surfaceBg,
+                borderColor: theme.surfaceBorder,
+                color: theme.surfaceText,
+              }}
             >
               {isRtl ? <ArrowRight className="w-3.5 h-3.5" /> : <ArrowLeft className="w-3.5 h-3.5" />}
               <span>{t.superAdmin.backToHome}</span>
@@ -135,14 +157,21 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
         </header>
 
         <main className="max-w-md w-full mx-auto my-8 space-y-4">
-          <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-900 font-semibold flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 shrink-0" />
+          <div
+            className={`p-4 border text-xs font-semibold flex items-center gap-2 ${ui.radiusClasses.card}`}
+            style={{
+              backgroundColor: theme.surfaceBg,
+              borderColor: theme.surfaceBorder,
+              color: theme.surfaceText,
+            }}
+          >
+            <ShieldCheck className="w-4 h-4 shrink-0" style={{ color: theme.highlightHex || '#E8833A' }} />
             <span>{t.superAdmin.loginRequiredDesc}</span>
           </div>
           <OwnerAuthCard />
         </main>
 
-        <footer className="text-center text-xs text-zinc-400">
+        <footer className="text-center text-xs" style={{ color: theme.mutedText }}>
           {t.brandName} · {t.superAdmin.title}
         </footer>
       </div>
@@ -152,18 +181,32 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
   // Gate 2: Strictly enforce tygosibs@gmail.com
   if (!isSuperAdminEmail(user.email)) {
     return (
-      <div dir={dir} className="min-h-screen bg-[#FAFAFA] flex items-center justify-center p-6">
-        <div className="max-w-md w-full bg-white border border-zinc-200 rounded-2xl p-8 text-center space-y-4 shadow-sm">
+      <div
+        dir={dir}
+        className="min-h-screen flex items-center justify-center p-6"
+        style={{ backgroundColor: theme.canvasBg, color: theme.canvasText }}
+      >
+        <div
+          className={`max-w-md w-full border p-8 text-center space-y-4 ${ui.radiusClasses.card}`}
+          style={{
+            backgroundColor: theme.surfaceBg,
+            borderColor: theme.surfaceBorder,
+            color: theme.surfaceText,
+            boxShadow: theme.cardShadow,
+          }}
+        >
           <div className="flex justify-end">
             <LanguageToggleButton compact />
           </div>
           <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
             <ShieldAlert className="w-6 h-6" />
           </div>
-          <h1 className="text-xl font-extrabold text-zinc-950">{t.superAdmin.accessDeniedTitle}</h1>
-          <p className="text-xs text-zinc-600 leading-relaxed">
+          <h1 className="text-xl font-extrabold" style={{ color: theme.surfaceText }}>
+            {t.superAdmin.accessDeniedTitle}
+          </h1>
+          <p className="text-xs leading-relaxed" style={{ color: theme.mutedText }}>
             {t.superAdmin.accessDeniedDesc}{' '}
-            <span className="font-mono-num font-bold text-zinc-900" dir="ltr">
+            <span className="font-mono-num font-bold" style={{ color: theme.surfaceText }} dir="ltr">
               ({user.email})
             </span>
           </p>
@@ -171,21 +214,27 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
             <button
               type="button"
               onClick={() => onNavigate('/admin')}
-              className="px-4 py-2.5 rounded-xl bg-zinc-950 text-white text-xs font-bold hover:bg-zinc-800 cursor-pointer"
+              className={`min-h-[42px] px-4 py-2.5 text-xs font-extrabold cursor-pointer ${ui.radiusClasses.button}`}
+              style={{ backgroundColor: theme.accentHex, color: theme.accentTextHex }}
             >
               {t.superAdmin.backToOwner}
             </button>
             <button
               type="button"
               onClick={() => onNavigate('/')}
-              className="px-4 py-2.5 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-700 hover:bg-zinc-50 cursor-pointer"
+              className={`min-h-[42px] px-4 py-2.5 border text-xs font-bold cursor-pointer ${ui.radiusClasses.button}`}
+              style={{
+                backgroundColor: theme.surfaceSubtleBg,
+                borderColor: theme.surfaceBorder,
+                color: theme.surfaceText,
+              }}
             >
               {t.superAdmin.backToHome}
             </button>
             <button
               type="button"
               onClick={() => setSignOutConfirmOpen(true)}
-              className="px-4 py-2.5 rounded-xl border border-rose-200 text-xs font-bold text-rose-700 hover:bg-rose-50 cursor-pointer"
+              className={`min-h-[42px] px-4 py-2.5 border border-rose-200 text-xs font-bold text-rose-700 hover:bg-rose-50 cursor-pointer ${ui.radiusClasses.button}`}
             >
               {t.admin.signOut}
             </button>
@@ -237,7 +286,6 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
   const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://suofra.vercel.app';
   const isTopDeck = ui.screenConfig.layoutStyle === 'top_deck';
   const isCompactRail = ui.screenConfig.layoutStyle === 'compact_rail';
-  const theme = ui.theme;
 
   return (
     <div
@@ -546,15 +594,22 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
           {activeTab === 'landing' && <LandingCmsTab />}
           {activeTab === 'domain' && (
             <div className="space-y-6">
-              <div className="bg-white border border-zinc-200 rounded-2xl p-6 space-y-2">
+              <div
+                className={`border p-6 space-y-2 ${ui.radiusClasses.card}`}
+                style={{
+                  backgroundColor: theme.surfaceBg,
+                  borderColor: theme.surfaceBorder,
+                  boxShadow: theme.cardShadow,
+                }}
+              >
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <h2 className="text-lg font-extrabold text-zinc-950">
+                    <h2 className="text-lg font-extrabold" style={{ color: theme.surfaceText }}>
                       {isEn
                         ? 'Custom Domain & Firebase Production Link Audit'
                         : 'حالة ربط النطاق الخارجي و Firebase'}
                     </h2>
-                    <p className="text-xs text-zinc-500 mt-0.5">
+                    <p className="text-xs mt-0.5" style={{ color: theme.mutedText }}>
                       {isEn
                         ? 'Verify suofra.vercel.app SPA routing, Firebase Auth domains, and Firestore connectivity.'
                         : 'مراجعة إعدادات النطاق suofra.vercel.app، توجيه الروابط SPA، وصلاحيات تسجيل الدخول وقاعدة البيانات.'}
@@ -564,7 +619,11 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
                     type="button"
                     disabled={testingConn}
                     onClick={handleTestFirestore}
-                    className="px-4 py-2 rounded-xl bg-zinc-950 text-white text-xs font-bold hover:bg-zinc-800 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                    className={`min-h-[42px] px-4 py-2 text-xs font-extrabold flex items-center gap-2 cursor-pointer disabled:opacity-50 ${ui.radiusClasses.button}`}
+                    style={{
+                      backgroundColor: theme.accentHex,
+                      color: theme.accentTextHex,
+                    }}
                   >
                     {testingConn && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                     <span>{isEn ? 'Test Firestore Connection' : 'فحص الاتصال بـ Firestore'}</span>
@@ -591,45 +650,71 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-white border border-zinc-200 rounded-2xl p-5 space-y-3">
-                  <h3 className="text-sm font-extrabold text-zinc-950">
+                <div
+                  className={`border p-5 space-y-3 ${ui.radiusClasses.card}`}
+                  style={{
+                    backgroundColor: theme.surfaceBg,
+                    borderColor: theme.surfaceBorder,
+                    boxShadow: theme.cardShadow,
+                  }}
+                >
+                  <h3 className="text-sm font-extrabold" style={{ color: theme.surfaceText }}>
                     {isEn ? 'Firebase Project Binding' : 'بيانات الربط النشطة في Firebase'}
                   </h3>
                   <div className="space-y-2 text-xs">
-                    <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-200 flex items-center justify-between gap-2">
-                      <span className="text-zinc-500 font-semibold">Project ID</span>
-                      <span className="font-mono-num font-bold text-zinc-900" dir="ltr">
+                    <div
+                      className="p-3 rounded-xl border flex items-center justify-between gap-2"
+                      style={{ backgroundColor: theme.surfaceSubtleBg, borderColor: theme.surfaceBorder }}
+                    >
+                      <span className="font-semibold" style={{ color: theme.mutedText }}>Project ID</span>
+                      <span className="font-mono-num font-bold" style={{ color: theme.surfaceText }} dir="ltr">
                         {firebaseConfig.projectId}
                       </span>
                     </div>
-                    <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-200 flex items-center justify-between gap-2">
-                      <span className="text-zinc-500 font-semibold">Auth Domain</span>
-                      <span className="font-mono-num font-bold text-zinc-900" dir="ltr">
+                    <div
+                      className="p-3 rounded-xl border flex items-center justify-between gap-2"
+                      style={{ backgroundColor: theme.surfaceSubtleBg, borderColor: theme.surfaceBorder }}
+                    >
+                      <span className="font-semibold" style={{ color: theme.mutedText }}>Auth Domain</span>
+                      <span className="font-mono-num font-bold" style={{ color: theme.surfaceText }} dir="ltr">
                         {firebaseConfig.authDomain}
                       </span>
                     </div>
-                    <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-200 flex items-center justify-between gap-2">
-                      <span className="text-zinc-500 font-semibold">Firestore DB ID</span>
-                      <span className="font-mono-num font-bold text-zinc-900 truncate" dir="ltr">
+                    <div
+                      className="p-3 rounded-xl border flex items-center justify-between gap-2"
+                      style={{ backgroundColor: theme.surfaceSubtleBg, borderColor: theme.surfaceBorder }}
+                    >
+                      <span className="font-semibold" style={{ color: theme.mutedText }}>Firestore DB ID</span>
+                      <span className="font-mono-num font-bold truncate" style={{ color: theme.surfaceText }} dir="ltr">
                         {firebaseConfig.firestoreDatabaseId}
                       </span>
                     </div>
-                    <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-200 flex items-center justify-between gap-2">
-                      <span className="text-zinc-500 font-semibold">Current Origin</span>
-                      <span className="font-mono-num font-bold text-zinc-900 truncate" dir="ltr">
+                    <div
+                      className="p-3 rounded-xl border flex items-center justify-between gap-2"
+                      style={{ backgroundColor: theme.surfaceSubtleBg, borderColor: theme.surfaceBorder }}
+                    >
+                      <span className="font-semibold" style={{ color: theme.mutedText }}>Current Origin</span>
+                      <span className="font-mono-num font-bold truncate" style={{ color: theme.surfaceText }} dir="ltr">
                         {currentOrigin}
                       </span>
                     </div>
                   </div>
                 </div>
 
-                <div className="bg-white border border-zinc-200 rounded-2xl p-5 space-y-3">
-                  <h3 className="text-sm font-extrabold text-zinc-950">
+                <div
+                  className={`border p-5 space-y-3 ${ui.radiusClasses.card}`}
+                  style={{
+                    backgroundColor: theme.surfaceBg,
+                    borderColor: theme.surfaceBorder,
+                    boxShadow: theme.cardShadow,
+                  }}
+                >
+                  <h3 className="text-sm font-extrabold" style={{ color: theme.surfaceText }}>
                     {isEn
                       ? 'Firebase Authorized Domains Checklist'
                       : 'نطاقات تسجيل الدخول المطلوبة في Firebase Console'}
                   </h3>
-                  <p className="text-xs text-zinc-600 leading-relaxed">
+                  <p className="text-xs leading-relaxed" style={{ color: theme.mutedText }}>
                     {isEn
                       ? 'Ensure the domains below are listed under Firebase Console → Authentication → Settings → Authorized domains so Google & Email Auth work seamlessly on production:'
                       : 'لضمان عمل تسجيل الدخول عبر Google والحسابات الجديدة على موقعك المباشر بدون أخطاء، تأكد من وجود هذه النطاقات في Firebase Console ← Authentication ← Settings ← Authorized domains:'}
@@ -641,15 +726,24 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
                       .map((domain) => (
                         <div
                           key={domain}
-                          className="p-3 rounded-xl bg-amber-50/70 border border-amber-200 flex items-center justify-between gap-3"
+                          className="p-3 rounded-xl border flex items-center justify-between gap-3"
+                          style={{
+                            backgroundColor: theme.surfaceSubtleBg,
+                            borderColor: theme.surfaceBorder,
+                          }}
                         >
-                          <span className="font-mono-num text-xs font-extrabold text-amber-950" dir="ltr">
+                          <span className="font-mono-num text-xs font-extrabold" style={{ color: theme.surfaceText }} dir="ltr">
                             {domain}
                           </span>
                           <button
                             type="button"
                             onClick={() => handleCopyText(domain, domain)}
-                            className="px-2.5 py-1 rounded-lg bg-white border border-amber-300 text-[11px] font-bold text-amber-900 hover:bg-amber-100 flex items-center gap-1 cursor-pointer"
+                            className={`min-h-[34px] px-3 py-1 border text-[11px] font-bold flex items-center gap-1 cursor-pointer ${ui.radiusClasses.button}`}
+                            style={{
+                              backgroundColor: theme.surfaceBg,
+                              borderColor: theme.surfaceBorder,
+                              color: theme.surfaceText,
+                            }}
                           >
                             {copiedKey === domain ? (
                               <>

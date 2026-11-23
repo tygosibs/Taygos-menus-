@@ -84,6 +84,7 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
   const { lang, t, dir, loc } = useLanguage();
   const isEn = lang === 'en';
   const ui = useScreenUi('owner_admin');
+  const ownerTheme = ui.theme;
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -323,10 +324,19 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
 
   if (!authReady || (user && loadingRestaurant)) {
     return (
-      <div dir={dir} className="min-h-screen bg-zinc-50 flex items-center justify-center p-6">
+      <div
+        dir={dir}
+        className="min-h-screen flex items-center justify-center p-6"
+        style={{ backgroundColor: ownerTheme.canvasBg, color: ownerTheme.canvasText }}
+      >
         <div className="text-center space-y-2">
-          <div className="w-8 h-8 border-2 border-zinc-900 border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-sm font-semibold text-zinc-600">{t.admin.loadingWorkspace}</p>
+          <div
+            className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin mx-auto"
+            style={{ borderColor: ownerTheme.accentHex, borderTopColor: 'transparent' }}
+          />
+          <p className="text-sm font-semibold" style={{ color: ownerTheme.mutedText }}>
+            {t.admin.loadingWorkspace}
+          </p>
         </div>
       </div>
     );
@@ -335,12 +345,17 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
   // Protected Auth Gate
   if (!user) {
     return (
-      <div dir={dir} className="min-h-screen bg-[#FAFAFA] flex flex-col justify-between p-4 sm:p-6">
+      <div
+        dir={dir}
+        className="min-h-screen flex flex-col justify-between p-4 sm:p-6"
+        style={{ backgroundColor: ownerTheme.canvasBg, color: ownerTheme.canvasText }}
+      >
         <header className="max-w-5xl w-full mx-auto flex flex-wrap items-center justify-between gap-3">
           <button
             type="button"
             onClick={() => onNavigate('/')}
-            className="text-lg sm:text-xl font-extrabold text-zinc-950 cursor-pointer flex items-center gap-2 hover:opacity-80"
+            className="text-lg sm:text-xl font-extrabold cursor-pointer flex items-center gap-2 hover:opacity-80"
+            style={{ color: ownerTheme.canvasText }}
           >
             <span>{t.brandName}</span>
           </button>
@@ -349,7 +364,12 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
             <button
               type="button"
               onClick={() => onNavigate('/menu/buns-lab')}
-              className="px-3 py-1.5 rounded-lg border border-zinc-200 bg-white text-xs font-bold text-zinc-700 hover:bg-zinc-50 cursor-pointer"
+              className={`min-h-[38px] px-3 py-1.5 border text-xs font-bold cursor-pointer ${ui.radiusClasses.button}`}
+              style={{
+                backgroundColor: ownerTheme.surfaceBg,
+                borderColor: ownerTheme.surfaceBorder,
+                color: ownerTheme.surfaceText,
+              }}
             >
               {t.landing.openDemoMenu}
             </button>
@@ -357,7 +377,12 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
               type="button"
               onClick={() => onNavigate('/')}
               aria-label={t.nav.home}
-              className="w-9 h-9 rounded-lg border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100 flex items-center justify-center cursor-pointer"
+              className={`w-9 h-9 border flex items-center justify-center cursor-pointer ${ui.radiusClasses.button}`}
+              style={{
+                backgroundColor: ownerTheme.surfaceBg,
+                borderColor: ownerTheme.surfaceBorder,
+                color: ownerTheme.surfaceText,
+              }}
             >
               <X className="w-4 h-4" />
             </button>
@@ -379,7 +404,7 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
           />
         </main>
 
-        <footer className="text-center text-xs text-zinc-400">
+        <footer className="text-center text-xs" style={{ color: ownerTheme.mutedText }}>
           {t.brandName} · {t.brandSubtitle}
         </footer>
       </div>
@@ -389,14 +414,26 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
   // First-time Onboarding if owner has no restaurant yet
   if (!restaurant) {
     return (
-      <div dir={dir} className="min-h-screen bg-[#FAFAFA] overflow-x-clip max-w-full">
-        <header className="bg-white border-b border-zinc-200 px-3 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-2.5">
+      <div
+        dir={dir}
+        className="min-h-screen overflow-x-clip max-w-full"
+        style={{ backgroundColor: ownerTheme.canvasBg, color: ownerTheme.canvasText }}
+      >
+        <header
+          className="border-b px-3 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-2.5"
+          style={{
+            backgroundColor: ownerTheme.headerBg,
+            borderColor: ownerTheme.headerBorder,
+            color: ownerTheme.headerText,
+          }}
+        >
           <button
             type="button"
             onClick={() => onNavigate('/')}
-            className="text-base sm:text-lg font-extrabold text-zinc-950 cursor-pointer flex items-center gap-1.5 hover:opacity-80"
+            className="text-base sm:text-lg font-extrabold cursor-pointer flex items-center gap-1.5 hover:opacity-80"
+            style={{ color: ownerTheme.headerText }}
           >
-            <Home className="w-4 h-4 text-zinc-500" />
+            <Home className="w-4 h-4" style={{ color: ownerTheme.accentHex }} />
             <span>{t.brandName}</span>
           </button>
           <div className="flex items-center gap-2">
@@ -405,7 +442,11 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
               <button
                 type="button"
                 onClick={() => onNavigate('/super-admin')}
-                className="px-2.5 sm:px-3.5 py-2 rounded-xl bg-amber-500 text-zinc-950 text-xs font-bold hover:bg-amber-400 flex items-center gap-1.5 cursor-pointer"
+                className={`min-h-[38px] px-2.5 sm:px-3.5 py-2 text-xs font-extrabold flex items-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
+                style={{
+                  backgroundColor: ownerTheme.highlightHex || '#E8833A',
+                  color: '#FFFFFF',
+                }}
               >
                 <ShieldCheck className="w-4 h-4" />
                 <span className="hidden sm:inline">{t.admin.superAdminBtn}</span>
@@ -414,7 +455,12 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
             <button
               type="button"
               onClick={() => setSignOutConfirmOpen(true)}
-              className="px-2.5 py-2 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-600 hover:text-zinc-950 hover:bg-zinc-50 flex items-center gap-1.5 cursor-pointer"
+              className={`min-h-[38px] px-2.5 py-2 border text-xs font-bold flex items-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
+              style={{
+                borderColor: ownerTheme.surfaceBorder,
+                color: ownerTheme.headerText,
+                backgroundColor: ownerTheme.surfaceSubtleBg,
+              }}
             >
               <LogOut className="w-4 h-4" />
               <span className="hidden sm:inline">{t.admin.signOut}</span>
@@ -423,7 +469,12 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
               type="button"
               onClick={() => onNavigate('/?view=landing')}
               aria-label={isEn ? 'Landing Preview' : 'معاينة صفحة الهبوط'}
-              className="w-9 h-9 rounded-xl border border-zinc-200 text-zinc-600 hover:bg-zinc-100 flex items-center justify-center cursor-pointer"
+              className={`w-9 h-9 border flex items-center justify-center cursor-pointer ${ui.radiusClasses.button}`}
+              style={{
+                borderColor: ownerTheme.surfaceBorder,
+                color: ownerTheme.headerText,
+                backgroundColor: ownerTheme.surfaceSubtleBg,
+              }}
             >
               <Globe className="w-4 h-4" />
             </button>
@@ -432,15 +483,30 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
 
         {staffPortalSlug ? (
           <main className="max-w-xl mx-auto mt-10 px-4 pb-12">
-            <div className="bg-white border-2 border-indigo-200 rounded-3xl p-6 sm:p-8 shadow-sm space-y-5 text-center">
-              <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-700 flex items-center justify-center mx-auto">
+            <div
+              className={`border-2 p-6 sm:p-8 space-y-5 text-center ${ui.radiusClasses.card}`}
+              style={{
+                backgroundColor: ownerTheme.surfaceBg,
+                borderColor: ownerTheme.surfaceBorder,
+                color: ownerTheme.surfaceText,
+                boxShadow: ownerTheme.cardShadow,
+              }}
+            >
+              <div
+                className="w-12 h-12 rounded-2xl border flex items-center justify-center mx-auto"
+                style={{
+                  backgroundColor: ownerTheme.surfaceSubtleBg,
+                  borderColor: ownerTheme.surfaceBorder,
+                  color: ownerTheme.accentHex,
+                }}
+              >
                 <ShieldCheck className="w-6 h-6" />
               </div>
               <div className="space-y-2">
-                <h1 className="text-lg sm:text-xl font-extrabold text-zinc-950">
+                <h1 className="text-lg sm:text-xl font-extrabold" style={{ color: ownerTheme.surfaceText }}>
                   {isEn ? 'You are signed in with a Staff Account' : 'أنت مسجّل الآن بحساب كادر / مدير مطعم'}
                 </h1>
-                <p className="text-xs sm:text-sm text-zinc-600 leading-relaxed">
+                <p className="text-xs sm:text-sm leading-relaxed" style={{ color: ownerTheme.mutedText }}>
                   {isEn
                     ? 'The /admin portal is reserved for restaurant owners. Open your Staff Portal directly, or sign out to switch to an owner account.'
                     : 'بوابة /admin مخصصة لمالكي المطاعم. افتح بوابة الكادر الخاصة بمطعمك مباشرة، أو سجّل الخروج للدخول بحساب مالك آخر.'}
@@ -450,14 +516,23 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
                 <button
                   type="button"
                   onClick={() => onNavigate(`/staff/${staffPortalSlug}`)}
-                  className="w-full sm:w-auto min-h-[44px] px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs sm:text-sm font-extrabold whitespace-nowrap cursor-pointer"
+                  className={`w-full sm:w-auto min-h-[44px] px-5 py-2.5 text-xs sm:text-sm font-extrabold whitespace-nowrap cursor-pointer ${ui.radiusClasses.button}`}
+                  style={{
+                    backgroundColor: ownerTheme.accentHex,
+                    color: ownerTheme.accentTextHex,
+                  }}
                 >
                   {isEn ? 'Open Staff Portal' : 'الانتقال لبوابة الكادر'}
                 </button>
                 <button
                   type="button"
                   onClick={() => setSignOutConfirmOpen(true)}
-                  className="w-full sm:w-auto min-h-[44px] px-5 py-2.5 rounded-xl border border-zinc-300 bg-white hover:bg-zinc-50 text-zinc-800 text-xs sm:text-sm font-bold whitespace-nowrap cursor-pointer"
+                  className={`w-full sm:w-auto min-h-[44px] px-5 py-2.5 border text-xs sm:text-sm font-bold whitespace-nowrap cursor-pointer ${ui.radiusClasses.button}`}
+                  style={{
+                    backgroundColor: ownerTheme.surfaceSubtleBg,
+                    borderColor: ownerTheme.surfaceBorder,
+                    color: ownerTheme.surfaceText,
+                  }}
                 >
                   {t.admin.signOut}
                 </button>
@@ -555,7 +630,6 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
     .map((id) => navMetaMap[id as AdminTab])
     .filter(Boolean);
 
-  const ownerTheme = ui.theme;
   const isOwnerTopDeck = ui.screenConfig.layoutStyle === 'top_deck';
   const isOwnerCompactRail = ui.screenConfig.layoutStyle === 'compact_rail';
 
@@ -1209,22 +1283,43 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
 
         {/* Tygos Cloud ERP Footer Banner */}
         <footer className="print:hidden px-3 sm:px-6 pb-6 pt-2 max-w-6xl w-full mx-auto">
-          <div className="rounded-2xl bg-zinc-950 text-white border border-zinc-800 p-4 sm:p-5 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div
+            className={`border p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${ui.radiusClasses.card}`}
+            style={{
+              backgroundColor: ownerTheme.sidebarBg,
+              borderColor: ownerTheme.sidebarBorder,
+              color: ownerTheme.sidebarText,
+              boxShadow: ownerTheme.cardShadow,
+            }}
+          >
             <div className="flex items-start gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-400/30 text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
+              <div
+                className="w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 mt-0.5"
+                style={{
+                  backgroundColor: 'rgba(255,255,255,0.08)',
+                  borderColor: ownerTheme.sidebarBorder,
+                  color: ownerTheme.highlightHex || '#E8833A',
+                }}
+              >
                 <Layers className="w-5 h-5" />
               </div>
               <div className="space-y-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 text-[11px] font-extrabold">
+                  <span
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-extrabold"
+                    style={{
+                      backgroundColor: 'rgba(255,255,255,0.12)',
+                      color: ownerTheme.highlightHex || '#E8833A',
+                    }}
+                  >
                     <Sparkles className="w-3 h-3" />
                     <span>Tygos Cloud ERP</span>
                   </span>
-                  <span className="text-[11px] text-zinc-400 font-semibold">
+                  <span className="text-[11px] font-semibold" style={{ color: ownerTheme.sidebarMuted }}>
                     {isEn ? 'Enterprise Hospitality Suite' : 'منظومة الإدارة السحابية للمطاعم والكافيهات'}
                   </span>
                 </div>
-                <p className="text-xs sm:text-sm font-bold text-zinc-100 leading-relaxed">
+                <p className="text-xs sm:text-sm font-bold leading-relaxed" style={{ color: ownerTheme.sidebarText }}>
                   {isEn
                     ? 'Want to connect these screens to inventory, recipe costing, integrated POS, and full accounting? Discover the complete Tygos Cloud ERP.'
                     : 'هل تريد ربط هذه الشاشات بالمخازن، التكاليف، نقاط البيع، والحسابات المتكاملة؟ اكتشف منظومة تايجوس (Tygos) السحابية الكاملة'}
@@ -1234,7 +1329,11 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
             <button
               type="button"
               onClick={() => setTygosModalOpen(true)}
-              className="w-full sm:w-auto shrink-0 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-extrabold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              className={`w-full sm:w-auto shrink-0 min-h-[42px] px-4 py-2.5 text-xs font-extrabold flex items-center justify-center gap-1.5 transition-opacity hover:opacity-95 cursor-pointer ${ui.radiusClasses.button}`}
+              style={{
+                backgroundColor: ownerTheme.highlightHex || '#E8833A',
+                color: '#FFFFFF',
+              }}
             >
               <span>{isEn ? 'Discover Tygos Cloud' : 'اكتشف منظومة تايجوس'}</span>
               <ArrowUpRight className="w-4 h-4" />
@@ -1246,23 +1345,34 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
       {/* Tygos Cloud ERP Overview Modal */}
       {tygosModalOpen && (
         <div
-          className="print:hidden fixed inset-0 z-50 bg-zinc-950/60 backdrop-blur-xs flex items-center justify-center p-4"
+          className="print:hidden fixed inset-0 z-50 bg-black/55 backdrop-blur-xs flex items-center justify-center p-4"
           onClick={() => setTygosModalOpen(false)}
         >
           <div
-            className="bg-white rounded-3xl border border-zinc-200 max-w-lg w-full p-5 sm:p-6 space-y-5 shadow-2xl"
+            className="rounded-3xl border max-w-lg w-full p-5 sm:p-6 space-y-5 shadow-2xl"
+            style={{
+              backgroundColor: ownerTheme.surfaceBg,
+              borderColor: ownerTheme.surfaceBorder,
+              color: ownerTheme.surfaceText,
+            }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-3">
               <div className="space-y-1">
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-950 text-amber-400 text-[11px] font-extrabold">
+                <span
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-extrabold"
+                  style={{
+                    backgroundColor: ownerTheme.sidebarBg,
+                    color: ownerTheme.highlightHex || '#E8833A',
+                  }}
+                >
                   <Sparkles className="w-3.5 h-3.5" />
                   <span>Tygos Cloud ERP</span>
                 </span>
-                <h3 className="text-lg font-extrabold text-zinc-950 pt-1">
+                <h3 className="text-lg font-extrabold pt-1" style={{ color: ownerTheme.surfaceText }}>
                   {isEn ? 'Full Restaurant Operations & ERP Integration' : 'منظومة تايجوس (Tygos) السحابية الكاملة'}
                 </h3>
-                <p className="text-xs text-zinc-600 leading-relaxed">
+                <p className="text-xs leading-relaxed" style={{ color: ownerTheme.mutedText }}>
                   {isEn
                     ? 'Upgrade from QR ordering & KDS screens to end-to-end financial, inventory, and branch control.'
                     : 'اربط شاشات الصالة والمطبخ والكاشير في سُفرة مباشرة بإدارة التشغيل الكاملة للمطاعم والسلاسل.'}
@@ -1272,7 +1382,12 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
                 type="button"
                 onClick={() => setTygosModalOpen(false)}
                 aria-label={isEn ? 'Close' : 'إغلاق'}
-                className="w-9 h-9 rounded-xl border border-zinc-200 text-zinc-600 hover:bg-zinc-100 flex items-center justify-center cursor-pointer shrink-0"
+                className="w-9 h-9 rounded-xl border flex items-center justify-center cursor-pointer shrink-0"
+                style={{
+                  backgroundColor: ownerTheme.surfaceSubtleBg,
+                  borderColor: ownerTheme.surfaceBorder,
+                  color: ownerTheme.mutedText,
+                }}
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1303,12 +1418,21 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
               ].map((mod) => {
                 const Icon = mod.icon;
                 return (
-                  <div key={mod.title} className="p-3.5 rounded-2xl bg-zinc-50 border border-zinc-200 space-y-1.5">
-                    <div className="flex items-center gap-2 text-zinc-950 font-extrabold text-xs">
-                      <Icon className="w-4 h-4 text-amber-600 shrink-0" />
+                  <div
+                    key={mod.title}
+                    className="p-3.5 rounded-2xl border space-y-1.5"
+                    style={{
+                      backgroundColor: ownerTheme.surfaceSubtleBg,
+                      borderColor: ownerTheme.surfaceBorder,
+                    }}
+                  >
+                    <div className="flex items-center gap-2 font-extrabold text-xs" style={{ color: ownerTheme.surfaceText }}>
+                      <Icon className="w-4 h-4 shrink-0" style={{ color: ownerTheme.highlightHex || '#E8833A' }} />
                       <span>{mod.title}</span>
                     </div>
-                    <p className="text-[11px] text-zinc-600 leading-relaxed">{mod.desc}</p>
+                    <p className="text-[11px] leading-relaxed" style={{ color: ownerTheme.mutedText }}>
+                      {mod.desc}
+                    </p>
                   </div>
                 );
               })}
@@ -1319,7 +1443,7 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
                 href={tygosWhatsappHref}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex-1 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold flex items-center justify-center gap-2 transition-colors"
+                className="flex-1 min-h-[42px] py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold flex items-center justify-center gap-2 transition-colors"
               >
                 <MessageCircle className="w-4 h-4" />
                 <span>{isEn ? 'Request Tygos Demo via WhatsApp' : 'اطلب عرضاً توضيحياً لـ Tygos عبر واتساب'}</span>
@@ -1327,7 +1451,12 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
               <button
                 type="button"
                 onClick={() => setTygosModalOpen(false)}
-                className="py-3 px-4 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-700 hover:bg-zinc-50 cursor-pointer"
+                className="min-h-[42px] py-3 px-4 rounded-xl border text-xs font-bold cursor-pointer"
+                style={{
+                  backgroundColor: ownerTheme.surfaceSubtleBg,
+                  borderColor: ownerTheme.surfaceBorder,
+                  color: ownerTheme.surfaceText,
+                }}
               >
                 {isEn ? 'Continue Using Sufra' : 'العودة للوحة التحكم'}
               </button>
@@ -1339,7 +1468,7 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
       {/* Platform Promo Code Redemption Modal */}
       {promoModalOpen && (
         <div
-          className="print:hidden fixed inset-0 z-50 bg-zinc-950/60 backdrop-blur-xs flex items-center justify-center p-4"
+          className="print:hidden fixed inset-0 z-50 bg-black/55 backdrop-blur-xs flex items-center justify-center p-4"
           onClick={() => setPromoModalOpen(false)}
         >
           <form
@@ -1382,15 +1511,26 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
               }
             }}
             onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-3xl border border-zinc-200 max-w-md w-full p-5 sm:p-6 space-y-4 shadow-2xl"
+            className="rounded-3xl border max-w-md w-full p-5 sm:p-6 space-y-4 shadow-2xl"
+            style={{
+              backgroundColor: ownerTheme.surfaceBg,
+              borderColor: ownerTheme.surfaceBorder,
+              color: ownerTheme.surfaceText,
+            }}
           >
             <div className="flex items-start justify-between gap-3">
               <div className="space-y-1">
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-100 text-amber-900 text-[11px] font-extrabold">
+                <span
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-extrabold"
+                  style={{
+                    backgroundColor: ownerTheme.surfaceSubtleBg,
+                    color: ownerTheme.highlightHex || '#E8833A',
+                  }}
+                >
                   <Gift className="w-3.5 h-3.5" />
                   <span>{isEn ? 'Platform SaaS Gift' : 'هدية وكود خصم المنصة'}</span>
                 </span>
-                <h3 className="text-base font-extrabold text-zinc-950 pt-1">
+                <h3 className="text-base font-extrabold pt-1" style={{ color: ownerTheme.surfaceText }}>
                   {isEn ? 'Redeem Subscription Promo Code' : 'تفعيل كود خصم اشتراك سُفرة'}
                 </h3>
               </div>
@@ -1398,7 +1538,12 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
                 type="button"
                 onClick={() => setPromoModalOpen(false)}
                 aria-label={isEn ? 'Close' : 'إغلاق'}
-                className="w-9 h-9 rounded-xl border border-zinc-200 text-zinc-600 hover:bg-zinc-100 flex items-center justify-center cursor-pointer"
+                className="w-9 h-9 rounded-xl border flex items-center justify-center cursor-pointer"
+                style={{
+                  backgroundColor: ownerTheme.surfaceSubtleBg,
+                  borderColor: ownerTheme.surfaceBorder,
+                  color: ownerTheme.mutedText,
+                }}
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1421,7 +1566,7 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
             )}
 
             <div>
-              <label className="block text-xs font-bold text-zinc-700 mb-1.5">
+              <label className="block text-xs font-bold mb-1.5" style={{ color: ownerTheme.surfaceText }}>
                 {isEn ? 'Promo Code' : 'كود الخصم أو الهدية'}
               </label>
               <input
@@ -1432,7 +1577,12 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
                 value={promoCodeInput}
                 onChange={(e) => setPromoCodeInput(sanitizePlatformPromoCode(e.target.value))}
                 placeholder="BDAY50"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm font-mono-num font-bold uppercase focus:outline-none focus:border-zinc-900"
+                className="w-full px-3.5 py-2.5 rounded-xl border text-sm font-mono-num font-bold uppercase focus:outline-none"
+                style={{
+                  backgroundColor: ownerTheme.surfaceSubtleBg,
+                  borderColor: ownerTheme.surfaceBorder,
+                  color: ownerTheme.surfaceText,
+                }}
               />
             </div>
 
@@ -1443,14 +1593,23 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
               <button
                 type="button"
                 onClick={() => setPromoModalOpen(false)}
-                className="px-4 py-2.5 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-700 hover:bg-zinc-50 cursor-pointer"
+                className="min-h-[42px] px-4 py-2.5 rounded-xl border text-xs font-bold cursor-pointer"
+                style={{
+                  backgroundColor: ownerTheme.surfaceSubtleBg,
+                  borderColor: ownerTheme.surfaceBorder,
+                  color: ownerTheme.surfaceText,
+                }}
               >
                 {isEn ? 'Close' : 'إغلاق'}
               </button>
               <button
                 type="submit"
                 disabled={redeemingPromo || promoCodeInput.trim().length < 2}
-                className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-extrabold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                className="min-h-[42px] px-5 py-2.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                style={{
+                  backgroundColor: ownerTheme.accentHex,
+                  color: ownerTheme.accentTextHex,
+                }}
               >
                 {redeemingPromo ? (
                   <Loader2 className="w-4 h-4 animate-spin" />

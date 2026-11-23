@@ -157,6 +157,8 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
   const managerUi = useScreenUi('manager_console');
   const cashierUi = useScreenUi('cashier_kds');
   const captainUi = useScreenUi('captain_waiter');
+  const shellTheme = cashierUi.theme;
+  const shellRadius = cashierUi.radiusClasses;
 
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [loadingRest, setLoadingRest] = useState(true);
@@ -503,10 +505,14 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
 
   if (loadingRest || !authReady || (authUid && loadingStaff)) {
     return (
-      <div dir="rtl" className="min-h-screen bg-zinc-50 flex items-center justify-center p-6">
+      <div
+        dir="rtl"
+        className="min-h-screen flex items-center justify-center p-6"
+        style={{ backgroundColor: shellTheme.canvasBg, color: shellTheme.canvasText }}
+      >
         <div className="text-center space-y-2">
-          <Loader2 className="w-8 h-8 animate-spin text-zinc-900 mx-auto" />
-          <p className="text-xs sm:text-sm font-bold text-zinc-600">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto" style={{ color: shellTheme.accentHex }} />
+          <p className="text-xs sm:text-sm font-bold" style={{ color: shellTheme.mutedText }}>
             جاري تحميل بوابة الكادر...
           </p>
         </div>
@@ -516,17 +522,32 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
 
   if (!restaurant) {
     return (
-      <div dir="rtl" className="min-h-screen bg-[#F5F6F8] flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white border border-zinc-200 rounded-3xl p-6 text-center space-y-4">
+      <div
+        dir="rtl"
+        className="min-h-screen flex items-center justify-center p-4"
+        style={{ backgroundColor: shellTheme.canvasBg, color: shellTheme.canvasText }}
+      >
+        <div
+          className={`max-w-md w-full border p-6 text-center space-y-4 ${shellRadius.card}`}
+          style={{
+            backgroundColor: shellTheme.surfaceBg,
+            borderColor: shellTheme.surfaceBorder,
+            color: shellTheme.surfaceText,
+            boxShadow: shellTheme.cardShadow,
+          }}
+        >
           <AlertCircle className="w-10 h-10 text-rose-500 mx-auto" />
-          <h1 className="text-lg font-extrabold text-zinc-950">المطعم غير موجود</h1>
-          <p className="text-xs text-zinc-500">
+          <h1 className="text-lg font-extrabold" style={{ color: shellTheme.surfaceText }}>
+            المطعم غير موجود
+          </h1>
+          <p className="text-xs" style={{ color: shellTheme.mutedText }}>
             تأكد من صحة رابط صفحة الكادر الخاص بالمطعم (/staff/{slug}).
           </p>
           <button
             type="button"
             onClick={() => onNavigate('/')}
-            className="px-4 py-2.5 rounded-xl bg-zinc-950 text-white text-xs font-extrabold cursor-pointer"
+            className={`min-h-[42px] px-4 py-2.5 text-xs font-extrabold cursor-pointer ${shellRadius.button}`}
+            style={{ backgroundColor: shellTheme.accentHex, color: shellTheme.accentTextHex }}
           >
             العودة للرئيسية
           </button>
@@ -538,13 +559,22 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
   // Dedicated Suspension Block Screen
   if (suspendedNotice && !staff) {
     return (
-      <div dir="rtl" className="min-h-screen bg-[#F5F6F8] flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white border-2 border-rose-300 rounded-3xl p-6 sm:p-7 shadow-xl text-center space-y-4">
+      <div
+        dir="rtl"
+        className="min-h-screen flex items-center justify-center p-4"
+        style={{ backgroundColor: shellTheme.canvasBg, color: shellTheme.canvasText }}
+      >
+        <div
+          className="max-w-md w-full border-2 border-rose-300 rounded-3xl p-6 sm:p-7 shadow-xl text-center space-y-4"
+          style={{ backgroundColor: shellTheme.surfaceBg, color: shellTheme.surfaceText }}
+        >
           <span className="w-14 h-14 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
             <ShieldAlert className="w-7 h-7" />
           </span>
           <div className="space-y-1">
-            <h1 className="text-lg font-extrabold text-zinc-950">{restaurant.name}</h1>
+            <h1 className="text-lg font-extrabold" style={{ color: shellTheme.surfaceText }}>
+              {restaurant.name}
+            </h1>
             <p className="text-xs font-bold text-rose-700">تم تقييد الدخول لهذه الشاشة</p>
           </div>
           <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-xs sm:text-sm font-extrabold text-rose-950 leading-relaxed">
@@ -558,7 +588,8 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
                   setSuspendedNotice(null);
                   void signOut(auth);
                 }}
-                className="min-h-[42px] px-4 py-2 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-extrabold cursor-pointer"
+                className={`min-h-[42px] px-4 py-2 text-xs font-extrabold cursor-pointer ${shellRadius.button}`}
+                style={{ backgroundColor: shellTheme.accentHex, color: shellTheme.accentTextHex }}
               >
                 تسجيل الخروج والعودة
               </button>
@@ -566,7 +597,12 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
             <button
               type="button"
               onClick={() => setSuspendedNotice(null)}
-              className="min-h-[42px] px-4 py-2 rounded-xl border border-zinc-300 text-zinc-700 text-xs font-bold hover:bg-zinc-50 cursor-pointer"
+              className={`min-h-[42px] px-4 py-2 border text-xs font-bold cursor-pointer ${shellRadius.button}`}
+              style={{
+                backgroundColor: shellTheme.surfaceSubtleBg,
+                borderColor: shellTheme.surfaceBorder,
+                color: shellTheme.surfaceText,
+              }}
             >
               الدخول بحساب آخر
             </button>
@@ -579,17 +615,36 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
   // Forced password change screen (only if mustChangePassword === true)
   if (staff && staff.mustChangePassword) {
     return (
-      <div dir="rtl" className="min-h-screen bg-[#F5F6F8] flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white border border-zinc-200 rounded-3xl p-6 sm:p-7 shadow-lg space-y-5">
+      <div
+        dir="rtl"
+        className="min-h-screen flex items-center justify-center p-4"
+        style={{ backgroundColor: shellTheme.canvasBg, color: shellTheme.canvasText }}
+      >
+        <div
+          className="max-w-md w-full border rounded-3xl p-6 sm:p-7 space-y-5"
+          style={{
+            backgroundColor: shellTheme.surfaceBg,
+            borderColor: shellTheme.surfaceBorder,
+            color: shellTheme.surfaceText,
+            boxShadow: shellTheme.cardShadow,
+          }}
+        >
           <div className="space-y-1">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-extrabold">
+            <span
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-extrabold"
+              style={{
+                backgroundColor: shellTheme.surfaceSubtleBg,
+                borderColor: shellTheme.surfaceBorder,
+                color: shellTheme.highlightHex || '#E8833A',
+              }}
+            >
               <KeyRound className="w-3.5 h-3.5" />
               <span>تحديث كلمة المرور مطلوب</span>
             </span>
-            <h1 className="text-lg font-extrabold text-zinc-950 pt-1">
+            <h1 className="text-lg font-extrabold pt-1" style={{ color: shellTheme.surfaceText }}>
               مرحباً {staff.name}
             </h1>
-            <p className="text-xs text-zinc-600">
+            <p className="text-xs" style={{ color: shellTheme.mutedText }}>
               لأمان حسابك، يرجى تعيين كلمة مرور دائمة وقوية قبل بدء العمل في {restaurant.name}.
             </p>
           </div>
@@ -601,7 +656,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
           )}
 
           <form onSubmit={handleForcedPasswordSubmit} className="space-y-3">
-            <label className="block space-y-1 text-xs font-bold text-zinc-800">
+            <label className="block space-y-1 text-xs font-bold" style={{ color: shellTheme.surfaceText }}>
               <span>كلمة المرور الجديدة (8+ أحرف وأرقام) *</span>
               <input
                 type="password"
@@ -609,10 +664,15 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
                 dir="ltr"
                 value={newPw}
                 onChange={(e) => setNewPw(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900"
+                className="w-full px-3.5 py-2.5 rounded-xl border text-sm focus:outline-none"
+                style={{
+                  backgroundColor: shellTheme.surfaceSubtleBg,
+                  borderColor: shellTheme.surfaceBorder,
+                  color: shellTheme.surfaceText,
+                }}
               />
             </label>
-            <label className="block space-y-1 text-xs font-bold text-zinc-800">
+            <label className="block space-y-1 text-xs font-bold" style={{ color: shellTheme.surfaceText }}>
               <span>تأكيد كلمة المرور الجديدة *</span>
               <input
                 type="password"
@@ -620,13 +680,22 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
                 dir="ltr"
                 value={confirmPw}
                 onChange={(e) => setConfirmPw(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900"
+                className="w-full px-3.5 py-2.5 rounded-xl border text-sm focus:outline-none"
+                style={{
+                  backgroundColor: shellTheme.surfaceSubtleBg,
+                  borderColor: shellTheme.surfaceBorder,
+                  color: shellTheme.surfaceText,
+                }}
               />
             </label>
             <button
               type="submit"
               disabled={savingPw}
-              className="w-full min-h-[44px] rounded-xl bg-zinc-950 text-white text-sm font-extrabold hover:bg-zinc-800 cursor-pointer disabled:opacity-50"
+              className={`w-full min-h-[44px] text-sm font-extrabold cursor-pointer disabled:opacity-50 ${shellRadius.button}`}
+              style={{
+                backgroundColor: shellTheme.accentHex,
+                color: shellTheme.accentTextHex,
+              }}
             >
               {savingPw ? 'جاري الحفظ...' : 'حفظ كلمة المرور والدخول'}
             </button>
@@ -639,23 +708,41 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
   // Staff Login View (Not logged in or signed in with non-staff/other-tenant account)
   if (!staff) {
     return (
-      <div dir="rtl" className="min-h-screen bg-[#F5F6F8] flex flex-col justify-between p-4 sm:p-6">
+      <div
+        dir="rtl"
+        className="min-h-screen flex flex-col justify-between p-4 sm:p-6"
+        style={{ backgroundColor: shellTheme.canvasBg, color: shellTheme.canvasText }}
+      >
         <header className="max-w-4xl w-full mx-auto flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             {restaurant.logoUrl ? (
               <img
                 src={restaurant.logoUrl}
                 alt={restaurant.name}
-                className="w-9 h-9 rounded-xl object-cover border border-zinc-200 bg-white"
+                className="w-9 h-9 rounded-xl object-cover border"
+                style={{
+                  borderColor: shellTheme.surfaceBorder,
+                  backgroundColor: shellTheme.surfaceBg,
+                }}
               />
             ) : (
-              <div className="w-9 h-9 rounded-xl bg-zinc-950 text-amber-400 flex items-center justify-center font-extrabold text-sm">
+              <div
+                className="w-9 h-9 rounded-xl flex items-center justify-center font-extrabold text-sm"
+                style={{
+                  backgroundColor: shellTheme.sidebarBg,
+                  color: shellTheme.highlightHex || '#E8833A',
+                }}
+              >
                 <ShieldCheck className="w-5 h-5" />
               </div>
             )}
             <div>
-              <p className="text-sm font-extrabold text-zinc-950">{restaurant.name}</p>
-              <p className="text-[11px] text-zinc-500">بوابة دخول فريق العمل والكادر</p>
+              <p className="text-sm font-extrabold" style={{ color: shellTheme.canvasText }}>
+                {restaurant.name}
+              </p>
+              <p className="text-[11px]" style={{ color: shellTheme.mutedText }}>
+                بوابة دخول فريق العمل والكادر
+              </p>
             </div>
           </div>
 
@@ -671,23 +758,38 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
               <button
                 type="button"
                 onClick={() => signOut(auth)}
-                className="px-3.5 py-2 rounded-xl bg-amber-950 text-white font-bold cursor-pointer"
+                className="min-h-[40px] px-3.5 py-2 rounded-xl bg-amber-950 text-white font-bold cursor-pointer"
               >
                 تسجيل الخروج للعودة لدخول الكادر
               </button>
             </div>
           )}
 
-          <div className="bg-white border border-zinc-200 rounded-3xl p-6 sm:p-7 shadow-sm space-y-5">
+          <div
+            className="border rounded-3xl p-6 sm:p-7 space-y-5"
+            style={{
+              backgroundColor: shellTheme.surfaceBg,
+              borderColor: shellTheme.surfaceBorder,
+              color: shellTheme.surfaceText,
+              boxShadow: shellTheme.cardShadow,
+            }}
+          >
             <div className="space-y-1">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-800 text-[11px] font-extrabold">
+              <span
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-extrabold"
+                style={{
+                  backgroundColor: shellTheme.surfaceSubtleBg,
+                  borderColor: shellTheme.surfaceBorder,
+                  color: shellTheme.accentHex,
+                }}
+              >
                 <Lock className="w-3.5 h-3.5" />
                 <span>دخول آمن ومعزول للمطعم</span>
               </span>
-              <h1 className="text-xl font-extrabold text-zinc-950 pt-1">
+              <h1 className="text-xl font-extrabold pt-1" style={{ color: shellTheme.surfaceText }}>
                 {restaurant.name} — دخول الكادر
               </h1>
-              <p className="text-xs text-zinc-500 leading-relaxed">
+              <p className="text-xs leading-relaxed" style={{ color: shellTheme.mutedText }}>
                 سجّل الدخول باستخدام <strong>اسم المستخدم</strong> أو <strong>رقم الهاتف</strong> أو{' '}
                 <strong>البريد الإلكتروني</strong> وكلمة المرور.
               </p>
@@ -700,11 +802,11 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
             )}
 
             <form onSubmit={handleLoginSubmit} className="space-y-4">
-              <label className="block space-y-1.5 text-xs font-bold text-zinc-800">
+              <label className="block space-y-1.5 text-xs font-bold" style={{ color: shellTheme.surfaceText }}>
                 <div className="flex items-center justify-between gap-2">
                   <span>اسم المستخدم أو رقم الهاتف أو الإيميل *</span>
                   {detectedIdentifier && (
-                    <span className="text-[11px] text-indigo-700 font-extrabold">
+                    <span className="text-[11px] font-extrabold" style={{ color: shellTheme.highlightHex || '#E8833A' }}>
                       {detectedIdentifier}
                     </span>
                   )}
@@ -717,11 +819,16 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
                   placeholder="username / 01012345678 / email"
-                  className="w-full px-3.5 py-3 rounded-xl border border-zinc-300 text-sm font-mono-num focus:outline-none focus:ring-2 focus:ring-zinc-900"
+                  className="w-full px-3.5 py-3 rounded-xl border text-sm font-mono-num focus:outline-none"
+                  style={{
+                    backgroundColor: shellTheme.surfaceSubtleBg,
+                    borderColor: shellTheme.surfaceBorder,
+                    color: shellTheme.surfaceText,
+                  }}
                 />
               </label>
 
-              <label className="block space-y-1.5 text-xs font-bold text-zinc-800">
+              <label className="block space-y-1.5 text-xs font-bold" style={{ color: shellTheme.surfaceText }}>
                 <span>كلمة المرور *</span>
                 <div className="relative">
                   <input
@@ -732,13 +839,19 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full px-3.5 py-3 rounded-xl border border-zinc-300 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900"
+                    className="w-full px-3.5 py-3 rounded-xl border text-sm focus:outline-none"
+                    style={{
+                      backgroundColor: shellTheme.surfaceSubtleBg,
+                      borderColor: shellTheme.surfaceBorder,
+                      color: shellTheme.surfaceText,
+                    }}
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword((v) => !v)}
                     aria-label="إظهار أو إخفاء كلمة المرور"
-                    className="absolute inset-y-0 end-2 px-2 flex items-center text-zinc-400 hover:text-zinc-700 cursor-pointer"
+                    className="absolute inset-y-0 end-2 px-2 flex items-center cursor-pointer"
+                    style={{ color: shellTheme.mutedText }}
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -748,7 +861,11 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
               <button
                 type="submit"
                 disabled={loggingIn}
-                className="w-full min-h-[46px] px-4 py-3 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white text-sm font-extrabold inline-flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                className={`w-full min-h-[46px] px-4 py-3 text-sm font-extrabold inline-flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 ${shellRadius.button}`}
+                style={{
+                  backgroundColor: shellTheme.accentHex,
+                  color: shellTheme.accentTextHex,
+                }}
               >
                 {loggingIn ? (
                   <>
@@ -761,13 +878,13 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
               </button>
             </form>
 
-            <div className="pt-3 border-t border-zinc-100 text-[11px] text-zinc-500 leading-relaxed">
+            <div className="pt-3 border-t text-[11px] leading-relaxed" style={{ borderColor: shellTheme.surfaceBorder, color: shellTheme.mutedText }}>
               هل نسيت كلمة المرور؟ اطلب من مدير المطعم إصدار <strong>رابط دعوة QR جديد</strong> أو إرسال رابط استعادة للإيميل.
             </div>
           </div>
         </main>
 
-        <footer className="text-center text-[11px] text-zinc-400">
+        <footer className="text-center text-[11px]" style={{ color: shellTheme.mutedText }}>
           {restaurant.name} · بوابة تشغيل الكادر
         </footer>
       </div>

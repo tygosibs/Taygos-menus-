@@ -817,21 +817,39 @@ export function CaptainWaiterTab({
       dir={dir}
       className={
         isFullscreen
-          ? 'fixed inset-0 z-50 bg-[#F5F6F8] overflow-y-auto p-4 sm:p-6 space-y-5'
+          ? 'fixed inset-0 z-50 overflow-y-auto p-4 sm:p-6 space-y-5'
           : 'space-y-5'
+      }
+      style={
+        isFullscreen
+          ? { backgroundColor: ui.theme.canvasBg, color: ui.theme.canvasText }
+          : undefined
       }
     >
       {/* Captain Screen Header & Controls */}
-      <div className="bg-white border border-zinc-200 rounded-2xl p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div
+        className={`border p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 ${ui.radiusClasses.card}`}
+        style={{
+          backgroundColor: ui.theme.surfaceBg,
+          borderColor: ui.theme.surfaceBorder,
+          boxShadow: ui.theme.cardShadow,
+        }}
+      >
         <div className="flex items-start gap-3">
-          <span className="w-10 h-10 rounded-xl bg-zinc-950 text-amber-400 flex items-center justify-center shrink-0">
+          <span
+            className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+            style={{
+              backgroundColor: ui.theme.sidebarBg,
+              color: ui.theme.highlightHex || '#E8833A',
+            }}
+          >
             <UserCheck className="w-5 h-5" />
           </span>
           <div>
-            <h2 className="text-base sm:text-lg font-extrabold text-zinc-950">
+            <h2 className="text-base sm:text-lg font-extrabold" style={{ color: ui.theme.surfaceText }}>
               {isEn ? 'Captain & Waiter Floor Screen' : 'شاشة الكابتن (الويتر) وخدمة الصالة'}
             </h2>
-            <p className="text-xs text-zinc-500 mt-0.5 leading-relaxed">
+            <p className="text-xs mt-0.5 leading-relaxed" style={{ color: ui.theme.mutedText }}>
               {isEn
                 ? 'Live table calls paired with ready dishes & drinks waiting for table delivery.'
                 : 'تنبيهات نداء الطاولات لحظياً مع قائمة الأصناف الجاهزة للاستلام من المطبخ والبار والباستري.'}
@@ -843,11 +861,20 @@ export function CaptainWaiterTab({
           <button
             type="button"
             onClick={() => setPrinterModalOpen(true)}
-            className={`min-h-[40px] px-3 py-2 rounded-xl border text-xs font-extrabold flex items-center gap-1.5 cursor-pointer ${
+            className={`min-h-[42px] px-3 py-2 border text-xs font-extrabold flex items-center gap-1.5 cursor-pointer ${ui.radiusClasses.button} ${
               printerStatusLabel
-                ? 'border-indigo-200 bg-indigo-50 text-indigo-800 hover:bg-indigo-100'
-                : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50'
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                : ''
             }`}
+            style={
+              printerStatusLabel
+                ? undefined
+                : {
+                    backgroundColor: ui.theme.surfaceSubtleBg,
+                    borderColor: ui.theme.surfaceBorder,
+                    color: ui.theme.surfaceText,
+                  }
+            }
           >
             <Printer className="w-4 h-4" />
             <span>{printerStatusLabel ? `طابعة: ${printerStatusLabel}` : isEn ? 'Printer' : 'طابعة حرارية'}</span>
@@ -859,7 +886,12 @@ export function CaptainWaiterTab({
               unlockAudioContext();
               playOrderAlertChime();
             }}
-            className="min-h-[40px] px-3 py-2 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-700 hover:bg-zinc-50 flex items-center gap-1.5 cursor-pointer"
+            className={`min-h-[42px] px-3 py-2 border text-xs font-bold flex items-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
+            style={{
+              backgroundColor: ui.theme.surfaceSubtleBg,
+              borderColor: ui.theme.surfaceBorder,
+              color: ui.theme.surfaceText,
+            }}
           >
             <Volume2 className="w-4 h-4" />
             <span>{isEn ? 'Test Alert' : 'تجربة الصوت'}</span>
@@ -868,11 +900,18 @@ export function CaptainWaiterTab({
           <button
             type="button"
             onClick={() => setSoundEnabled((v) => !v)}
-            className={`min-h-[40px] px-3 py-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 cursor-pointer ${
-              soundEnabled
-                ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                : 'border-zinc-200 bg-zinc-50 text-zinc-500'
+            className={`min-h-[42px] px-3 py-2 border text-xs font-bold flex items-center gap-1.5 cursor-pointer ${ui.radiusClasses.button} ${
+              soundEnabled ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : ''
             }`}
+            style={
+              soundEnabled
+                ? undefined
+                : {
+                    backgroundColor: ui.theme.surfaceSubtleBg,
+                    borderColor: ui.theme.surfaceBorder,
+                    color: ui.theme.mutedText,
+                  }
+            }
           >
             {soundEnabled ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
             <span>{soundEnabled ? (isEn ? 'Sound ON' : 'الصوت مفعّل') : isEn ? 'Muted' : 'صامت'}</span>
@@ -881,11 +920,20 @@ export function CaptainWaiterTab({
           <button
             type="button"
             onClick={handleToggleFullscreen}
-            className={`min-h-[40px] px-3.5 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 cursor-pointer ${
+            className={`min-h-[42px] px-3.5 py-2 border text-xs font-extrabold flex items-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
+            style={
               isFullscreen
-                ? 'bg-zinc-950 text-white'
-                : 'border border-zinc-200 bg-white text-zinc-800 hover:bg-zinc-50'
-            }`}
+                ? {
+                    backgroundColor: ui.theme.accentHex,
+                    borderColor: ui.theme.accentHex,
+                    color: ui.theme.accentTextHex,
+                  }
+                : {
+                    backgroundColor: ui.theme.surfaceSubtleBg,
+                    borderColor: ui.theme.surfaceBorder,
+                    color: ui.theme.surfaceText,
+                  }
+            }
           >
             {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
             <span>{isFullscreen ? (isEn ? 'Exit Fullscreen' : 'خروج من ملء الشاشة') : isEn ? 'Full Screen' : 'ملء الشاشة'}</span>
@@ -1013,11 +1061,20 @@ export function CaptainWaiterTab({
           <button
             type="button"
             onClick={() => setSelectedHall('all')}
-            className={`min-h-[38px] px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap cursor-pointer ${
+            className={`min-h-[40px] px-3.5 py-2 border text-xs font-bold whitespace-nowrap cursor-pointer ${ui.radiusClasses.button}`}
+            style={
               selectedHall === 'all'
-                ? 'bg-zinc-950 text-white'
-                : 'bg-white border border-zinc-200 text-zinc-700 hover:bg-zinc-50'
-            }`}
+                ? {
+                    backgroundColor: ui.theme.accentHex,
+                    borderColor: ui.theme.accentHex,
+                    color: ui.theme.accentTextHex,
+                  }
+                : {
+                    backgroundColor: ui.theme.surfaceBg,
+                    borderColor: ui.theme.surfaceBorder,
+                    color: ui.theme.surfaceText,
+                  }
+            }
           >
             {isEn ? 'All Halls / Zones' : 'كل الصالات'}
           </button>
@@ -1026,11 +1083,20 @@ export function CaptainWaiterTab({
               key={hName}
               type="button"
               onClick={() => setSelectedHall(hName)}
-              className={`min-h-[38px] px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+              className={`min-h-[40px] px-3.5 py-2 border text-xs font-bold whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${ui.radiusClasses.button}`}
+              style={
                 selectedHall === hName
-                  ? 'bg-amber-500 text-zinc-950'
-                  : 'bg-white border border-zinc-200 text-zinc-700 hover:bg-zinc-50'
-              }`}
+                  ? {
+                      backgroundColor: ui.theme.highlightHex || ui.theme.accentHex,
+                      borderColor: ui.theme.highlightHex || ui.theme.accentHex,
+                      color: '#FFFFFF',
+                    }
+                  : {
+                      backgroundColor: ui.theme.surfaceBg,
+                      borderColor: ui.theme.surfaceBorder,
+                      color: ui.theme.surfaceText,
+                    }
+              }
             >
               <MapPin className="w-3.5 h-3.5 shrink-0" />
               <span>{hName}</span>
@@ -1045,31 +1111,53 @@ export function CaptainWaiterTab({
       {captainMode === 'grid' && (
         <div className="space-y-4">
           {gridHalls.length === 0 ? (
-            <div className="bg-white border border-zinc-200 rounded-2xl p-8 text-center space-y-2">
-              <Grid className="w-8 h-8 text-zinc-300 mx-auto" />
-              <h3 className="text-sm font-extrabold text-zinc-900">
+            <div
+              className={`border p-8 text-center space-y-2 ${ui.radiusClasses.card}`}
+              style={{
+                backgroundColor: ui.theme.surfaceBg,
+                borderColor: ui.theme.surfaceBorder,
+                boxShadow: ui.theme.cardShadow,
+              }}
+            >
+              <Grid className="w-8 h-8 mx-auto opacity-40" style={{ color: ui.theme.mutedText }} />
+              <h3 className="text-sm font-extrabold" style={{ color: ui.theme.surfaceText }}>
                 لا توجد صالات مضافة بعد
               </h3>
-              <p className="text-xs text-zinc-500 max-w-md mx-auto">
+              <p className="text-xs max-w-md mx-auto" style={{ color: ui.theme.mutedText }}>
                 أضف الصالات وأرقام الترابيزات من تبويب الصالات و QR، أو استخدم نقطة طلب الكابتن لتسجيل الطلبات مباشرة.
               </p>
             </div>
           ) : (
             gridHalls.map(({ hall, tableNumbers }) => (
-              <section key={hall.id} className="bg-white border border-zinc-200 rounded-2xl p-4 sm:p-5 space-y-3">
+              <section
+                key={hall.id}
+                className={`border p-4 sm:p-5 space-y-3 ${ui.radiusClasses.card}`}
+                style={{
+                  backgroundColor: ui.theme.surfaceBg,
+                  borderColor: ui.theme.surfaceBorder,
+                  boxShadow: ui.theme.cardShadow,
+                }}
+              >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-amber-600" />
-                    <h3 className="text-sm font-extrabold text-zinc-950">
+                    <MapPin className="w-4 h-4" style={{ color: ui.theme.highlightHex || '#E8833A' }} />
+                    <h3 className="text-sm font-extrabold" style={{ color: ui.theme.surfaceText }}>
                       {loc(hall.name, hall.name_en)}
                     </h3>
                     {hall.hallType && (
-                      <span className="px-2 py-0.5 rounded-md bg-zinc-100 text-zinc-700 text-[11px] font-bold">
+                      <span
+                        className="px-2 py-0.5 rounded-md border text-[11px] font-bold"
+                        style={{
+                          backgroundColor: ui.theme.surfaceSubtleBg,
+                          borderColor: ui.theme.surfaceBorder,
+                          color: ui.theme.surfaceText,
+                        }}
+                      >
                         {hall.hallType}
                       </span>
                     )}
                   </div>
-                  <span className="text-[11px] font-mono-num text-zinc-500 font-bold">
+                  <span className="text-[11px] font-mono-num font-bold" style={{ color: ui.theme.mutedText }}>
                     {tableNumbers.length} ترابيزة
                   </span>
                 </div>
@@ -1124,8 +1212,15 @@ export function CaptainWaiterTab({
           )}
 
           {/* Bottom Color Legend */}
-          <div className="bg-white border border-zinc-200 rounded-2xl p-3.5 flex flex-wrap items-center justify-center gap-4 text-xs font-bold text-zinc-700">
-            <span className="text-[11px] font-extrabold text-zinc-500">دليل الألوان:</span>
+          <div
+            className={`border p-3.5 flex flex-wrap items-center justify-center gap-4 text-xs font-bold ${ui.radiusClasses.card}`}
+            style={{
+              backgroundColor: ui.theme.surfaceBg,
+              borderColor: ui.theme.surfaceBorder,
+              color: ui.theme.surfaceText,
+            }}
+          >
+            <span className="text-[11px] font-extrabold" style={{ color: ui.theme.mutedText }}>دليل الألوان:</span>
             <span className="flex items-center gap-1.5">
               <span
                 className="w-3.5 h-3.5 rounded-sm inline-block"
@@ -1163,17 +1258,29 @@ export function CaptainWaiterTab({
       {/* ============================================================== */}
       {captainMode === 'pos' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-          <div className="lg:col-span-8 bg-white border border-zinc-200 rounded-2xl p-4 sm:p-5 space-y-4">
+          <div
+            className={`lg:col-span-8 border p-4 sm:p-5 space-y-4 ${ui.radiusClasses.card}`}
+            style={{
+              backgroundColor: ui.theme.surfaceBg,
+              borderColor: ui.theme.surfaceBorder,
+              boxShadow: ui.theme.cardShadow,
+            }}
+          >
             {/* Search & Categories */}
             <div className="flex flex-col sm:flex-row gap-2.5">
               <div className="relative flex-1">
-                <Search className="w-4 h-4 text-zinc-400 absolute start-3 top-1/2 -translate-y-1/2" />
+                <Search className="w-4 h-4 absolute start-3 top-1/2 -translate-y-1/2" style={{ color: ui.theme.mutedText }} />
                 <input
                   type="text"
                   value={posSearchQuery}
                   onChange={(e) => setPosSearchQuery(e.target.value)}
                   placeholder="ابحث عن صنف بالاسم للطلب السريع..."
-                  className="w-full ps-9 pe-3 py-2.5 rounded-xl border border-zinc-200 text-xs font-bold"
+                  className="w-full ps-9 pe-3 py-2.5 rounded-xl border text-xs font-bold"
+                  style={{
+                    backgroundColor: ui.theme.surfaceSubtleBg,
+                    borderColor: ui.theme.surfaceBorder,
+                    color: ui.theme.surfaceText,
+                  }}
                 />
               </div>
             </div>
@@ -1182,11 +1289,20 @@ export function CaptainWaiterTab({
               <button
                 type="button"
                 onClick={() => setPosSelectedCatId('all')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap cursor-pointer ${
+                className={`min-h-[38px] px-3 py-1.5 border text-xs font-extrabold whitespace-nowrap cursor-pointer ${ui.radiusClasses.button}`}
+                style={
                   posSelectedCatId === 'all'
-                    ? 'bg-zinc-950 text-white'
-                    : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
-                }`}
+                    ? {
+                        backgroundColor: ui.theme.accentHex,
+                        borderColor: ui.theme.accentHex,
+                        color: ui.theme.accentTextHex,
+                      }
+                    : {
+                        backgroundColor: ui.theme.surfaceSubtleBg,
+                        borderColor: ui.theme.surfaceBorder,
+                        color: ui.theme.surfaceText,
+                      }
+                }
               >
                 كل الأقسام ({menuItems.filter((m) => m.isAvailable !== false).length})
               </button>
@@ -1195,11 +1311,20 @@ export function CaptainWaiterTab({
                   key={cat.id}
                   type="button"
                   onClick={() => setPosSelectedCatId(cat.id)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap cursor-pointer ${
+                  className={`min-h-[38px] px-3 py-1.5 border text-xs font-extrabold whitespace-nowrap cursor-pointer ${ui.radiusClasses.button}`}
+                  style={
                     posSelectedCatId === cat.id
-                      ? 'bg-amber-500 text-zinc-950'
-                      : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
-                  }`}
+                      ? {
+                          backgroundColor: ui.theme.highlightHex || ui.theme.accentHex,
+                          borderColor: ui.theme.highlightHex || ui.theme.accentHex,
+                          color: '#FFFFFF',
+                        }
+                      : {
+                          backgroundColor: ui.theme.surfaceSubtleBg,
+                          borderColor: ui.theme.surfaceBorder,
+                          color: ui.theme.surfaceText,
+                        }
+                  }
                 >
                   {loc(cat.name, cat.name_en)}
                 </button>
@@ -1208,7 +1333,7 @@ export function CaptainWaiterTab({
 
             {/* Text-Only Compact Menu Buttons (NO images) */}
             {posFilteredItems.length === 0 ? (
-              <p className="text-xs text-zinc-500 text-center py-8">
+              <p className="text-xs text-center py-8" style={{ color: ui.theme.mutedText }}>
                 لا توجد أصناف متاحة تطابق البحث الآن.
               </p>
             ) : (
@@ -1229,21 +1354,33 @@ export function CaptainWaiterTab({
                           handlePosAddItem(item);
                         }
                       }}
-                      className="p-3 rounded-xl border border-zinc-200 bg-zinc-50 hover:bg-amber-50 hover:border-amber-300 text-start transition-colors flex flex-col justify-between gap-1.5 min-h-[76px] cursor-pointer"
+                      className="p-3 rounded-xl border text-start transition-colors flex flex-col justify-between gap-1.5 min-h-[76px] cursor-pointer"
+                      style={{
+                        backgroundColor: ui.theme.surfaceSubtleBg,
+                        borderColor: ui.theme.surfaceBorder,
+                        color: ui.theme.surfaceText,
+                      }}
                     >
-                      <span className="text-xs font-extrabold text-zinc-950 line-clamp-2 leading-snug">
+                      <span className="text-xs font-extrabold line-clamp-2 leading-snug" style={{ color: ui.theme.surfaceText }}>
                         {loc(item.name, item.name_en)}
                       </span>
                       <div className="flex items-center justify-between gap-1 text-[11px]">
                         {showCaptainPrices ? (
-                          <span className="font-mono-num font-extrabold text-amber-800">
+                          <span className="font-mono-num font-extrabold" style={{ color: ui.theme.highlightHex || '#E8833A' }}>
                             {formatMoney(item.sizes[0]?.price ?? item.basePrice)}
                           </span>
                         ) : (
-                          <span className="text-zinc-500 font-bold">+ أضف</span>
+                          <span className="font-bold" style={{ color: ui.theme.mutedText }}>+ أضف</span>
                         )}
                         {hasOptions && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-white border border-zinc-200 text-zinc-600 font-bold">
+                          <span
+                            className="text-[10px] px-1.5 py-0.5 rounded border font-bold"
+                            style={{
+                              backgroundColor: ui.theme.surfaceBg,
+                              borderColor: ui.theme.surfaceBorder,
+                              color: ui.theme.mutedText,
+                            }}
+                          >
                             خيارات
                           </span>
                         )}
@@ -1256,7 +1393,14 @@ export function CaptainWaiterTab({
           </div>
 
           {/* Right Panel: Order Destination + Cart */}
-          <div className="lg:col-span-4 bg-white border border-zinc-200 rounded-2xl p-4 sm:p-5 space-y-4">
+          <div
+            className={`lg:col-span-4 border p-4 sm:p-5 space-y-4 ${ui.radiusClasses.card}`}
+            style={{
+              backgroundColor: ui.theme.surfaceBg,
+              borderColor: ui.theme.surfaceBorder,
+              boxShadow: ui.theme.cardShadow,
+            }}
+          >
             <div className="grid grid-cols-3 gap-1.5">
               {(
                 [
@@ -1269,11 +1413,20 @@ export function CaptainWaiterTab({
                   key={ot.id}
                   type="button"
                   onClick={() => setPosOrderType(ot.id)}
-                  className={`py-2 rounded-xl border text-xs font-extrabold cursor-pointer ${
+                  className={`min-h-[40px] py-2 border text-xs font-extrabold cursor-pointer ${ui.radiusClasses.button}`}
+                  style={
                     posOrderType === ot.id
-                      ? 'bg-zinc-950 text-white border-zinc-950'
-                      : 'bg-zinc-50 border-zinc-200 text-zinc-700'
-                  }`}
+                      ? {
+                          backgroundColor: ui.theme.accentHex,
+                          borderColor: ui.theme.accentHex,
+                          color: ui.theme.accentTextHex,
+                        }
+                      : {
+                          backgroundColor: ui.theme.surfaceSubtleBg,
+                          borderColor: ui.theme.surfaceBorder,
+                          color: ui.theme.surfaceText,
+                        }
+                  }
                 >
                   {ot.label}
                 </button>
@@ -1478,9 +1631,13 @@ export function CaptainWaiterTab({
               type="button"
               disabled={posSubmitting || posCart.length === 0}
               onClick={handleSubmitCaptainOrder}
-              className="w-full min-h-[44px] rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-extrabold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              className={`w-full min-h-[46px] text-xs font-extrabold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 ${ui.radiusClasses.button}`}
+              style={{
+                backgroundColor: ui.theme.accentHex,
+                color: ui.theme.accentTextHex,
+              }}
             >
-              <Send className="w-4 h-4 text-amber-400" />
+              <Send className="w-4 h-4" style={{ color: ui.theme.highlightHex || '#E8833A' }} />
               <span>{posSubmitting ? 'جاري الإرسال...' : 'إرسال الطلب للمحطات 🚀'}</span>
             </button>
           </div>
@@ -1494,12 +1651,19 @@ export function CaptainWaiterTab({
         <>
           {/* KPI Quick Strip */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-white border border-zinc-200 rounded-2xl p-4 flex items-center justify-between gap-3">
+            <div
+              className={`border p-4 flex items-center justify-between gap-3 ${ui.radiusClasses.card}`}
+              style={{
+                backgroundColor: ui.theme.surfaceBg,
+                borderColor: ui.theme.surfaceBorder,
+                boxShadow: ui.theme.cardShadow,
+              }}
+            >
               <div>
-                <p className="text-[11px] font-bold text-zinc-500">
+                <p className="text-[11px] font-bold" style={{ color: ui.theme.mutedText }}>
                   {isEn ? 'Active Table Calls' : 'نداءات الطاولات النشطة'}
                 </p>
-                <p className="text-2xl font-extrabold font-mono-num text-zinc-950 mt-0.5">
+                <p className="text-2xl font-extrabold font-mono-num mt-0.5" style={{ color: ui.theme.surfaceText }}>
                   {activeCalls.length}
                 </p>
               </div>
@@ -1508,9 +1672,16 @@ export function CaptainWaiterTab({
               </span>
             </div>
 
-            <div className="bg-white border border-zinc-200 rounded-2xl p-4 flex items-center justify-between gap-3">
+            <div
+              className={`border p-4 flex items-center justify-between gap-3 ${ui.radiusClasses.card}`}
+              style={{
+                backgroundColor: ui.theme.surfaceBg,
+                borderColor: ui.theme.surfaceBorder,
+                boxShadow: ui.theme.cardShadow,
+              }}
+            >
               <div>
-                <p className="text-[11px] font-bold text-zinc-500">
+                <p className="text-[11px] font-bold" style={{ color: ui.theme.mutedText }}>
                   {isEn ? 'Dishes Ready to Serve' : 'أصناف جاهزة للتقديم'}
                 </p>
                 <p className="text-2xl font-extrabold font-mono-num text-emerald-700 mt-0.5">
@@ -1526,14 +1697,21 @@ export function CaptainWaiterTab({
           {/* Section 1: Table Service Calls */}
           <section className="space-y-3">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-extrabold text-zinc-950 flex items-center gap-2">
-                <BellRing className="w-4 h-4 text-amber-600" />
+              <h3 className="text-sm font-extrabold flex items-center gap-2" style={{ color: ui.theme.canvasText }}>
+                <BellRing className="w-4 h-4" style={{ color: ui.theme.highlightHex || '#E8833A' }} />
                 <span>{isEn ? 'Table Service Requests' : 'تنبيهات النداء وطلبات الشيك'}</span>
               </h3>
             </div>
 
         {activeCalls.length === 0 ? (
-          <div className="bg-white border border-zinc-200 rounded-2xl p-6 text-center text-xs text-zinc-500">
+          <div
+            className={`border p-6 text-center text-xs ${ui.radiusClasses.card}`}
+            style={{
+              backgroundColor: ui.theme.surfaceBg,
+              borderColor: ui.theme.surfaceBorder,
+              color: ui.theme.mutedText,
+            }}
+          >
             {isEn
               ? 'No pending waiter calls right now.'
               : 'لا توجد نداءات معلّقة من الترابيزات حالياً.'}
@@ -1547,9 +1725,13 @@ export function CaptainWaiterTab({
               return (
                 <div
                   key={call.id}
-                  className={`bg-white rounded-2xl border p-4 space-y-3 shadow-2xs ${
+                  className={`border p-4 space-y-3 ${ui.radiusClasses.card} ${
                     isAck ? 'border-blue-200' : 'border-amber-300 ring-2 ring-amber-200/60'
                   }`}
+                  style={{
+                    backgroundColor: ui.theme.surfaceBg,
+                    boxShadow: ui.theme.cardShadow,
+                  }}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="space-y-1 min-w-0">
@@ -1620,7 +1802,7 @@ export function CaptainWaiterTab({
       {/* Section 2: Ready Dishes & Drinks from Kitchen / Bar / Pastry */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-extrabold text-zinc-950 flex items-center gap-2">
+          <h3 className="text-sm font-extrabold flex items-center gap-2" style={{ color: ui.theme.canvasText }}>
             <ChefHat className="w-4 h-4 text-emerald-600" />
             <span>
               {isEn
@@ -1631,9 +1813,16 @@ export function CaptainWaiterTab({
         </div>
 
         {readyGroupedByOrder.length === 0 ? (
-          <div className="bg-white border border-zinc-200 rounded-2xl p-8 text-center space-y-2">
-            <Clock className="w-7 h-7 text-zinc-300 mx-auto" />
-            <p className="text-xs font-bold text-zinc-700">
+          <div
+            className={`border p-8 text-center space-y-2 ${ui.radiusClasses.card}`}
+            style={{
+              backgroundColor: ui.theme.surfaceBg,
+              borderColor: ui.theme.surfaceBorder,
+              boxShadow: ui.theme.cardShadow,
+            }}
+          >
+            <Clock className="w-7 h-7 mx-auto opacity-40" style={{ color: ui.theme.mutedText }} />
+            <p className="text-xs font-bold" style={{ color: ui.theme.mutedText }}>
               {isEn
                 ? 'No items marked Ready yet by Kitchen, Bar, or Pastry.'
                 : 'لا توجد أصناف جاهزة للاستلام حالياً. بمجرد ضغط "جاهز" من المطبخ أو البار أو الباستري ستظهر هنا فوراً.'}
@@ -1647,7 +1836,11 @@ export function CaptainWaiterTab({
               return (
                 <article
                   key={group.orderId}
-                  className="bg-white border-2 border-emerald-300 rounded-2xl p-4 sm:p-5 space-y-3 shadow-xs"
+                  className={`border-2 border-emerald-300 p-4 sm:p-5 space-y-3 ${ui.radiusClasses.card}`}
+                  style={{
+                    backgroundColor: ui.theme.surfaceBg,
+                    boxShadow: ui.theme.cardShadow,
+                  }}
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-100 pb-3">
                     <div>
@@ -1747,7 +1940,11 @@ export function CaptainWaiterTab({
                             type="button"
                             disabled={servingKey === singleKey}
                             onClick={() => handleMarkItemServed(dish.orderId, dish.orderNumber, [dish.itemIndex])}
-                            className="min-h-[40px] px-3 py-2 rounded-xl bg-zinc-950 text-white text-xs font-extrabold hover:bg-zinc-800 flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-50"
+                            className={`min-h-[42px] px-3 py-2 text-xs font-extrabold flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-50 ${ui.radiusClasses.button}`}
+                            style={{
+                              backgroundColor: ui.theme.accentHex,
+                              color: ui.theme.accentTextHex,
+                            }}
                           >
                             <CheckCheck className="w-3.5 h-3.5 text-emerald-400" />
                             <span>{isEn ? 'Served' : 'تم التقديم'}</span>
@@ -1779,22 +1976,27 @@ export function CaptainWaiterTab({
             <div
               dir={dir}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-md bg-white h-full overflow-y-auto shadow-2xl flex flex-col justify-between"
+              className="w-full max-w-md h-full overflow-y-auto shadow-2xl flex flex-col justify-between"
+              style={{
+                backgroundColor: ui.theme.surfaceBg,
+                color: ui.theme.surfaceText,
+              }}
             >
               <div className="p-5 space-y-4">
-                <div className="flex items-start justify-between gap-2 border-b border-zinc-100 pb-3">
+                <div className="flex items-start justify-between gap-2 border-b pb-3" style={{ borderColor: ui.theme.surfaceBorder }}>
                   <div>
-                    <p className="text-[11px] font-bold text-amber-700">
+                    <p className="text-[11px] font-bold" style={{ color: ui.theme.highlightHex || '#E8833A' }}>
                       {selectedTableDrawer.hallName}
                     </p>
-                    <h3 className="text-lg font-extrabold text-zinc-950">
+                    <h3 className="text-lg font-extrabold" style={{ color: ui.theme.surfaceText }}>
                       ترابيزة {selectedTableDrawer.tableNumber}
                     </h3>
                   </div>
                   <button
                     type="button"
                     onClick={() => setSelectedTableDrawer(null)}
-                    className="w-9 h-9 rounded-xl hover:bg-zinc-100 flex items-center justify-center cursor-pointer"
+                    className="w-9 h-9 rounded-xl flex items-center justify-center cursor-pointer"
+                    style={{ backgroundColor: ui.theme.surfaceSubtleBg, color: ui.theme.surfaceText }}
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -1807,15 +2009,22 @@ export function CaptainWaiterTab({
                 )}
 
                 {snap.tblOrders.length === 0 ? (
-                  <div className="p-5 rounded-2xl bg-zinc-50 border border-zinc-200 text-center space-y-2">
-                    <p className="text-xs font-bold text-zinc-700">الترابيزة شاغرة حالياً</p>
+                  <div
+                    className="p-5 rounded-2xl border text-center space-y-2"
+                    style={{ backgroundColor: ui.theme.surfaceSubtleBg, borderColor: ui.theme.surfaceBorder }}
+                  >
+                    <p className="text-xs font-bold" style={{ color: ui.theme.mutedText }}>الترابيزة شاغرة حالياً</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
                     {snap.tblOrders.map((ord) => (
-                      <div key={ord.id} className="p-3.5 rounded-2xl bg-zinc-50 border border-zinc-200 space-y-2">
+                      <div
+                        key={ord.id}
+                        className="p-3.5 rounded-2xl border space-y-2"
+                        style={{ backgroundColor: ui.theme.surfaceSubtleBg, borderColor: ui.theme.surfaceBorder }}
+                      >
                         <div className="flex items-center justify-between text-xs font-extrabold">
-                          <span className="font-mono-num text-zinc-950">#{ord.orderNumber}</span>
+                          <span className="font-mono-num" style={{ color: ui.theme.surfaceText }}>#{ord.orderNumber}</span>
                           {showCaptainPrices && (
                             <span className="font-mono-num text-emerald-700">
                               {formatMoney(ord.total)}
@@ -1825,10 +2034,17 @@ export function CaptainWaiterTab({
                         <div className="space-y-1 text-xs">
                           {ord.items.map((it, idx) => (
                             <div key={idx} className="flex items-center justify-between gap-2">
-                              <span className="font-bold text-zinc-800">
+                              <span className="font-bold" style={{ color: ui.theme.surfaceText }}>
                                 {it.quantity}× {it.name} {it.sizeName ? `(${it.sizeName})` : ''}
                               </span>
-                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-white border border-zinc-200 font-bold">
+                              <span
+                                className="text-[10px] px-1.5 py-0.5 rounded border font-bold"
+                                style={{
+                                  backgroundColor: ui.theme.surfaceBg,
+                                  borderColor: ui.theme.surfaceBorder,
+                                  color: ui.theme.surfaceText,
+                                }}
+                              >
                                 {ord.itemProgress?.[String(idx)] === 'ready'
                                   ? 'جاهز'
                                   : ord.itemProgress?.[String(idx)] === 'served'
@@ -1844,7 +2060,10 @@ export function CaptainWaiterTab({
                 )}
               </div>
 
-              <div className="p-5 border-t border-zinc-200 bg-zinc-50 space-y-2">
+              <div
+                className="p-5 border-t space-y-2"
+                style={{ backgroundColor: ui.theme.surfaceSubtleBg, borderColor: ui.theme.surfaceBorder }}
+              >
                 <button
                   type="button"
                   onClick={() => {
@@ -1854,9 +2073,13 @@ export function CaptainWaiterTab({
                     setSelectedTableDrawer(null);
                     setCaptainMode('pos');
                   }}
-                  className="w-full min-h-[42px] rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer"
+                  className={`w-full min-h-[44px] text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
+                  style={{
+                    backgroundColor: ui.theme.accentHex,
+                    color: ui.theme.accentTextHex,
+                  }}
                 >
-                  <Plus className="w-4 h-4 text-amber-400" />
+                  <Plus className="w-4 h-4" style={{ color: ui.theme.highlightHex || '#E8833A' }} />
                   <span>إضافة أصناف على الترابيزة</span>
                 </button>
 
@@ -1872,7 +2095,7 @@ export function CaptainWaiterTab({
                           'request_bill_cash'
                         )
                       }
-                      className="min-h-[40px] rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50"
+                      className="min-h-[42px] rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50"
                     >
                       <Banknote className="w-3.5 h-3.5" />
                       <span>طلب الشيك كاش</span>
@@ -1887,7 +2110,7 @@ export function CaptainWaiterTab({
                           'request_bill_card'
                         )
                       }
-                      className="min-h-[40px] rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50"
+                      className="min-h-[42px] rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50"
                     >
                       <CreditCard className="w-3.5 h-3.5" />
                       <span>طلب الشيك فيزا</span>
@@ -1909,16 +2132,22 @@ export function CaptainWaiterTab({
           <div
             dir={dir}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md bg-white rounded-2xl p-5 space-y-4 shadow-2xl"
+            className="w-full max-w-md rounded-2xl border p-5 space-y-4 shadow-2xl"
+            style={{
+              backgroundColor: ui.theme.surfaceBg,
+              borderColor: ui.theme.surfaceBorder,
+              color: ui.theme.surfaceText,
+            }}
           >
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-extrabold text-zinc-950">
+              <h3 className="text-sm font-extrabold" style={{ color: ui.theme.surfaceText }}>
                 تخصيص ألوان خريطة الترابيزات ووقت التنبيه
               </h3>
               <button
                 type="button"
                 onClick={() => setGridSettingsOpen(false)}
-                className="w-8 h-8 rounded-lg hover:bg-zinc-100 flex items-center justify-center cursor-pointer"
+                className="w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer"
+                style={{ backgroundColor: ui.theme.surfaceSubtleBg, color: ui.theme.surfaceText }}
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1935,7 +2164,8 @@ export function CaptainWaiterTab({
               ).map((entry) => (
                 <label
                   key={entry.key}
-                  className="p-2.5 rounded-xl border border-zinc-200 flex items-center justify-between gap-2 cursor-pointer"
+                  className="p-2.5 rounded-xl border flex items-center justify-between gap-2 cursor-pointer"
+                  style={{ backgroundColor: ui.theme.surfaceSubtleBg, borderColor: ui.theme.surfaceBorder }}
                 >
                   <span>{entry.label}</span>
                   <input
@@ -1950,7 +2180,7 @@ export function CaptainWaiterTab({
               ))}
             </div>
 
-            <label className="block space-y-1 text-xs font-bold text-zinc-800">
+            <label className="block space-y-1 text-xs font-bold" style={{ color: ui.theme.surfaceText }}>
               <span>حد التأخير لتغيير لون الترابيزة (بالدقائق):</span>
               <input
                 type="number"
@@ -1959,7 +2189,12 @@ export function CaptainWaiterTab({
                 dir="ltr"
                 value={overdueDraft}
                 onChange={(e) => setOverdueDraft(Number(e.target.value))}
-                className="w-full px-3 py-2 rounded-xl border border-zinc-300 font-mono-num font-bold text-sm"
+                className="w-full px-3 py-2 rounded-xl border font-mono-num font-bold text-sm"
+                style={{
+                  backgroundColor: ui.theme.surfaceSubtleBg,
+                  borderColor: ui.theme.surfaceBorder,
+                  color: ui.theme.surfaceText,
+                }}
               />
             </label>
 
@@ -1967,7 +2202,11 @@ export function CaptainWaiterTab({
               type="button"
               disabled={savingGridSettings}
               onClick={handleSaveGridSettings}
-              className="w-full min-h-[42px] rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-extrabold cursor-pointer disabled:opacity-50"
+              className={`w-full min-h-[42px] text-xs font-extrabold cursor-pointer disabled:opacity-50 ${ui.radiusClasses.button}`}
+              style={{
+                backgroundColor: ui.theme.accentHex,
+                color: ui.theme.accentTextHex,
+              }}
             >
               {savingGridSettings ? 'جاري الحفظ...' : 'حفظ ألوان وإعدادات الصالة'}
             </button>
@@ -1984,16 +2223,22 @@ export function CaptainWaiterTab({
           <div
             dir={dir}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm bg-white rounded-2xl p-5 space-y-4 shadow-2xl"
+            className="w-full max-w-sm rounded-2xl border p-5 space-y-4 shadow-2xl"
+            style={{
+              backgroundColor: ui.theme.surfaceBg,
+              borderColor: ui.theme.surfaceBorder,
+              color: ui.theme.surfaceText,
+            }}
           >
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-extrabold text-zinc-950">
+              <h3 className="text-sm font-extrabold" style={{ color: ui.theme.surfaceText }}>
                 {loc(posPickerItem.name, posPickerItem.name_en)}
               </h3>
               <button
                 type="button"
                 onClick={() => setPosPickerItem(null)}
-                className="w-8 h-8 rounded-lg hover:bg-zinc-100 flex items-center justify-center cursor-pointer"
+                className="w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer"
+                style={{ backgroundColor: ui.theme.surfaceSubtleBg, color: ui.theme.surfaceText }}
               >
                 <X className="w-4 h-4" />
               </button>
@@ -2001,18 +2246,27 @@ export function CaptainWaiterTab({
 
             {posPickerItem.sizes.length > 0 && (
               <div className="space-y-1.5">
-                <p className="text-xs font-bold text-zinc-700">الحجم:</p>
+                <p className="text-xs font-bold" style={{ color: ui.theme.mutedText }}>الحجم:</p>
                 <div className="flex flex-wrap gap-1.5">
                   {posPickerItem.sizes.map((sz) => (
                     <button
                       key={sz.name}
                       type="button"
                       onClick={() => setPosPickerSize(sz)}
-                      className={`px-3 py-1.5 rounded-xl border text-xs font-bold cursor-pointer ${
+                      className={`px-3 py-1.5 rounded-xl border text-xs font-bold cursor-pointer`}
+                      style={
                         posPickerSize?.name === sz.name
-                          ? 'bg-zinc-950 text-white border-zinc-950'
-                          : 'bg-zinc-50 border-zinc-200 text-zinc-800'
-                      }`}
+                          ? {
+                              backgroundColor: ui.theme.accentHex,
+                              borderColor: ui.theme.accentHex,
+                              color: ui.theme.accentTextHex,
+                            }
+                          : {
+                              backgroundColor: ui.theme.surfaceSubtleBg,
+                              borderColor: ui.theme.surfaceBorder,
+                              color: ui.theme.surfaceText,
+                            }
+                      }
                     >
                       {sz.name}
                       {showCaptainPrices ? ` (${formatMoney(sz.price)})` : ''}
@@ -2024,7 +2278,7 @@ export function CaptainWaiterTab({
 
             {posPickerItem.addons.length > 0 && (
               <div className="space-y-1.5">
-                <p className="text-xs font-bold text-zinc-700">الإضافات:</p>
+                <p className="text-xs font-bold" style={{ color: ui.theme.mutedText }}>الإضافات:</p>
                 <div className="flex flex-wrap gap-1.5">
                   {posPickerItem.addons.map((ad) => {
                     const active = posPickerAddons.some((a) => a.name === ad.name);
@@ -2037,11 +2291,20 @@ export function CaptainWaiterTab({
                             active ? prev.filter((x) => x.name !== ad.name) : [...prev, ad]
                           )
                         }
-                        className={`px-3 py-1.5 rounded-xl border text-xs font-bold cursor-pointer ${
+                        className="px-3 py-1.5 rounded-xl border text-xs font-bold cursor-pointer"
+                        style={
                           active
-                            ? 'bg-amber-500 text-zinc-950 border-amber-500'
-                            : 'bg-zinc-50 border-zinc-200 text-zinc-800'
-                        }`}
+                            ? {
+                                backgroundColor: ui.theme.highlightHex || ui.theme.accentHex,
+                                borderColor: ui.theme.highlightHex || ui.theme.accentHex,
+                                color: '#FFFFFF',
+                              }
+                            : {
+                                backgroundColor: ui.theme.surfaceSubtleBg,
+                                borderColor: ui.theme.surfaceBorder,
+                                color: ui.theme.surfaceText,
+                              }
+                        }
                       >
                         {ad.name}
                         {showCaptainPrices ? ` (+${formatMoney(ad.price)})` : ''}
@@ -2057,7 +2320,12 @@ export function CaptainWaiterTab({
               placeholder="ملاحظة خاصة على الصنف (بدون ملح / زيادة صوص...)"
               value={posPickerNotes}
               onChange={(e) => setPosPickerNotes(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl border border-zinc-200 text-xs"
+              className="w-full px-3 py-2 rounded-xl border text-xs"
+              style={{
+                backgroundColor: ui.theme.surfaceSubtleBg,
+                borderColor: ui.theme.surfaceBorder,
+                color: ui.theme.surfaceText,
+              }}
             />
 
             <button
@@ -2066,7 +2334,11 @@ export function CaptainWaiterTab({
                 handlePosAddItem(posPickerItem, posPickerSize, posPickerAddons, posPickerNotes);
                 setPosPickerItem(null);
               }}
-              className="w-full min-h-[42px] rounded-xl bg-zinc-950 text-white text-xs font-extrabold cursor-pointer"
+              className={`w-full min-h-[42px] text-xs font-extrabold cursor-pointer ${ui.radiusClasses.button}`}
+              style={{
+                backgroundColor: ui.theme.accentHex,
+                color: ui.theme.accentTextHex,
+              }}
             >
               إضافة للطلب
             </button>

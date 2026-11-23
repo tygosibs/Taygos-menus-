@@ -56,6 +56,7 @@ const ALL_SCREEN_IDS: UiScreenId[] = [
 ];
 
 const ALL_THEME_IDS: ScreenThemeId[] = [
+  'sand_sapphire',
   'obsidian_gold',
   'alabaster_editorial',
   'emerald_hospitality',
@@ -103,7 +104,7 @@ export function UiStudioTab({ adminEmail }: UiStudioTabProps) {
     return map;
   }, [catalog]);
 
-  const activeThemeBase = SCREEN_THEMES[screenCfg.themeId] || SCREEN_THEMES.obsidian_gold;
+  const activeThemeBase = SCREEN_THEMES[screenCfg.themeId] || SCREEN_THEMES.sand_sapphire;
   const resolvedAccent = screenCfg.accentColorOverride || activeThemeBase.accentHex;
   const radiusCls = getRadiusClasses(screenCfg.cardRadius);
 
@@ -497,7 +498,7 @@ export function UiStudioTab({ adminEmail }: UiStudioTabProps) {
           {ALL_SCREEN_IDS.map((sid) => {
             const meta = SCREEN_META[sid];
             const sCfg = draft.screens[sid];
-            const th = SCREEN_THEMES[sCfg.themeId] || SCREEN_THEMES.obsidian_gold;
+            const th = SCREEN_THEMES[sCfg.themeId] || SCREEN_THEMES.sand_sapphire;
             const active = selectedScreen === sid;
             return (
               <button

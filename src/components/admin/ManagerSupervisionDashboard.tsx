@@ -20,6 +20,7 @@ import {
   Wallet,
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { useScreenUi } from '../../contexts/PlatformUiContext';
 import {
   subscribeCategories,
   subscribeMenuItems,
@@ -83,6 +84,8 @@ export function ManagerSupervisionDashboard({
   onRestaurantUpdated,
 }: ManagerSupervisionDashboardProps) {
   const { formatCurrency, loc } = useLanguage();
+  const ui = useScreenUi('manager_console');
+  const theme = ui.theme;
   const currencyLabel = formatCurrency(restaurant.currency);
   const opsConfig = useMemo(() => getResolvedOperationsConfig(restaurant), [restaurant]);
   const treasury = useMemo(() => getResolvedTreasuryState(restaurant), [restaurant]);
@@ -283,30 +286,49 @@ export function ManagerSupervisionDashboard({
   return (
     <div dir="rtl" className="space-y-6">
       {/* Header Summary Bar */}
-      <section className="bg-white border border-zinc-200 rounded-2xl p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      <section
+        className={`border p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4 ${ui.radiusClasses.card}`}
+        style={{
+          backgroundColor: theme.surfaceBg,
+          borderColor: theme.surfaceBorder,
+          boxShadow: theme.cardShadow,
+        }}
+      >
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <Crown className="w-5 h-5 text-indigo-600 shrink-0" />
-            <h2 className="text-base sm:text-lg font-extrabold text-zinc-950">
+            <Crown className="w-5 h-5 shrink-0" style={{ color: theme.accentHex }} />
+            <h2 className="text-base sm:text-lg font-extrabold" style={{ color: theme.surfaceText }}>
               لوحة الإشراف العام ومتابعة الكادر — {loc(restaurant.name, restaurant.name_en)}
             </h2>
           </div>
-          <p className="text-xs text-zinc-500 max-w-3xl leading-relaxed">
+          <p className="text-xs max-w-3xl leading-relaxed" style={{ color: theme.mutedText }}>
             راقب كل قسم وشاشة باسم الموظف المشغّل لها حالياً. إذا كان القسم مغطى بموظف تدخل بوضع الإشراف للمراجعة والتعديل أو إلغاء أصناف مع سبب؛ وإذا كان شاغراً يمكنك تغطيته بوردية بديلة.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 shrink-0">
-          <div className="px-3.5 py-2 rounded-xl bg-zinc-50 border border-zinc-200 text-xs font-bold text-zinc-700 font-mono-num">
-            الورديات النشطة: <strong className="text-zinc-950">{activeShifts.length}</strong>
+          <div
+            className={`min-h-[42px] px-3.5 py-2 border text-xs font-bold font-mono-num flex items-center ${ui.radiusClasses.button}`}
+            style={{
+              backgroundColor: theme.surfaceSubtleBg,
+              borderColor: theme.surfaceBorder,
+              color: theme.mutedText,
+            }}
+          >
+            الورديات النشطة: <strong className="ms-1" style={{ color: theme.surfaceText }}>{activeShifts.length}</strong>
           </div>
           {(isOwner || managerPerms.canManageHalls) && (
             <button
               type="button"
               onClick={() => onNavigateScreen('halls')}
-              className="min-h-[40px] px-4 py-2 rounded-xl border border-zinc-300 bg-white hover:bg-zinc-50 text-xs font-extrabold text-zinc-900 inline-flex items-center gap-1.5 cursor-pointer"
+              className={`min-h-[42px] px-4 py-2 border text-xs font-extrabold inline-flex items-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
+              style={{
+                backgroundColor: theme.surfaceSubtleBg,
+                borderColor: theme.surfaceBorder,
+                color: theme.surfaceText,
+              }}
             >
-              <LayoutGrid className="w-4 h-4 text-amber-600" />
+              <LayoutGrid className="w-4 h-4" style={{ color: theme.highlightHex || '#E8833A' }} />
               <span>الصالات وأكواد QR</span>
             </button>
           )}
@@ -314,9 +336,14 @@ export function ManagerSupervisionDashboard({
             <button
               type="button"
               onClick={() => setSettingsOpen((v) => !v)}
-              className="min-h-[40px] px-4 py-2 rounded-xl border border-zinc-300 bg-white hover:bg-zinc-50 text-xs font-extrabold text-zinc-900 inline-flex items-center gap-1.5 cursor-pointer"
+              className={`min-h-[42px] px-4 py-2 border text-xs font-extrabold inline-flex items-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
+              style={{
+                backgroundColor: theme.surfaceSubtleBg,
+                borderColor: theme.surfaceBorder,
+                color: theme.surfaceText,
+              }}
             >
-              <Settings className="w-4 h-4 text-indigo-600" />
+              <Settings className="w-4 h-4" style={{ color: theme.accentHex }} />
               <span>إعدادات الورديات والأسعار</span>
             </button>
           )}
@@ -344,11 +371,18 @@ export function ManagerSupervisionDashboard({
       {/* CRITICAL PAUSED ITEMS ALERT (Never forget disabled items + show price) */}
       {canPauseOrEditMenu && (
         <section
-          className={`rounded-2xl border p-4 sm:p-5 space-y-4 ${
-            pausedItems.length > 0
-              ? 'bg-amber-50/70 border-amber-300'
-              : 'bg-white border-zinc-200'
+          className={`border p-4 sm:p-5 space-y-4 ${ui.radiusClasses.card} ${
+            pausedItems.length > 0 ? 'bg-amber-50/70 border-amber-300' : ''
           }`}
+          style={
+            pausedItems.length > 0
+              ? undefined
+              : {
+                  backgroundColor: theme.surfaceBg,
+                  borderColor: theme.surfaceBorder,
+                  boxShadow: theme.cardShadow,
+                }
+          }
         >
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div className="space-y-1">
@@ -461,19 +495,25 @@ export function ManagerSupervisionDashboard({
       {settingsOpen && canModifyOperations && (
         <form
           onSubmit={handleSaveOperationsConfig}
-          className="bg-white border border-zinc-200 rounded-2xl p-5 space-y-5"
+          className={`border p-5 space-y-5 ${ui.radiusClasses.card}`}
+          style={{
+            backgroundColor: theme.surfaceBg,
+            borderColor: theme.surfaceBorder,
+            boxShadow: theme.cardShadow,
+          }}
         >
-          <div className="flex items-center justify-between gap-3 border-b border-zinc-100 pb-3">
+          <div className="flex items-center justify-between gap-3 border-b pb-3" style={{ borderColor: theme.surfaceBorder }}>
             <div className="flex items-center gap-2">
-              <Sliders className="w-4 h-4 text-indigo-600" />
-              <h3 className="text-sm font-extrabold text-zinc-950">
+              <Sliders className="w-4 h-4" style={{ color: theme.accentHex }} />
+              <h3 className="text-sm font-extrabold" style={{ color: theme.surfaceText }}>
                 ضبط الورديات والعهدة الافتراضية وإظهار الأسعار للشاشات
               </h3>
             </div>
             <button
               type="button"
               onClick={() => setSettingsOpen(false)}
-              className="text-xs font-bold text-zinc-500 hover:text-zinc-900 cursor-pointer"
+              className="text-xs font-bold cursor-pointer hover:opacity-80"
+              style={{ color: theme.mutedText }}
             >
               إغلاق
             </button>
@@ -627,7 +667,11 @@ export function ManagerSupervisionDashboard({
             <button
               type="submit"
               disabled={savingSettings}
-              className="min-h-[40px] px-5 py-2 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-extrabold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              className={`min-h-[42px] px-5 py-2 text-xs font-extrabold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50 ${ui.radiusClasses.button}`}
+              style={{
+                backgroundColor: theme.accentHex,
+                color: theme.accentTextHex,
+              }}
             >
               {savingSettings ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               <span>حفظ الإعدادات التشغيلية</span>
@@ -639,11 +683,11 @@ export function ManagerSupervisionDashboard({
       {/* LIVE STATION & FLOOR SUPERVISORY CONSOLE */}
       <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-extrabold text-zinc-950 flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-indigo-600" />
+          <h3 className="text-sm font-extrabold flex items-center gap-2" style={{ color: theme.canvasText }}>
+            <ShieldCheck className="w-4 h-4" style={{ color: theme.accentHex }} />
             <span>الشاشات والأقسام المباشرة واسم الموظف المسؤول الآن</span>
           </h3>
-          <span className="text-[11px] text-zinc-500">
+          <span className="text-[11px]" style={{ color: theme.mutedText }}>
             الدخول الإشرافي يسمح بالمراقبة والتعديل وكتابة ملاحظات الصنف/الترابيزة دون فتح وردية مكررة
           </span>
         </div>
@@ -662,19 +706,38 @@ export function ManagerSupervisionDashboard({
             return (
               <article
                 key={card.key}
-                className={`bg-white rounded-2xl border p-4 sm:p-5 flex flex-col justify-between gap-4 ${
-                  card.activeShift ? 'border-zinc-200' : 'border-amber-200 bg-amber-50/15'
+                className={`border p-4 sm:p-5 flex flex-col justify-between gap-4 ${ui.radiusClasses.card} ${
+                  card.activeShift ? '' : 'border-amber-300 bg-amber-50/20'
                 }`}
+                style={
+                  card.activeShift
+                    ? {
+                        backgroundColor: theme.surfaceBg,
+                        borderColor: theme.surfaceBorder,
+                        boxShadow: theme.cardShadow,
+                      }
+                    : { boxShadow: theme.cardShadow }
+                }
               >
                 <div className="space-y-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <span className="w-10 h-10 rounded-xl bg-zinc-950 text-amber-400 flex items-center justify-center shrink-0">
+                      <span
+                        className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                        style={{
+                          backgroundColor: theme.sidebarBg,
+                          color: theme.highlightHex || '#E8833A',
+                        }}
+                      >
                         <Icon className="w-5 h-5" />
                       </span>
                       <div className="min-w-0">
-                        <h4 className="text-sm font-extrabold text-zinc-950 truncate">{card.title}</h4>
-                        <p className="text-[11px] text-zinc-500 truncate">{card.subtitle}</p>
+                        <h4 className="text-sm font-extrabold truncate" style={{ color: theme.surfaceText }}>
+                          {card.title}
+                        </h4>
+                        <p className="text-[11px] truncate" style={{ color: theme.mutedText }}>
+                          {card.subtitle}
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -714,16 +777,24 @@ export function ManagerSupervisionDashboard({
                         coveringStaffName: card.activeShift?.staffName,
                       })
                     }
-                    className="w-full min-h-[42px] px-4 py-2 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-extrabold inline-flex items-center justify-center gap-2 cursor-pointer"
+                    className={`w-full min-h-[44px] px-4 py-2 text-xs font-extrabold inline-flex items-center justify-center gap-2 cursor-pointer ${ui.radiusClasses.button}`}
+                    style={{
+                      backgroundColor: theme.accentHex,
+                      color: theme.accentTextHex,
+                    }}
                   >
-                    <Eye className="w-4 h-4 text-amber-400" />
+                    <Eye className="w-4 h-4" style={{ color: theme.highlightHex || '#E8833A' }} />
                     <span>مراقبة وإشراف على شاشة {card.activeShift?.staffName}</span>
                   </button>
                 ) : coveredByMe ? (
                   <button
                     type="button"
                     onClick={() => onNavigateScreen(card.screen, { supervisory: false })}
-                    className="w-full min-h-[42px] px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold inline-flex items-center justify-center gap-2 cursor-pointer"
+                    className={`w-full min-h-[44px] px-4 py-2 text-xs font-extrabold inline-flex items-center justify-center gap-2 cursor-pointer ${ui.radiusClasses.button}`}
+                    style={{
+                      backgroundColor: theme.highlightHex || '#E8833A',
+                      color: '#FFFFFF',
+                    }}
                   >
                     <LayoutGrid className="w-4 h-4" />
                     <span>العودة لورديتي البديلة في هذا القسم</span>
@@ -732,7 +803,7 @@ export function ManagerSupervisionDashboard({
                   <button
                     type="button"
                     onClick={() => onNavigateScreen(card.screen, { supervisory: false })}
-                    className="w-full min-h-[42px] px-4 py-2 rounded-xl border border-emerald-600 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold inline-flex items-center justify-center gap-2 cursor-pointer"
+                    className={`w-full min-h-[44px] px-4 py-2 border border-emerald-600 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold inline-flex items-center justify-center gap-2 cursor-pointer ${ui.radiusClasses.button}`}
                   >
                     <Play className="w-4 h-4" />
                     <span>دخول وبدء وردية بديلة (القسم شاغر)</span>
@@ -745,25 +816,43 @@ export function ManagerSupervisionDashboard({
       </section>
 
       {/* MANAGER CUSTODY VAULT CARD */}
-      <section className="bg-white border border-zinc-200 rounded-2xl p-5 grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+      <section
+        className={`border p-5 grid grid-cols-1 lg:grid-cols-12 gap-5 items-start ${ui.radiusClasses.card}`}
+        style={{
+          backgroundColor: theme.surfaceBg,
+          borderColor: theme.surfaceBorder,
+          boxShadow: theme.cardShadow,
+        }}
+      >
         <div className="lg:col-span-5 space-y-2">
           <div className="flex items-center gap-2">
-            <Wallet className="w-5 h-5 text-indigo-600" />
-            <h3 className="text-sm font-extrabold text-zinc-950">خزنة وعهدة المدير</h3>
+            <Wallet className="w-5 h-5" style={{ color: theme.accentHex }} />
+            <h3 className="text-sm font-extrabold" style={{ color: theme.surfaceText }}>
+              خزنة وعهدة المدير
+            </h3>
           </div>
-          <p className="text-xs text-zinc-500 leading-relaxed">
+          <p className="text-xs leading-relaxed" style={{ color: theme.mutedText }}>
             المبالغ الكاش التي يسلمها الكاشير للمدير عند انتهاء الوردية تتجمع هنا حتى تسليمها لصاحب المطعم أو ترحيلها لكاشير الوردية التالية.
           </p>
-          <div className="p-4 rounded-xl bg-zinc-50 border border-zinc-200 flex items-center justify-between">
-            <span className="text-xs font-bold text-zinc-600">الرصيد الكاش في عهدة المدير</span>
-            <span className="text-xl font-extrabold font-mono-num text-zinc-950">
+          <div
+            className="p-4 rounded-xl border flex items-center justify-between"
+            style={{ backgroundColor: theme.surfaceSubtleBg, borderColor: theme.surfaceBorder }}
+          >
+            <span className="text-xs font-bold" style={{ color: theme.mutedText }}>
+              الرصيد الكاش في عهدة المدير
+            </span>
+            <span className="text-xl font-extrabold font-mono-num" style={{ color: theme.surfaceText }}>
               {formatMoney(treasury.managerCustodyBalance)}
             </span>
           </div>
         </div>
 
-        <form onSubmit={handleTransferCustody} className="lg:col-span-7 space-y-3 bg-zinc-50 border border-zinc-200 rounded-xl p-4">
-          <p className="text-xs font-extrabold text-zinc-900 flex items-center gap-1.5">
+        <form
+          onSubmit={handleTransferCustody}
+          className="lg:col-span-7 space-y-3 border rounded-xl p-4"
+          style={{ backgroundColor: theme.surfaceSubtleBg, borderColor: theme.surfaceBorder }}
+        >
+          <p className="text-xs font-extrabold flex items-center gap-1.5" style={{ color: theme.surfaceText }}>
             <ArrowRightLeft className="w-4 h-4 text-emerald-600" />
             <span>توريد / تسليم نقدية إلى الخزنة الرئيسية لصاحب المطعم</span>
           </p>
@@ -776,14 +865,24 @@ export function ManagerSupervisionDashboard({
               value={transferAmount}
               onChange={(e) => setTransferAmount(e.target.value)}
               placeholder={`المبلغ (${currencyLabel})`}
-              className="w-full px-3 py-2 rounded-xl border border-zinc-300 bg-white text-xs font-mono-num font-bold"
+              className="w-full px-3 py-2 rounded-xl border text-xs font-mono-num font-bold"
+              style={{
+                backgroundColor: theme.surfaceBg,
+                borderColor: theme.surfaceBorder,
+                color: theme.surfaceText,
+              }}
             />
             <input
               type="text"
               value={transferNote}
               onChange={(e) => setTransferNote(e.target.value)}
               placeholder="ملاحظة التسليم (اختياري)"
-              className="w-full px-3 py-2 rounded-xl border border-zinc-300 bg-white text-xs"
+              className="w-full px-3 py-2 rounded-xl border text-xs"
+              style={{
+                backgroundColor: theme.surfaceBg,
+                borderColor: theme.surfaceBorder,
+                color: theme.surfaceText,
+              }}
             />
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -791,27 +890,28 @@ export function ManagerSupervisionDashboard({
               type="button"
               disabled={treasury.managerCustodyBalance <= 0}
               onClick={() => setTransferAmount(String(treasury.managerCustodyBalance))}
-              className="text-[11px] font-bold text-indigo-700 underline cursor-pointer disabled:opacity-40"
+              className="text-[11px] font-bold underline cursor-pointer disabled:opacity-40"
+              style={{ color: theme.accentHex }}
             >
               تحديد كامل العهدة ({formatMoney(treasury.managerCustodyBalance)})
             </button>
             <button
               type="submit"
               disabled={transferring || treasury.managerCustodyBalance <= 0}
-              className="min-h-[38px] px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              className={`min-h-[42px] px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50 ${ui.radiusClasses.button}`}
             >
               {transferring ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Utensils className="w-3.5 h-3.5" />}
               <span>توريد للخزنة الرئيسية</span>
             </button>
           </div>
           {treasuryTransfers.length > 0 && (
-            <div className="pt-2 border-t border-zinc-200 space-y-1 max-h-28 overflow-y-auto">
+            <div className="pt-2 border-t space-y-1 max-h-28 overflow-y-auto" style={{ borderColor: theme.surfaceBorder }}>
               {treasuryTransfers.slice(0, 4).map((tr) => (
-                <div key={tr.id} className="flex items-center justify-between text-[11px] text-zinc-600">
+                <div key={tr.id} className="flex items-center justify-between text-[11px]" style={{ color: theme.mutedText }}>
                   <span className="truncate">
                     {tr.fromName} ← {tr.toName}
                   </span>
-                  <span className="font-mono-num font-bold text-zinc-900 shrink-0">
+                  <span className="font-mono-num font-bold shrink-0" style={{ color: theme.surfaceText }}>
                     {formatMoney(tr.amountCash)}
                   </span>
                 </div>

@@ -7,6 +7,7 @@ export type UiScreenId =
   | 'landing_page';
 
 export type ScreenThemeId =
+  | 'sand_sapphire'
   | 'obsidian_gold'
   | 'alabaster_editorial'
   | 'emerald_hospitality'
@@ -44,6 +45,8 @@ export interface ScreenThemeTokens {
   headerText: string;
   accentHex: string;
   accentTextHex: string;
+  highlightHex?: string;
+  successHex?: string;
   cardShadow: string;
   previewSwatches: [string, string, string];
 }

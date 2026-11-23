@@ -57,6 +57,36 @@ export const SCREEN_META: Record<
 };
 
 export const SCREEN_THEMES: Record<ScreenThemeId, ScreenThemeTokens> = {
+  sand_sapphire: {
+    id: 'sand_sapphire',
+    nameAr: 'رمل وياقوت',
+    nameEn: 'Sand & Sapphire',
+    taglineAr: 'رملي دافئ مريح للعين مع أزرق ملكي ولمسات برتقالية',
+    taglineEn: 'Warm sand canvas with deep royal sapphire and amber accents',
+    isDarkShell: true,
+    canvasBg: '#F3EBDD',
+    canvasText: '#0E1B3D',
+    surfaceBg: '#FBF7EF',
+    surfaceSubtleBg: '#F3EBDD',
+    surfaceBorder: '#E6D9C3',
+    surfaceText: '#14285A',
+    mutedText: '#475569',
+    sidebarBg: '#14285A',
+    sidebarBorder: '#233B78',
+    sidebarText: '#FBF7EF',
+    sidebarMuted: '#B8C4E0',
+    sidebarActiveBg: '#E8833A',
+    sidebarActiveText: '#0E1B3D',
+    headerBg: '#FBF7EF',
+    headerBorder: '#E6D9C3',
+    headerText: '#14285A',
+    accentHex: '#14285A',
+    accentTextHex: '#FBF7EF',
+    highlightHex: '#E8833A',
+    successHex: '#2F8F5B',
+    cardShadow: '0 1px 3px rgba(20, 40, 90, 0.06)',
+    previewSwatches: ['#F3EBDD', '#14285A', '#E8833A'],
+  },
   obsidian_gold: {
     id: 'obsidian_gold',
     nameAr: 'أوبسيديان الملكي الذهبي',
@@ -345,7 +375,7 @@ export function createDefaultScreenConfig(screenId: UiScreenId): UiScreenConfig 
   switch (screenId) {
     case 'super_admin':
       return {
-        themeId: 'obsidian_gold',
+        themeId: 'sand_sapphire',
         layoutStyle: 'sidebar_cards',
         cardRadius: 'rounded',
         cards: [
@@ -372,7 +402,7 @@ export function createDefaultScreenConfig(screenId: UiScreenId): UiScreenConfig 
       };
     case 'owner_admin':
       return {
-        themeId: 'alabaster_editorial',
+        themeId: 'sand_sapphire',
         layoutStyle: 'sidebar_cards',
         cardRadius: 'rounded',
         cards: [
@@ -399,7 +429,7 @@ export function createDefaultScreenConfig(screenId: UiScreenId): UiScreenConfig 
       };
     case 'manager_console':
       return {
-        themeId: 'nordic_slate',
+        themeId: 'sand_sapphire',
         layoutStyle: 'top_deck',
         cardRadius: 'rounded',
         cards: [
@@ -420,7 +450,7 @@ export function createDefaultScreenConfig(screenId: UiScreenId): UiScreenConfig 
       };
     case 'cashier_kds':
       return {
-        themeId: 'midnight_sapphire',
+        themeId: 'sand_sapphire',
         layoutStyle: 'top_deck',
         cardRadius: 'rounded',
         cards: [
@@ -441,7 +471,7 @@ export function createDefaultScreenConfig(screenId: UiScreenId): UiScreenConfig 
       };
     case 'captain_waiter':
       return {
-        themeId: 'emerald_hospitality',
+        themeId: 'sand_sapphire',
         layoutStyle: 'top_deck',
         cardRadius: 'rounded',
         cards: [
@@ -456,7 +486,7 @@ export function createDefaultScreenConfig(screenId: UiScreenId): UiScreenConfig 
       };
     case 'landing_page':
       return {
-        themeId: 'alabaster_editorial',
+        themeId: 'sand_sapphire',
         layoutStyle: 'top_deck',
         cardRadius: 'rounded',
         cards: [

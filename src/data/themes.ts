@@ -190,6 +190,7 @@ export const MENU_THEMES: ThemeMeta[] = [
 ];
 
 export const COLOR_PRESETS = [
+  { name: 'رمل وياقوت', name_en: 'Sand & Sapphire', hex: '#14285A' },
   { name: 'عنابي كلاسيكي', name_en: 'Classic Crimson', hex: '#A61C1C' },
   { name: 'عنبر جريء', name_en: 'Bold Amber', hex: '#F59E0B' },
   { name: 'ذهبي فاخر', name_en: 'Luxury Gold', hex: '#D4AF37' },

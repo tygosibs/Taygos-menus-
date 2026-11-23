@@ -64,7 +64,7 @@ export function OnboardingForm({ ownerId, ownerDisplayName, onCreated }: Onboard
 
   // Step 2: Open Theme Selection & Interactive Preview
   const [activeTheme, setActiveTheme] = useState<ActiveTheme>('theme-1');
-  const [primaryColor, setPrimaryColor] = useState('#A61C1C');
+  const [primaryColor, setPrimaryColor] = useState('#14285A');
   const [customThemes, setCustomThemes] = useState<CustomTheme[]>([]);
   const [previewViewport, setPreviewViewport] = useState<'mobile' | 'desktop'>('mobile');
   const [previewSelectedItem, setPreviewSelectedItem] = useState<MenuItem | null>(null);

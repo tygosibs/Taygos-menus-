@@ -1195,8 +1195,13 @@ export function LiveOrdersTab({
       dir={dir}
       className={
         isFullscreen
-          ? 'fixed inset-0 z-50 bg-[#F5F6F8] overflow-y-auto p-4 sm:p-6 space-y-5'
+          ? 'fixed inset-0 z-50 overflow-y-auto p-4 sm:p-6 space-y-5'
           : 'space-y-5'
+      }
+      style={
+        isFullscreen
+          ? { backgroundColor: ui.theme.canvasBg, color: ui.theme.canvasText }
+          : undefined
       }
     >
       {/* Top Bar with Station Switcher, Sound Controls, and Full-Screen Toggle */}
@@ -1235,7 +1240,7 @@ export function LiveOrdersTab({
                   setDrawerFeedback(null);
                   setDrawerModalOpen(true);
                 }}
-                className={`min-h-[40px] px-3.5 py-2 text-xs font-extrabold flex items-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
+                className={`min-h-[42px] px-3.5 py-2 text-xs font-extrabold flex items-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
                 style={{
                   backgroundColor: ui.theme.accentHex,
                   color: ui.theme.accentTextHex,
@@ -1266,11 +1271,20 @@ export function LiveOrdersTab({
             <button
               type="button"
               onClick={() => setPrinterModalOpen(true)}
-              className={`min-h-[40px] px-3 py-2 rounded-xl border text-xs font-extrabold flex items-center gap-1.5 cursor-pointer ${
+              className={`min-h-[42px] px-3 py-2 border text-xs font-extrabold flex items-center gap-1.5 cursor-pointer ${ui.radiusClasses.button} ${
                 printerStatusLabel
-                  ? 'border-indigo-200 bg-indigo-50 text-indigo-800 hover:bg-indigo-100'
-                  : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50'
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                  : ''
               }`}
+              style={
+                printerStatusLabel
+                  ? undefined
+                  : {
+                      backgroundColor: ui.theme.surfaceSubtleBg,
+                      borderColor: ui.theme.surfaceBorder,
+                      color: ui.theme.surfaceText,
+                    }
+              }
             >
               <Printer className="w-4 h-4" />
               <span>{printerStatusLabel ? `طابعة: ${printerStatusLabel}` : isEn ? 'Thermal Printer' : 'طابعة حرارية'}</span>
@@ -1282,7 +1296,12 @@ export function LiveOrdersTab({
                 unlockAudioContext();
                 playOrderAlertChime();
               }}
-              className="min-h-[40px] px-3 py-2 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-700 hover:bg-zinc-50 flex items-center gap-1.5 cursor-pointer"
+              className={`min-h-[42px] px-3 py-2 border text-xs font-bold flex items-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
+              style={{
+                backgroundColor: ui.theme.surfaceSubtleBg,
+                borderColor: ui.theme.surfaceBorder,
+                color: ui.theme.surfaceText,
+              }}
             >
               <Volume2 className="w-4 h-4" />
               <span className="hidden sm:inline">{t.admin.orders.testSound}</span>
@@ -1290,11 +1309,18 @@ export function LiveOrdersTab({
             <button
               type="button"
               onClick={() => setSoundEnabled((v) => !v)}
-              className={`min-h-[40px] px-3 py-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 cursor-pointer ${
-                soundEnabled
-                  ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                  : 'border-zinc-200 bg-zinc-50 text-zinc-500'
+              className={`min-h-[42px] px-3 py-2 border text-xs font-bold flex items-center gap-1.5 cursor-pointer ${ui.radiusClasses.button} ${
+                soundEnabled ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : ''
               }`}
+              style={
+                soundEnabled
+                  ? undefined
+                  : {
+                      backgroundColor: ui.theme.surfaceSubtleBg,
+                      borderColor: ui.theme.surfaceBorder,
+                      color: ui.theme.mutedText,
+                    }
+              }
             >
               {soundEnabled ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
               <span className="hidden sm:inline">
@@ -1304,11 +1330,20 @@ export function LiveOrdersTab({
             <button
               type="button"
               onClick={handleToggleFullscreen}
-              className={`min-h-[40px] px-3.5 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 cursor-pointer ${
+              className={`min-h-[42px] px-3.5 py-2 border text-xs font-extrabold flex items-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
+              style={
                 isFullscreen
-                  ? 'bg-zinc-950 text-white'
-                  : 'border border-zinc-200 bg-white text-zinc-800 hover:bg-zinc-50'
-              }`}
+                  ? {
+                      backgroundColor: ui.theme.accentHex,
+                      borderColor: ui.theme.accentHex,
+                      color: ui.theme.accentTextHex,
+                    }
+                  : {
+                      backgroundColor: ui.theme.surfaceSubtleBg,
+                      borderColor: ui.theme.surfaceBorder,
+                      color: ui.theme.surfaceText,
+                    }
+              }
             >
               {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
               <span>
@@ -1417,24 +1452,32 @@ export function LiveOrdersTab({
 
           return (
             <div className="space-y-4">
-              <div className="bg-white border border-zinc-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
+              <div
+                className={`border p-4 flex flex-wrap items-center justify-between gap-3 ${ui.radiusClasses.card}`}
+                style={{
+                  backgroundColor: ui.theme.surfaceBg,
+                  borderColor: ui.theme.surfaceBorder,
+                  boxShadow: ui.theme.cardShadow,
+                }}
+              >
                 <div className="flex items-center gap-2.5">
                   <span className={`px-3 py-1 rounded-lg border text-xs font-extrabold ${stMeta.badgeClass}`}>
                     {isEn ? stMeta.label_en : stMeta.label}
                   </span>
-                  <span className="text-xs text-zinc-600 font-semibold">
+                  <span className="text-xs font-semibold" style={{ color: ui.theme.mutedText }}>
                     {isEn
                       ? `${visibleKdsOrders.length} active ticket(s) for this screen`
                       : `${visibleKdsOrders.length} تذكرة تحضير مخصصة لهذه الشاشة`}
                   </span>
                 </div>
 
-                <label className="flex items-center gap-2 text-xs font-bold text-zinc-700 cursor-pointer">
+                <label className="flex items-center gap-2 text-xs font-bold cursor-pointer" style={{ color: ui.theme.surfaceText }}>
                   <input
                     type="checkbox"
                     checked={kdsShowCompletedItems}
                     onChange={(e) => setKdsShowCompletedItems(e.target.checked)}
-                    className="w-4 h-4 accent-zinc-950"
+                    className="w-4 h-4"
+                    style={{ accentColor: ui.theme.accentHex }}
                   />
                   <span>
                     {isEn ? 'Show already ready/served tickets' : 'إظهار الطلبات التي تم تجهيزها أيضاً'}
@@ -1443,14 +1486,21 @@ export function LiveOrdersTab({
               </div>
 
               {visibleKdsOrders.length === 0 ? (
-                <div className="bg-white border border-zinc-200 rounded-2xl p-10 text-center space-y-2">
+                <div
+                  className={`border p-10 text-center space-y-2 ${ui.radiusClasses.card}`}
+                  style={{
+                    backgroundColor: ui.theme.surfaceBg,
+                    borderColor: ui.theme.surfaceBorder,
+                    boxShadow: ui.theme.cardShadow,
+                  }}
+                >
                   <CheckCheck className="w-9 h-9 text-emerald-500 mx-auto" />
-                  <h3 className="text-base font-extrabold text-zinc-900">
+                  <h3 className="text-base font-extrabold" style={{ color: ui.theme.surfaceText }}>
                     {isEn
                       ? `All clear on ${stMeta.shortLabel_en} screen!`
                       : `لا توجد طلبات معلّقة على شاشة ${stMeta.shortLabel} الآن`}
                   </h3>
-                  <p className="text-xs text-zinc-500 max-w-md mx-auto">
+                  <p className="text-xs max-w-md mx-auto" style={{ color: ui.theme.mutedText }}>
                     {isEn
                       ? 'Any new order containing items from categories assigned to this station will appear here immediately.'
                       : 'أي أوردر جديد يحتوي على أصناف تابعة لهذه المحطة سيظهر هنا فوراً مع رقم الترابيزة واسم العميل.'}
@@ -1479,22 +1529,35 @@ export function LiveOrdersTab({
                     return (
                       <article
                         key={order.id}
-                        className={`bg-white rounded-2xl border-2 p-4 flex flex-col justify-between gap-4 shadow-2xs ${
+                        className={`border-2 p-4 flex flex-col justify-between gap-4 ${ui.radiusClasses.card} ${
                           stPending > 0 ? 'border-amber-300' : 'border-emerald-200 bg-emerald-50/20'
                         }`}
+                        style={
+                          stPending > 0
+                            ? {
+                                backgroundColor: ui.theme.surfaceBg,
+                                boxShadow: ui.theme.cardShadow,
+                              }
+                            : { boxShadow: ui.theme.cardShadow }
+                        }
                       >
                         <div className="space-y-3">
-                          <div className="flex items-start justify-between gap-2 border-b border-zinc-100 pb-3">
+                          <div className="flex items-start justify-between gap-2 border-b pb-3" style={{ borderColor: ui.theme.surfaceBorder }}>
                             <div>
                               <div className="flex flex-wrap items-center gap-2">
-                                <span className="font-mono-num text-base font-extrabold text-zinc-950">
+                                <span className="font-mono-num text-base font-extrabold" style={{ color: ui.theme.surfaceText }}>
                                   #{order.orderNumber}
                                 </span>
-                                <span className="px-2.5 py-0.5 rounded-lg bg-zinc-950 text-white text-xs font-extrabold">
+                                <span
+                                  className="px-2.5 py-0.5 rounded-lg text-xs font-extrabold"
+                                  style={{ backgroundColor: ui.theme.sidebarBg, color: ui.theme.sidebarText }}
+                                >
                                   {locationLabel}
                                 </span>
                               </div>
-                              <p className="text-[11px] text-zinc-500 mt-1">{order.customerName}</p>
+                              <p className="text-[11px] mt-1" style={{ color: ui.theme.mutedText }}>
+                                {order.customerName}
+                              </p>
                             </div>
                             <span
                               className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold shrink-0 ${
@@ -1527,22 +1590,28 @@ export function LiveOrdersTab({
                                   <div
                                     key={itemKey}
                                     className={`p-3 rounded-xl border flex items-start justify-between gap-2.5 ${
-                                      isDone
-                                        ? 'bg-emerald-50/70 border-emerald-200'
-                                        : 'bg-zinc-50 border-zinc-200'
+                                      isDone ? 'bg-emerald-50/70 border-emerald-200' : ''
                                     }`}
+                                    style={
+                                      isDone
+                                        ? undefined
+                                        : {
+                                            backgroundColor: ui.theme.surfaceSubtleBg,
+                                            borderColor: ui.theme.surfaceBorder,
+                                          }
+                                    }
                                   >
                                     <div className="min-w-0 space-y-1">
                                       <div className="flex flex-wrap items-center gap-1.5">
-                                        <span className="font-mono-num text-sm font-extrabold text-zinc-950">
+                                        <span className="font-mono-num text-sm font-extrabold" style={{ color: ui.theme.surfaceText }}>
                                           {it.quantity}×
                                         </span>
-                                        <span className="text-xs sm:text-sm font-extrabold text-zinc-950">
+                                        <span className="text-xs sm:text-sm font-extrabold" style={{ color: ui.theme.surfaceText }}>
                                           {it.name}
                                           {it.sizeName ? ` (${it.sizeName})` : ''}
                                         </span>
                                         {showStationPrices && (
-                                          <span className="font-mono-num text-[11px] font-bold text-zinc-600">
+                                          <span className="font-mono-num text-[11px] font-bold" style={{ color: ui.theme.mutedText }}>
                                             ({formatMoney(it.lineTotal)})
                                           </span>
                                         )}
@@ -1553,7 +1622,7 @@ export function LiveOrdersTab({
                                         )}
                                       </div>
                                       {it.addonNames?.length > 0 && (
-                                        <p className="text-[11px] text-zinc-600">
+                                        <p className="text-[11px]" style={{ color: ui.theme.mutedText }}>
                                           + {it.addonNames.join(isEn ? ', ' : '، ')}
                                         </p>
                                       )}
@@ -1570,7 +1639,7 @@ export function LiveOrdersTab({
                                       type="button"
                                       disabled={updatingItemKey === itemKey}
                                       onClick={() => handleMarkStationItemsReady(order, [originalIndex])}
-                                      className="min-h-[38px] px-3 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-extrabold hover:bg-emerald-700 shrink-0 cursor-pointer disabled:opacity-50"
+                                      className="min-h-[40px] px-3 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-extrabold hover:bg-emerald-700 shrink-0 cursor-pointer disabled:opacity-50"
                                     >
                                       {activeStation === 'kitchen'
                                         ? isEn
@@ -1600,7 +1669,11 @@ export function LiveOrdersTab({
                               type="button"
                               disabled={updatingItemKey === batchKey}
                               onClick={() => handleMarkStationItemsReady(order, unreadyIndices)}
-                              className="flex-1 min-h-[42px] py-2.5 px-3 rounded-xl bg-zinc-950 text-white text-xs font-extrabold hover:bg-zinc-800 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                              className={`flex-1 min-h-[42px] py-2.5 px-3 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 ${ui.radiusClasses.button}`}
+                              style={{
+                                backgroundColor: ui.theme.accentHex,
+                                color: ui.theme.accentTextHex,
+                              }}
                             >
                               <CheckCheck className="w-4 h-4 text-emerald-400" />
                               <span>
@@ -1621,7 +1694,12 @@ export function LiveOrdersTab({
                                 stItems.map((x) => x.item)
                               )
                             }
-                            className="min-h-[42px] py-2.5 px-3 rounded-xl border border-zinc-300 bg-white hover:bg-zinc-50 text-zinc-900 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                            className={`min-h-[42px] py-2.5 px-3 border text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 ${ui.radiusClasses.button}`}
+                            style={{
+                              backgroundColor: ui.theme.surfaceSubtleBg,
+                              borderColor: ui.theme.surfaceBorder,
+                              color: ui.theme.surfaceText,
+                            }}
                           >
                             <Printer className="w-4 h-4" />
                             <span>{isEn ? 'Print Ticket' : 'طباعة التذكرة'}</span>
@@ -1641,20 +1719,42 @@ export function LiveOrdersTab({
         /* ============================================================== */
         <div className="space-y-6">
           {/* Cashier Sub-View Switcher */}
-          <div className="bg-white border border-zinc-200 rounded-2xl p-2 flex flex-wrap items-center gap-1.5">
+          <div
+            className={`border p-2 flex flex-wrap items-center gap-1.5 ${ui.radiusClasses.card}`}
+            style={{
+              backgroundColor: ui.theme.surfaceBg,
+              borderColor: ui.theme.surfaceBorder,
+              boxShadow: ui.theme.cardShadow,
+            }}
+          >
             <button
               type="button"
               onClick={() => setCashierSubView('orders')}
-              className={`min-h-[40px] px-3.5 py-2 rounded-xl border text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap cursor-pointer transition-colors ${
+              className={`min-h-[42px] px-3.5 py-2 border text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap cursor-pointer transition-colors ${ui.radiusClasses.button}`}
+              style={
                 cashierSubView === 'orders'
-                  ? 'bg-zinc-950 text-white border-zinc-950'
-                  : 'bg-zinc-50 text-zinc-700 border-zinc-200 hover:bg-zinc-100'
-              }`}
+                  ? {
+                      backgroundColor: ui.theme.accentHex,
+                      borderColor: ui.theme.accentHex,
+                      color: ui.theme.accentTextHex,
+                    }
+                  : {
+                      backgroundColor: ui.theme.surfaceSubtleBg,
+                      borderColor: ui.theme.surfaceBorder,
+                      color: ui.theme.surfaceText,
+                    }
+              }
             >
               <Receipt className="w-4 h-4 shrink-0" />
               <span>{isEn ? 'Live Orders & Checks' : 'الطلبات والشيكات الحية'}</span>
               {activeOrders.length > 0 && (
-                <span className="font-mono-num px-1.5 py-0.5 rounded bg-amber-500 text-zinc-950 text-[10px] font-extrabold">
+                <span
+                  className="font-mono-num px-1.5 py-0.5 rounded text-[10px] font-extrabold"
+                  style={{
+                    backgroundColor: ui.theme.highlightHex || '#E8833A',
+                    color: '#FFFFFF',
+                  }}
+                >
                   {activeOrders.length}
                 </span>
               )}
@@ -1663,16 +1763,25 @@ export function LiveOrdersTab({
             <button
               type="button"
               onClick={() => setCashierSubView('tables')}
-              className={`min-h-[40px] px-3.5 py-2 rounded-xl border text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap cursor-pointer transition-colors ${
+              className={`min-h-[42px] px-3.5 py-2 border text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap cursor-pointer transition-colors ${ui.radiusClasses.button}`}
+              style={
                 cashierSubView === 'tables'
-                  ? 'bg-zinc-950 text-white border-zinc-950'
-                  : 'bg-zinc-50 text-zinc-700 border-zinc-200 hover:bg-zinc-100'
-              }`}
+                  ? {
+                      backgroundColor: ui.theme.accentHex,
+                      borderColor: ui.theme.accentHex,
+                      color: ui.theme.accentTextHex,
+                    }
+                  : {
+                      backgroundColor: ui.theme.surfaceSubtleBg,
+                      borderColor: ui.theme.surfaceBorder,
+                      color: ui.theme.surfaceText,
+                    }
+              }
             >
               <Grid className="w-4 h-4 shrink-0" />
               <span>{isEn ? 'Color Floor Map' : 'خريطة الترابيزات الحية بالألوان'}</span>
               {openTableGroups.length > 0 && (
-                <span className="font-mono-num px-1.5 py-0.5 rounded bg-emerald-500 text-white text-[10px] font-extrabold">
+                <span className="font-mono-num px-1.5 py-0.5 rounded bg-emerald-600 text-white text-[10px] font-extrabold">
                   {openTableGroups.length}
                 </span>
               )}
@@ -1681,11 +1790,20 @@ export function LiveOrdersTab({
             <button
               type="button"
               onClick={() => setCashierSubView('pos')}
-              className={`min-h-[40px] px-3.5 py-2 rounded-xl border text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap cursor-pointer transition-colors ${
+              className={`min-h-[42px] px-3.5 py-2 border text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap cursor-pointer transition-colors ${ui.radiusClasses.button}`}
+              style={
                 cashierSubView === 'pos'
-                  ? 'bg-zinc-950 text-white border-zinc-950'
-                  : 'bg-zinc-50 text-zinc-700 border-zinc-200 hover:bg-zinc-100'
-              }`}
+                  ? {
+                      backgroundColor: ui.theme.accentHex,
+                      borderColor: ui.theme.accentHex,
+                      color: ui.theme.accentTextHex,
+                    }
+                  : {
+                      backgroundColor: ui.theme.surfaceSubtleBg,
+                      borderColor: ui.theme.surfaceBorder,
+                      color: ui.theme.surfaceText,
+                    }
+              }
             >
               <ShoppingBag className="w-4 h-4 shrink-0" />
               <span>{isEn ? 'Cashier Fast POS' : 'نقطة بيع الكاشير (صالة / تيك أواي / دليفري)'}</span>
@@ -1849,15 +1967,15 @@ export function LiveOrdersTab({
           {openTableGroups.length > 0 && (
             <section className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="text-sm font-extrabold text-zinc-950 flex items-center gap-2">
-                  <Receipt className="w-4 h-4 text-amber-600" />
+                <h3 className="text-sm font-extrabold flex items-center gap-2" style={{ color: ui.theme.canvasText }}>
+                  <Receipt className="w-4 h-4" style={{ color: ui.theme.highlightHex || '#E8833A' }} />
                   <span>
                     {isEn
                       ? `Open Table Master Checks (${openTableGroups.length})`
                       : `شيكات الترابيزات المفتوحة الآن (${openTableGroups.length})`}
                   </span>
                 </h3>
-                <span className="text-[11px] text-zinc-500">
+                <span className="text-[11px]" style={{ color: ui.theme.mutedText }}>
                   {isEn
                     ? 'Grouped per table with Separate Check guest totals, print receipt, and Close Table.'
                     : 'مجمّعة لكل ترابيزة مع حساب كل ضيف بالاسم وإغلاق وطباعة الشيك.'}
@@ -1868,30 +1986,38 @@ export function LiveOrdersTab({
                 {openTableGroups.map((group) => (
                   <article
                     key={group.groupKey}
-                    className="bg-white border-2 border-zinc-900/15 rounded-2xl p-5 flex flex-col justify-between gap-4 shadow-2xs"
+                    className={`border p-5 flex flex-col justify-between gap-4 ${ui.radiusClasses.card}`}
+                    style={{
+                      backgroundColor: ui.theme.surfaceBg,
+                      borderColor: ui.theme.surfaceBorder,
+                      boxShadow: ui.theme.cardShadow,
+                    }}
                   >
                     <div className="space-y-3">
-                      <div className="flex items-start justify-between gap-3 border-b border-zinc-100 pb-3">
+                      <div className="flex items-start justify-between gap-3 border-b pb-3" style={{ borderColor: ui.theme.surfaceBorder }}>
                         <div>
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="px-2.5 py-1 rounded-lg bg-zinc-950 text-white text-xs font-extrabold flex items-center gap-1.5">
-                              <MapPin className="w-3.5 h-3.5 text-amber-400" />
+                            <span
+                              className="px-2.5 py-1 rounded-lg text-xs font-extrabold flex items-center gap-1.5"
+                              style={{ backgroundColor: ui.theme.sidebarBg, color: ui.theme.sidebarText }}
+                            >
+                              <MapPin className="w-3.5 h-3.5" style={{ color: ui.theme.highlightHex || '#E8833A' }} />
                               <span>
                                 {group.hallName ? `${group.hallName} · ` : ''}
                                 {isEn ? `Table ${group.tableNumber}` : `ترابيزة ${group.tableNumber}`}
                               </span>
                             </span>
-                            <span className="text-[11px] font-mono-num text-zinc-500 font-bold">
+                            <span className="text-[11px] font-mono-num font-bold" style={{ color: ui.theme.mutedText }}>
                               ({group.orderNumbers.map((n) => `#${n}`).join(' + ')})
                             </span>
                           </div>
                         </div>
 
                         <div className="text-end shrink-0">
-                          <p className="text-[10px] text-zinc-500 font-bold">
+                          <p className="text-[10px] font-bold" style={{ color: ui.theme.mutedText }}>
                             {isEn ? 'Table Grand Total' : 'إجمالي الترابيزة'}
                           </p>
-                          <p className="text-base font-extrabold font-mono-num text-zinc-950">
+                          <p className="text-base font-extrabold font-mono-num" style={{ color: ui.theme.surfaceText }}>
                             {formatMoney(group.grandTotal)}
                           </p>
                         </div>
@@ -1912,19 +2038,27 @@ export function LiveOrdersTab({
                             return (
                               <div
                                 key={`${ord.id}_${idx}`}
-                                className="flex items-start justify-between gap-2 text-xs py-1 border-b border-zinc-50 last:border-0"
+                                className="flex items-start justify-between gap-2 text-xs py-1 border-b last:border-0"
+                                style={{ borderColor: ui.theme.surfaceBorder }}
                               >
                                 <div className="min-w-0 space-y-0.5">
                                   <div className="flex flex-wrap items-center gap-1.5">
-                                    <span className="font-mono-num font-bold text-zinc-900">
+                                    <span className="font-mono-num font-bold" style={{ color: ui.theme.surfaceText }}>
                                       {it.quantity}×
                                     </span>
-                                    <span className="font-bold text-zinc-900">
+                                    <span className="font-bold" style={{ color: ui.theme.surfaceText }}>
                                       {it.name}
                                       {it.sizeName ? ` (${it.sizeName})` : ''}
                                     </span>
                                     {it.guestName && (
-                                      <span className="px-1.5 py-0.5 rounded bg-zinc-100 border border-zinc-200 text-zinc-700 text-[10px] font-extrabold">
+                                      <span
+                                        className="px-1.5 py-0.5 rounded border text-[10px] font-extrabold"
+                                        style={{
+                                          backgroundColor: ui.theme.surfaceSubtleBg,
+                                          borderColor: ui.theme.surfaceBorder,
+                                          color: ui.theme.surfaceText,
+                                        }}
+                                      >
                                         {it.guestName}
                                       </span>
                                     )}
@@ -1936,7 +2070,7 @@ export function LiveOrdersTab({
                                     {getPrepBadge(prepState)}
                                   </div>
                                 </div>
-                                <span className="font-mono-num font-bold text-zinc-800 shrink-0">
+                                <span className="font-mono-num font-bold shrink-0" style={{ color: ui.theme.surfaceText }}>
                                   {formatMoney(it.lineTotal)}
                                 </span>
                               </div>
@@ -1946,9 +2080,12 @@ export function LiveOrdersTab({
                       </div>
 
                       {/* Separate Check Guest Breakdown */}
-                      <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-200 space-y-2">
-                        <p className="text-[11px] font-extrabold text-zinc-800 flex items-center gap-1.5">
-                          <Users className="w-3.5 h-3.5 text-amber-600" />
+                      <div
+                        className="p-3 rounded-xl border space-y-2"
+                        style={{ backgroundColor: ui.theme.surfaceSubtleBg, borderColor: ui.theme.surfaceBorder }}
+                      >
+                        <p className="text-[11px] font-extrabold flex items-center gap-1.5" style={{ color: ui.theme.surfaceText }}>
+                          <Users className="w-3.5 h-3.5" style={{ color: ui.theme.highlightHex || '#E8833A' }} />
                           <span>
                             {isEn
                               ? 'Separate Check Breakdown (By Guest Name)'
@@ -1959,13 +2096,14 @@ export function LiveOrdersTab({
                           {group.guestsBreakdown.map((gc, idx) => (
                             <div
                               key={`${gc.guestName}_${idx}`}
-                              className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-white border border-zinc-200 text-[11px]"
+                              className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg border text-[11px]"
+                              style={{ backgroundColor: ui.theme.surfaceBg, borderColor: ui.theme.surfaceBorder }}
                             >
-                              <span className="font-bold text-zinc-800 truncate">
+                              <span className="font-bold truncate" style={{ color: ui.theme.surfaceText }}>
                                 {gc.guestName}{' '}
-                                <span className="text-zinc-400 font-normal">({gc.itemsCount})</span>
+                                <span className="font-normal" style={{ color: ui.theme.mutedText }}>({gc.itemsCount})</span>
                               </span>
-                              <span className="font-mono-num font-extrabold text-zinc-950 shrink-0">
+                              <span className="font-mono-num font-extrabold shrink-0" style={{ color: ui.theme.surfaceText }}>
                                 {formatMoney(gc.total)}
                               </span>
                             </div>
@@ -1984,13 +2122,18 @@ export function LiveOrdersTab({
                       </div>
                     )}
 
-                    <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-zinc-100">
+                    <div className="flex flex-wrap items-center gap-2 pt-2 border-t" style={{ borderColor: ui.theme.surfaceBorder }}>
                       {(canEditOpenOrders || canApplyInstantDiscount || canCancelOpenOrders) &&
                         group.orders[0] && (
                           <button
                             type="button"
                             onClick={() => openModifyOrderModal(group.orders[0])}
-                            className="min-h-[42px] px-3 py-2 rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-900 hover:bg-indigo-100 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer"
+                            className={`min-h-[42px] px-3 py-2 border text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
+                            style={{
+                              backgroundColor: ui.theme.surfaceSubtleBg,
+                              borderColor: ui.theme.surfaceBorder,
+                              color: ui.theme.accentHex,
+                            }}
                           >
                             <Edit3 className="w-3.5 h-3.5" />
                             <span>{isEn ? 'Edit / Discount' : 'تعديل / خصم'}</span>
@@ -2000,7 +2143,7 @@ export function LiveOrdersTab({
                       <button
                         type="button"
                         onClick={() => openSplitCheckForTableGroup(group)}
-                        className="min-h-[42px] px-3.5 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-950 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer"
+                        className={`min-h-[42px] px-3.5 py-2 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-950 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
                       >
                         <Scissors className="w-4 h-4" />
                         <span>{isEn ? 'Split Check' : 'تقسيم الشيك'}</span>
@@ -2012,7 +2155,12 @@ export function LiveOrdersTab({
                           setReceiptModalOrder(null);
                           setReceiptModalTable(group);
                         }}
-                        className="min-h-[42px] px-4 py-2 rounded-xl border border-zinc-300 bg-white text-zinc-900 text-xs font-extrabold hover:bg-zinc-50 flex items-center justify-center gap-1.5 cursor-pointer"
+                        className={`min-h-[42px] px-4 py-2 border text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
+                        style={{
+                          backgroundColor: ui.theme.surfaceSubtleBg,
+                          borderColor: ui.theme.surfaceBorder,
+                          color: ui.theme.surfaceText,
+                        }}
                       >
                         <Printer className="w-4 h-4" />
                         <span>{isEn ? 'Print Receipt' : 'طباعة الريسيت'}</span>
@@ -2021,7 +2169,7 @@ export function LiveOrdersTab({
                       <button
                         type="button"
                         onClick={() => openSettlementModal({ type: 'table', group }, 'cash')}
-                        className="flex-1 min-h-[42px] px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-extrabold hover:bg-emerald-700 flex items-center justify-center gap-1.5 cursor-pointer"
+                        className={`flex-1 min-h-[42px] px-4 py-2 bg-emerald-600 text-white text-xs font-extrabold hover:bg-emerald-700 flex items-center justify-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
                       >
                         <Banknote className="w-4 h-4" />
                         <span>{isEn ? 'Settle & Close' : 'تحصيل وإقفال الشيك'}</span>
@@ -2037,12 +2185,12 @@ export function LiveOrdersTab({
           <section className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="space-y-0.5">
-                <h3 className="text-sm font-extrabold text-zinc-950">
+                <h3 className="text-sm font-extrabold" style={{ color: ui.theme.canvasText }}>
                   {isEn
                     ? 'Active Orders & Open Checks'
                     : 'الطلبات والشيكات المفتوحة حالياً'}
                 </h3>
-                <p className="text-[11px] text-zinc-500">
+                <p className="text-[11px]" style={{ color: ui.theme.mutedText }}>
                   {isEn
                     ? 'Settled or cancelled checks leave this screen automatically to keep operations clutter-free.'
                     : 'تختفي الشيكات تلقائياً من هذه الشاشة فور التحصيل أو الإلغاء لمنع التكدس.'}
@@ -2050,7 +2198,14 @@ export function LiveOrdersTab({
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 {supervisoryMode && coveringStaffName && (
-                  <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-lg">
+                  <span
+                    className="text-[11px] font-bold border px-2.5 py-1 rounded-lg"
+                    style={{
+                      backgroundColor: ui.theme.surfaceBg,
+                      borderColor: ui.theme.surfaceBorder,
+                      color: ui.theme.accentHex,
+                    }}
+                  >
                     إشراف على وردية: {coveringStaffName}
                   </span>
                 )}
@@ -2058,9 +2213,14 @@ export function LiveOrdersTab({
                   <button
                     type="button"
                     onClick={onOpenShiftReports}
-                    className="px-3 py-1.5 rounded-xl border border-zinc-300 bg-white hover:bg-zinc-50 text-[11px] font-extrabold text-zinc-800 inline-flex items-center gap-1.5 cursor-pointer"
+                    className={`min-h-[38px] px-3 py-1.5 border text-[11px] font-extrabold inline-flex items-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
+                    style={{
+                      backgroundColor: ui.theme.surfaceBg,
+                      borderColor: ui.theme.surfaceBorder,
+                      color: ui.theme.surfaceText,
+                    }}
                   >
-                    <Receipt className="w-3.5 h-3.5 text-amber-600" />
+                    <Receipt className="w-3.5 h-3.5" style={{ color: ui.theme.highlightHex || '#E8833A' }} />
                     <span>
                       {isEn
                         ? 'Closed Checks Archive (Reports)'
@@ -2081,11 +2241,20 @@ export function LiveOrdersTab({
                   key={tab.id}
                   type="button"
                   onClick={() => setFilterStatus(tab.id)}
-                  className={`min-h-[38px] px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap cursor-pointer ${
+                  className={`min-h-[40px] px-3.5 py-2 border text-xs font-bold whitespace-nowrap cursor-pointer ${ui.radiusClasses.button}`}
+                  style={
                     filterStatus === tab.id
-                      ? 'bg-zinc-950 text-white'
-                      : 'bg-white border border-zinc-200 text-zinc-600 hover:text-zinc-950'
-                  }`}
+                      ? {
+                          backgroundColor: ui.theme.accentHex,
+                          borderColor: ui.theme.accentHex,
+                          color: ui.theme.accentTextHex,
+                        }
+                      : {
+                          backgroundColor: ui.theme.surfaceBg,
+                          borderColor: ui.theme.surfaceBorder,
+                          color: ui.theme.surfaceText,
+                        }
+                  }
                 >
                   {tab.label}
                 </button>
@@ -2093,10 +2262,19 @@ export function LiveOrdersTab({
             </div>
 
             {filteredOrders.length === 0 ? (
-              <div className="bg-white border border-zinc-200 rounded-2xl p-8 sm:p-12 text-center space-y-2">
-                <Clock className="w-8 h-8 text-zinc-300 mx-auto" />
-                <h3 className="text-base font-bold text-zinc-800">{t.admin.orders.emptyTitle}</h3>
-                <p className="text-xs text-zinc-500 max-w-md mx-auto leading-relaxed">
+              <div
+                className={`border p-8 sm:p-12 text-center space-y-2 ${ui.radiusClasses.card}`}
+                style={{
+                  backgroundColor: ui.theme.surfaceBg,
+                  borderColor: ui.theme.surfaceBorder,
+                  boxShadow: ui.theme.cardShadow,
+                }}
+              >
+                <Clock className="w-8 h-8 mx-auto opacity-40" style={{ color: ui.theme.mutedText }} />
+                <h3 className="text-base font-bold" style={{ color: ui.theme.surfaceText }}>
+                  {t.admin.orders.emptyTitle}
+                </h3>
+                <p className="text-xs max-w-md mx-auto leading-relaxed" style={{ color: ui.theme.mutedText }}>
                   {t.admin.orders.emptyDesc}{' '}
                   <span className="font-mono-num" dir="ltr">/menu/{restaurant.slug}</span>
                 </p>
@@ -2118,16 +2296,21 @@ export function LiveOrdersTab({
                   return (
                     <article
                       key={order.id}
-                      className="bg-white border border-zinc-200 rounded-2xl p-5 flex flex-col justify-between gap-4"
+                      className={`border p-5 flex flex-col justify-between gap-4 ${ui.radiusClasses.card}`}
+                      style={{
+                        backgroundColor: ui.theme.surfaceBg,
+                        borderColor: ui.theme.surfaceBorder,
+                        boxShadow: ui.theme.cardShadow,
+                      }}
                     >
                       <div className="space-y-3">
-                        <div className="flex items-start justify-between gap-3 border-b border-zinc-100 pb-3">
+                        <div className="flex items-start justify-between gap-3 border-b pb-3" style={{ borderColor: ui.theme.surfaceBorder }}>
                           <div>
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="font-mono-num text-base font-extrabold text-zinc-950">
+                              <span className="font-mono-num text-base font-extrabold" style={{ color: ui.theme.surfaceText }}>
                                 #{order.orderNumber}
                               </span>
-                              <span className="text-xs text-zinc-600 font-semibold">· {typeLabel}</span>
+                              <span className="text-xs font-semibold" style={{ color: ui.theme.mutedText }}>· {typeLabel}</span>
                               {order.isGroupOrder && (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 text-[10px] font-extrabold">
                                   <Users className="w-3 h-3" />
@@ -2621,18 +2804,26 @@ export function LiveOrdersTab({
           <div
             dir={dir}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-zinc-200 overflow-hidden"
+            className="w-full max-w-md rounded-3xl shadow-2xl border overflow-hidden"
+            style={{
+              backgroundColor: ui.theme.surfaceBg,
+              borderColor: ui.theme.surfaceBorder,
+              color: ui.theme.surfaceText,
+            }}
           >
-            <div className="px-5 py-4 bg-zinc-950 text-white flex items-center justify-between gap-2">
+            <div
+              className="px-5 py-4 flex items-center justify-between gap-2"
+              style={{ backgroundColor: ui.theme.sidebarBg, color: ui.theme.sidebarText }}
+            >
               <div className="flex items-center gap-2">
-                <Banknote className="w-5 h-5 text-amber-400" />
+                <Banknote className="w-5 h-5" style={{ color: ui.theme.highlightHex || '#E8833A' }} />
                 <div>
                   <h3 className="text-sm font-extrabold">
                     {settleTarget.type === 'table'
                       ? `تحصيل وإقفال ${settleTarget.group.hallName ? `${settleTarget.group.hallName} · ` : ''}ترابيزة ${settleTarget.group.tableNumber}`
                       : `تحصيل الطلب #${settleTarget.order.orderNumber}`}
                   </h3>
-                  <p className="text-[11px] text-zinc-400 font-mono-num">
+                  <p className="text-[11px] font-mono-num" style={{ color: ui.theme.sidebarMuted }}>
                     المطلوب سداده: {formatMoney(settleTotalDue)}
                   </p>
                 </div>
@@ -2641,7 +2832,7 @@ export function LiveOrdersTab({
                 type="button"
                 disabled={settlingBusy}
                 onClick={() => setSettleTarget(null)}
-                className="w-8 h-8 rounded-lg hover:bg-zinc-800 flex items-center justify-center cursor-pointer"
+                className="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -2673,11 +2864,20 @@ export function LiveOrdersTab({
                         setSettleCashTendered(settleTotalDue.toFixed(2));
                       }
                     }}
-                    className={`min-h-[42px] rounded-xl border text-xs font-extrabold cursor-pointer ${
+                    className={`min-h-[42px] border text-xs font-extrabold cursor-pointer ${ui.radiusClasses.button}`}
+                    style={
                       settleMethod === m.id
-                        ? 'bg-zinc-950 text-white border-zinc-950'
-                        : 'bg-zinc-50 border-zinc-200 text-zinc-700 hover:bg-zinc-100'
-                    }`}
+                        ? {
+                            backgroundColor: ui.theme.accentHex,
+                            borderColor: ui.theme.accentHex,
+                            color: ui.theme.accentTextHex,
+                          }
+                        : {
+                            backgroundColor: ui.theme.surfaceSubtleBg,
+                            borderColor: ui.theme.surfaceBorder,
+                            color: ui.theme.surfaceText,
+                          }
+                    }
                   >
                     {m.label}
                   </button>
@@ -2685,7 +2885,7 @@ export function LiveOrdersTab({
               </div>
 
               {settleMethod === 'split' && (
-                <label className="block space-y-1 text-xs font-bold text-zinc-800">
+                <label className="block space-y-1 text-xs font-bold" style={{ color: ui.theme.surfaceText }}>
                   <span>المبلغ المدفوع بالفيزا *</span>
                   <input
                     type="number"
@@ -2695,14 +2895,19 @@ export function LiveOrdersTab({
                     dir="ltr"
                     value={settleVisaAmount}
                     onChange={(e) => setSettleVisaAmount(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 font-mono-num font-bold text-sm"
+                    className="w-full px-3.5 py-2.5 rounded-xl border font-mono-num font-bold text-sm"
+                    style={{
+                      backgroundColor: ui.theme.surfaceSubtleBg,
+                      borderColor: ui.theme.surfaceBorder,
+                      color: ui.theme.surfaceText,
+                    }}
                   />
                 </label>
               )}
 
               {(settleMethod === 'cash' || settleMethod === 'split') && (
                 <div className="space-y-2.5">
-                  <label className="block space-y-1 text-xs font-bold text-zinc-800">
+                  <label className="block space-y-1 text-xs font-bold" style={{ color: ui.theme.surfaceText }}>
                     <span>المبلغ المستلم نقداً من العميل (كاش مستحق: {formatMoney(settlementCalc.cashDue)})</span>
                     <input
                       type="number"
@@ -2711,7 +2916,12 @@ export function LiveOrdersTab({
                       dir="ltr"
                       value={settleCashTendered}
                       onChange={(e) => setSettleCashTendered(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 font-mono-num font-extrabold text-sm"
+                      className="w-full px-3.5 py-2.5 rounded-xl border font-mono-num font-extrabold text-sm"
+                      style={{
+                        backgroundColor: ui.theme.surfaceSubtleBg,
+                        borderColor: ui.theme.surfaceBorder,
+                        color: ui.theme.surfaceText,
+                      }}
                     />
                   </label>
 
@@ -2719,7 +2929,12 @@ export function LiveOrdersTab({
                     <button
                       type="button"
                       onClick={() => setSettleCashTendered(String(settlementCalc.cashDue))}
-                      className="px-2.5 py-1 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-[11px] font-bold cursor-pointer"
+                      className="px-2.5 py-1 rounded-lg border text-[11px] font-bold cursor-pointer"
+                      style={{
+                        backgroundColor: ui.theme.surfaceSubtleBg,
+                        borderColor: ui.theme.surfaceBorder,
+                        color: ui.theme.surfaceText,
+                      }}
                     >
                       المبلغ بالضبط
                     </button>
@@ -2728,35 +2943,44 @@ export function LiveOrdersTab({
                         key={bill}
                         type="button"
                         onClick={() => setSettleCashTendered(String(bill))}
-                        className="px-2.5 py-1 rounded-lg border border-zinc-200 hover:bg-zinc-50 text-[11px] font-mono-num font-bold cursor-pointer"
+                        className="px-2.5 py-1 rounded-lg border text-[11px] font-mono-num font-bold cursor-pointer"
+                        style={{
+                          backgroundColor: ui.theme.surfaceSubtleBg,
+                          borderColor: ui.theme.surfaceBorder,
+                          color: ui.theme.surfaceText,
+                        }}
                       >
                         {bill}
                       </button>
                     ))}
                   </div>
 
-                  <label className="flex items-center gap-2 text-xs font-bold text-zinc-800 cursor-pointer pt-1">
+                  <label className="flex items-center gap-2 text-xs font-bold cursor-pointer pt-1" style={{ color: ui.theme.surfaceText }}>
                     <input
                       type="checkbox"
                       checked={autoRoundCoinless}
                       onChange={(e) => setAutoRoundCoinless(e.target.checked)}
-                      className="w-4 h-4 accent-zinc-950"
+                      className="w-4 h-4"
+                      style={{ accentColor: ui.theme.accentHex }}
                     />
                     <span>
                       تقريب الباقي تلقائياً بدون فكة (مضاعفات {settlementCalc.roundingStep}) وتسجيل فرق الدرج
                     </span>
                   </label>
 
-                  <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-200 space-y-1.5 text-xs">
+                  <div
+                    className="p-3 rounded-xl border space-y-1.5 text-xs"
+                    style={{ backgroundColor: ui.theme.surfaceSubtleBg, borderColor: ui.theme.surfaceBorder }}
+                  >
                     <div className="flex justify-between">
-                      <span className="text-zinc-600">الباقي الدقيق:</span>
+                      <span style={{ color: ui.theme.mutedText }}>الباقي الدقيق:</span>
                       <span className="font-mono-num font-bold">{formatMoney(settlementCalc.exactChangeDue)}</span>
                     </div>
                     <div className="flex justify-between text-emerald-800 font-extrabold">
                       <span>الباقي المردود للعميل:</span>
                       <span className="font-mono-num">{formatMoney(settlementCalc.changeReturned)}</span>
                     </div>
-                    <div className="flex justify-between font-extrabold pt-1 border-t border-zinc-200">
+                    <div className="flex justify-between font-extrabold pt-1 border-t" style={{ borderColor: ui.theme.surfaceBorder }}>
                       <span>فرق الدرج (كسر الفكة):</span>
                       <span
                         className={`font-mono-num ${
@@ -2764,7 +2988,7 @@ export function LiveOrdersTab({
                             ? 'text-emerald-700'
                             : settlementCalc.drawerVariance < 0
                               ? 'text-rose-700'
-                              : 'text-zinc-700'
+                              : ''
                         }`}
                       >
                         {settlementCalc.drawerVariance > 0
@@ -2795,7 +3019,12 @@ export function LiveOrdersTab({
                   type="button"
                   disabled={settlingBusy}
                   onClick={() => setSettleTarget(null)}
-                  className="min-h-[44px] px-4 py-2.5 rounded-xl border border-zinc-300 text-zinc-700 text-xs font-bold hover:bg-zinc-50 cursor-pointer"
+                  className="min-h-[44px] px-4 py-2.5 rounded-xl border text-xs font-bold cursor-pointer"
+                  style={{
+                    backgroundColor: ui.theme.surfaceSubtleBg,
+                    borderColor: ui.theme.surfaceBorder,
+                    color: ui.theme.surfaceText,
+                  }}
                 >
                   إلغاء
                 </button>
@@ -2814,16 +3043,24 @@ export function LiveOrdersTab({
           <div
             dir={dir}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl border border-zinc-200 overflow-hidden max-h-[90vh] flex flex-col"
+            className="w-full max-w-2xl rounded-3xl shadow-2xl border overflow-hidden max-h-[90vh] flex flex-col"
+            style={{
+              backgroundColor: ui.theme.surfaceBg,
+              borderColor: ui.theme.surfaceBorder,
+              color: ui.theme.surfaceText,
+            }}
           >
-            <div className="px-5 py-4 bg-zinc-950 text-white flex items-center justify-between gap-3 shrink-0">
+            <div
+              className="px-5 py-4 flex items-center justify-between gap-3 shrink-0"
+              style={{ backgroundColor: ui.theme.sidebarBg, color: ui.theme.sidebarText }}
+            >
               <div className="flex items-center gap-2.5">
-                <Wallet className="w-5 h-5 text-amber-400" />
+                <Wallet className="w-5 h-5" style={{ color: ui.theme.highlightHex || '#E8833A' }} />
                 <div>
                   <h3 className="text-sm sm:text-base font-extrabold">
                     حساب الدرج والمصروفات وتسليم الوردية (ح/الدرج)
                   </h3>
-                  <p className="text-[11px] text-zinc-400">
+                  <p className="text-[11px]" style={{ color: ui.theme.sidebarMuted }}>
                     {effectiveActiveCashierShift
                       ? `${effectiveActiveCashierShift.staffName} · ${effectiveActiveCashierShift.shiftSlotName || 'الوردية الحالية'}`
                       : 'لا توجد وردية كاشير مفتوحة حالياً'}
@@ -2833,7 +3070,7 @@ export function LiveOrdersTab({
               <button
                 type="button"
                 onClick={() => setDrawerModalOpen(false)}
-                className="w-8 h-8 rounded-lg hover:bg-zinc-800 flex items-center justify-center cursor-pointer"
+                className="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -2965,16 +3202,19 @@ export function LiveOrdersTab({
                           </div>
                         )}
 
-                        <div className="p-4 rounded-2xl bg-zinc-950 text-white flex items-center justify-between gap-3">
+                        <div
+                          className="p-4 rounded-2xl flex items-center justify-between gap-3"
+                          style={{ backgroundColor: ui.theme.sidebarBg, color: ui.theme.sidebarText }}
+                        >
                           <div>
-                            <p className="text-[11px] text-zinc-400 font-bold">
+                            <p className="text-[11px] font-bold" style={{ color: ui.theme.sidebarMuted }}>
                               صافي الكاش المتوقع تسليمه بالدرج الآن
                             </p>
-                            <p className="text-xl font-extrabold font-mono-num text-amber-400 mt-0.5">
+                            <p className="text-xl font-extrabold font-mono-num mt-0.5" style={{ color: ui.theme.highlightHex || '#E8833A' }}>
                               {formatMoney(netExpectedCash)}
                             </p>
                           </div>
-                          <span className="text-[11px] text-zinc-400 font-mono-num">
+                          <span className="text-[11px] font-mono-num" style={{ color: ui.theme.sidebarMuted }}>
                             {effectiveActiveCashierShift.ordersHandled} طلب
                           </span>
                         </div>
@@ -3156,7 +3396,11 @@ export function LiveOrdersTab({
                             type="button"
                             disabled={closingHandover}
                             onClick={handleConfirmHandoverClose}
-                            className="w-full min-h-[44px] rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-extrabold cursor-pointer disabled:opacity-50"
+                            className={`w-full min-h-[44px] text-xs font-extrabold cursor-pointer disabled:opacity-50 ${ui.radiusClasses.button}`}
+                            style={{
+                              backgroundColor: ui.theme.accentHex,
+                              color: ui.theme.accentTextHex,
+                            }}
                           >
                             {closingHandover
                               ? 'جاري تسليم وإغلاق الوردية...'
@@ -3184,14 +3428,22 @@ export function LiveOrdersTab({
           <div
             dir={dir}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-xl bg-white rounded-3xl shadow-2xl border border-zinc-200 overflow-hidden max-h-[90vh] flex flex-col"
+            className="w-full max-w-xl rounded-3xl shadow-2xl border overflow-hidden max-h-[90vh] flex flex-col"
+            style={{
+              backgroundColor: ui.theme.surfaceBg,
+              borderColor: ui.theme.surfaceBorder,
+              color: ui.theme.surfaceText,
+            }}
           >
-            <div className="px-5 py-4 bg-zinc-950 text-white flex items-center justify-between gap-2 shrink-0">
+            <div
+              className="px-5 py-4 flex items-center justify-between gap-2 shrink-0"
+              style={{ backgroundColor: ui.theme.sidebarBg, color: ui.theme.sidebarText }}
+            >
               <div>
                 <h3 className="text-sm font-extrabold">
                   إدارة وتعديل الطلب #{modifyTargetOrder.orderNumber}
                 </h3>
-                <p className="text-[11px] text-zinc-400">
+                <p className="text-[11px]" style={{ color: ui.theme.sidebarMuted }}>
                   {modifyTargetOrder.hallName ? `${modifyTargetOrder.hallName} · ` : ''}
                   {modifyTargetOrder.tableNumber
                     ? `ترابيزة ${modifyTargetOrder.tableNumber}`
@@ -3201,7 +3453,7 @@ export function LiveOrdersTab({
               <button
                 type="button"
                 onClick={() => setModifyTargetOrder(null)}
-                className="w-8 h-8 rounded-lg hover:bg-zinc-800 flex items-center justify-center cursor-pointer"
+                className="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -3395,7 +3647,11 @@ export function LiveOrdersTab({
                       type="button"
                       disabled={modifyBusy}
                       onClick={() => handleSaveModifiedOrder(false)}
-                      className="flex-1 min-h-[42px] px-4 py-2.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-extrabold cursor-pointer disabled:opacity-50"
+                      className={`flex-1 min-h-[42px] px-4 py-2.5 text-xs font-extrabold cursor-pointer disabled:opacity-50 ${ui.radiusClasses.button}`}
+                      style={{
+                        backgroundColor: ui.theme.accentHex,
+                        color: ui.theme.accentTextHex,
+                      }}
                     >
                       {modifyBusy ? 'جاري الحفظ...' : 'حفظ التعديلات في الفاتورة'}
                     </button>

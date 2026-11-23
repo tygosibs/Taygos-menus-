@@ -3,8 +3,8 @@
 
 @layer base {
   :root {
-    --font-display: 'Cairo', 'Tajawal', system-ui, sans-serif;
-    --font-body: 'Tajawal', 'Cairo', system-ui, sans-serif;
+    --font-display: 'Cairo', system-ui, sans-serif;
+    --font-body: 'IBM Plex Sans Arabic', 'Tajawal', system-ui, sans-serif;
     --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
   }
 
@@ -16,6 +16,7 @@
 
   h1, h2, h3, h4, .font-display {
     font-family: var(--font-display);
+    font-weight: 800;
   }
 
   .font-mono-num {
@@ -68,12 +69,52 @@
   animation: sufra-pulse-fade 3.2s ease-in-out infinite;
 }
 
+@keyframes sufra-qr-scan {
+  0%, 100% { transform: translate3d(0, 0, 0); opacity: 0.75; }
+  50% { transform: translate3d(0, 108px, 0); opacity: 1; }
+}
+
+@keyframes sufra-stage-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.18); opacity: 0.65; }
+}
+
+@keyframes sufra-price-shift {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}
+
+.landing-plex-body {
+  font-family: 'IBM Plex Sans Arabic', 'Tajawal', system-ui, sans-serif;
+}
+
+.landing-cairo-heading {
+  font-family: 'Cairo', system-ui, sans-serif;
+  font-weight: 800;
+}
+
+.landing-qr-scan-line {
+  animation: sufra-qr-scan 2.8s ease-in-out infinite;
+}
+
+.landing-stage-dot {
+  animation: sufra-stage-pulse 2s ease-in-out infinite;
+}
+
+.landing-price-pulse {
+  animation: sufra-price-shift 2.4s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .offer-anim-marquee,
   .offer-anim-orbit,
   .offer-anim-bounce,
-  .offer-anim-fade {
+  .offer-anim-fade,
+  .landing-qr-scan-line,
+  .landing-stage-dot,
+  .landing-price-pulse {
     animation: none !important;
+    transition: none !important;
   }
 }
 

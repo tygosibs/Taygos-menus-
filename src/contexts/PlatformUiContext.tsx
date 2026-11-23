@@ -227,22 +227,22 @@ export function PlatformUiProvider({ children }: { children: ReactNode }) {
           dir={dir}
           role="status"
           aria-live="polite"
-          className="fixed inset-0 z-[120] bg-zinc-950/45 backdrop-blur-xs flex items-center justify-center p-4"
+          className="fixed inset-0 z-[120] bg-[#0E1B3D]/50 backdrop-blur-xs flex items-center justify-center p-4"
         >
-          <div className="max-w-md w-full bg-white border border-zinc-200 rounded-3xl p-6 shadow-2xl space-y-4 text-center">
-            <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto">
+          <div className="max-w-md w-full bg-[#FBF7EF] border border-[#E6D9C3] rounded-3xl p-6 shadow-2xl space-y-4 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-[#F3EBDD] border border-[#E6D9C3] text-[#E8833A] flex items-center justify-center mx-auto">
               <RefreshCw className="w-6 h-6 animate-spin" />
             </div>
             <div className="space-y-1.5">
-              <p className="text-xs font-extrabold uppercase tracking-wider text-amber-700">
+              <p className="text-xs font-extrabold uppercase tracking-wider text-[#E8833A]">
                 {isEn ? 'Live UI Update (2s)' : 'تحديث مباشر للواجهة (ثانيتين)'}
               </p>
-              <h3 className="text-base font-extrabold text-zinc-950 leading-snug">
+              <h3 className="text-base font-extrabold text-[#14285A] leading-snug">
                 {isEn
                   ? 'Refreshing screen layout gently...'
                   : 'عفواً، سيتم تحديث المنظومة وتحميل الشاشة من جديد'}
               </h3>
-              <p className="text-xs text-zinc-600 leading-relaxed">
+              <p className="text-xs text-[#0E1B3D]/80 leading-relaxed">
                 {isEn
                   ? pendingNotice?.en || uiConfig.refreshNoticeEn
                   : pendingNotice?.ar || uiConfig.refreshNoticeAr}
@@ -250,13 +250,13 @@ export function PlatformUiProvider({ children }: { children: ReactNode }) {
             </div>
 
             <div className="space-y-1.5">
-              <div className="h-2 w-full rounded-full bg-zinc-100 overflow-hidden">
+              <div className="h-2 w-full rounded-full bg-[#E6D9C3] overflow-hidden">
                 <div
-                  className="h-full bg-amber-500 rounded-full transition-none"
+                  className="h-full bg-[#E8833A] rounded-full transition-none"
                   style={{ width: `${countdownProgress}%` }}
                 />
               </div>
-              <div className="flex items-center justify-center gap-1.5 text-[11px] font-bold text-emerald-700">
+              <div className="flex items-center justify-center gap-1.5 text-[11px] font-bold text-[#2F8F5B]">
                 <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
                 <span>
                   {isEn
@@ -275,8 +275,8 @@ export function PlatformUiProvider({ children }: { children: ReactNode }) {
           dir={dir}
           className="fixed bottom-4 inset-x-0 z-[120] flex justify-center px-4 pointer-events-none"
         >
-          <div className="bg-emerald-950 text-emerald-50 border border-emerald-700/60 px-4 py-2.5 rounded-2xl shadow-lg flex items-center gap-2 text-xs font-extrabold">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <div className="bg-[#14285A] text-[#FBF7EF] border border-[#2F8F5B]/60 px-4 py-2.5 rounded-2xl shadow-lg flex items-center gap-2 text-xs font-extrabold">
+            <CheckCircle2 className="w-4 h-4 text-[#2F8F5B] shrink-0" />
             <span>
               {isEn
                 ? 'Screen updated smoothly — all your work is intact ✓'
@@ -309,13 +309,15 @@ export function useScreenUi(
 ): ResolvedScreenUi {
   const { uiConfig } = usePlatformUi();
   const screenConfig = overrideConfig || uiConfig.screens[screenId];
-  const baseTheme = SCREEN_THEMES[screenConfig.themeId] || SCREEN_THEMES.obsidian_gold;
+  const baseTheme = SCREEN_THEMES[screenConfig.themeId] || SCREEN_THEMES.sand_sapphire;
 
   const theme = useMemo<ScreenThemeTokens>(() => {
     const accent = screenConfig.accentColorOverride || baseTheme.accentHex;
     return {
       ...baseTheme,
       accentHex: accent,
+      highlightHex: baseTheme.highlightHex || '#E8833A',
+      successHex: baseTheme.successHex || '#2F8F5B',
       sidebarActiveBg: screenConfig.accentColorOverride ? accent : baseTheme.sidebarActiveBg,
     };
   }, [baseTheme, screenConfig.accentColorOverride]);
