@@ -967,7 +967,7 @@ service cloud.firestore {
         scr.keys().hasAll(['themeId', 'layoutStyle', 'cardRadius', 'cards', 'buttonOverrides']) &&
         scr.keys().hasOnly(['themeId', 'layoutStyle', 'cardRadius', 'accentColorOverride', 'cards', 'buttonOverrides']) &&
         scr.themeId in [
-          'obsidian_gold', 'alabaster_editorial', 'emerald_hospitality', 'midnight_sapphire',
+          'sand_sapphire', 'obsidian_gold', 'alabaster_editorial', 'emerald_hospitality', 'midnight_sapphire',
           'espresso_bistro', 'nordic_slate', 'burgundy_velvet', 'saffron_sunrise'
         ] &&
         scr.layoutStyle in ['sidebar_cards', 'compact_rail', 'top_deck'] &&

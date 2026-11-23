@@ -1,5 +1,6 @@
 import { DragEvent, useMemo, useState } from 'react';
 import {
+  AlertCircle,
   ArrowDown,
   ArrowUp,
   Check,
@@ -398,14 +399,45 @@ export function UiStudioTab({ adminEmail }: UiStudioTabProps) {
           : `تم نشر التحديث بنجاح (الإصدار v${published.version})! يتم الآن تحديث جميع الشاشات تلقائياً خلال ثانيتين دون أي تأثير على عمل المطاعم.`,
       });
     } catch (err) {
+      const errCode =
+        err && typeof err === 'object' && 'code' in err
+          ? String((err as { code?: unknown }).code || '')
+          : '';
+      const rawMsg = err instanceof Error ? err.message.toLowerCase() : String(err).toLowerCase();
+      const isPermDenied =
+        errCode.includes('permission-denied') ||
+        rawMsg.includes('missing or insufficient permissions') ||
+        rawMsg.includes('permission-denied');
+      const isUnauth =
+        errCode.includes('unauthenticated') || rawMsg.includes('unauthenticated');
+      const isOffline =
+        errCode.includes('unavailable') ||
+        rawMsg.includes('offline') ||
+        rawMsg.includes('network');
+
+      let friendlyMsg: string;
+      if (isPermDenied) {
+        friendlyMsg = isEn
+          ? 'Could not save to the database because permissions were denied for this payload or account. Your unsaved edits are still kept on screen — please ensure you are signed in as Super Admin and try again.'
+          : 'تعذر حفظ التغييرات في قاعدة البيانات بسبب رفض الصلاحية لهذا الحساب أو البيانات المرسلة. لا تزال تعديلاتك محفوظة في المسودة على الشاشة — تأكد من تسجيل الدخول بحساب السوبر أدمن وحاول مرة أخرى.';
+      } else if (isUnauth) {
+        friendlyMsg = isEn
+          ? 'Your sign-in session has expired. Your edits are still on screen — please sign in again and republish.'
+          : 'انتهت جلسة تسجيل الدخول الحالية. تعديلاتك ما زالت محفوظة على الشاشة — أعد تسجيل الدخول ثم اضغط نشر مجدداً.';
+      } else if (isOffline) {
+        friendlyMsg = isEn
+          ? 'Could not reach the server due to a connection issue. Your edits remain on screen so you can retry once connected.'
+          : 'تعذر الاتصال بالخادم حالياً. تعديلاتك ما زالت محفوظة في المسودة ويمكنك إعادة المحاولة فور عودة الاتصال.';
+      } else {
+        friendlyMsg = isEn
+          ? 'Could not save and publish UI settings. Your unsaved edits remain on screen — please retry.'
+          : 'تعذر حفظ ونشر إعدادات الواجهة. تعديلاتك ما زالت محفوظة على الشاشة ويمكنك المحاولة مرة أخرى.';
+      }
+
+      setHasUnsavedChanges(true);
       setStatusMsg({
         type: 'err',
-        text:
-          err instanceof Error
-            ? err.message
-            : isEn
-              ? 'Failed to publish UI configuration.'
-              : 'تعذر حفظ ونشر إعدادات الواجهة. تأكد من الصلاحيات.',
+        text: friendlyMsg,
       });
     } finally {
       setSaving(false);
@@ -480,7 +512,11 @@ export function UiStudioTab({ adminEmail }: UiStudioTabProps) {
             }`}
           >
             <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              {statusMsg.type === 'ok' ? (
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+              ) : (
+                <AlertCircle className="w-4 h-4 shrink-0" />
+              )}
               <span>{statusMsg.text}</span>
             </div>
             <button
