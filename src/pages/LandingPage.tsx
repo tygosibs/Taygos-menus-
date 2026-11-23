@@ -36,6 +36,7 @@ import {
 } from '../lib/firestoreService';
 import { applySeoMetadata, getPlatformShareMetadata } from '../lib/seoHead';
 import { CustomTheme, PlatformLandingSettings } from '../types/menu';
+import { LandingVisualShowcases } from '../components/landing/LandingVisualShowcases';
 
 interface LandingPageProps {
   onNavigate: (path: string) => void;
@@ -43,6 +44,9 @@ interface LandingPageProps {
 
 type DrawerNavId =
   | 'hero'
+  | 'showcase_menu_qr'
+  | 'showcase_themes'
+  | 'showcase_roles'
   | 'digital_menu'
   | 'hall_captain'
   | 'cashier'
@@ -61,7 +65,10 @@ interface DrawerNavItem {
 
 const DRAWER_ITEMS: DrawerNavItem[] = [
   { id: 'hero', label: 'الرئيسية', sectionId: 'hero' },
-  { id: 'digital_menu', label: 'المنيو الرقمي', sectionId: 'digital-menu' },
+  { id: 'showcase_menu_qr', label: 'المنيو الرقمي وQR', sectionId: 'showcase-menu-qr' },
+  { id: 'showcase_themes', label: 'معرض الثيمات', sectionId: 'showcase-themes' },
+  { id: 'showcase_roles', label: 'شاشة لكل دور', sectionId: 'showcase-roles' },
+  { id: 'digital_menu', label: 'تحديث المنيو والأسعار', sectionId: 'digital-menu' },
   { id: 'hall_captain', label: 'الصالة والكابتن', sectionId: 'hall-captain' },
   { id: 'cashier', label: 'الكاشير', sectionId: 'cashier' },
   { id: 'kds', label: 'شاشات المطبخ', sectionId: 'kds' },
@@ -708,7 +715,11 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
               <div className="lg:col-span-5 space-y-3">
                 <span className="text-xs font-bold text-[#14285A] flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-[#E8833A]" />
-                  <span>{totalThemesCount} ثيماً جاهزاً لهوية مطعمك</span>
+                  <span>
+                    {customThemes.length > 0
+                      ? `${totalThemesCount} ثيماً حياً لهوية مطعمك`
+                      : `${MENU_THEMES.length} ثيمات مدمجة جاهزة لهوية مطعمك`}
+                  </span>
                 </span>
                 <h2 className="landing-cairo-heading text-xl sm:text-2xl text-[#14285A]">
                   بدّل مظهر المنيو بنفس كود الطاولة
@@ -771,6 +782,12 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             </div>
           </div>
         </section>
+
+        {/* Three Visual Showcases: Menu & QR, Real Themes Gallery, Role Screens */}
+        <LandingVisualShowcases
+          customThemes={customThemes}
+          onScrollToContact={() => scrollToSection('contact', 'contact')}
+        />
 
         {/* 1. المنيو الرقمي */}
         <section id="digital-menu" className="scroll-mt-20 py-16 sm:py-24 border-t border-[#E6D9C3] bg-[#FBF7EF]">
