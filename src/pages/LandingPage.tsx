@@ -37,6 +37,7 @@ import {
 import { applySeoMetadata, getPlatformShareMetadata } from '../lib/seoHead';
 import { CustomTheme, PlatformLandingSettings } from '../types/menu';
 import { LandingVisualShowcases } from '../components/landing/LandingVisualShowcases';
+import { LandingOperationsShowcases } from '../components/landing/LandingOperationsShowcases';
 
 interface LandingPageProps {
   onNavigate: (path: string) => void;
@@ -47,6 +48,12 @@ type DrawerNavId =
   | 'showcase_menu_qr'
   | 'showcase_themes'
   | 'showcase_roles'
+  | 'showcase_supervision'
+  | 'showcase_roles_access'
+  | 'showcase_treasury_shifts'
+  | 'showcase_reports_audit'
+  | 'showcase_crm'
+  | 'showcase_loyalty_marketing'
   | 'digital_menu'
   | 'hall_captain'
   | 'cashier'
@@ -68,6 +75,12 @@ const DRAWER_ITEMS: DrawerNavItem[] = [
   { id: 'showcase_menu_qr', label: 'المنيو الرقمي وQR', sectionId: 'showcase-menu-qr' },
   { id: 'showcase_themes', label: 'معرض الثيمات', sectionId: 'showcase-themes' },
   { id: 'showcase_roles', label: 'شاشة لكل دور', sectionId: 'showcase-roles' },
+  { id: 'showcase_supervision', label: 'المدير والإشراف', sectionId: 'showcase-supervision' },
+  { id: 'showcase_roles_access', label: 'الأدوار والحسابات', sectionId: 'showcase-roles-access' },
+  { id: 'showcase_treasury_shifts', label: 'الخزنة والورديات', sectionId: 'showcase-treasury-shifts' },
+  { id: 'showcase_reports_audit', label: 'التقارير والتدقيق', sectionId: 'showcase-reports-audit' },
+  { id: 'showcase_crm', label: 'إدارة العملاء (CRM)', sectionId: 'showcase-crm' },
+  { id: 'showcase_loyalty_marketing', label: 'الولاء والتسويق', sectionId: 'showcase-loyalty-marketing' },
   { id: 'digital_menu', label: 'تحديث المنيو والأسعار', sectionId: 'digital-menu' },
   { id: 'hall_captain', label: 'الصالة والكابتن', sectionId: 'hall-captain' },
   { id: 'cashier', label: 'الكاشير', sectionId: 'cashier' },
@@ -786,6 +799,11 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
         {/* Three Visual Showcases: Menu & QR, Real Themes Gallery, Role Screens */}
         <LandingVisualShowcases
           customThemes={customThemes}
+          onScrollToContact={() => scrollToSection('contact', 'contact')}
+        />
+
+        {/* Six Verified Operations, Treasury, Reporting, CRM & Loyalty Showcases */}
+        <LandingOperationsShowcases
           onScrollToContact={() => scrollToSection('contact', 'contact')}
         />
 
