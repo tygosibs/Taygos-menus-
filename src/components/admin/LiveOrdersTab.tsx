@@ -65,8 +65,9 @@ import { subscribeRestaurantStations } from '../../lib/stationsService';
 import {
   buildEffectiveStations,
   cleanStationId,
+  getDefaultFallbackStationId,
   getStationIconComponent,
-  resolveOrderItemStation,
+  resolveOrderItemStations,
   screenToStationId,
   STATION_META_MAP,
   StationMeta,
@@ -327,10 +328,20 @@ export function LiveOrdersTab({
   const [printingKdsOrderId, setPrintingKdsOrderId] = useState<string | null>(null);
   const [printFeedback, setPrintFeedback] = useState<string | null>(null);
 
+  const [nowTick, setNowTick] = useState(() => Date.now());
   const initializedRef = useRef(false);
   const knownIdsRef = useRef<Set<string>>(new Set());
   const callsInitializedRef = useRef(false);
   const knownCallIdsRef = useRef<Set<string>>(new Set());
+  const autoPrintedKeysRef = useRef<Set<string>>(new Set());
+
+  const soundEnabledRef = useRef(soundEnabled);
+  soundEnabledRef.current = soundEnabled;
+  const activeStationRef = useRef<StationView>(activeStation);
+  activeStationRef.current = activeStation;
+  const effectiveStationsRef = useRef<StationMeta[]>([]);
+  const itemMapRef = useRef<Map<string, MenuItem>>(new Map());
+  const categoryMapRef = useRef<Map<string, Category>>(new Map());
 
   const statusMeta: Record<OrderStatus, { label: string; colorClass: string }> = {
     pending: {
@@ -352,6 +363,7 @@ export function LiveOrdersTab({
   };
 
   useEffect(() => {
+    const timer = window.setInterval(() => setNowTick(Date.now()), 30000);
     const unlock = () => unlockAudioContext();
     window.addEventListener('pointerdown', unlock, { once: true });
     void tryAutoReconnectSavedPrinter().then((ok) => {
@@ -360,7 +372,10 @@ export function LiveOrdersTab({
         if (conn.name) setPrinterStatusLabel(conn.name);
       }
     });
-    return () => window.removeEventListener('pointerdown', unlock);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('pointerdown', unlock);
+    };
   }, []);
 
   useEffect(() => {
@@ -439,7 +454,67 @@ export function LiveOrdersTab({
             }
           });
           if (newPendingOrders.length > 0) {
-            if (soundEnabled) {
+            const curStation = activeStationRef.current;
+            const stationsNow = effectiveStationsRef.current;
+            const fallbackSt = getDefaultFallbackStationId(stationsNow);
+            let shouldChime = soundEnabledRef.current;
+
+            if (curStation !== 'cashier') {
+              const curMeta =
+                stationsNow.find((s) => s.stationId === curStation) || STATION_META_MAP[curStation];
+              const matchedOrders = newPendingOrders.filter((ord) => {
+                if (
+                  curMeta?.allowedOrderTypes &&
+                  curMeta.allowedOrderTypes.length > 0 &&
+                  !curMeta.allowedOrderTypes.includes(ord.orderType)
+                ) {
+                  return false;
+                }
+                return ord.items.some((it) =>
+                  resolveOrderItemStations(
+                    it,
+                    itemMapRef.current,
+                    categoryMapRef.current,
+                    fallbackSt
+                  ).includes(curStation)
+                );
+              });
+              shouldChime =
+                matchedOrders.length > 0 &&
+                soundEnabledRef.current &&
+                (curMeta?.soundAlertEnabled ?? true);
+
+              if (
+                curMeta?.thermalPrintMode === 'auto' &&
+                matchedOrders.length > 0 &&
+                getActivePrinterConnection().connected
+              ) {
+                matchedOrders.forEach((ord) => {
+                  const autoKey = `${ord.id}:${curStation}`;
+                  if (autoPrintedKeysRef.current.has(autoKey)) return;
+                  autoPrintedKeysRef.current.add(autoKey);
+                  const stItems = ord.items.filter((it) =>
+                    resolveOrderItemStations(
+                      it,
+                      itemMapRef.current,
+                      categoryMapRef.current,
+                      fallbackSt
+                    ).includes(curStation)
+                  );
+                  if (stItems.length > 0) {
+                    const job = buildStationTicketJob({
+                      restaurant,
+                      order: ord,
+                      station: curMeta,
+                      stationItems: stItems,
+                    });
+                    void printThermalJobsSequentially([job]).catch(() => {});
+                  }
+                });
+              }
+            }
+
+            if (shouldChime) {
               playOrderAlertChime();
             }
             if (staffMode) {
@@ -470,7 +545,7 @@ export function LiveOrdersTab({
     );
 
     return () => unsub();
-  }, [restaurant.id, restaurant.ownerId, restaurant.slug, soundEnabled, retryKey, isEn, staffMode]);
+  }, [restaurant.id, restaurant.ownerId, restaurant.slug, retryKey, isEn, staffMode]);
 
   useEffect(() => {
     if (!canReadServiceCalls) {
@@ -539,6 +614,10 @@ export function LiveOrdersTab({
     return map;
   }, [effectiveStations]);
 
+  effectiveStationsRef.current = effectiveStations;
+  itemMapRef.current = itemMap;
+  categoryMapRef.current = categoryMap;
+
   const resolveStationMeta = (stationId: string): StationMeta => {
     return (
       stationById.get(stationId) ||
@@ -554,32 +633,68 @@ export function LiveOrdersTab({
     );
   };
 
-  // Dynamic Station KDS filtering & counts
+  // Dynamic Station KDS filtering & multi-station byStation counts
   const stationOrdersMap = useMemo(() => {
     const map = new Map<
       string,
       Array<{
         order: Order;
-        items: Array<{ item: OrderItemPayload; originalIndex: number; prepState: ItemPrepState }>;
+        items: Array<{
+          item: OrderItemPayload;
+          originalIndex: number;
+          prepState: ItemPrepState;
+          targetStations: string[];
+        }>;
         pendingCount: number;
       }>
     >();
 
     effectiveStations.forEach((st) => map.set(st.stationId, []));
-    const fallbackStationId = effectiveStations[0]?.stationId || 'kitchen';
+    const fallbackStationId = getDefaultFallbackStationId(effectiveStations);
 
     activeOrders.forEach((order) => {
       const grouped = new Map<
         string,
-        Array<{ item: OrderItemPayload; originalIndex: number; prepState: ItemPrepState }>
+        Array<{
+          item: OrderItemPayload;
+          originalIndex: number;
+          prepState: ItemPrepState;
+          targetStations: string[];
+        }>
       >();
 
       order.items.forEach((it, idx) => {
-        const st = resolveOrderItemStation(it, itemMap, categoryMap, fallbackStationId);
-        const prepState: ItemPrepState = order.itemProgress?.[String(idx)] || 'pending';
-        const list = grouped.get(st) || [];
-        list.push({ item: it, originalIndex: idx, prepState });
-        grouped.set(st, list);
+        const targetStations = resolveOrderItemStations(
+          it,
+          itemMap,
+          categoryMap,
+          fallbackStationId
+        );
+        const overallState: ItemPrepState = order.itemProgress?.[String(idx)] || 'pending';
+        const byStationMap = order.itemProgressBy?.[String(idx)]?.byStation;
+
+        targetStations.forEach((stId) => {
+          const stMetaForFilter = stationById.get(stId);
+          if (
+            stMetaForFilter &&
+            stMetaForFilter.allowedOrderTypes.length > 0 &&
+            !stMetaForFilter.allowedOrderTypes.includes(order.orderType)
+          ) {
+            return;
+          }
+          const stationPrepState: ItemPrepState =
+            overallState === 'served'
+              ? 'served'
+              : byStationMap?.[stId]?.state ?? (byStationMap ? 'pending' : overallState);
+          const list = grouped.get(stId) || [];
+          list.push({
+            item: it,
+            originalIndex: idx,
+            prepState: stationPrepState,
+            targetStations,
+          });
+          grouped.set(stId, list);
+        });
       });
 
       grouped.forEach((stItems, stId) => {
@@ -593,7 +708,7 @@ export function LiveOrdersTab({
     });
 
     return map;
-  }, [activeOrders, itemMap, categoryMap, effectiveStations]);
+  }, [activeOrders, itemMap, categoryMap, effectiveStations, stationById]);
 
   const stationOpenCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -799,14 +914,19 @@ export function LiveOrdersTab({
     setSplitCheckOrder(consolidated);
   };
 
-  const handleMarkStationItemsReady = async (order: Order, itemIndices: number[]) => {
+  const handleUpdateKdsItemsState = async (
+    order: Order,
+    itemIndices: number[],
+    nextState: ItemPrepState = 'ready',
+    targetStationsMap?: Record<string, string[]>
+  ) => {
     if (itemIndices.length === 0) return;
-    const key = `${order.id}:${itemIndices.join(',')}`;
+    const key = `${order.id}:${nextState}:${itemIndices.join(',')}`;
     setUpdatingItemKey(key);
     try {
       const updates: Record<string, ItemPrepState> = {};
       itemIndices.forEach((idx) => {
-        updates[String(idx)] = 'ready';
+        updates[String(idx)] = nextState;
       });
       await updateOrderItemProgress(
         order.id,
@@ -818,8 +938,9 @@ export function LiveOrdersTab({
           orderNumber: order.orderNumber,
           station:
             activeStation === 'cashier'
-              ? effectiveStations[0]?.stationId || 'kitchen'
+              ? getDefaultFallbackStationId(effectiveStations)
               : activeStation,
+          targetStationsMap,
           actor,
         }
       );
@@ -1491,6 +1612,22 @@ export function LiveOrdersTab({
         /* ============================================================== */
         (() => {
           const stMeta = resolveStationMeta(activeStation);
+          const rawDynamicSt = dynamicStations.find(
+            (s) => cleanStationId(s.stationId || s.id) === activeStation
+          );
+          const showStationPrices =
+            rawDynamicSt?.showPrices !== undefined
+              ? Boolean(rawDynamicSt.showPrices)
+              : Boolean(
+                  opsConfig.showPricesByRole?.[
+                    activeStation as keyof typeof opsConfig.showPricesByRole
+                  ] ?? stMeta.showPrices
+                );
+          const statusBtns = stMeta.availableStatusButtons;
+          const allowPrepareBtn = statusBtns.includes('preparing');
+          const allowReadyBtn = statusBtns.includes('ready');
+          const allowServedBtn = statusBtns.includes('served');
+
           const allStationOrders = stationOrdersMap.get(activeStation) || [];
           const visibleKdsOrders = kdsShowCompletedItems
             ? allStationOrders
@@ -1506,8 +1643,11 @@ export function LiveOrdersTab({
                   boxShadow: ui.theme.cardShadow,
                 }}
               >
-                <div className="flex items-center gap-2.5">
-                  <span className={`px-3 py-1 rounded-lg border text-xs font-extrabold ${stMeta.badgeClass}`}>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    className="px-3 py-1 rounded-lg border text-xs font-extrabold text-white"
+                    style={{ backgroundColor: stMeta.color || '#EA580C', borderColor: stMeta.color || '#EA580C' }}
+                  >
                     {isEn ? stMeta.label_en : stMeta.label}
                   </span>
                   <span className="text-xs font-semibold" style={{ color: ui.theme.mutedText }}>
@@ -1515,6 +1655,30 @@ export function LiveOrdersTab({
                       ? `${visibleKdsOrders.length} active ticket(s) for this screen`
                       : `${visibleKdsOrders.length} تذكرة تحضير مخصصة لهذه الشاشة`}
                   </span>
+                  {stMeta.allowedOrderTypes.length < 3 && (
+                    <span className="px-2 py-0.5 rounded-md bg-zinc-100 border border-zinc-200 text-[10px] font-bold text-zinc-700">
+                      {stMeta.allowedOrderTypes
+                        .map((ot) =>
+                          ot === 'dine_in'
+                            ? isEn
+                              ? 'Dine-in'
+                              : 'صالة'
+                            : ot === 'delivery'
+                              ? isEn
+                                ? 'Delivery'
+                                : 'توصيل'
+                              : isEn
+                                ? 'Pickup'
+                                : 'تيك أواي'
+                        )
+                        .join(' · ')}
+                    </span>
+                  )}
+                  {stMeta.thermalPrintMode === 'auto' && (
+                    <span className="px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-[10px] font-extrabold text-emerald-800">
+                      {isEn ? 'Auto-Print' : 'طباعة تلقائية'}
+                    </span>
+                  )}
                 </div>
 
                 <label className="flex items-center gap-2 text-xs font-bold cursor-pointer" style={{ color: ui.theme.surfaceText }}>
@@ -1548,7 +1712,7 @@ export function LiveOrdersTab({
                   </h3>
                   <p className="text-xs max-w-md mx-auto" style={{ color: ui.theme.mutedText }}>
                     {isEn
-                      ? 'Any new order containing items from categories assigned to this station will appear here immediately.'
+                      ? 'Any new order containing items assigned to this station will appear here immediately.'
                       : 'أي أوردر جديد يحتوي على أصناف تابعة لهذه المحطة سيظهر هنا فوراً مع رقم الترابيزة واسم العميل.'}
                   </p>
                 </div>
@@ -1558,7 +1722,17 @@ export function LiveOrdersTab({
                     const unreadyIndices = stItems
                       .filter((x) => x.prepState === 'pending' || x.prepState === 'preparing')
                       .map((x) => x.originalIndex);
-                    const batchKey = `${order.id}:${unreadyIndices.join(',')}`;
+                    const batchTargetsMap: Record<string, string[]> = {};
+                    stItems.forEach((x) => {
+                      batchTargetsMap[String(x.originalIndex)] = x.targetStations;
+                    });
+                    const batchKey = `${order.id}:ready:${unreadyIndices.join(',')}`;
+                    const createdMs = getTimestampMillis(order.createdAt);
+                    const elapsedMins =
+                      createdMs > 0 ? Math.max(0, Math.floor((nowTick - createdMs) / 60000)) : 0;
+                    const isOverdueTicket =
+                      stPending > 0 && elapsedMins >= stMeta.overdueAlertMinutes;
+
                     const locationLabel =
                       order.orderType === 'dine_in'
                         ? `${order.hallName ? `${order.hallName} · ` : ''}${
@@ -1576,7 +1750,11 @@ export function LiveOrdersTab({
                       <article
                         key={order.id}
                         className={`border-2 p-4 flex flex-col justify-between gap-4 ${ui.radiusClasses.card} ${
-                          stPending > 0 ? 'border-amber-300' : 'border-emerald-200 bg-emerald-50/20'
+                          isOverdueTicket
+                            ? 'border-rose-400'
+                            : stPending > 0
+                              ? 'border-amber-300'
+                              : 'border-emerald-200 bg-emerald-50/20'
                         }`}
                         style={
                           stPending > 0
@@ -1600,6 +1778,11 @@ export function LiveOrdersTab({
                                 >
                                   {locationLabel}
                                 </span>
+                                {isOverdueTicket && (
+                                  <span className="px-2 py-0.5 rounded-md bg-rose-100 text-rose-800 border border-rose-200 text-[10px] font-extrabold font-mono-num">
+                                    {isEn ? `Overdue +${elapsedMins}m` : `متأخر +${elapsedMins}د`}
+                                  </span>
+                                )}
                               </div>
                               <p className="text-[11px] mt-1" style={{ color: ui.theme.mutedText }}>
                                 {order.customerName}
@@ -1623,30 +1806,28 @@ export function LiveOrdersTab({
                           </div>
 
                           <div className="space-y-2.5">
-                            {(() => {
-                              const showStationPrices = Boolean(
-                                opsConfig.showPricesByRole?.[
-                                  activeStation as keyof typeof opsConfig.showPricesByRole
-                                ]
-                              );
-                              return stItems.map(({ item: it, originalIndex, prepState }) => {
-                                const isDone = prepState === 'ready' || prepState === 'served';
-                                const itemKey = `${order.id}:${originalIndex}`;
-                                return (
-                                  <div
-                                    key={itemKey}
-                                    className={`p-3 rounded-xl border flex items-start justify-between gap-2.5 ${
-                                      isDone ? 'bg-emerald-50/70 border-emerald-200' : ''
-                                    }`}
-                                    style={
-                                      isDone
-                                        ? undefined
-                                        : {
-                                            backgroundColor: ui.theme.surfaceSubtleBg,
-                                            borderColor: ui.theme.surfaceBorder,
-                                          }
-                                    }
-                                  >
+                            {stItems.map(({ item: it, originalIndex, prepState, targetStations }) => {
+                              const isDone = prepState === 'ready' || prepState === 'served';
+                              const idxStr = String(originalIndex);
+                              const itemTargetsMap = { [idxStr]: targetStations };
+                              const byStationMap = order.itemProgressBy?.[idxStr]?.byStation;
+                              const otherStations = targetStations.filter((s) => s !== activeStation);
+                              return (
+                                <div
+                                  key={`${order.id}:${originalIndex}`}
+                                  className={`p-3 rounded-xl border flex flex-col gap-2 ${
+                                    isDone ? 'bg-emerald-50/70 border-emerald-200' : ''
+                                  }`}
+                                  style={
+                                    isDone
+                                      ? undefined
+                                      : {
+                                          backgroundColor: ui.theme.surfaceSubtleBg,
+                                          borderColor: ui.theme.surfaceBorder,
+                                        }
+                                  }
+                                >
+                                  <div className="flex items-start justify-between gap-2.5">
                                     <div className="min-w-0 space-y-1">
                                       <div className="flex flex-wrap items-center gap-1.5">
                                         <span className="font-mono-num text-sm font-extrabold" style={{ color: ui.theme.surfaceText }}>
@@ -1677,29 +1858,102 @@ export function LiveOrdersTab({
                                           {isEn ? 'Note:' : 'ملاحظة:'} {it.notes}
                                         </p>
                                       )}
-                                      <div className="pt-0.5">{getPrepBadge(prepState)}</div>
+                                      <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                                        {getPrepBadge(prepState)}
+                                        {otherStations.map((otherId) => {
+                                          const otherMeta = resolveStationMeta(otherId);
+                                          const otherState = byStationMap?.[otherId]?.state || 'pending';
+                                          const otherDone = otherState === 'ready' || otherState === 'served';
+                                          return (
+                                            <span
+                                              key={otherId}
+                                              className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${
+                                                otherDone
+                                                  ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                                                  : 'bg-zinc-100 border-zinc-200 text-zinc-700'
+                                              }`}
+                                            >
+                                              {isEn ? otherMeta.shortLabel_en : otherMeta.shortLabel}:{' '}
+                                              {otherDone
+                                                ? isEn
+                                                  ? 'Ready'
+                                                  : 'جاهز'
+                                                : otherState === 'preparing'
+                                                  ? isEn
+                                                    ? 'Prep'
+                                                    : 'يحضر'
+                                                  : isEn
+                                                    ? 'Wait'
+                                                    : 'ينتظر'}
+                                            </span>
+                                          );
+                                        })}
+                                      </div>
                                     </div>
 
-                                  {!isDone && (
-                                    <button
-                                      type="button"
-                                      disabled={updatingItemKey === itemKey}
-                                      onClick={() => handleMarkStationItemsReady(order, [originalIndex])}
-                                      className="min-h-[40px] px-3 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-extrabold hover:bg-emerald-700 shrink-0 cursor-pointer disabled:opacity-50"
-                                    >
-                                      {activeStation === 'kitchen'
-                                        ? isEn
-                                          ? 'Ready to Serve'
-                                          : 'جاهز للتقديم'
-                                        : isEn
-                                          ? 'Ready'
-                                          : 'جاهز'}
-                                    </button>
-                                  )}
+                                    <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                                      {prepState === 'pending' && allowPrepareBtn && (
+                                        <button
+                                          type="button"
+                                          disabled={updatingItemKey === `${order.id}:preparing:${originalIndex}`}
+                                          onClick={() =>
+                                            handleUpdateKdsItemsState(
+                                              order,
+                                              [originalIndex],
+                                              'preparing',
+                                              itemTargetsMap
+                                            )
+                                          }
+                                          className="min-h-[38px] px-2.5 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-extrabold hover:bg-blue-700 cursor-pointer disabled:opacity-50"
+                                        >
+                                          {isEn ? 'Prep' : 'تحضير'}
+                                        </button>
+                                      )}
+                                      {(prepState === 'pending' || prepState === 'preparing') && allowReadyBtn && (
+                                        <button
+                                          type="button"
+                                          disabled={updatingItemKey === `${order.id}:ready:${originalIndex}`}
+                                          onClick={() =>
+                                            handleUpdateKdsItemsState(
+                                              order,
+                                              [originalIndex],
+                                              'ready',
+                                              itemTargetsMap
+                                            )
+                                          }
+                                          className="min-h-[38px] px-3 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-extrabold hover:bg-emerald-700 cursor-pointer disabled:opacity-50"
+                                        >
+                                          {activeStation === 'kitchen'
+                                            ? isEn
+                                              ? 'Ready'
+                                              : 'جاهز للتقديم'
+                                            : isEn
+                                              ? 'Ready'
+                                              : 'جاهز'}
+                                        </button>
+                                      )}
+                                      {prepState === 'ready' && allowServedBtn && (
+                                        <button
+                                          type="button"
+                                          disabled={updatingItemKey === `${order.id}:served:${originalIndex}`}
+                                          onClick={() =>
+                                            handleUpdateKdsItemsState(
+                                              order,
+                                              [originalIndex],
+                                              'served',
+                                              itemTargetsMap
+                                            )
+                                          }
+                                          className="min-h-[38px] px-2.5 py-1.5 rounded-xl bg-zinc-800 text-white text-xs font-extrabold hover:bg-zinc-900 cursor-pointer disabled:opacity-50"
+                                        >
+                                          {isEn ? 'Served' : 'تم التقديم'}
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
                                 </div>
                               );
-                            });
-                            })()}
+                            })}
                           </div>
 
                           {order.notes && (
@@ -1710,11 +1964,13 @@ export function LiveOrdersTab({
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2 pt-1">
-                          {unreadyIndices.length > 1 && (
+                          {allowReadyBtn && unreadyIndices.length > 1 && (
                             <button
                               type="button"
                               disabled={updatingItemKey === batchKey}
-                              onClick={() => handleMarkStationItemsReady(order, unreadyIndices)}
+                              onClick={() =>
+                                handleUpdateKdsItemsState(order, unreadyIndices, 'ready', batchTargetsMap)
+                              }
                               className={`flex-1 min-h-[42px] py-2.5 px-3 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 ${ui.radiusClasses.button}`}
                               style={{
                                 backgroundColor: ui.theme.accentHex,
@@ -1730,26 +1986,28 @@ export function LiveOrdersTab({
                             </button>
                           )}
 
-                          <button
-                            type="button"
-                            disabled={printingKdsOrderId === order.id}
-                            onClick={() =>
-                              handlePrintKdsTicket(
-                                order,
-                                stMeta,
-                                stItems.map((x) => x.item)
-                              )
-                            }
-                            className={`min-h-[42px] py-2.5 px-3 border text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 ${ui.radiusClasses.button}`}
-                            style={{
-                              backgroundColor: ui.theme.surfaceSubtleBg,
-                              borderColor: ui.theme.surfaceBorder,
-                              color: ui.theme.surfaceText,
-                            }}
-                          >
-                            <Printer className="w-4 h-4" />
-                            <span>{isEn ? 'Print Ticket' : 'طباعة التذكرة'}</span>
-                          </button>
+                          {stMeta.thermalPrintMode !== 'off' && (
+                            <button
+                              type="button"
+                              disabled={printingKdsOrderId === order.id}
+                              onClick={() =>
+                                handlePrintKdsTicket(
+                                  order,
+                                  stMeta,
+                                  stItems.map((x) => x.item)
+                                )
+                              }
+                              className={`min-h-[42px] py-2.5 px-3 border text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 ${ui.radiusClasses.button}`}
+                              style={{
+                                backgroundColor: ui.theme.surfaceSubtleBg,
+                                borderColor: ui.theme.surfaceBorder,
+                                color: ui.theme.surfaceText,
+                              }}
+                            >
+                              <Printer className="w-4 h-4" />
+                              <span>{isEn ? 'Print Ticket' : 'طباعة التذكرة'}</span>
+                            </button>
+                          )}
                         </div>
                       </article>
                     );
@@ -2073,13 +2331,12 @@ export function LiveOrdersTab({
                       <div className="space-y-2 max-h-56 overflow-y-auto pe-1">
                         {group.orders.flatMap((ord) =>
                           ord.items.map((it, idx) => {
-                            const st = resolveOrderItemStation(
+                            const itemStations = resolveOrderItemStations(
                               it,
                               itemMap,
                               categoryMap,
-                              effectiveStations[0]?.stationId || 'kitchen'
+                              getDefaultFallbackStationId(effectiveStations)
                             );
-                            const stMeta = resolveStationMeta(st);
                             const prepState = ord.itemProgress?.[String(idx)] || 'pending';
                             return (
                               <div
@@ -2108,11 +2365,17 @@ export function LiveOrdersTab({
                                         {it.guestName}
                                       </span>
                                     )}
-                                    <span
-                                      className={`px-1.5 py-0.5 rounded border text-[9px] font-bold ${stMeta.badgeClass}`}
-                                    >
-                                      {isEn ? stMeta.shortLabel_en : stMeta.shortLabel}
-                                    </span>
+                                    {itemStations.map((stId) => {
+                                      const stMeta = resolveStationMeta(stId);
+                                      return (
+                                        <span
+                                          key={stId}
+                                          className={`px-1.5 py-0.5 rounded border text-[9px] font-bold ${stMeta.badgeClass}`}
+                                        >
+                                          {isEn ? stMeta.shortLabel_en : stMeta.shortLabel}
+                                        </span>
+                                      );
+                                    })}
                                     {getPrepBadge(prepState)}
                                   </div>
                                 </div>
@@ -2389,13 +2652,12 @@ export function LiveOrdersTab({
 
                         <div className="space-y-2">
                           {order.items.map((item, idx) => {
-                            const itemSt = resolveOrderItemStation(
+                            const itemStations = resolveOrderItemStations(
                               item,
                               itemMap,
                               categoryMap,
-                              effectiveStations[0]?.stationId || 'kitchen'
+                              getDefaultFallbackStationId(effectiveStations)
                             );
-                            const stMeta = resolveStationMeta(itemSt);
                             const prepState = order.itemProgress?.[String(idx)] || 'pending';
                             return (
                               <div
@@ -2413,11 +2675,17 @@ export function LiveOrdersTab({
                                         {item.guestName}
                                       </span>
                                     )}
-                                    <span
-                                      className={`px-1.5 py-0.5 rounded border text-[9px] font-bold ${stMeta.badgeClass}`}
-                                    >
-                                      {isEn ? stMeta.shortLabel_en : stMeta.shortLabel}
-                                    </span>
+                                    {itemStations.map((stId) => {
+                                      const stMeta = resolveStationMeta(stId);
+                                      return (
+                                        <span
+                                          key={stId}
+                                          className={`px-1.5 py-0.5 rounded border text-[9px] font-bold ${stMeta.badgeClass}`}
+                                        >
+                                          {isEn ? stMeta.shortLabel_en : stMeta.shortLabel}
+                                        </span>
+                                      );
+                                    })}
                                     {order.status !== 'completed' && order.status !== 'cancelled' && getPrepBadge(prepState)}
                                   </p>
                                   {item.addonNames?.length > 0 && (

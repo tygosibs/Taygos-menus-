@@ -103,12 +103,13 @@ export const STATION_COLOR_PRESETS: string[] = [
  */
 export const STATION_TEMPLATES: StationTemplate[] = [
   { suggestedId: 'kitchen', name: 'المطبخ', nameEn: 'Kitchen', color: '#EA580C', icon: 'chef-hat' },
+  { suggestedId: 'sub_kitchen', name: 'مطبخ فرعي', nameEn: 'Sub-Kitchen', color: '#C2410C', icon: 'chef-hat' },
+  { suggestedId: 'bakery', name: 'المخبز', nameEn: 'Bakery', color: '#B45309', icon: 'croissant' },
   { suggestedId: 'grill', name: 'المشويات', nameEn: 'Grill', color: '#DC2626', icon: 'flame' },
   { suggestedId: 'bar', name: 'البار', nameEn: 'Bar', color: '#0284C7', icon: 'wine' },
   { suggestedId: 'pastry', name: 'الباستري', nameEn: 'Pastry', color: '#DB2777', icon: 'croissant' },
   { suggestedId: 'coffee', name: 'القهوة', nameEn: 'Coffee', color: '#78350F', icon: 'coffee' },
   { suggestedId: 'pizza', name: 'البيتزا', nameEn: 'Pizza', color: '#D97706', icon: 'pizza' },
-  { suggestedId: 'bakery', name: 'المخبز', nameEn: 'Bakery', color: '#B45309', icon: 'croissant' },
   { suggestedId: 'shawarma', name: 'الشاورما', nameEn: 'Shawarma', color: '#B45309', icon: 'utensils' },
   { suggestedId: 'sushi', name: 'السوشي', nameEn: 'Sushi', color: '#0D9488', icon: 'fish' },
   { suggestedId: 'salads', name: 'السلطات', nameEn: 'Salads', color: '#059669', icon: 'salad' },
@@ -117,9 +118,9 @@ export const STATION_TEMPLATES: StationTemplate[] = [
 ];
 
 export const DEFAULT_SEED_STATIONS: StationTemplate[] = [
-  STATION_TEMPLATES[0], // المطبخ
-  STATION_TEMPLATES[2], // البار
-  STATION_TEMPLATES[3], // الباستري
+  STATION_TEMPLATES[0], // المطبخ (kitchen)
+  STATION_TEMPLATES[4], // البار (bar)
+  STATION_TEMPLATES[5], // الباستري (pastry)
 ];
 
 export const DEFAULT_ALLOWED_ORDER_TYPES: OrderType[] = ['dine_in', 'pickup', 'delivery'];

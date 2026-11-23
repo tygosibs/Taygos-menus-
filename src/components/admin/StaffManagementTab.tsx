@@ -60,6 +60,7 @@ import {
 } from '../../lib/staffService';
 import { subscribeRestaurantStations } from '../../lib/stationsService';
 import {
+  buildEffectiveCaptainScreens,
   buildEffectiveStations,
   cleanStationId,
   getStationIconComponent,
@@ -77,6 +78,7 @@ import {
   StaffRole,
   StaffScreen,
   StaffShift,
+  StationScreenType,
   SuspensionType,
 } from '../../types/menu';
 import { AuthorizedDomainsCard } from './AuthorizedDomainsCard';
@@ -88,6 +90,7 @@ interface StaffManagementTabProps {
   mode: 'owner' | 'manager';
   actor: StaffActorInfo;
   onRestaurantUpdated?: (updated: Restaurant) => void;
+  onOpenAddScreen?: (screenType?: StationScreenType) => void;
 }
 
 const MANAGER_PERMISSION_LABELS: Array<{
@@ -181,6 +184,13 @@ const MANAGER_PERMISSION_LABELS: Array<{
     hintAr: 'إنشاء وتعديل الصالات وتوليد وطباعة باركود الترابيزات',
     hintEn: 'Create/edit halls and print table QR stands',
   },
+  {
+    key: 'canManageStations',
+    labelAr: 'إدارة الشاشات والمحطات',
+    labelEn: 'Manage Screens & Stations',
+    hintAr: 'إضافة وتعديل وتعطيل وأرشفة محطات التحضير وشاشات الكابتن',
+    hintEn: 'Create, edit, pause, and archive prep stations and captain screens',
+  },
 ];
 
 const AUDIT_LABELS_AR: Record<string, string> = {
@@ -273,6 +283,7 @@ export function StaffManagementTab({
   mode,
   actor,
   onRestaurantUpdated,
+  onOpenAddScreen,
 }: StaffManagementTabProps) {
   const { lang, dir, loc } = useLanguage();
   const isEn = lang === 'en';
@@ -317,6 +328,7 @@ export function StaffManagementTab({
   const [roleInput, setRoleInput] = useState<StaffRole>('cashier');
   const [hallIdInput, setHallIdInput] = useState('');
   const [allowedScreensInput, setAllowedScreensInput] = useState<StaffScreen[]>(['cashier']);
+  const [allowedCaptainScreensInput, setAllowedCaptainScreensInput] = useState<string[]>([]);
   const [defaultScreenInput, setDefaultScreenInput] = useState<StaffScreen>('cashier');
   const [useOneTimeInvite, setUseOneTimeInvite] = useState(true);
   const [directPasswordInput, setDirectPasswordInput] = useState('');
@@ -407,6 +419,13 @@ export function StaffManagementTab({
     [dynamicStations]
   );
 
+  const effectiveCaptainScreens = useMemo(
+    () => buildEffectiveCaptainScreens(dynamicStations),
+    [dynamicStations]
+  );
+
+  const canManageStations = mode === 'owner' || opsConfig.managerPermissions.canManageStations !== false;
+
   const dynamicManagerScreens = useMemo(
     () => getManagerScreensForStations(effectiveStations, opsConfig.managerPermissions.canManageHalls),
     [effectiveStations, opsConfig.managerPermissions.canManageHalls]
@@ -465,6 +484,7 @@ export function StaffManagementTab({
     setRoleInput('manager');
     setHallIdInput('');
     setAllowedScreensInput([...dynamicManagerScreens]);
+    setAllowedCaptainScreensInput(effectiveCaptainScreens.map((c) => c.stationId));
     setDefaultScreenInput('staff_management');
     setUseOneTimeInvite(true);
     setDirectPasswordInput('');
@@ -484,6 +504,7 @@ export function StaffManagementTab({
     setRoleInput('cashier');
     setHallIdInput('');
     setAllowedScreensInput(defaults.allowedScreens);
+    setAllowedCaptainScreensInput([]);
     setDefaultScreenInput(defaults.defaultScreen);
     setUseOneTimeInvite(true);
     setDirectPasswordInput('');
@@ -506,6 +527,7 @@ export function StaffManagementTab({
     );
     const nextScreens: StaffScreen[] = sanitizedScreens.length > 0 ? sanitizedScreens : ['cashier'];
     setAllowedScreensInput(nextScreens);
+    setAllowedCaptainScreensInput(member.allowedCaptainScreens || []);
     const preferredDefault =
       member.defaultScreen && nextScreens.includes(member.defaultScreen)
         ? member.defaultScreen
@@ -522,6 +544,13 @@ export function StaffManagementTab({
     const defaults = getDefaultScreensForRole(nextRole, effectiveStations);
     setAllowedScreensInput(defaults.allowedScreens);
     setDefaultScreenInput(defaults.defaultScreen);
+    if (nextRole === 'captain' && effectiveCaptainScreens.length > 0) {
+      setAllowedCaptainScreensInput([effectiveCaptainScreens[0].stationId]);
+    } else if (nextRole === 'manager') {
+      setAllowedCaptainScreensInput(effectiveCaptainScreens.map((c) => c.stationId));
+    } else {
+      setAllowedCaptainScreensInput([]);
+    }
   };
 
   const toggleAllowedScreen = (screen: StaffScreen) => {
@@ -532,6 +561,17 @@ export function StaffManagementTab({
       const next = exists ? prev.filter((s) => s !== screen) : [...prev, screen];
       if (!next.includes(defaultScreenInput)) {
         setDefaultScreenInput(next[0]);
+      }
+      return next;
+    });
+  };
+
+  const toggleAllowedCaptainScreen = (captainScreenId: string) => {
+    setAllowedCaptainScreensInput((prev) => {
+      const exists = prev.includes(captainScreenId);
+      const next = exists ? prev.filter((id) => id !== captainScreenId) : [...prev, captainScreenId];
+      if (!exists && !allowedScreensInput.includes('captain')) {
+        setAllowedScreensInput((cur) => [...cur, 'captain']);
       }
       return next;
     });
@@ -581,6 +621,7 @@ export function StaffManagementTab({
             role: mode === 'owner' ? roleInput : editingMember.role === 'manager' ? 'manager' : roleInput,
             allowedScreens: finalScreens,
             allowedStations: extractedStations,
+            allowedCaptainScreens: allowedCaptainScreensInput,
             defaultStationId,
             defaultScreen: defaultScreenInput,
             hallId: hallIdInput,
@@ -605,6 +646,7 @@ export function StaffManagementTab({
           role: formKind === 'manager' ? 'manager' : roleInput,
           allowedScreens: finalScreens,
           allowedStations: extractedStations,
+          allowedCaptainScreens: allowedCaptainScreensInput,
           defaultStationId,
           defaultScreen:
             formKind === 'manager' ? 'staff_management' : defaultScreenInput,
@@ -977,22 +1019,24 @@ export function StaffManagementTab({
               <Users className="w-3.5 h-3.5" />
               <span>{isEn ? 'Team Members & Access' : 'أعضاء الكادر والصلاحيات'}</span>
             </button>
-            <button
-              type="button"
-              onClick={() => setSubView('stations')}
-              className={`min-h-[38px] px-3.5 py-1.5 rounded-xl text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
-                subView === 'stations'
-                  ? 'bg-zinc-950 text-white'
-                  : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
-              }`}
-            >
-              <Layers className="w-3.5 h-3.5" />
-              <span>
-                {isEn
-                  ? `Prep Stations (${effectiveStations.length})`
-                  : `الأقسام الرئيسية والمحطات (${effectiveStations.length})`}
-              </span>
-            </button>
+            {canManageStations && (
+              <button
+                type="button"
+                onClick={() => setSubView('stations')}
+                className={`min-h-[38px] px-3.5 py-1.5 rounded-xl text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
+                  subView === 'stations'
+                    ? 'bg-zinc-950 text-white'
+                    : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>
+                  {isEn
+                    ? `Screens & Stations (${effectiveStations.length + effectiveCaptainScreens.length})`
+                    : `الشاشات والمحطات (${effectiveStations.length + effectiveCaptainScreens.length})`}
+                </span>
+              </button>
+            )}
             <button
               type="button"
               onClick={() => setSubView('audit')}
@@ -1203,8 +1247,13 @@ export function StaffManagementTab({
         </div>
       )}
 
-      {subView === 'stations' ? (
-        <StationsManagerTab restaurant={restaurant} actor={actor} activeShifts={activeShifts} />
+      {subView === 'stations' && canManageStations ? (
+        <StationsManagerTab
+          restaurant={restaurant}
+          actor={actor}
+          activeShifts={activeShifts}
+          onGoHome={() => setSubView('members')}
+        />
       ) : loading ? (
         <div className="bg-white border border-zinc-200 rounded-2xl p-10 text-center space-y-2">
           <Loader2 className="w-7 h-7 animate-spin text-zinc-500 mx-auto" />
@@ -1474,6 +1523,20 @@ export function StaffManagementTab({
                                 }`}
                               >
                                 {isEn ? meta.shortEn : meta.shortAr}
+                              </span>
+                            );
+                          })}
+                          {(member.allowedCaptainScreens || []).map((capId) => {
+                            const capMeta = effectiveCaptainScreens.find(
+                              (c) => cleanStationId(c.stationId) === cleanStationId(capId)
+                            );
+                            if (!capMeta) return null;
+                            return (
+                              <span
+                                key={`cap_${capId}`}
+                                className="px-2 py-0.5 rounded-md text-[11px] font-bold border bg-teal-50 text-teal-800 border-teal-200"
+                              >
+                                {isEn ? capMeta.label_en : capMeta.label}
                               </span>
                             );
                           })}
@@ -1785,11 +1848,30 @@ export function StaffManagementTab({
                   <span className="text-xs font-extrabold text-zinc-900">
                     {isEn ? 'Allowed Screens & Prep Stations' : 'الشاشات والأقسام المسموح بها لهذا الحساب'}
                   </span>
-                  <span className="text-[11px] text-zinc-500">
-                    {isEn
-                      ? `Select any combination (${assignableScreens.length} available)`
-                      : `يمكن اختيار أي مزيج من الشاشات وأقسام التحضير (${assignableScreens.length} متاح)`}
-                  </span>
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <span className="text-[11px] text-zinc-500">
+                      {isEn
+                        ? `${assignableScreens.length} screens`
+                        : `${assignableScreens.length} شاشة متاحة`}
+                    </span>
+                    {canManageStations && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFormOpen(false);
+                          if (onOpenAddScreen) {
+                            onOpenAddScreen();
+                          } else {
+                            setSubView('stations');
+                          }
+                        }}
+                        className="text-[11px] font-extrabold text-orange-700 hover:underline inline-flex items-center gap-1 cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>{isEn ? 'Add New Screen' : 'إضافة شاشة جديدة'}</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -1830,6 +1912,78 @@ export function StaffManagementTab({
                       </label>
                     );
                   })}
+                </div>
+
+                {/* Custom Captain Screens Section */}
+                <div className="pt-2 border-t border-zinc-200/80 space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-[11px] font-extrabold text-teal-900">
+                      {isEn
+                        ? 'Assigned Captain Floor Screens (Optional hall/table scope)'
+                        : 'شاشات الكابتن المخصصة (لتحديد صالة أو طاولات محددة لكل كابتن)'}
+                    </span>
+                    {canManageStations && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFormOpen(false);
+                          if (onOpenAddScreen) {
+                            onOpenAddScreen('captain');
+                          } else {
+                            setSubView('stations');
+                          }
+                        }}
+                        className="text-[11px] font-extrabold text-teal-700 hover:underline inline-flex items-center gap-1 cursor-pointer"
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>{isEn ? 'New Captain Screen' : 'إضافة شاشة كابتن'}</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {effectiveCaptainScreens.length === 0 ? (
+                    <p className="text-[11px] text-zinc-500">
+                      {isEn
+                        ? 'No custom captain screens created yet — Captain access covers all tables by default.'
+                        : 'لا توجد شاشات كابتن مخصصة بعد — افتراضياً تغطي شاشة الكابتن كل الطاولات.'}
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {effectiveCaptainScreens.map((cap) => {
+                        const checked = allowedCaptainScreensInput.includes(cap.stationId);
+                        return (
+                          <label
+                            key={cap.stationId}
+                            className={`flex items-center justify-between gap-2 p-2.5 rounded-xl border text-xs font-bold cursor-pointer ${
+                              checked
+                                ? 'bg-teal-50 border-teal-700 text-teal-950'
+                                : 'bg-white border-zinc-200 text-zinc-700'
+                            }`}
+                          >
+                            <span className="flex items-center gap-2 min-w-0">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => toggleAllowedCaptainScreen(cap.stationId)}
+                                className="w-4 h-4 accent-teal-700 shrink-0"
+                              />
+                              <UserCheck className="w-3.5 h-3.5 text-teal-700 shrink-0" />
+                              <span className="truncate">{loc(cap.label, cap.label_en)}</span>
+                            </span>
+                            <span className="text-[10px] text-teal-700 shrink-0">
+                              {cap.tableVisibilityScope === 'assigned_only'
+                                ? isEn
+                                  ? 'Scoped'
+                                  : 'مخصصة'
+                                : isEn
+                                  ? 'All'
+                                  : 'الكل'}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
 
                 <label className="block space-y-1 text-xs font-bold text-zinc-800 pt-1">

@@ -325,6 +325,7 @@ export const UI_ACTION_CATALOG: Record<UiScreenId, UiActionCatalogItem[]> = {
   owner_admin: [
     { id: 'orders', defaultLabelAr: 'شاشات الكاشير والمطبخ', defaultLabelEn: 'Cashier / POS & KDS', iconName: 'BellRing' },
     { id: 'captain', defaultLabelAr: 'شاشة الكابتن والويتر', defaultLabelEn: 'Captain / Waiter', iconName: 'UserCheck' },
+    { id: 'stations', defaultLabelAr: 'الشاشات والمحطات', defaultLabelEn: 'Screens & Stations', iconName: 'Layers' },
     { id: 'staff', defaultLabelAr: 'المدير والكادر والصلاحيات', defaultLabelEn: 'Manager, Roles & Permissions', iconName: 'ShieldCheck' },
     { id: 'reports', defaultLabelAr: 'تقرير الورديات والحسابات', defaultLabelEn: 'Shifts & Vault Reports', iconName: 'Calculator' },
     { id: 'customers', defaultLabelAr: 'إدارة العملاء والولاء', defaultLabelEn: 'Customer CRM & Loyalty', iconName: 'Users' },
@@ -335,6 +336,7 @@ export const UI_ACTION_CATALOG: Record<UiScreenId, UiActionCatalogItem[]> = {
   ],
   manager_console: [
     { id: 'supervision', defaultLabelAr: 'لوحة الإشراف العام', defaultLabelEn: 'Supervision Console', iconName: 'Crown', lockedVisible: true },
+    { id: 'stations', defaultLabelAr: 'الشاشات والمحطات', defaultLabelEn: 'Screens & Stations', iconName: 'Layers' },
     { id: 'menu_editor', defaultLabelAr: 'المنيو والأصناف', defaultLabelEn: 'Digital Menu & Items', iconName: 'Utensils' },
     { id: 'shift_reports', defaultLabelAr: 'تقرير الورديات', defaultLabelEn: 'Shift Reports', iconName: 'FileSpreadsheet' },
     { id: 'staff_management', defaultLabelAr: 'إدارة الكادر', defaultLabelEn: 'Staff & Permissions', iconName: 'ShieldCheck' },
@@ -410,7 +412,7 @@ export function createDefaultScreenConfig(screenId: UiScreenId): UiScreenConfig 
             id: 'card_ops_owner',
             titleAr: 'التشغيل اليومي المباشر',
             titleEn: 'Daily Floor Operations',
-            buttonIds: ['orders', 'captain'],
+            buttonIds: ['orders', 'captain', 'stations'],
           },
           {
             id: 'card_team_finance',
@@ -437,7 +439,7 @@ export function createDefaultScreenConfig(screenId: UiScreenId): UiScreenConfig 
             id: 'card_mgr_lead',
             titleAr: 'القيادة والإشراف',
             titleEn: 'Leadership & Reports',
-            buttonIds: ['supervision', 'menu_editor', 'shift_reports', 'staff_management'],
+            buttonIds: ['supervision', 'stations', 'menu_editor', 'shift_reports', 'staff_management'],
           },
           {
             id: 'card_mgr_stations',

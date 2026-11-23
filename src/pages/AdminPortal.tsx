@@ -38,6 +38,7 @@ import { OnboardingForm } from '../components/admin/OnboardingForm';
 import { OwnerShiftReportTab } from '../components/admin/OwnerShiftReportTab';
 import { QrGeneratorTab } from '../components/admin/QrGeneratorTab';
 import { StaffManagementTab } from '../components/admin/StaffManagementTab';
+import { StationsManagerTab } from '../components/admin/StationsManagerTab';
 import { ThemeCustomizerTab } from '../components/admin/ThemeCustomizerTab';
 import { OwnerAuthCard } from '../components/auth/OwnerAuthCard';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -61,7 +62,7 @@ import {
 } from '../lib/firestoreService';
 import { playOrderAlertChime, unlockAudioContext } from '../lib/sound';
 import { fetchRestaurantSlugById, getStaffAccessForUid } from '../lib/staffService';
-import { CustomerProfile, Restaurant } from '../types/menu';
+import { CustomerProfile, Restaurant, StationScreenType } from '../types/menu';
 
 interface AdminPortalProps {
   onNavigate: (path: string) => void;
@@ -70,6 +71,7 @@ interface AdminPortalProps {
 type AdminTab =
   | 'orders'
   | 'captain'
+  | 'stations'
   | 'staff'
   | 'reports'
   | 'customers'
@@ -97,7 +99,7 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
     const saved = window.sessionStorage.getItem(OWNER_TAB_STORAGE_KEY) as AdminTab | null;
     if (
       saved &&
-      ['orders', 'captain', 'staff', 'reports', 'customers', 'menu', 'offers', 'theme', 'qr'].includes(saved)
+      ['orders', 'captain', 'stations', 'staff', 'reports', 'customers', 'menu', 'offers', 'theme', 'qr'].includes(saved)
     ) {
       return saved;
     }
@@ -109,6 +111,12 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
       window.sessionStorage.setItem(OWNER_TAB_STORAGE_KEY, tab);
     }
   };
+  const [stationCreateIntent, setStationCreateIntent] = useState<{
+    key: number;
+    returnTab?: AdminTab;
+    returnLabel?: string;
+    screenType?: StationScreenType;
+  } | null>(null);
   const [justCreatedBanner, setJustCreatedBanner] = useState(false);
   const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
 
@@ -581,6 +589,12 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
       icon: UserCheck,
       badge: pendingCallsCount > 0 ? pendingCallsCount : undefined,
     },
+    stations: {
+      id: 'stations',
+      label: ui.getButtonLabel('stations', lang, isEn ? 'Screens & Stations' : 'الشاشات والمحطات'),
+      shortLabel: ui.getButtonLabel('stations', lang, isEn ? 'Screens' : 'الشاشات والمحطات'),
+      icon: Layers,
+    },
     staff: {
       id: 'staff',
       label: ui.getButtonLabel('staff', lang, isEn ? 'Manager & Staff RBAC' : 'المدير والكادر والصلاحيات'),
@@ -643,9 +657,30 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
 
   const handleSelectOwnerTab = (tabId: AdminTab) => {
     unlockAudioContext();
+    setStationCreateIntent(null);
     setActiveTab(tabId);
     if (tabId === 'orders') setNewOrderToast(null);
     if (tabId === 'captain') setNewCallToast(null);
+  };
+
+  const openAddScreenFrom = (returnTab: AdminTab, screenType?: StationScreenType) => {
+    const returnLabel =
+      returnTab === 'menu'
+        ? isEn
+          ? 'Back to Menu'
+          : 'رجوع للمنيو'
+        : returnTab === 'staff'
+          ? isEn
+            ? 'Back to Staff'
+            : 'رجوع للكادر'
+          : undefined;
+    setStationCreateIntent({
+      key: Date.now(),
+      returnTab,
+      returnLabel,
+      screenType,
+    });
+    setActiveTab('stations');
   };
 
   return (
@@ -1233,6 +1268,31 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
               onRestaurantUpdated={(updated) => setRestaurant(updated)}
             />
           )}
+          {activeTab === 'stations' && (
+            <StationsManagerTab
+              restaurant={restaurant}
+              actor={{
+                uid: user.uid,
+                name: user.displayName || restaurant.name,
+                role: 'owner',
+              }}
+              createIntent={stationCreateIntent}
+              onGoHome={() => {
+                setStationCreateIntent(null);
+                setActiveTab('orders');
+              }}
+              onReturnAfterCreate={() => {
+                const ret = stationCreateIntent?.returnTab;
+                setStationCreateIntent(null);
+                if (ret) setActiveTab(ret);
+              }}
+              onCancelReturn={() => {
+                const ret = stationCreateIntent?.returnTab;
+                setStationCreateIntent(null);
+                if (ret) setActiveTab(ret);
+              }}
+            />
+          )}
           {activeTab === 'staff' && (
             <StaffManagementTab
               restaurant={restaurant}
@@ -1243,6 +1303,7 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
                 role: 'owner',
               }}
               onRestaurantUpdated={(updated) => setRestaurant(updated)}
+              onOpenAddScreen={(screenType) => openAddScreenFrom('staff', screenType)}
             />
           )}
           {activeTab === 'reports' && (
@@ -1262,7 +1323,12 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
               onRestaurantUpdated={(updated) => setRestaurant(updated)}
             />
           )}
-          {activeTab === 'menu' && <MenuBuilderTab restaurant={restaurant} />}
+          {activeTab === 'menu' && (
+            <MenuBuilderTab
+              restaurant={restaurant}
+              onOpenAddScreen={() => openAddScreenFrom('menu', 'prep')}
+            />
+          )}
           {activeTab === 'offers' && (
             <OffersPromosTab
               restaurant={restaurant}

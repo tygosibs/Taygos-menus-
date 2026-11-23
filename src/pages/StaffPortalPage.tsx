@@ -8,6 +8,7 @@ import {
   EyeOff,
   FileSpreadsheet,
   KeyRound,
+  Layers,
   LayoutGrid,
   Loader2,
   Lock,
@@ -30,6 +31,7 @@ import { OwnerShiftReportTab } from '../components/admin/OwnerShiftReportTab';
 import { QrGeneratorTab } from '../components/admin/QrGeneratorTab';
 import { StaffManagementTab } from '../components/admin/StaffManagementTab';
 import { StaffShiftBar } from '../components/admin/StaffShiftBar';
+import { StationsManagerTab } from '../components/admin/StationsManagerTab';
 import { ThermalPrinterSettingsModal } from '../components/admin/ThermalPrinterSettingsModal';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useScreenUi } from '../contexts/PlatformUiContext';
@@ -68,10 +70,12 @@ import {
 } from '../lib/staffService';
 import { subscribeRestaurantStations } from '../lib/stationsService';
 import {
+  buildEffectiveCaptainScreens,
   buildEffectiveStations,
   cleanStationId,
   getStationIconComponent,
   screenToStationId,
+  stationIdToScreen,
   StationMeta,
 } from '../lib/stationUtils';
 import {
@@ -88,6 +92,7 @@ import {
   StaffMember,
   StaffScreen,
   StaffShift,
+  StationScreenType,
   TreasuryTransfer,
 } from '../types/menu';
 
@@ -96,7 +101,7 @@ interface StaffPortalPageProps {
   onNavigate: (path: string) => void;
 }
 
-type ManagerPortalMode = 'supervision' | 'menu_editor' | 'shift_reports' | 'screen';
+type ManagerPortalMode = 'supervision' | 'stations' | 'menu_editor' | 'shift_reports' | 'screen';
 
 function getScreenIcon(scr: StaffScreen, stations: StationMeta[]) {
   if (scr === 'staff_management') return ShieldCheck;
@@ -114,7 +119,8 @@ function getScreenIcon(scr: StaffScreen, stations: StationMeta[]) {
 function computeEffectiveStaffScreens(
   staff: StaffMember,
   canManageStaff: boolean,
-  canManageHalls: boolean
+  canManageHalls: boolean,
+  dynamicStations?: StationMeta[]
 ): StaffScreen[] {
   const isMgr = staff.role === 'manager';
   const base = (staff.allowedScreens || []).filter((scr) => {
@@ -124,6 +130,12 @@ function computeEffectiveStaffScreens(
   });
   if (isMgr && canManageHalls && !base.includes('halls')) {
     base.push('halls');
+  }
+  if (isMgr && dynamicStations && dynamicStations.length > 0) {
+    dynamicStations.forEach((st) => {
+      const scr = stationIdToScreen(st.stationId);
+      if (!base.includes(scr)) base.push(scr);
+    });
   }
   return base.length > 0 ? base : ['cashier'];
 }
@@ -175,10 +187,11 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
   const [mismatchAuthNotice, setMismatchAuthNotice] = useState(false);
 
   const [activeScreen, setActiveScreen] = useState<StaffScreen>('cashier');
+  const [activeCaptainScreenId, setActiveCaptainScreenId] = useState<string>('');
   const [managerMode, setManagerModeState] = useState<ManagerPortalMode>(() => {
     if (typeof window === 'undefined') return 'supervision';
     const saved = window.sessionStorage.getItem(`sufra_staff_mgr_mode_${slug}`) as ManagerPortalMode | null;
-    if (saved && ['supervision', 'menu_editor', 'shift_reports', 'screen'].includes(saved)) {
+    if (saved && ['supervision', 'stations', 'menu_editor', 'shift_reports', 'screen'].includes(saved)) {
       return saved;
     }
     return 'supervision';
@@ -189,6 +202,13 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
       window.sessionStorage.setItem(`sufra_staff_mgr_mode_${slug}`, mode);
     }
   };
+  const [stationCreateIntent, setStationCreateIntent] = useState<{
+    key: number;
+    returnMode: ManagerPortalMode;
+    returnScreen?: StaffScreen;
+    screenType?: StationScreenType;
+    returnLabel?: string;
+  } | null>(null);
   const [supervisoryOverride, setSupervisoryOverride] = useState<{
     screen: StaffScreen;
     supervisory?: boolean;
@@ -414,6 +434,11 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
     [dynamicStations]
   );
 
+  const effectiveCaptainScreens = useMemo(
+    () => buildEffectiveCaptainScreens(dynamicStations),
+    [dynamicStations]
+  );
+
   const opsConfig = useMemo(() => getResolvedOperationsConfig(restaurant), [restaurant]);
   const managerPerms = opsConfig.managerPermissions;
 
@@ -476,16 +501,21 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
 
   const handleScreenChange = (
     scr: StaffScreen,
-    opts?: { supervisory?: boolean; coveringStaffName?: string }
+    opts?: { supervisory?: boolean; coveringStaffName?: string; captainScreenId?: string }
   ) => {
     if (!restaurant || !staff) return;
     const effective = computeEffectiveStaffScreens(
       staff,
       managerPerms.canManageStaff,
-      managerPerms.canManageHalls
+      managerPerms.canManageHalls,
+      effectiveStations
     );
     if (!effective.includes(scr)) return;
     setActiveScreen(scr);
+    if (opts?.captainScreenId) {
+      setActiveCaptainScreenId(opts.captainScreenId);
+    }
+    setStationCreateIntent(null);
     setManagerMode('screen');
     if (opts) {
       setSupervisoryOverride({
@@ -497,6 +527,34 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
       setSupervisoryOverride(null);
     }
     saveStaffScreen(restaurant.id, staff.uid, scr);
+  };
+
+  const openManagerAddScreen = (
+    returnMode: ManagerPortalMode,
+    returnScreen?: StaffScreen,
+    screenType?: StationScreenType
+  ) => {
+    if (managerPerms.canManageStations === false) return;
+    const returnLabel =
+      returnMode === 'menu_editor'
+        ? isEn
+          ? 'Menu & Items'
+          : 'المنيو والأصناف'
+        : returnScreen === 'staff_management'
+          ? isEn
+            ? 'Staff & Permissions'
+            : 'إدارة الكادر'
+          : isEn
+            ? 'Supervision'
+            : 'لوحة الإشراف';
+    setStationCreateIntent({
+      key: Date.now(),
+      returnMode,
+      returnScreen,
+      screenType,
+      returnLabel,
+    });
+    setManagerMode('stations');
   };
 
   const handleForcedPasswordSubmit = async (e: FormEvent) => {
@@ -973,20 +1031,43 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
   // Authenticated Active Staff Workspace (strictly screen-isolated)
   const roleMeta = STAFF_ROLE_META[staff.role] || STAFF_ROLE_META.cashier;
   const isManager = staff.role === 'manager';
+  const canManageStations = isManager && managerPerms.canManageStations !== false;
   const allowedScreens = computeEffectiveStaffScreens(
     staff,
     managerPerms.canManageStaff,
-    managerPerms.canManageHalls
+    managerPerms.canManageHalls,
+    effectiveStations
   );
   const safeCurrentScreen: StaffScreen = allowedScreens.includes(activeScreen)
     ? activeScreen
     : allowedScreens[0] || 'cashier';
 
+  const allowedCaptainScreenList: StationMeta[] = (() => {
+    if (effectiveCaptainScreens.length === 0) return [];
+    if (isManager) return effectiveCaptainScreens;
+    const explicitCapIds = (staff.allowedCaptainScreens || [])
+      .map((id) => cleanStationId(id))
+      .filter(Boolean);
+    if (explicitCapIds.length > 0) {
+      return effectiveCaptainScreens.filter((c) => explicitCapIds.includes(cleanStationId(c.stationId)));
+    }
+    return effectiveCaptainScreens;
+  })();
+
+  const activeCaptainScreenMeta: StationMeta | undefined =
+    allowedCaptainScreenList.length > 0
+      ? allowedCaptainScreenList.find((c) => c.stationId === activeCaptainScreenId) ||
+        allowedCaptainScreenList[0]
+      : undefined;
+
   const currentScreenMeta = getScreenMetaDynamic(safeCurrentScreen, effectiveStations);
   const currentStationId = screenToStationId(safeCurrentScreen)
     ? cleanStationId(screenToStationId(safeCurrentScreen) || '')
     : undefined;
-  const currentShiftKey = currentStationId || safeCurrentScreen;
+  const currentShiftKey =
+    safeCurrentScreen === 'captain' && activeCaptainScreenMeta
+      ? activeCaptainScreenMeta.stationId
+      : currentStationId || safeCurrentScreen;
 
   // Determine if another staff member covers this screen while Manager is supervising
   const liveCoveringShift =
@@ -1037,6 +1118,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
   const orderedManagerNavIds = (() => {
     const baseAllowed = [
       'supervision',
+      ...(canManageStations ? ['stations'] : []),
       ...(managerPerms.canEditMenu || managerPerms.canPauseItems ? ['menu_editor'] : []),
       ...(managerPerms.canViewShiftReports ? ['shift_reports'] : []),
       ...allowedScreens.filter(
@@ -1172,6 +1254,44 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
                     );
                   }
 
+                  if (isManager && navId === 'stations' && canManageStations) {
+                    const isActive = managerMode === 'stations';
+                    return (
+                      <button
+                        key="stations"
+                        type="button"
+                        onClick={() => {
+                          setStationCreateIntent(null);
+                          setManagerMode('stations');
+                          setSupervisoryOverride(null);
+                        }}
+                        className={`min-h-[36px] px-3 py-1.5 text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors border ${activePortalUi.radiusClasses.button}`}
+                        style={
+                          isActive
+                            ? {
+                                backgroundColor: portalTheme.accentHex,
+                                borderColor: portalTheme.accentHex,
+                                color: portalTheme.accentTextHex,
+                              }
+                            : {
+                                backgroundColor: portalTheme.surfaceSubtleBg,
+                                borderColor: portalTheme.surfaceBorder,
+                                color: portalTheme.surfaceText,
+                              }
+                        }
+                      >
+                        <Layers className="w-3.5 h-3.5" />
+                        <span>
+                          {managerUi.getButtonLabel(
+                            'stations',
+                            lang,
+                            isEn ? 'Screens & Stations' : 'الشاشات والمحطات'
+                          )}
+                        </span>
+                      </button>
+                    );
+                  }
+
                   if (isManager && navId === 'menu_editor') {
                     const isActive = managerMode === 'menu_editor';
                     return (
@@ -1179,6 +1299,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
                         key="menu_editor"
                         type="button"
                         onClick={() => {
+                          setStationCreateIntent(null);
                           setManagerMode('menu_editor');
                           setSupervisoryOverride(null);
                         }}
@@ -1216,6 +1337,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
                         key="shift_reports"
                         type="button"
                         onClick={() => {
+                          setStationCreateIntent(null);
                           setManagerMode('shift_reports');
                           setSupervisoryOverride(null);
                         }}
@@ -1333,10 +1455,58 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
             dynamicStations={dynamicStations}
             treasuryTransfers={treasuryTransfers}
             onNavigateScreen={(scr, opts) => handleScreenChange(scr, opts)}
+            onOpenStations={
+              canManageStations
+                ? () => {
+                    setStationCreateIntent(null);
+                    setManagerMode('stations');
+                  }
+                : undefined
+            }
             onRestaurantUpdated={(updated) => setRestaurant(updated)}
           />
+        ) : isManager && managerMode === 'stations' && canManageStations ? (
+          <StationsManagerTab
+            restaurant={restaurant}
+            actor={actor}
+            activeShifts={allActiveShifts}
+            createIntent={stationCreateIntent}
+            onGoHome={() => {
+              setStationCreateIntent(null);
+              setManagerMode('supervision');
+            }}
+            onReturnAfterCreate={() => {
+              const retMode = stationCreateIntent?.returnMode;
+              const retScreen = stationCreateIntent?.returnScreen;
+              setStationCreateIntent(null);
+              if (retMode === 'screen' && retScreen) {
+                setActiveScreen(retScreen);
+                setManagerMode('screen');
+              } else if (retMode) {
+                setManagerMode(retMode);
+              }
+            }}
+            onCancelReturn={() => {
+              const retMode = stationCreateIntent?.returnMode;
+              const retScreen = stationCreateIntent?.returnScreen;
+              setStationCreateIntent(null);
+              if (retMode === 'screen' && retScreen) {
+                setActiveScreen(retScreen);
+                setManagerMode('screen');
+              } else if (retMode) {
+                setManagerMode(retMode);
+              }
+            }}
+          />
         ) : isManager && managerMode === 'menu_editor' ? (
-          <MenuBuilderTab restaurant={restaurant} />
+          <MenuBuilderTab
+            restaurant={restaurant}
+            onOpenAddScreen={
+              canManageStations
+                ? () => openManagerAddScreen('menu_editor', undefined, 'prep')
+                : undefined
+            }
+          />
         ) : isManager && managerMode === 'shift_reports' ? (
           <OwnerShiftReportTab
             restaurant={restaurant}
@@ -1355,6 +1525,11 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
                 mode="manager"
                 actor={actor}
                 onRestaurantUpdated={(updated) => setRestaurant(updated)}
+                onOpenAddScreen={
+                  canManageStations
+                    ? (scrType) => openManagerAddScreen('screen', 'staff_management', scrType)
+                    : undefined
+                }
               />
             )}
 
@@ -1395,13 +1570,57 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
             )}
 
             {safeCurrentScreen === 'captain' && (
-              <CaptainWaiterTab
-                restaurant={restaurant}
-                defaultHallName={staff.hallName}
-                staffMode
-                actor={actor}
-                onRestaurantUpdated={(updated) => setRestaurant(updated)}
-              />
+              <div className="space-y-3">
+                {allowedCaptainScreenList.length > 1 && (
+                  <div
+                    className={`border p-2.5 flex flex-wrap items-center gap-2 ${activePortalUi.radiusClasses.card}`}
+                    style={{
+                      backgroundColor: portalTheme.surfaceBg,
+                      borderColor: portalTheme.surfaceBorder,
+                    }}
+                  >
+                    <span className="text-[11px] font-extrabold px-2" style={{ color: portalTheme.mutedText }}>
+                      {isEn ? 'Captain Screen:' : 'شاشة الكابتن:'}
+                    </span>
+                    {allowedCaptainScreenList.map((cap) => {
+                      const active = activeCaptainScreenMeta?.stationId === cap.stationId;
+                      return (
+                        <button
+                          key={cap.stationId}
+                          type="button"
+                          onClick={() => setActiveCaptainScreenId(cap.stationId)}
+                          className={`min-h-[36px] px-3 py-1.5 text-xs font-extrabold border inline-flex items-center gap-1.5 cursor-pointer ${activePortalUi.radiusClasses.button}`}
+                          style={
+                            active
+                              ? {
+                                  backgroundColor: cap.color || portalTheme.accentHex,
+                                  borderColor: cap.color || portalTheme.accentHex,
+                                  color: '#FFFFFF',
+                                }
+                              : {
+                                  backgroundColor: portalTheme.surfaceSubtleBg,
+                                  borderColor: portalTheme.surfaceBorder,
+                                  color: portalTheme.surfaceText,
+                                }
+                          }
+                        >
+                          <UserCheck className="w-3.5 h-3.5" />
+                          <span>{isEn ? cap.shortLabel_en : cap.shortLabel}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <CaptainWaiterTab
+                  restaurant={restaurant}
+                  captainScreenMeta={activeCaptainScreenMeta}
+                  defaultHallName={staff.hallName}
+                  staffMode
+                  actor={actor}
+                  onRestaurantUpdated={(updated) => setRestaurant(updated)}
+                />
+              </div>
             )}
 
             {safeCurrentScreen === 'halls' && isManager && managerPerms.canManageHalls && (

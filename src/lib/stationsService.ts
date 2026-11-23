@@ -553,3 +553,111 @@ export async function deleteRestaurantStationChecked(params: {
     handleFirestoreError(error, OperationType.DELETE, `restaurants/${restaurantId}/stations/${station.id}`);
   }
 }
+
+export async function syncStationMenuAssignments(params: {
+  stationId: string;
+  fallbackStationId: string;
+  categories: Category[];
+  menuItems: MenuItem[];
+  selectedCategoryIds: string[];
+  selectedItemIds: string[];
+}): Promise<void> {
+  const {
+    stationId,
+    fallbackStationId,
+    categories,
+    menuItems,
+    selectedCategoryIds,
+    selectedItemIds,
+  } = params;
+  const targetId = cleanStationId(stationId);
+  if (!targetId) return;
+
+  const safeFallback =
+    cleanStationId(fallbackStationId) && cleanStationId(fallbackStationId) !== targetId
+      ? cleanStationId(fallbackStationId)
+      : 'kitchen';
+  const selectedCatSet = new Set(selectedCategoryIds);
+  const selectedItemSet = new Set(selectedItemIds);
+
+  const catUpdates: Array<{ cat: Category; nextIds: string[] }> = [];
+  const catNextMap = new Map<string, string[]>();
+
+  categories.forEach((cat) => {
+    const existingRaw = cleanStationIdList(
+      cat.stationIds && cat.stationIds.length > 0
+        ? cat.stationIds
+        : [cat.stationId || cat.station].filter(Boolean)
+    );
+    const hasTarget = existingRaw.includes(targetId);
+    const wantsTarget = selectedCatSet.has(cat.id);
+
+    let nextIds = existingRaw;
+    if (wantsTarget && !hasTarget) {
+      nextIds = Array.from(new Set([...existingRaw, targetId])).slice(0, 20);
+    } else if (!wantsTarget && hasTarget) {
+      const remaining = existingRaw.filter((id) => id !== targetId);
+      nextIds = remaining.length > 0 ? remaining : [safeFallback];
+    }
+
+    catNextMap.set(cat.id, nextIds);
+    if (wantsTarget !== hasTarget) {
+      catUpdates.push({ cat, nextIds });
+    }
+  });
+
+  const itemUpdates: Array<{ item: MenuItem; nextIds: string[] }> = [];
+  menuItems.forEach((item) => {
+    const existingRaw = cleanStationIdList(
+      item.stationIds && item.stationIds.length > 0
+        ? item.stationIds
+        : [item.stationId || item.station].filter(Boolean)
+    );
+    const hasTarget = existingRaw.includes(targetId);
+    const wantsTarget = selectedItemSet.has(item.id);
+    const catChanged = catUpdates.some((cu) => cu.cat.id === item.categoryId);
+
+    let nextIds = existingRaw;
+    if (wantsTarget && !hasTarget) {
+      nextIds = Array.from(new Set([...existingRaw, targetId])).slice(0, 20);
+    } else if (!wantsTarget && hasTarget) {
+      const remaining = existingRaw.filter((id) => id !== targetId);
+      const catFallback = (catNextMap.get(item.categoryId) || []).filter((id) => id !== targetId);
+      nextIds = remaining.length > 0 ? remaining : catFallback.length > 0 ? catFallback : [safeFallback];
+    }
+
+    if (wantsTarget !== hasTarget || (catChanged && wantsTarget)) {
+      itemUpdates.push({ item, nextIds });
+    }
+  });
+
+  if (catUpdates.length === 0 && itemUpdates.length === 0) return;
+
+  const writes: Array<{ ref: ReturnType<typeof doc>; data: Record<string, unknown> }> = [
+    ...catUpdates.map(({ cat, nextIds }) => ({
+      ref: doc(db, 'categories', cat.id),
+      data: {
+        station: nextIds[0] || safeFallback,
+        stationId: nextIds[0] || safeFallback,
+        stationIds: nextIds,
+      },
+    })),
+    ...itemUpdates.map(({ item, nextIds }) => ({
+      ref: doc(db, 'menu_items', item.id),
+      data: {
+        station: nextIds[0] || safeFallback,
+        stationId: nextIds[0] || safeFallback,
+        stationIds: nextIds,
+        updatedAt: serverTimestamp(),
+      },
+    })),
+  ];
+
+  const CHUNK_SIZE = 400;
+  for (let i = 0; i < writes.length; i += CHUNK_SIZE) {
+    const batch = writeBatch(db);
+    writes.slice(i, i + CHUNK_SIZE).forEach((w) => batch.update(w.ref, w.data));
+    await batch.commit();
+  }
+}
+

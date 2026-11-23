@@ -35,7 +35,11 @@ import {
   getTimestampMillis,
   updateRestaurantOperationsConfig,
 } from '../../lib/operationsService';
-import { resolveOrderItemStation, StationMeta } from '../../lib/stationUtils';
+import {
+  getDefaultFallbackStationId,
+  resolveOrderItemStations,
+  StationMeta,
+} from '../../lib/stationUtils';
 import {
   Category,
   CustomerProfile,
@@ -473,9 +477,9 @@ export function CashierFloorPosPanel({
 
     setPosSubmitting(andSettleNow ? 'settle' : 'send');
     try {
-      const fallbackStation = effectiveStations[0]?.stationId || 'kitchen';
+      const fallbackStation = getDefaultFallbackStationId(effectiveStations);
       const orderItems: OrderItemPayload[] = posCart.map((entry) => {
-        const st = resolveOrderItemStation(
+        const stList = resolveOrderItemStations(
           {
             menuItemId: entry.item.id,
             name: entry.item.name,
@@ -485,11 +489,13 @@ export function CashierFloorPosPanel({
             lineTotal: entry.unitPrice * entry.quantity,
             station: entry.item.station || entry.item.stationId,
             stationId: entry.item.stationId || entry.item.station,
+            stationIds: entry.item.stationIds,
           },
           itemMap,
           categoryMap,
           fallbackStation
         );
+        const primarySt = stList[0] || fallbackStation;
         return {
           menuItemId: entry.item.id,
           name: entry.item.name,
@@ -499,8 +505,9 @@ export function CashierFloorPosPanel({
           unitPrice: entry.unitPrice,
           lineTotal: Number((entry.unitPrice * entry.quantity).toFixed(2)),
           ...(entry.notes ? { notes: entry.notes } : {}),
-          station: st,
-          stationId: st,
+          station: primarySt,
+          stationId: primarySt,
+          stationIds: stList,
         };
       });
 

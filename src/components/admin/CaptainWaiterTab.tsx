@@ -51,8 +51,10 @@ import { playOrderAlertChime, unlockAudioContext } from '../../lib/sound';
 import { subscribeRestaurantStations } from '../../lib/stationsService';
 import {
   buildEffectiveStations,
+  getDefaultFallbackStationId,
   getStationIconComponent,
   resolveOrderItemStation,
+  resolveOrderItemStations,
   STATION_META_MAP,
   StationMeta,
 } from '../../lib/stationUtils';
@@ -87,6 +89,7 @@ import { ThermalPrinterSettingsModal } from './ThermalPrinterSettingsModal';
 interface CaptainWaiterTabProps {
   restaurant: Restaurant;
   defaultHallName?: string;
+  captainScreenMeta?: StationMeta;
   staffMode?: boolean;
   actor?: StaffActorInfo;
   onRestaurantUpdated?: (updated: Restaurant) => void;
@@ -112,6 +115,7 @@ interface ReadyDishEntry {
 export function CaptainWaiterTab({
   restaurant,
   defaultHallName,
+  captainScreenMeta,
   staffMode = false,
   actor,
   onRestaurantUpdated,
@@ -123,7 +127,19 @@ export function CaptainWaiterTab({
 
   const opsConfig = useMemo(() => getResolvedOperationsConfig(restaurant), [restaurant]);
   const showCaptainPrices =
-    !staffMode || actor?.role === 'owner' || Boolean(opsConfig.showPricesByRole.captain);
+    !staffMode || actor?.role === 'owner'
+      ? true
+      : captainScreenMeta
+        ? Boolean(captainScreenMeta.showPrices)
+        : Boolean(opsConfig.showPricesByRole.captain);
+
+  const allowedPosOrderTypes = useMemo<OrderType[]>(
+    () =>
+      captainScreenMeta?.allowedOrderTypes && captainScreenMeta.allowedOrderTypes.length > 0
+        ? captainScreenMeta.allowedOrderTypes
+        : ['dine_in', 'pickup', 'delivery'],
+    [captainScreenMeta]
+  );
 
   const [captainMode, setCaptainMode] = useState<'grid' | 'pos' | 'calls'>('grid');
   const [serviceCalls, setServiceCalls] = useState<ServiceCall[]>([]);
@@ -134,7 +150,10 @@ export function CaptainWaiterTab({
   const [customers, setCustomers] = useState<CustomerProfile[]>([]);
   const [dynamicStations, setDynamicStations] = useState<RestaurantStation[]>([]);
   const [selectedHall, setSelectedHall] = useState<string>(() => defaultHallName?.trim() || 'all');
-  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [soundEnabled, setSoundEnabled] = useState(() =>
+    captainScreenMeta ? captainScreenMeta.soundAlertEnabled : true
+  );
+  const effectiveSoundEnabled = soundEnabled && (captainScreenMeta?.soundAlertEnabled ?? true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [updatingCallId, setUpdatingCallId] = useState<string | null>(null);
   const [servingKey, setServingKey] = useState<string | null>(null);
@@ -253,6 +272,18 @@ export function CaptainWaiterTab({
   }, [halls, posHallName]);
 
   useEffect(() => {
+    if (captainScreenMeta) {
+      setSoundEnabled(captainScreenMeta.soundAlertEnabled);
+    }
+  }, [captainScreenMeta?.stationId, captainScreenMeta?.soundAlertEnabled]);
+
+  useEffect(() => {
+    if (!allowedPosOrderTypes.includes(posOrderType)) {
+      setPosOrderType(allowedPosOrderTypes[0] || 'dine_in');
+    }
+  }, [allowedPosOrderTypes, posOrderType]);
+
+  useEffect(() => {
     callsInitRef.current = false;
     knownCallIdsRef.current = new Set();
 
@@ -272,7 +303,7 @@ export function CaptainWaiterTab({
             }
           });
           if (newPendingCalls.length > 0) {
-            if (soundEnabled) playOrderAlertChime();
+            if (effectiveSoundEnabled) playOrderAlertChime();
             if (staffMode) {
               const firstCall = newPendingCalls[0];
               void showOperationalNotification({
@@ -319,7 +350,7 @@ export function CaptainWaiterTab({
           });
           knownReadyKeysRef.current = currentReadyKeys;
           if (hasNewReady) {
-            if (soundEnabled) playOrderAlertChime();
+            if (effectiveSoundEnabled) playOrderAlertChime();
             if (staffMode) {
               void showOperationalNotification({
                 title: isEn ? 'Dish ready for pickup!' : 'صنف جاهز للاستلام!',
@@ -342,7 +373,7 @@ export function CaptainWaiterTab({
       unsubCalls();
       unsubOrders();
     };
-  }, [restaurant.id, restaurant.ownerId, restaurant.slug, soundEnabled, staffMode, isEn]);
+  }, [restaurant.id, restaurant.ownerId, restaurant.slug, effectiveSoundEnabled, staffMode, isEn]);
 
   const effectiveStations = useMemo(
     () => buildEffectiveStations(dynamicStations),
@@ -379,34 +410,137 @@ export function CaptainWaiterTab({
     [menuItems]
   );
 
-  const hallFilterOptions = useMemo(() => {
-    const names = new Set<string>();
+  const assignedHallIdSet = useMemo(
+    () => new Set(captainScreenMeta?.assignedHallIds || []),
+    [captainScreenMeta]
+  );
+  const assignedTableSet = useMemo(
+    () => new Set((captainScreenMeta?.assignedTableNumbers || []).map((t) => String(t).trim()).filter(Boolean)),
+    [captainScreenMeta]
+  );
+  const hasExplicitAssignment = assignedHallIdSet.size > 0 || assignedTableSet.size > 0;
+  const isAssignedOnlyScope = Boolean(
+    captainScreenMeta && captainScreenMeta.tableVisibilityScope === 'assigned_only' && hasExplicitAssignment
+  );
+
+  const assignedHallNameSet = useMemo(() => {
+    const s = new Set<string>();
+    if (assignedHallIdSet.size === 0) return s;
     halls.forEach((h) => {
-      if (h.name.trim()) names.add(h.name.trim());
-    });
-    serviceCalls.forEach((c) => {
-      if (c.status !== 'resolved' && c.hallName?.trim()) names.add(c.hallName.trim());
-    });
-    orders.forEach((o) => {
-      if (o.status !== 'completed' && o.status !== 'cancelled' && o.hallName?.trim()) {
-        names.add(o.hallName.trim());
+      if (assignedHallIdSet.has(h.id)) {
+        if (h.name?.trim()) s.add(h.name.trim().toLowerCase());
+        if (h.name_en?.trim()) s.add(h.name_en.trim().toLowerCase());
       }
     });
+    assignedHallIdSet.forEach((id) => s.add(id.trim().toLowerCase()));
+    return s;
+  }, [assignedHallIdSet, halls]);
+
+  const isHallAssigned = (hall: Hall): boolean => {
+    if (assignedHallIdSet.size === 0) return true;
+    return (
+      assignedHallIdSet.has(hall.id) ||
+      assignedHallNameSet.has((hall.name || '').trim().toLowerCase()) ||
+      assignedHallNameSet.has((hall.name_en || '').trim().toLowerCase())
+    );
+  };
+
+  const isRecordAssigned = (
+    itemHallName?: string,
+    itemTableNumber?: string,
+    orderType?: OrderType
+  ): boolean => {
+    if (
+      orderType &&
+      captainScreenMeta?.allowedOrderTypes &&
+      captainScreenMeta.allowedOrderTypes.length > 0 &&
+      !captainScreenMeta.allowedOrderTypes.includes(orderType)
+    ) {
+      return false;
+    }
+    if (!hasExplicitAssignment) return true;
+    const cleanH = (itemHallName || '').trim().toLowerCase();
+    const cleanT = (itemTableNumber || '').trim();
+    if (assignedHallIdSet.size > 0) {
+      if (cleanH) {
+        if (!assignedHallNameSet.has(cleanH)) return false;
+      } else if (assignedTableSet.size === 0) {
+        return false;
+      }
+    }
+    if (assignedTableSet.size > 0) {
+      if (!cleanT || !assignedTableSet.has(cleanT)) return false;
+    }
+    return true;
+  };
+
+  const scopedHalls = useMemo(() => {
+    if (!isAssignedOnlyScope) return halls;
+    return halls.filter((h) => {
+      if (!isHallAssigned(h)) return false;
+      if (assignedTableSet.size > 0) {
+        const nums = getHallTableNumbers(h);
+        return nums.some((tbl) => assignedTableSet.has(tbl.trim()));
+      }
+      return true;
+    });
+  }, [halls, isAssignedOnlyScope, assignedHallIdSet, assignedHallNameSet, assignedTableSet]);
+
+  useEffect(() => {
+    if (scopedHalls.length > 0 && isAssignedOnlyScope) {
+      const stillValid = scopedHalls.some((h) => h.name.trim() === posHallName.trim());
+      if (!stillValid) {
+        setPosHallName(scopedHalls[0].name);
+      }
+      if (selectedHall !== 'all' && !scopedHalls.some((h) => h.name.trim() === selectedHall)) {
+        setSelectedHall('all');
+      }
+    }
+  }, [scopedHalls, isAssignedOnlyScope, posHallName, selectedHall]);
+
+  const hallFilterOptions = useMemo(() => {
+    const names = new Set<string>();
+    scopedHalls.forEach((h) => {
+      if (h.name.trim()) names.add(h.name.trim());
+    });
+    if (!isAssignedOnlyScope) {
+      serviceCalls.forEach((c) => {
+        if (c.status !== 'resolved' && c.hallName?.trim()) names.add(c.hallName.trim());
+      });
+      orders.forEach((o) => {
+        if (o.status !== 'completed' && o.status !== 'cancelled' && o.hallName?.trim()) {
+          names.add(o.hallName.trim());
+        }
+      });
+    }
     return Array.from(names);
-  }, [halls, serviceCalls, orders]);
+  }, [scopedHalls, isAssignedOnlyScope, serviceCalls, orders]);
 
   const activeCalls = useMemo(() => {
     return serviceCalls.filter((c) => {
       if (c.status === 'resolved') return false;
+      if (isAssignedOnlyScope && !isRecordAssigned(c.hallName, c.tableNumber)) return false;
       if (selectedHall !== 'all' && (c.hallName || '').trim() !== selectedHall) return false;
       return true;
     });
-  }, [serviceCalls, selectedHall]);
+  }, [serviceCalls, selectedHall, isAssignedOnlyScope, assignedHallIdSet, assignedHallNameSet, assignedTableSet]);
 
   const readyDishes = useMemo<ReadyDishEntry[]>(() => {
     const list: ReadyDishEntry[] = [];
+    const fallbackStation = getDefaultFallbackStationId(effectiveStations);
     orders.forEach((order) => {
       if (order.status === 'completed' || order.status === 'cancelled') return;
+      if (isAssignedOnlyScope && !isRecordAssigned(order.hallName, order.tableNumber, order.orderType)) {
+        return;
+      }
+      if (
+        !isAssignedOnlyScope &&
+        captainScreenMeta?.allowedOrderTypes &&
+        captainScreenMeta.allowedOrderTypes.length > 0 &&
+        !captainScreenMeta.allowedOrderTypes.includes(order.orderType)
+      ) {
+        return;
+      }
       if (selectedHall !== 'all' && (order.hallName || '').trim() !== selectedHall) return;
 
       order.items.forEach((it, idx) => {
@@ -426,18 +560,24 @@ export function CaptainWaiterTab({
             quantity: it.quantity,
             guestName: it.guestName,
             notes: it.notes,
-            station: resolveOrderItemStation(
-              it,
-              itemMap,
-              categoryMap,
-              effectiveStations[0]?.stationId || 'kitchen'
-            ),
+            station: resolveOrderItemStation(it, itemMap, categoryMap, fallbackStation),
           });
         }
       });
     });
     return list;
-  }, [orders, selectedHall, itemMap, categoryMap, effectiveStations]);
+  }, [
+    orders,
+    selectedHall,
+    itemMap,
+    categoryMap,
+    effectiveStations,
+    isAssignedOnlyScope,
+    captainScreenMeta,
+    assignedHallIdSet,
+    assignedHallNameSet,
+    assignedTableSet,
+  ]);
 
   const readyGroupedByOrder = useMemo(() => {
     const map = new Map<
@@ -549,15 +689,25 @@ export function CaptainWaiterTab({
 
   const formatMoney = (val: number) => `${val.toFixed(2).replace(/\.00$/, '')} ${currencyLabel}`;
 
-  // Build Floor Grid Hall sections
+  // Build Floor Grid Hall sections (honors captainScreenMeta scoping)
   const gridHalls = useMemo(() => {
     const filtered =
-      selectedHall === 'all' ? halls : halls.filter((h) => h.name.trim() === selectedHall);
-    return filtered.map((h) => ({
-      hall: h,
-      tableNumbers: getHallTableNumbers(h),
-    }));
-  }, [halls, selectedHall]);
+      selectedHall === 'all'
+        ? scopedHalls
+        : scopedHalls.filter((h) => h.name.trim() === selectedHall);
+    return filtered.map((h) => {
+      const rawTables = getHallTableNumbers(h);
+      const tableNumbers =
+        isAssignedOnlyScope && assignedTableSet.size > 0
+          ? rawTables.filter((tbl) => assignedTableSet.has(tbl.trim()))
+          : rawTables;
+      return {
+        hall: h,
+        tableNumbers,
+        isHighlightedHall: hasExplicitAssignment && isHallAssigned(h),
+      };
+    });
+  }, [scopedHalls, selectedHall, isAssignedOnlyScope, assignedTableSet, hasExplicitAssignment, assignedHallIdSet, assignedHallNameSet]);
 
   const getTableSnapshot = (hallName: string, tableNumber: string) => {
     const cleanTbl = tableNumber.trim();
@@ -758,9 +908,9 @@ export function CaptainWaiterTab({
 
     setPosSubmitting(true);
     try {
-      const fallbackStation = effectiveStations[0]?.stationId || 'kitchen';
+      const fallbackStation = getDefaultFallbackStationId(effectiveStations);
       const orderItems: OrderItemPayload[] = posCart.map((entry) => {
-        const st = resolveOrderItemStation(
+        const stList = resolveOrderItemStations(
           {
             menuItemId: entry.item.id,
             name: entry.item.name,
@@ -770,11 +920,13 @@ export function CaptainWaiterTab({
             lineTotal: entry.unitPrice * entry.quantity,
             station: entry.item.station || entry.item.stationId,
             stationId: entry.item.stationId || entry.item.station,
+            stationIds: entry.item.stationIds,
           },
           itemMap,
           categoryMap,
           fallbackStation
         );
+        const primarySt = stList[0] || fallbackStation;
         return {
           menuItemId: entry.item.id,
           name: entry.item.name,
@@ -784,8 +936,9 @@ export function CaptainWaiterTab({
           unitPrice: entry.unitPrice,
           lineTotal: Number((entry.unitPrice * entry.quantity).toFixed(2)),
           ...(entry.notes ? { notes: entry.notes } : {}),
-          station: st,
-          stationId: st,
+          station: primarySt,
+          stationId: primarySt,
+          stationIds: stList,
         };
       });
 
@@ -863,13 +1016,39 @@ export function CaptainWaiterTab({
             <UserCheck className="w-5 h-5" />
           </span>
           <div>
-            <h2 className="text-base sm:text-lg font-extrabold" style={{ color: ui.theme.surfaceText }}>
-              {isEn ? 'Captain & Waiter Floor Screen' : 'شاشة الكابتن (الويتر) وخدمة الصالة'}
-            </h2>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-base sm:text-lg font-extrabold" style={{ color: ui.theme.surfaceText }}>
+                {captainScreenMeta
+                  ? isEn
+                    ? captainScreenMeta.shortLabel_en
+                    : captainScreenMeta.shortLabel
+                  : isEn
+                    ? 'Captain & Waiter Floor Screen'
+                    : 'شاشة الكابتن (الويتر) وخدمة الصالة'}
+              </h2>
+              {captainScreenMeta && (
+                <span
+                  className="px-2 py-0.5 rounded-md border text-[10px] font-extrabold"
+                  style={{
+                    backgroundColor: ui.theme.surfaceSubtleBg,
+                    borderColor: ui.theme.surfaceBorder,
+                    color: captainScreenMeta.color || ui.theme.accentHex,
+                  }}
+                >
+                  {isAssignedOnlyScope
+                    ? isEn
+                      ? 'Assigned Zone Only'
+                      : 'نطاق مخصص فقط'
+                    : isEn
+                      ? 'Full Floor View'
+                      : 'عرض كل الصالات'}
+                </span>
+              )}
+            </div>
             <p className="text-xs mt-0.5 leading-relaxed" style={{ color: ui.theme.mutedText }}>
               {isEn
                 ? 'Live table calls paired with ready dishes & drinks waiting for table delivery.'
-                : 'تنبيهات نداء الطاولات لحظياً مع قائمة الأصناف الجاهزة للاستلام من المطبخ والبار والباستري.'}
+                : 'تنبيهات نداء الطاولات لحظياً مع قائمة الأصناف الجاهزة للاستلام من المحطات.'}
             </p>
           </div>
         </div>
@@ -1155,13 +1334,16 @@ export function CaptainWaiterTab({
               </p>
             </div>
           ) : (
-            gridHalls.map(({ hall, tableNumbers }) => (
+            gridHalls.map(({ hall, tableNumbers, isHighlightedHall }) => (
               <section
                 key={hall.id}
                 className={`border p-4 sm:p-5 space-y-3 ${ui.radiusClasses.card}`}
                 style={{
                   backgroundColor: ui.theme.surfaceBg,
-                  borderColor: ui.theme.surfaceBorder,
+                  borderColor:
+                    isHighlightedHall && !isAssignedOnlyScope
+                      ? captainScreenMeta?.color || ui.theme.accentHex
+                      : ui.theme.surfaceBorder,
                   boxShadow: ui.theme.cardShadow,
                 }}
               >
@@ -1171,6 +1353,14 @@ export function CaptainWaiterTab({
                     <h3 className="text-sm font-extrabold" style={{ color: ui.theme.surfaceText }}>
                       {loc(hall.name, hall.name_en)}
                     </h3>
+                    {isHighlightedHall && !isAssignedOnlyScope && (
+                      <span
+                        className="px-2 py-0.5 rounded-md text-[10px] font-extrabold text-white"
+                        style={{ backgroundColor: captainScreenMeta?.color || '#0D9488' }}
+                      >
+                        {isEn ? 'Assigned' : 'نطاقي'}
+                      </span>
+                    )}
                     {hall.hallType && (
                       <span
                         className="px-2 py-0.5 rounded-md border text-[11px] font-bold"
@@ -1194,6 +1384,11 @@ export function CaptainWaiterTab({
                   {tableNumbers.map((tblNum) => {
                     const snap = getTableSnapshot(hall.name, tblNum);
                     const tileColor = opsConfig.tableColors[snap.state];
+                    const isTableInAssignedZone =
+                      hasExplicitAssignment &&
+                      !isAssignedOnlyScope &&
+                      isHallAssigned(hall) &&
+                      (assignedTableSet.size === 0 || assignedTableSet.has(tblNum.trim()));
                     return (
                       <button
                         key={`${hall.id}_${tblNum}`}
@@ -1203,7 +1398,9 @@ export function CaptainWaiterTab({
                           setSelectedTableDrawer({ hallName: hall.name, tableNumber: tblNum });
                         }}
                         style={{ backgroundColor: tileColor }}
-                        className="rounded-2xl p-3 text-white shadow-xs hover:opacity-95 transition-transform active:scale-[0.98] flex flex-col items-center justify-between min-h-[92px] cursor-pointer relative overflow-hidden"
+                        className={`rounded-2xl p-3 text-white shadow-xs hover:opacity-95 transition-transform active:scale-[0.98] flex flex-col items-center justify-between min-h-[92px] cursor-pointer relative overflow-hidden ${
+                          isTableInAssignedZone ? 'ring-2 ring-zinc-950 ring-offset-2' : ''
+                        }`}
                       >
                         <div className="w-full flex items-center justify-between text-[10px] font-extrabold opacity-90">
                           <span>
@@ -1450,47 +1647,54 @@ export function CaptainWaiterTab({
               boxShadow: ui.theme.cardShadow,
             }}
           >
-            <div className="grid grid-cols-3 gap-1.5">
+            <div
+              className="grid gap-1.5"
+              style={{
+                gridTemplateColumns: `repeat(${Math.max(1, allowedPosOrderTypes.length)}, minmax(0, 1fr))`,
+              }}
+            >
               {(
                 [
                   { id: 'dine_in' as const, label: isEn ? 'Dine-in' : 'صالة' },
                   { id: 'pickup' as const, label: isEn ? 'Pickup' : 'استلام' },
                   { id: 'delivery' as const, label: isEn ? 'Delivery' : 'توصيل' },
                 ] as const
-              ).map((ot) => (
-                <button
-                  key={ot.id}
-                  type="button"
-                  onClick={() => setPosOrderType(ot.id)}
-                  className={`min-h-[40px] py-2 border text-xs font-extrabold cursor-pointer ${ui.radiusClasses.button}`}
-                  style={
-                    posOrderType === ot.id
-                      ? {
-                          backgroundColor: ui.theme.accentHex,
-                          borderColor: ui.theme.accentHex,
-                          color: ui.theme.accentTextHex,
-                        }
-                      : {
-                          backgroundColor: ui.theme.surfaceSubtleBg,
-                          borderColor: ui.theme.surfaceBorder,
-                          color: ui.theme.surfaceText,
-                        }
-                  }
-                >
-                  {ot.label}
-                </button>
-              ))}
+              )
+                .filter((ot) => allowedPosOrderTypes.includes(ot.id))
+                .map((ot) => (
+                  <button
+                    key={ot.id}
+                    type="button"
+                    onClick={() => setPosOrderType(ot.id)}
+                    className={`min-h-[40px] py-2 border text-xs font-extrabold cursor-pointer ${ui.radiusClasses.button}`}
+                    style={
+                      posOrderType === ot.id
+                        ? {
+                            backgroundColor: ui.theme.accentHex,
+                            borderColor: ui.theme.accentHex,
+                            color: ui.theme.accentTextHex,
+                          }
+                        : {
+                            backgroundColor: ui.theme.surfaceSubtleBg,
+                            borderColor: ui.theme.surfaceBorder,
+                            color: ui.theme.surfaceText,
+                          }
+                    }
+                  >
+                    {ot.label}
+                  </button>
+                ))}
             </div>
 
             {posOrderType === 'dine_in' ? (
               <div className="grid grid-cols-2 gap-2">
-                {halls.length > 0 ? (
+                {scopedHalls.length > 0 ? (
                   <select
                     value={posHallName}
                     onChange={(e) => setPosHallName(e.target.value)}
                     className="px-3 py-2 rounded-xl border border-zinc-200 text-xs font-bold bg-white"
                   >
-                    {halls.map((h) => (
+                    {scopedHalls.map((h) => (
                       <option key={h.id} value={h.name}>
                         {loc(h.name, h.name_en)}
                       </option>

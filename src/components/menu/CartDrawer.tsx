@@ -31,7 +31,7 @@ import {
   saveDemoCustomerProfile,
 } from '../../lib/customerLoyaltyUtils';
 import { recordCustomerOrderLoyalty, submitPublicOrder } from '../../lib/firestoreService';
-import { resolveMenuItemStation, StationMeta } from '../../lib/stationUtils';
+import { getDefaultFallbackStationId, resolveMenuItemStations, StationMeta } from '../../lib/stationUtils';
 import { computeSeparateChecks } from '../../lib/tableSessionUtils';
 import {
   CartItem,
@@ -431,10 +431,19 @@ export function CartDrawer({
     [stations]
   );
 
+  const fallbackStationId = useMemo(
+    () => getDefaultFallbackStationId(stations),
+    [stations]
+  );
+
   const buildOrderItems = (): OrderItemPayload[] =>
     cart.map((c) => {
-      const resolvedStation = resolveMenuItemStation(c.menuItem, categoryMap);
+      const stationIds = resolveMenuItemStations(c.menuItem, categoryMap, fallbackStationId);
+      const resolvedStation = stationIds[0] || fallbackStationId;
       const stMeta = stationMap.get(resolvedStation);
+      const stationNames = stationIds
+        .map((id) => stationMap.get(id)?.shortLabel)
+        .filter((s): s is string => Boolean(s));
       const payload: OrderItemPayload = {
         menuItemId: c.menuItem.id,
         name: loc(c.menuItem.name, c.menuItem.name_en),
@@ -444,7 +453,12 @@ export function CartDrawer({
         lineTotal: Number((c.unitPrice * c.quantity).toFixed(2)),
         station: resolvedStation,
         stationId: resolvedStation,
-        ...(stMeta?.shortLabel ? { stationName: stMeta.shortLabel } : {}),
+        stationIds,
+        ...(stationNames.length > 0
+          ? { stationName: stationNames.join(' + ') }
+          : stMeta?.shortLabel
+            ? { stationName: stMeta.shortLabel }
+            : {}),
       };
       if (c.selectedSize?.name) {
         payload.sizeName = loc(c.selectedSize.name, c.selectedSize.name_en);

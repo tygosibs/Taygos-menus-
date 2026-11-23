@@ -6,6 +6,7 @@ import {
   Clock,
   Crown,
   Eye,
+  Layers,
   LayoutGrid,
   Loader2,
   PauseCircle,
@@ -37,6 +38,7 @@ import {
 } from '../../lib/operationsService';
 import { getScreenMetaDynamic } from '../../lib/staffAuthUtils';
 import {
+  buildEffectiveCaptainScreens,
   buildEffectiveStations,
   cleanStationId,
   getStationIconComponent,
@@ -61,7 +63,11 @@ interface ManagerSupervisionDashboardProps {
   activeShifts: StaffShift[];
   dynamicStations: RestaurantStation[];
   treasuryTransfers: TreasuryTransfer[];
-  onNavigateScreen: (screen: StaffScreen, opts?: { supervisory?: boolean; coveringStaffName?: string }) => void;
+  onNavigateScreen: (
+    screen: StaffScreen,
+    opts?: { supervisory?: boolean; coveringStaffName?: string; captainScreenId?: string }
+  ) => void;
+  onOpenStations?: () => void;
   onRestaurantUpdated?: (updated: Restaurant) => void;
 }
 
@@ -83,6 +89,7 @@ export function ManagerSupervisionDashboard({
   dynamicStations,
   treasuryTransfers,
   onNavigateScreen,
+  onOpenStations,
   onRestaurantUpdated,
 }: ManagerSupervisionDashboardProps) {
   const { lang, dir, formatCurrency, loc } = useLanguage();
@@ -136,6 +143,11 @@ export function ManagerSupervisionDashboard({
     [dynamicStations]
   );
 
+  const effectiveCaptainScreens = useMemo(
+    () => buildEffectiveCaptainScreens(dynamicStations),
+    [dynamicStations]
+  );
+
   const categoryMap = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
 
   const pausedItems = useMemo(
@@ -151,11 +163,53 @@ export function ManagerSupervisionDashboard({
       .slice(0, 8);
   }, [menuItems, menuSearch]);
 
-  // Supervisory station & screen cards: Cashier, Captain, and every prep station
+  // Supervisory station & screen cards: Cashier, Captain(s), and every prep station
   const supervisoryCards = useMemo(() => {
+    const captainEntries =
+      effectiveCaptainScreens.length > 0
+        ? effectiveCaptainScreens.map((cap) => {
+            const capClean = cleanStationId(cap.stationId);
+            const scopeHint =
+              cap.tableVisibilityScope === 'assigned_only'
+                ? isEn
+                  ? `Assigned zone (${cap.assignedHallIds?.length || 0} halls · ${cap.assignedTableNumbers?.length || 0} tables)`
+                  : `نطاق مخصص (${cap.assignedHallIds?.length || 0} صالة · ${cap.assignedTableNumbers?.length || 0} طاولة)`
+                : isEn
+                  ? 'Live floor map, customer service calls, and captain ordering'
+                  : 'خريطة الترابيزات الحية، نداءات العملاء، ونقطة طلب الكابتن';
+            return {
+              key: `captain_${cap.stationId}`,
+              screen: 'captain' as StaffScreen,
+              captainScreenId: cap.stationId,
+              title: isEn ? cap.label_en : cap.label,
+              subtitle: scopeHint,
+              activeShift:
+                activeShifts.find(
+                  (s) =>
+                    cleanStationId(s.stationId) === capClean ||
+                    cleanStationId(s.stationId) === 'captain'
+                ) || null,
+              iconName: 'captain',
+            };
+          })
+        : [
+            {
+              key: 'captain',
+              screen: 'captain' as StaffScreen,
+              captainScreenId: undefined,
+              title: isEn ? 'Captain & Floor Service' : 'الكابتن وخدمة الصالات',
+              subtitle: isEn
+                ? 'Live floor map, customer service calls, and captain ordering'
+                : 'خريطة الترابيزات الحية، نداءات العملاء، ونقطة طلب الكابتن',
+              activeShift: activeShifts.find((s) => cleanStationId(s.stationId) === 'captain') || null,
+              iconName: 'captain',
+            },
+          ];
+
     const entries: Array<{
       key: string;
       screen: StaffScreen;
+      captainScreenId?: string;
       title: string;
       subtitle: string;
       activeShift: StaffShift | null;
@@ -171,16 +225,7 @@ export function ManagerSupervisionDashboard({
         activeShift: activeShifts.find((s) => cleanStationId(s.stationId) === 'cashier') || null,
         iconName: 'cashier',
       },
-      {
-        key: 'captain',
-        screen: 'captain',
-        title: isEn ? 'Captain & Floor Service' : 'الكابتن وخدمة الصالات',
-        subtitle: isEn
-          ? 'Live floor map, customer service calls, and captain ordering'
-          : 'خريطة الترابيزات الحية، نداءات العملاء، ونقطة طلب الكابتن',
-        activeShift: activeShifts.find((s) => cleanStationId(s.stationId) === 'captain') || null,
-        iconName: 'captain',
-      },
+      ...captainEntries,
       ...effectiveStations.map((st) => {
         const scr = stationIdToScreen(st.stationId);
         const scrMeta = getScreenMetaDynamic(scr, effectiveStations);
@@ -199,7 +244,7 @@ export function ManagerSupervisionDashboard({
       }),
     ];
     return entries;
-  }, [activeShifts, effectiveStations, isEn]);
+  }, [activeShifts, effectiveStations, effectiveCaptainScreens, isEn]);
 
   const formatMoney = (val: number) => `${Number(val || 0).toFixed(2).replace(/\.00$/, '')} ${currencyLabel}`;
 
@@ -371,6 +416,21 @@ export function ManagerSupervisionDashboard({
             {isEn ? 'Active Shifts:' : 'الورديات النشطة:'}{' '}
             <strong className="ms-1" style={{ color: theme.surfaceText }}>{activeShifts.length}</strong>
           </div>
+          {(isOwner || managerPerms.canManageStations !== false) && onOpenStations && (
+            <button
+              type="button"
+              onClick={onOpenStations}
+              className={`min-h-[42px] px-4 py-2 border text-xs font-extrabold inline-flex items-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
+              style={{
+                backgroundColor: theme.surfaceSubtleBg,
+                borderColor: theme.surfaceBorder,
+                color: theme.surfaceText,
+              }}
+            >
+              <Layers className="w-4 h-4" style={{ color: theme.accentHex }} />
+              <span>{isEn ? 'Screens & Stations' : 'الشاشات والمحطات'}</span>
+            </button>
+          )}
           {(isOwner || managerPerms.canManageHalls) && (
             <button
               type="button"
@@ -894,6 +954,7 @@ export function ManagerSupervisionDashboard({
                       onNavigateScreen(card.screen, {
                         supervisory: true,
                         coveringStaffName: card.activeShift?.staffName,
+                        captainScreenId: card.captainScreenId,
                       })
                     }
                     className={`w-full min-h-[44px] px-4 py-2 text-xs font-extrabold inline-flex items-center justify-center gap-2 cursor-pointer ${ui.radiusClasses.button}`}
@@ -912,7 +973,12 @@ export function ManagerSupervisionDashboard({
                 ) : coveredByMe ? (
                   <button
                     type="button"
-                    onClick={() => onNavigateScreen(card.screen, { supervisory: false })}
+                    onClick={() =>
+                      onNavigateScreen(card.screen, {
+                        supervisory: false,
+                        captainScreenId: card.captainScreenId,
+                      })
+                    }
                     className={`w-full min-h-[44px] px-4 py-2 text-xs font-extrabold inline-flex items-center justify-center gap-2 cursor-pointer ${ui.radiusClasses.button}`}
                     style={{
                       backgroundColor: theme.highlightHex || '#E8833A',
@@ -927,7 +993,12 @@ export function ManagerSupervisionDashboard({
                 ) : (
                   <button
                     type="button"
-                    onClick={() => onNavigateScreen(card.screen, { supervisory: false })}
+                    onClick={() =>
+                      onNavigateScreen(card.screen, {
+                        supervisory: false,
+                        captainScreenId: card.captainScreenId,
+                      })
+                    }
                     className={`w-full min-h-[44px] px-4 py-2 border border-emerald-600 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold inline-flex items-center justify-center gap-2 cursor-pointer ${ui.radiusClasses.button}`}
                   >
                     <Play className="w-4 h-4" />
