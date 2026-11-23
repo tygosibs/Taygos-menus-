@@ -64,7 +64,8 @@ import {
 } from './customerLoyaltyUtils';
 import { db, handleFirestoreError, OperationType } from './firebase';
 import { incrementActiveShiftMetric } from './shiftsService';
-import { cleanStationId } from './stationUtils';
+import { ItemProgressStationEntry } from '../types/menu';
+import { cleanStationId, cleanStationIdList } from './stationUtils';
 
 export function cleanStation(val?: string): PrepStation {
   const c = cleanStationId(val);
@@ -638,6 +639,7 @@ export async function saveCategory(
     imageUrl?: string;
     station?: PrepStation;
     stationId?: string;
+    stationIds?: string[];
     sortOrder: number;
     propagateStationToCategoryIds?: string[];
   }
@@ -647,7 +649,9 @@ export async function saveCategory(
   const path = `categories/${catId}`;
   const cleanNameEn = (data.name_en || '').trim().slice(0, 80);
   const cleanParentId = (data.parentId || '').trim().slice(0, 128);
-  const safeStation = cleanStation(data.stationId || data.station);
+  const explicitList = cleanStationIdList(data.stationIds);
+  const safeStation = explicitList[0] || cleanStation(data.stationId || data.station);
+  const safeStationIds = explicitList.length > 0 ? explicitList : [safeStation];
   try {
     if (isNew) {
       const payload: Record<string, unknown> = {
@@ -657,6 +661,7 @@ export async function saveCategory(
         name: data.name.trim().slice(0, 80),
         station: safeStation,
         stationId: safeStation,
+        stationIds: safeStationIds,
         sortOrder: Number(data.sortOrder) || 0,
         createdAt: serverTimestamp(),
       };
@@ -678,6 +683,7 @@ export async function saveCategory(
         imageUrl: (data.imageUrl || '').trim().slice(0, 300000),
         station: safeStation,
         stationId: safeStation,
+        stationIds: safeStationIds,
         sortOrder: Number(data.sortOrder) || 0,
       });
 
@@ -699,6 +705,7 @@ export async function saveCategory(
           batch.update(d.ref, {
             station: safeStation,
             stationId: safeStation,
+            stationIds: safeStationIds,
             updatedAt: serverTimestamp(),
           });
         });
@@ -795,13 +802,16 @@ export async function saveMenuItem(
     suggestedItemIds?: string[];
     station?: PrepStation;
     stationId?: string;
+    stationIds?: string[];
     sortOrder: number;
   }
 ): Promise<void> {
   const isNew = !data.id;
   const itemId = data.id || makeId('item');
   const path = `menu_items/${itemId}`;
-  const safeStation = cleanStation(data.stationId || data.station);
+  const explicitList = cleanStationIdList(data.stationIds);
+  const safeStation = explicitList[0] || cleanStation(data.stationId || data.station);
+  const safeStationIds = explicitList.length > 0 ? explicitList : [safeStation];
 
   const cleanSizes = data.sizes.slice(0, 10).map((s) => ({
     name: s.name.trim().slice(0, 40),
@@ -844,6 +854,7 @@ export async function saveMenuItem(
         suggestedItemIds: cleanSuggestedIds,
         station: safeStation,
         stationId: safeStation,
+        stationIds: safeStationIds,
         sortOrder: Number(data.sortOrder) || 0,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -887,6 +898,7 @@ export async function saveMenuItem(
         suggestedItemIds: cleanSuggestedIds,
         station: safeStation,
         stationId: safeStation,
+        stationIds: safeStationIds,
         sortOrder: Number(data.sortOrder) || 0,
         updatedAt: serverTimestamp(),
       });
@@ -985,7 +997,9 @@ export async function submitPublicOrder(input: SubmitOrderInput): Promise<{ id: 
   const path = `orders/${orderId}`;
 
   const cleanItems = input.items.slice(0, 80).map((it) => {
-    const safeStation = cleanStation(it.stationId || it.station);
+    const cleanList = cleanStationIdList(it.stationIds);
+    const safeStation = cleanList[0] || cleanStation(it.stationId || it.station);
+    const safeStationIds = cleanList.length > 0 ? cleanList : [safeStation];
     const cleaned: OrderItemPayload = {
       menuItemId: it.menuItemId,
       name: it.name.slice(0, 120),
@@ -995,6 +1009,7 @@ export async function submitPublicOrder(input: SubmitOrderInput): Promise<{ id: 
       lineTotal: Number(it.lineTotal.toFixed(2)),
       station: safeStation,
       stationId: safeStation,
+      stationIds: safeStationIds,
     };
     if (it.stationName?.trim()) cleaned.stationName = it.stationName.trim().slice(0, 80);
     if (it.sizeName) cleaned.sizeName = it.sizeName.slice(0, 40);
@@ -1235,6 +1250,7 @@ export async function updateOrderItemProgress(
     ownerId?: string;
     orderNumber?: string;
     station?: PrepStation;
+    targetStationsMap?: Record<string, string[]>;
     actor?: StaffActorInfo;
   }
 ): Promise<void> {
@@ -1249,30 +1265,84 @@ export async function updateOrderItemProgress(
 
       const mergedProgress: Record<string, ItemPrepState> = {
         ...(current.itemProgress || {}),
-        ...itemUpdates,
       };
+      const mergedBy: Record<string, ItemProgressActorEntry> = {
+        ...(current.itemProgressBy || {}),
+      };
+
+      const nowMs = Date.now();
+      const actingStation = meta?.station ? cleanStation(meta.station) : undefined;
+      const actorUid = meta?.actor?.uid || 'system';
+      const actorName = (meta?.actor?.name || 'System').trim().slice(0, 100);
+      const actorRole = meta?.actor?.role || 'staff';
+
+      Object.entries(itemUpdates).forEach(([idxKey, st]) => {
+        const idxNum = Number(idxKey);
+        const orderItem = Number.isInteger(idxNum) ? current.items?.[idxNum] : undefined;
+        const explicitTargets = cleanStationIdList(
+          orderItem?.stationIds || meta?.targetStationsMap?.[idxKey]
+        );
+        const singleFallback = cleanStation(
+          orderItem?.stationId || orderItem?.station || actingStation
+        );
+        const targetStations =
+          explicitTargets.length > 0 ? explicitTargets : [singleFallback];
+
+        const prevEntry = mergedBy[idxKey];
+        const prevByStation: Record<string, ItemProgressStationEntry> = {
+          ...(prevEntry?.byStation || {}),
+        };
+
+        let effectiveOverallState: ItemPrepState = st;
+
+        if (actingStation && st !== 'served') {
+          prevByStation[actingStation] = {
+            state: st,
+            updatedByUid: actorUid,
+            updatedByName: actorName,
+            updatedByRole: actorRole,
+            station: actingStation,
+            stationId: actingStation,
+            updatedAt: nowMs,
+          };
+
+          if (targetStations.length > 1) {
+            const states = targetStations.map((sId) => prevByStation[sId]?.state || 'pending');
+            if (states.every((s) => s === 'ready' || s === 'served')) {
+              effectiveOverallState = 'ready';
+            } else if (states.some((s) => s === 'preparing' || s === 'ready' || s === 'served')) {
+              effectiveOverallState = 'preparing';
+            } else {
+              effectiveOverallState = 'pending';
+            }
+          }
+        }
+
+        mergedProgress[idxKey] = effectiveOverallState;
+
+        if (meta?.actor || actingStation) {
+          mergedBy[idxKey] = {
+            state: effectiveOverallState,
+            updatedByUid: actorUid,
+            updatedByName: actorName,
+            updatedByRole: actorRole,
+            ...(actingStation ? { station: actingStation } : prevEntry?.station ? { station: prevEntry.station } : {}),
+            ...(Object.keys(prevByStation).length > 0 ? { byStation: prevByStation } : {}),
+            updatedAt: nowMs,
+          };
+        }
+      });
 
       const updatePayload: Record<string, unknown> = {
         itemProgress: mergedProgress,
         updatedAt: serverTimestamp(),
       };
 
-      if (meta?.actor) {
-        const nowMs = Date.now();
-        const mergedBy: Record<string, ItemProgressActorEntry> = {
-          ...(current.itemProgressBy || {}),
-        };
-        Object.entries(itemUpdates).forEach(([idxKey, st]) => {
-          mergedBy[idxKey] = {
-            state: st,
-            updatedByUid: meta.actor!.uid,
-            updatedByName: meta.actor!.name.trim().slice(0, 100),
-            updatedByRole: meta.actor!.role,
-            ...(meta.station ? { station: meta.station } : {}),
-            updatedAt: nowMs,
-          };
-        });
+      if (meta?.actor || Object.keys(mergedBy).length > 0) {
         updatePayload.itemProgressBy = mergedBy;
+      }
+
+      if (meta?.actor) {
         updatePayload.lastUpdatedByUid = meta.actor.uid;
         updatePayload.lastUpdatedByName = meta.actor.name.trim().slice(0, 100);
         updatePayload.lastUpdatedByRole = meta.actor.role;

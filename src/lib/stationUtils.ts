@@ -1,4 +1,5 @@
 import {
+  BellRing,
   ChefHat,
   Coffee,
   Croissant,
@@ -8,18 +9,24 @@ import {
   Pizza,
   Salad,
   Sparkles,
+  UserCheck,
   Utensils,
   Wind,
   Wine,
 } from 'lucide-react';
 import {
+  CaptainTableVisibilityScope,
   Category,
+  KdsStatusButtonOption,
   MenuItem,
   OrderItemPayload,
+  OrderType,
   RestaurantStation,
   StaffMember,
   StaffScreen,
   StationIconName,
+  StationScreenType,
+  ThermalPrintMode,
 } from '../types/menu';
 
 export interface StationMeta {
@@ -32,7 +39,19 @@ export interface StationMeta {
   color: string;
   icon: StationIconName;
   badgeClass: string;
+  screenType: StationScreenType;
   isActive: boolean;
+  isArchived: boolean;
+  isDefaultFallback: boolean;
+  showPrices: boolean;
+  allowedOrderTypes: OrderType[];
+  soundAlertEnabled: boolean;
+  overdueAlertMinutes: number;
+  thermalPrintMode: ThermalPrintMode;
+  availableStatusButtons: KdsStatusButtonOption[];
+  assignedHallIds: string[];
+  assignedTableNumbers: string[];
+  tableVisibilityScope: CaptainTableVisibilityScope;
   sortOrder: number;
 }
 
@@ -52,15 +71,17 @@ export const STATION_ICON_OPTIONS: Array<{
   { id: 'chef-hat', labelAr: 'قبعة شيف (مطبخ)', labelEn: 'Chef Hat' },
   { id: 'flame', labelAr: 'نار / مشويات', labelEn: 'Grill / Flame' },
   { id: 'wine', labelAr: 'مشروبات / بار', labelEn: 'Bar / Drinks' },
-  { id: 'croissant', labelAr: 'حلويات / باستري', labelEn: 'Pastry' },
+  { id: 'croissant', labelAr: 'حلويات / باستري / مخبز', labelEn: 'Pastry / Bakery' },
   { id: 'coffee', labelAr: 'قهوة مختصة', labelEn: 'Coffee' },
-  { id: 'pizza', labelAr: 'بيتزا وفرن', labelEn: 'Pizza' },
+  { id: 'pizza', labelAr: 'بيتزا وفرن', labelEn: 'Pizza / Oven' },
   { id: 'fish', labelAr: 'سوشي / مأكولات بحرية', labelEn: 'Sushi / Seafood' },
   { id: 'salad', labelAr: 'سلطات ومقبلات', labelEn: 'Salads' },
   { id: 'cup-soda', labelAr: 'عصائر فريش', labelEn: 'Juices' },
   { id: 'wind', labelAr: 'شيشة / لاونج', labelEn: 'Shisha / Lounge' },
   { id: 'utensils', labelAr: 'شاورما / سريع', labelEn: 'Shawarma / Fast' },
   { id: 'sparkles', labelAr: 'قسم خاص مميز', labelEn: 'Custom / VIP' },
+  { id: 'user-check', labelAr: 'كابتن صالة / ويتر', labelEn: 'Captain / Waiter' },
+  { id: 'bell-ring', labelAr: 'استقبال نداءات الصالة', labelEn: 'Service Desk' },
 ];
 
 export const STATION_COLOR_PRESETS: string[] = [
@@ -87,6 +108,7 @@ export const STATION_TEMPLATES: StationTemplate[] = [
   { suggestedId: 'pastry', name: 'الباستري', nameEn: 'Pastry', color: '#DB2777', icon: 'croissant' },
   { suggestedId: 'coffee', name: 'القهوة', nameEn: 'Coffee', color: '#78350F', icon: 'coffee' },
   { suggestedId: 'pizza', name: 'البيتزا', nameEn: 'Pizza', color: '#D97706', icon: 'pizza' },
+  { suggestedId: 'bakery', name: 'المخبز', nameEn: 'Bakery', color: '#B45309', icon: 'croissant' },
   { suggestedId: 'shawarma', name: 'الشاورما', nameEn: 'Shawarma', color: '#B45309', icon: 'utensils' },
   { suggestedId: 'sushi', name: 'السوشي', nameEn: 'Sushi', color: '#0D9488', icon: 'fish' },
   { suggestedId: 'salads', name: 'السلطات', nameEn: 'Salads', color: '#059669', icon: 'salad' },
@@ -99,6 +121,9 @@ export const DEFAULT_SEED_STATIONS: StationTemplate[] = [
   STATION_TEMPLATES[2], // البار
   STATION_TEMPLATES[3], // الباستري
 ];
+
+export const DEFAULT_ALLOWED_ORDER_TYPES: OrderType[] = ['dine_in', 'pickup', 'delivery'];
+export const DEFAULT_STATUS_BUTTONS: KdsStatusButtonOption[] = ['preparing', 'ready', 'served'];
 
 export function getStationIconComponent(icon?: StationIconName | string) {
   switch (icon) {
@@ -124,6 +149,10 @@ export function getStationIconComponent(icon?: StationIconName | string) {
       return Utensils;
     case 'sparkles':
       return Sparkles;
+    case 'user-check':
+      return UserCheck;
+    case 'bell-ring':
+      return BellRing;
     case 'chef-hat':
     default:
       return ChefHat;
@@ -145,7 +174,19 @@ export const STATION_LIST: StationMeta[] = DEFAULT_SEED_STATIONS.map((tpl, idx) 
       : tpl.suggestedId === 'pastry'
         ? 'bg-rose-50 text-rose-800 border-rose-200'
         : 'bg-orange-50 text-orange-800 border-orange-200',
+  screenType: 'prep',
   isActive: true,
+  isArchived: false,
+  isDefaultFallback: tpl.suggestedId === 'kitchen',
+  showPrices: false,
+  allowedOrderTypes: [...DEFAULT_ALLOWED_ORDER_TYPES],
+  soundAlertEnabled: true,
+  overdueAlertMinutes: 15,
+  thermalPrintMode: 'manual',
+  availableStatusButtons: [...DEFAULT_STATUS_BUTTONS],
+  assignedHallIds: [],
+  assignedTableNumbers: [],
+  tableVisibilityScope: 'all',
   sortOrder: idx + 1,
 }));
 
@@ -186,19 +227,84 @@ export function cleanStationId(raw?: string | null): string {
     .slice(0, 64);
 }
 
+export function cleanStationIdList(list?: Array<string | null | undefined> | null): string[] {
+  if (!Array.isArray(list)) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  list.forEach((raw) => {
+    const c = cleanStationId(raw);
+    if (c && !seen.has(c)) {
+      seen.add(c);
+      out.push(c);
+    }
+  });
+  return out.slice(0, 20);
+}
+
 export function getStationTopicName(restaurantId: string, stationId: string): string {
   const cleanRest = cleanStationId(restaurantId).replace(/[^a-zA-Z0-9_-]/g, '_');
   const cleanSt = cleanStationId(stationId).replace(/[^a-zA-Z0-9_-]/g, '_');
   return `restaurant_${cleanRest}_station_${cleanSt}`;
 }
 
+function mapRestaurantStationToMeta(st: RestaurantStation): StationMeta {
+  const id = cleanStationId(st.stationId || st.id) || 'kitchen';
+  const nameAr = (st.name || '').trim() || id;
+  const nameEn = (st.nameEn || '').trim() || nameAr;
+  const screenType: StationScreenType = st.screenType === 'captain' ? 'captain' : 'prep';
+  const allowedOrderTypes =
+    Array.isArray(st.allowedOrderTypes) && st.allowedOrderTypes.length > 0
+      ? st.allowedOrderTypes.filter((t): t is OrderType => t === 'dine_in' || t === 'pickup' || t === 'delivery')
+      : [...DEFAULT_ALLOWED_ORDER_TYPES];
+  const availableStatusButtons =
+    Array.isArray(st.availableStatusButtons) && st.availableStatusButtons.length > 0
+      ? st.availableStatusButtons.filter(
+          (b): b is KdsStatusButtonOption => b === 'preparing' || b === 'ready' || b === 'served'
+        )
+      : [...DEFAULT_STATUS_BUTTONS];
+
+  return {
+    id,
+    stationId: id,
+    label: nameEn && nameEn !== nameAr ? `${nameAr} (${nameEn})` : nameAr,
+    label_en: nameEn,
+    shortLabel: nameAr,
+    shortLabel_en: nameEn,
+    color: st.color || (screenType === 'captain' ? '#0D9488' : '#EA580C'),
+    icon: st.icon || (screenType === 'captain' ? 'user-check' : 'chef-hat'),
+    badgeClass: 'bg-zinc-50 text-zinc-900 border-zinc-200',
+    screenType,
+    isActive: st.isActive !== false,
+    isArchived: st.isArchived === true,
+    isDefaultFallback: st.isDefaultFallback === true,
+    showPrices: st.showPrices === true,
+    allowedOrderTypes: allowedOrderTypes.length > 0 ? allowedOrderTypes : [...DEFAULT_ALLOWED_ORDER_TYPES],
+    soundAlertEnabled: st.soundAlertEnabled !== false,
+    overdueAlertMinutes:
+      typeof st.overdueAlertMinutes === 'number' && st.overdueAlertMinutes >= 1
+        ? Math.min(240, Math.round(st.overdueAlertMinutes))
+        : 15,
+    thermalPrintMode:
+      st.thermalPrintMode === 'auto' || st.thermalPrintMode === 'off' ? st.thermalPrintMode : 'manual',
+    availableStatusButtons:
+      availableStatusButtons.length > 0 ? availableStatusButtons : [...DEFAULT_STATUS_BUTTONS],
+    assignedHallIds: Array.isArray(st.assignedHallIds) ? st.assignedHallIds.filter(Boolean) : [],
+    assignedTableNumbers: Array.isArray(st.assignedTableNumbers)
+      ? st.assignedTableNumbers.map((t) => String(t).trim()).filter(Boolean)
+      : [],
+    tableVisibilityScope: st.tableVisibilityScope === 'assigned_only' ? 'assigned_only' : 'all',
+    sortOrder: st.sortOrder ?? 1,
+  };
+}
+
 export function buildEffectiveStations(
   dynamicStations: RestaurantStation[],
   includeInactive = false
 ): StationMeta[] {
-  const source =
-    dynamicStations.length > 0
-      ? dynamicStations
+  const prepDynamic = dynamicStations.filter((st) => st.screenType !== 'captain');
+  const source: RestaurantStation[] =
+    prepDynamic.length > 0
+      ? prepDynamic
       : DEFAULT_SEED_STATIONS.map((tpl, idx) => ({
           id: tpl.suggestedId,
           stationId: tpl.suggestedId,
@@ -208,34 +314,40 @@ export function buildEffectiveStations(
           nameEn: tpl.nameEn,
           color: tpl.color,
           icon: tpl.icon,
+          screenType: 'prep' as const,
           isActive: true,
+          isArchived: false,
+          isDefaultFallback: idx === 0,
           sortOrder: idx + 1,
         }));
 
   return source
-    .filter((st) => includeInactive || st.isActive !== false)
+    .filter((st) => includeInactive || (st.isActive !== false && st.isArchived !== true))
     .sort((a, b) => (a.sortOrder ?? 999) - (b.sortOrder ?? 999))
-    .map((st) => {
-      const id = cleanStationId(st.stationId || st.id) || 'kitchen';
-      const nameAr = (st.name || '').trim() || id;
-      const nameEn = (st.nameEn || '').trim() || nameAr;
-      return {
-        id,
-        stationId: id,
-        label: nameEn && nameEn !== nameAr ? `${nameAr} (${nameEn})` : nameAr,
-        label_en: nameEn,
-        shortLabel: nameAr,
-        shortLabel_en: nameEn,
-        color: st.color || '#EA580C',
-        icon: st.icon || 'chef-hat',
-        badgeClass: 'bg-zinc-50 text-zinc-900 border-zinc-200',
-        isActive: st.isActive !== false,
-        sortOrder: st.sortOrder ?? 1,
-      };
-    });
+    .map(mapRestaurantStationToMeta);
 }
 
-export function getStaffEffectiveAllowedStations(staff: Pick<StaffMember, 'role' | 'allowedScreens' | 'allowedStations'>, allStations: StationMeta[]): string[] {
+export function buildEffectiveCaptainScreens(
+  dynamicStations: RestaurantStation[],
+  includeInactive = false
+): StationMeta[] {
+  return dynamicStations
+    .filter((st) => st.screenType === 'captain')
+    .filter((st) => includeInactive || (st.isActive !== false && st.isArchived !== true))
+    .sort((a, b) => (a.sortOrder ?? 999) - (b.sortOrder ?? 999))
+    .map(mapRestaurantStationToMeta);
+}
+
+export function getDefaultFallbackStationId(effectiveStations: StationMeta[]): string {
+  const activePrep = effectiveStations.filter((s) => s.screenType !== 'captain' && s.isActive && !s.isArchived);
+  const explicitDefault = activePrep.find((s) => s.isDefaultFallback);
+  return explicitDefault?.stationId || activePrep[0]?.stationId || effectiveStations[0]?.stationId || 'kitchen';
+}
+
+export function getStaffEffectiveAllowedStations(
+  staff: Pick<StaffMember, 'role' | 'allowedScreens' | 'allowedStations'>,
+  allStations: StationMeta[]
+): string[] {
   const allIds = allStations.map((s) => s.stationId);
   if (staff.role === 'manager') {
     return allIds;
@@ -257,22 +369,56 @@ export function normalizeStation(val?: string | null): string | undefined {
   return clean || undefined;
 }
 
+export function resolveCategoryStations(
+  categoryId: string | undefined,
+  categoryMap: Map<string, Category>,
+  fallbackStationId = 'kitchen'
+): string[] {
+  if (!categoryId) return fallbackStationId ? [fallbackStationId] : [];
+  const cat = categoryMap.get(categoryId);
+  if (!cat) return fallbackStationId ? [fallbackStationId] : [];
+
+  const explicitList = cleanStationIdList(cat.stationIds);
+  if (explicitList.length > 0) return explicitList;
+
+  const direct = normalizeStation(cat.stationId || cat.station);
+  if (direct) return [direct];
+
+  if (cat.parentId) {
+    const parent = categoryMap.get(cat.parentId);
+    const parentList = cleanStationIdList(parent?.stationIds);
+    if (parentList.length > 0) return parentList;
+    const parentStation = normalizeStation(parent?.stationId || parent?.station);
+    if (parentStation) return [parentStation];
+  }
+
+  return fallbackStationId ? [fallbackStationId] : [];
+}
+
 export function resolveCategoryStation(
   categoryId: string | undefined,
   categoryMap: Map<string, Category>,
   fallbackStationId = 'kitchen'
 ): string {
-  if (!categoryId) return fallbackStationId;
-  const cat = categoryMap.get(categoryId);
-  if (!cat) return fallbackStationId;
-  const direct = normalizeStation(cat.stationId || cat.station);
-  if (direct) return direct;
-  if (cat.parentId) {
-    const parent = categoryMap.get(cat.parentId);
-    const parentStation = normalizeStation(parent?.stationId || parent?.station);
-    if (parentStation) return parentStation;
-  }
-  return fallbackStationId;
+  return resolveCategoryStations(categoryId, categoryMap, fallbackStationId)[0] || fallbackStationId;
+}
+
+export function resolveMenuItemStations(
+  item: MenuItem | undefined,
+  categoryMap: Map<string, Category>,
+  fallbackStationId = 'kitchen'
+): string[] {
+  if (!item) return fallbackStationId ? [fallbackStationId] : [];
+  const catStations = item.categoryId
+    ? resolveCategoryStations(item.categoryId, categoryMap, '')
+    : [];
+  const itemList = cleanStationIdList(item.stationIds);
+  if (itemList.length > 0) return itemList;
+
+  const direct = normalizeStation(item.stationId || item.station);
+  if (direct) return [direct];
+  if (catStations.length > 0) return catStations;
+  return fallbackStationId ? [fallbackStationId] : [];
 }
 
 export function resolveMenuItemStation(
@@ -280,13 +426,23 @@ export function resolveMenuItemStation(
   categoryMap: Map<string, Category>,
   fallbackStationId = 'kitchen'
 ): string {
-  if (!item) return fallbackStationId;
-  // Inherit from category hierarchy first if category explicitly defines stationId, or direct item override
-  const catStation = item.categoryId
-    ? resolveCategoryStation(item.categoryId, categoryMap, '')
-    : '';
-  const direct = normalizeStation(item.stationId || item.station);
-  return direct || catStation || fallbackStationId;
+  return resolveMenuItemStations(item, categoryMap, fallbackStationId)[0] || fallbackStationId;
+}
+
+export function resolveOrderItemStations(
+  orderItem: OrderItemPayload,
+  itemMap: Map<string, MenuItem>,
+  categoryMap: Map<string, Category>,
+  fallbackStationId = 'kitchen'
+): string[] {
+  const payloadList = cleanStationIdList(orderItem.stationIds);
+  if (payloadList.length > 0) return payloadList;
+
+  const direct = normalizeStation(orderItem.stationId || orderItem.station);
+  if (direct) return [direct];
+
+  const menuItem = itemMap.get(orderItem.menuItemId);
+  return resolveMenuItemStations(menuItem, categoryMap, fallbackStationId);
 }
 
 export function resolveOrderItemStation(
@@ -295,8 +451,5 @@ export function resolveOrderItemStation(
   categoryMap: Map<string, Category>,
   fallbackStationId = 'kitchen'
 ): string {
-  const direct = normalizeStation(orderItem.stationId || orderItem.station);
-  if (direct) return direct;
-  const menuItem = itemMap.get(orderItem.menuItemId);
-  return resolveMenuItemStation(menuItem, categoryMap, fallbackStationId);
+  return resolveOrderItemStations(orderItem, itemMap, categoryMap, fallbackStationId)[0] || fallbackStationId;
 }

@@ -65,7 +65,14 @@ export type StationIconName =
   | 'cup-soda'
   | 'wind'
   | 'utensils'
-  | 'sparkles';
+  | 'sparkles'
+  | 'user-check'
+  | 'bell-ring';
+
+export type StationScreenType = 'prep' | 'captain';
+export type ThermalPrintMode = 'manual' | 'auto' | 'off';
+export type KdsStatusButtonOption = 'preparing' | 'ready' | 'served';
+export type CaptainTableVisibilityScope = 'assigned_only' | 'all';
 
 export interface RestaurantStation {
   id: string;
@@ -76,7 +83,19 @@ export interface RestaurantStation {
   nameEn?: string;
   color: string;
   icon: StationIconName;
+  screenType?: StationScreenType;
   isActive: boolean;
+  isArchived?: boolean;
+  isDefaultFallback?: boolean;
+  showPrices?: boolean;
+  allowedOrderTypes?: OrderType[];
+  soundAlertEnabled?: boolean;
+  overdueAlertMinutes?: number;
+  thermalPrintMode?: ThermalPrintMode;
+  availableStatusButtons?: KdsStatusButtonOption[];
+  assignedHallIds?: string[];
+  assignedTableNumbers?: string[];
+  tableVisibilityScope?: CaptainTableVisibilityScope;
   sortOrder: number;
   createdBy?: string;
   createdAt?: unknown;
@@ -194,6 +213,7 @@ export interface ManagerPermissions {
   canEditDrawerFloat: boolean;
   canManageStaff: boolean;
   canManageHalls: boolean;
+  canManageStations?: boolean;
   canConfigureOperations: boolean;
   canToggleScreenPrices: boolean;
 }
@@ -296,6 +316,7 @@ export interface Category {
   imageUrl?: string;
   station?: PrepStation;
   stationId?: string;
+  stationIds?: string[];
   sortOrder: number;
   createdAt?: unknown;
 }
@@ -322,6 +343,7 @@ export interface MenuItem {
   suggestedItemIds?: string[];
   station?: PrepStation;
   stationId?: string;
+  stationIds?: string[];
   sortOrder: number;
   createdAt?: unknown;
   updatedAt?: unknown;
@@ -355,6 +377,7 @@ export interface OrderItemPayload {
   guestName?: string;
   station?: PrepStation;
   stationId?: string;
+  stationIds?: string[];
   stationName?: string;
 }
 
@@ -386,6 +409,16 @@ export interface StaffActorInfo {
   role: 'owner' | 'superadmin' | StaffRole;
 }
 
+export interface ItemProgressStationEntry {
+  state: ItemPrepState;
+  updatedByUid: string;
+  updatedByName: string;
+  updatedByRole?: string;
+  station?: PrepStation;
+  stationId?: string;
+  updatedAt: number;
+}
+
 export interface ItemProgressActorEntry {
   state: ItemPrepState;
   updatedByUid: string;
@@ -394,6 +427,7 @@ export interface ItemProgressActorEntry {
   station?: PrepStation;
   stationId?: string;
   updatedAt: number;
+  byStation?: Record<string, ItemProgressStationEntry>;
 }
 
 export type OrderPaymentMethod = 'cash' | 'visa' | 'split';
@@ -535,6 +569,7 @@ export interface StaffMember {
   role: StaffRole;
   allowedScreens: StaffScreen[];
   allowedStations?: string[];
+  allowedCaptainScreens?: string[];
   defaultScreen: StaffScreen;
   defaultStationId?: string;
   hallId?: string;
@@ -574,6 +609,7 @@ export interface StaffInvite {
   staffHallName?: string;
   allowedScreens: StaffScreen[];
   allowedStations?: string[];
+  allowedCaptainScreens?: string[];
   defaultScreen: StaffScreen;
   defaultStationId?: string;
   expiresAt: unknown;
@@ -592,6 +628,7 @@ export interface StaffAccess {
   role: StaffRole;
   allowedScreens: StaffScreen[];
   allowedStations?: string[];
+  allowedCaptainScreens?: string[];
   defaultScreen: StaffScreen;
   defaultStationId?: string;
   hallId?: string;

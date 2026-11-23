@@ -16,18 +16,27 @@ import { db, handleFirestoreError, OperationType } from './firebase';
 import { getActiveLang } from '../data/translations';
 import {
   cleanStationId,
+  cleanStationIdList,
+  DEFAULT_ALLOWED_ORDER_TYPES,
   DEFAULT_SEED_STATIONS,
+  DEFAULT_STATUS_BUTTONS,
   screenToStationId,
   StationTemplate,
 } from './stationUtils';
 import {
+  CaptainTableVisibilityScope,
   Category,
+  KdsStatusButtonOption,
   MenuItem,
+  Order,
+  OrderType,
   RestaurantStation,
   StaffActorInfo,
   StaffAuditEventType,
   StaffMember,
   StationIconName,
+  StationScreenType,
+  ThermalPrintMode,
 } from '../types/menu';
 
 function makeStationDocId(name: string, nameEn?: string): string {
@@ -80,7 +89,7 @@ export async function seedStarterStationsForRestaurant(params: {
     const created: RestaurantStation[] = [];
     let orderCounter = existingSnap.size;
 
-    templates.forEach((tpl) => {
+    templates.forEach((tpl, idx) => {
       const stId = cleanStationId(tpl.suggestedId);
       if (!stId || existingIds.has(stId)) return;
       orderCounter += 1;
@@ -93,7 +102,16 @@ export async function seedStarterStationsForRestaurant(params: {
         nameEn: tpl.nameEn,
         color: tpl.color,
         icon: tpl.icon,
+        screenType: 'prep',
         isActive: true,
+        isArchived: false,
+        isDefaultFallback: existingSnap.empty && idx === 0,
+        showPrices: false,
+        allowedOrderTypes: [...DEFAULT_ALLOWED_ORDER_TYPES],
+        soundAlertEnabled: true,
+        overdueAlertMinutes: 15,
+        thermalPrintMode: 'manual',
+        availableStatusButtons: [...DEFAULT_STATUS_BUTTONS],
         sortOrder: orderCounter,
         createdBy: actor.uid,
       };
@@ -141,7 +159,19 @@ export async function saveRestaurantStation(params: {
     nameEn?: string;
     color: string;
     icon: StationIconName;
+    screenType?: StationScreenType;
     isActive: boolean;
+    isArchived?: boolean;
+    isDefaultFallback?: boolean;
+    showPrices?: boolean;
+    allowedOrderTypes?: OrderType[];
+    soundAlertEnabled?: boolean;
+    overdueAlertMinutes?: number;
+    thermalPrintMode?: ThermalPrintMode;
+    availableStatusButtons?: KdsStatusButtonOption[];
+    assignedHallIds?: string[];
+    assignedTableNumbers?: string[];
+    tableVisibilityScope?: CaptainTableVisibilityScope;
     sortOrder: number;
   };
 }): Promise<RestaurantStation> {
@@ -151,56 +181,124 @@ export async function saveRestaurantStation(params: {
     const isEn = getActiveLang() === 'en';
     throw new Error(
       isEn
-        ? 'Station name must be at least 2 characters.'
-        : 'اسم القسم الرئيسي يجب أن لا يقل عن حرفين.'
+        ? 'Screen / station name must be at least 2 characters.'
+        : 'اسم الشاشة أو المحطة يجب أن لا يقل عن حرفين.'
     );
   }
   const cleanNameEn = (station.nameEn || '').trim().slice(0, 80);
-  const cleanColor = /^#[0-9a-fA-F]{6}$/.test(station.color) ? station.color : '#EA580C';
+  const screenType: StationScreenType = station.screenType === 'captain' ? 'captain' : 'prep';
+  const defaultColor = screenType === 'captain' ? '#0D9488' : '#EA580C';
+  const cleanColor = /^#[0-9a-fA-F]{6}$/.test(station.color) ? station.color : defaultColor;
   const isNew = !station.id;
 
-  let stId = cleanStationId(station.id || station.stationId || makeStationDocId(cleanName, cleanNameEn));
+  let stId = cleanStationId(
+    station.id ||
+      station.stationId ||
+      (screenType === 'captain' ? `cap_${makeStationDocId(cleanName, cleanNameEn)}` : makeStationDocId(cleanName, cleanNameEn))
+  );
   if (!stId) {
-    stId = `st_${Date.now().toString(36)}`;
+    stId = `${screenType === 'captain' ? 'cap' : 'st'}_${Date.now().toString(36)}`;
   }
 
+  const existingSnap = await getDocs(collection(db, 'restaurants', restaurantId, 'stations'));
   if (isNew) {
-    const existingSnap = await getDocs(collection(db, 'restaurants', restaurantId, 'stations'));
     const existingIds = new Set(existingSnap.docs.map((d) => d.id));
     if (existingIds.has(stId)) {
       stId = `${stId}_${Math.random().toString(36).slice(2, 5)}`;
     }
   }
 
+  const cleanOrderTypesRaw = Array.isArray(station.allowedOrderTypes)
+    ? station.allowedOrderTypes.filter((t): t is OrderType => t === 'dine_in' || t === 'pickup' || t === 'delivery')
+    : [];
+  const allowedOrderTypes: OrderType[] =
+    cleanOrderTypesRaw.length > 0 ? Array.from(new Set(cleanOrderTypesRaw)).slice(0, 3) : [...DEFAULT_ALLOWED_ORDER_TYPES];
+
+  const cleanStatusButtonsRaw = Array.isArray(station.availableStatusButtons)
+    ? station.availableStatusButtons.filter(
+        (b): b is KdsStatusButtonOption => b === 'preparing' || b === 'ready' || b === 'served'
+      )
+    : [];
+  const availableStatusButtons: KdsStatusButtonOption[] =
+    cleanStatusButtonsRaw.length > 0 ? Array.from(new Set(cleanStatusButtonsRaw)).slice(0, 3) : [...DEFAULT_STATUS_BUTTONS];
+
+  const assignedHallIds = Array.isArray(station.assignedHallIds)
+    ? Array.from(new Set(station.assignedHallIds.map((h) => String(h).trim()).filter(Boolean))).slice(0, 30)
+    : [];
+  const assignedTableNumbers = Array.isArray(station.assignedTableNumbers)
+    ? Array.from(new Set(station.assignedTableNumbers.map((t) => String(t).trim()).filter(Boolean))).slice(0, 200)
+    : [];
+  const tableVisibilityScope: CaptainTableVisibilityScope =
+    station.tableVisibilityScope === 'assigned_only' ? 'assigned_only' : 'all';
+
+  const isArchived = Boolean(station.isArchived);
+  const isActive = isArchived ? false : Boolean(station.isActive);
+  const isDefaultFallback = screenType === 'prep' && !isArchived ? Boolean(station.isDefaultFallback) : false;
+  const showPrices = Boolean(station.showPrices);
+  const soundAlertEnabled = station.soundAlertEnabled !== false;
+  const overdueAlertMinutes = Math.max(
+    1,
+    Math.min(240, Math.round(Number(station.overdueAlertMinutes) || 15))
+  );
+  const thermalPrintMode: ThermalPrintMode =
+    station.thermalPrintMode === 'auto' || station.thermalPrintMode === 'off'
+      ? station.thermalPrintMode
+      : 'manual';
+
   const ref = doc(db, 'restaurants', restaurantId, 'stations', stId);
 
   try {
+    if (isDefaultFallback) {
+      const siblingDefaults = existingSnap.docs.filter((d) => {
+        const data = d.data() as RestaurantStation;
+        return d.id !== stId && data.screenType !== 'captain' && data.isDefaultFallback === true;
+      });
+      if (siblingDefaults.length > 0) {
+        const clearBatch = writeBatch(db);
+        siblingDefaults.slice(0, 10).forEach((d) => {
+          clearBatch.update(d.ref, {
+            isDefaultFallback: false,
+            updatedAt: serverTimestamp(),
+          });
+        });
+        await clearBatch.commit();
+      }
+    }
+
+    const commonFields = {
+      name: cleanName,
+      nameEn: cleanNameEn,
+      color: cleanColor,
+      icon: station.icon || (screenType === 'captain' ? 'user-check' : 'chef-hat'),
+      screenType,
+      isActive,
+      isArchived,
+      isDefaultFallback,
+      showPrices,
+      allowedOrderTypes,
+      soundAlertEnabled,
+      overdueAlertMinutes,
+      thermalPrintMode,
+      availableStatusButtons,
+      assignedHallIds,
+      assignedTableNumbers,
+      tableVisibilityScope,
+      sortOrder: Math.max(0, Math.min(10000, Number(station.sortOrder) || 1)),
+      updatedAt: serverTimestamp(),
+    };
+
     if (isNew) {
       await setDoc(ref, {
         id: stId,
         stationId: stId,
         restaurantId,
         ownerId,
-        name: cleanName,
-        nameEn: cleanNameEn,
-        color: cleanColor,
-        icon: station.icon || 'chef-hat',
-        isActive: Boolean(station.isActive),
-        sortOrder: Number(station.sortOrder) || 1,
+        ...commonFields,
         createdBy: actor.uid,
         createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
       });
     } else {
-      await updateDoc(ref, {
-        name: cleanName,
-        nameEn: cleanNameEn,
-        color: cleanColor,
-        icon: station.icon || 'chef-hat',
-        isActive: Boolean(station.isActive),
-        sortOrder: Number(station.sortOrder) || 1,
-        updatedAt: serverTimestamp(),
-      });
+      await updateDoc(ref, commonFields);
     }
 
     const logId = makeAuditId();
@@ -216,11 +314,11 @@ export async function saveRestaurantStation(params: {
       details:
         getActiveLang() === 'en'
           ? isNew
-            ? `Created prep station: ${cleanNameEn || cleanName} (${stId})`
-            : `Updated prep station: ${cleanNameEn || cleanName} (${station.isActive ? 'active' : 'paused'})`
+            ? `Created ${screenType === 'captain' ? 'captain screen' : 'prep station'}: ${cleanNameEn || cleanName} (${stId})`
+            : `Updated ${screenType === 'captain' ? 'captain screen' : 'prep station'}: ${cleanNameEn || cleanName} (${isArchived ? 'archived' : isActive ? 'active' : 'paused'})`
           : isNew
-            ? `تم إنشاء قسم رئيسي جديد: ${cleanName} (${stId})`
-            : `تم تحديث القسم الرئيسي: ${cleanName} (${station.isActive ? 'نشط' : 'موقف'})`,
+            ? `تم إنشاء ${screenType === 'captain' ? 'شاشة كابتن' : 'محطة تحضير'} جديدة: ${cleanName} (${stId})`
+            : `تم تحديث ${screenType === 'captain' ? 'شاشة الكابتن' : 'محطة التحضير'}: ${cleanName} (${isArchived ? 'مؤرشفة' : isActive ? 'نشطة' : 'متوقفة'})`,
       createdAt: serverTimestamp(),
     });
 
@@ -232,13 +330,65 @@ export async function saveRestaurantStation(params: {
       name: cleanName,
       nameEn: cleanNameEn,
       color: cleanColor,
-      icon: station.icon || 'chef-hat',
-      isActive: Boolean(station.isActive),
-      sortOrder: Number(station.sortOrder) || 1,
+      icon: commonFields.icon,
+      screenType,
+      isActive,
+      isArchived,
+      isDefaultFallback,
+      showPrices,
+      allowedOrderTypes,
+      soundAlertEnabled,
+      overdueAlertMinutes,
+      thermalPrintMode,
+      availableStatusButtons,
+      assignedHallIds,
+      assignedTableNumbers,
+      tableVisibilityScope,
+      sortOrder: commonFields.sortOrder,
       createdBy: actor.uid,
     };
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, `restaurants/${restaurantId}/stations/${stId}`);
+  }
+}
+
+export async function archiveRestaurantStation(params: {
+  restaurantId: string;
+  ownerId: string;
+  station: RestaurantStation;
+  actor: StaffActorInfo;
+  archived: boolean;
+}): Promise<void> {
+  const { restaurantId, ownerId, station, actor, archived } = params;
+  const stId = cleanStationId(station.stationId || station.id);
+  const isEn = getActiveLang() === 'en';
+  const stationLabel = isEn ? station.nameEn || station.name : station.name;
+
+  try {
+    await updateDoc(doc(db, 'restaurants', restaurantId, 'stations', station.id), {
+      isArchived: archived,
+      isActive: !archived,
+      ...(archived ? { isDefaultFallback: false } : {}),
+      updatedAt: serverTimestamp(),
+    });
+
+    const logId = makeAuditId();
+    await setDoc(doc(db, 'restaurants', restaurantId, 'staff_audit_logs', logId), {
+      id: logId,
+      restaurantId,
+      ownerId,
+      eventType: 'station_updated' satisfies StaffAuditEventType,
+      actorUid: actor.uid,
+      actorName: actor.name.slice(0, 100),
+      actorRole: actor.role,
+      screen: stId,
+      details: isEn
+        ? `${archived ? 'Archived' : 'Restored'} screen/station: ${stationLabel}`
+        : `${archived ? 'تمت أرشفة' : 'تمت استعادة'} الشاشة/المحطة: ${station.name}`,
+      createdAt: serverTimestamp(),
+    }).catch(() => {});
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `restaurants/${restaurantId}/stations/${station.id}`);
   }
 }
 
@@ -269,44 +419,86 @@ export async function deleteRestaurantStationChecked(params: {
 }): Promise<void> {
   const { restaurantId, ownerId, station, actor } = params;
   const targetId = cleanStationId(station.stationId || station.id);
+  const isCaptainScreen = station.screenType === 'captain';
 
-  // Verify no linked categories, items, or staff members
-  const [catsSnap, itemsSnap, staffSnap] = await Promise.all([
+  // Verify no open orders, linked categories, items, or staff members
+  const [ordersSnap, catsSnap, itemsSnap, staffSnap] = await Promise.all([
+    getDocs(query(collection(db, 'orders'), where('restaurantId', '==', restaurantId))),
     getDocs(query(collection(db, 'categories'), where('restaurantId', '==', restaurantId))),
     getDocs(query(collection(db, 'menu_items'), where('restaurantId', '==', restaurantId))),
     getDocs(collection(db, 'restaurants', restaurantId, 'staff')),
   ]);
 
-  const linkedCategories = catsSnap.docs
-    .map((d) => d.data() as Category)
-    .filter((c) => cleanStationId(c.stationId || c.station) === targetId);
-
   const isEn = getActiveLang() === 'en';
   const stationLabel = isEn ? station.nameEn || station.name : station.name;
+
+  const openOrders = ordersSnap.docs
+    .map((d) => d.data() as Order)
+    .filter((o) => o.status !== 'completed' && o.status !== 'cancelled');
+
+  const blockingOpenOrders = openOrders.filter((ord) => {
+    if (isCaptainScreen) {
+      if (ord.orderType !== 'dine_in') return false;
+      const tables = (station.assignedTableNumbers || []).map((t) => String(t).trim()).filter(Boolean);
+      const halls = (station.assignedHallIds || []).filter(Boolean);
+      if (tables.length > 0 && ord.tableNumber) {
+        return tables.includes(String(ord.tableNumber).trim());
+      }
+      if (halls.length > 0 && station.tableVisibilityScope === 'assigned_only') {
+        return true;
+      }
+      return true;
+    }
+    return (ord.items || []).some((it) => {
+      const list = cleanStationIdList(it.stationIds);
+      if (list.includes(targetId)) return true;
+      return cleanStationId(it.stationId || it.station) === targetId;
+    });
+  });
+
+  if (blockingOpenOrders.length > 0) {
+    throw new Error(
+      isEn
+        ? `Cannot delete "${stationLabel}" because there are ${blockingOpenOrders.length} open orders currently active on it. Close those orders first or choose "Archive" instead to preserve order history.`
+        : `لا يمكن حذف "${station.name}" لوجود ${blockingOpenOrders.length} طلب مفتوح مرتبط بها حالياً. أغلق الطلبات أولاً أو اختر "أرشفة" بدلاً من الحذف للحفاظ على سجل الطلبات.`
+    );
+  }
+
+  const linkedCategories = catsSnap.docs
+    .map((d) => d.data() as Category)
+    .filter((c) => {
+      const list = cleanStationIdList(c.stationIds);
+      if (list.includes(targetId)) return true;
+      return cleanStationId(c.stationId || c.station) === targetId;
+    });
 
   if (linkedCategories.length > 0) {
     throw new Error(
       isEn
-        ? `Cannot delete station "${stationLabel}" because it is linked to ${linkedCategories.length} menu categories (${linkedCategories
+        ? `Cannot delete "${stationLabel}" because it is linked to ${linkedCategories.length} menu categories (${linkedCategories
             .slice(0, 2)
             .map((c) => c.name_en || c.name)
-            .join(', ')}). Reassign those categories first.`
-        : `لا يمكن حذف قسم "${station.name}" لأنه مرتبط بـ ${linkedCategories.length} قسم في المنيو (${linkedCategories
+            .join(', ')}). Reassign them or use "Archive" instead.`
+        : `لا يمكن حذف "${station.name}" لأنه مرتبط بـ ${linkedCategories.length} قسم في المنيو (${linkedCategories
             .slice(0, 2)
             .map((c) => c.name)
-            .join('، ')}). انقل تلك الأقسام لمحطة أخرى أولاً.`
+            .join('، ')}). انقل تلك الأقسام لمحطة أخرى أو استخدم "أرشفة" بدلاً من الحذف.`
     );
   }
 
   const linkedItems = itemsSnap.docs
     .map((d) => d.data() as MenuItem)
-    .filter((it) => cleanStationId(it.stationId || it.station) === targetId);
+    .filter((it) => {
+      const list = cleanStationIdList(it.stationIds);
+      if (list.includes(targetId)) return true;
+      return cleanStationId(it.stationId || it.station) === targetId;
+    });
 
   if (linkedItems.length > 0) {
     throw new Error(
       isEn
-        ? `Cannot delete station "${stationLabel}" because ${linkedItems.length} menu items are currently routed to it. Reassign those items first.`
-        : `لا يمكن حذف قسم "${station.name}" لوجود ${linkedItems.length} صنف من المنيو مرتبط به حالياً. عدّل تصنيف الأصناف أولاً.`
+        ? `Cannot delete "${stationLabel}" because ${linkedItems.length} menu items are routed to it. Reassign those items or use "Archive" instead.`
+        : `لا يمكن حذف "${station.name}" لوجود ${linkedItems.length} صنف من المنيو مرتبط به حالياً. عدّل توجيه الأصناف أو استخدم "أرشفة" بدلاً من الحذف.`
     );
   }
 
@@ -315,23 +507,28 @@ export async function deleteRestaurantStationChecked(params: {
     .filter((m) => {
       if (m.role === 'manager') return false;
       const explicitStations = (m.allowedStations || []).map((s) => cleanStationId(s));
+      const explicitCaptain = (m.allowedCaptainScreens || []).map((s) => cleanStationId(s));
       const screenStations = (m.allowedScreens || [])
         .map((scr) => screenToStationId(scr))
         .filter((x): x is string => Boolean(x));
-      return explicitStations.includes(targetId) || screenStations.includes(targetId);
+      return (
+        explicitStations.includes(targetId) ||
+        explicitCaptain.includes(targetId) ||
+        screenStations.includes(targetId)
+      );
     });
 
   if (linkedStaff.length > 0) {
     throw new Error(
       isEn
-        ? `Cannot delete station "${stationLabel}" because ${linkedStaff.length} staff members are assigned to it (${linkedStaff
+        ? `Cannot delete "${stationLabel}" because ${linkedStaff.length} staff members are assigned to it (${linkedStaff
             .slice(0, 2)
             .map((s) => s.name)
-            .join(', ')}). Remove their access first.`
-        : `لا يمكن حذف قسم "${station.name}" لوجود ${linkedStaff.length} موظف مرتبط به (${linkedStaff
+            .join(', ')}). Remove their access or use "Archive" instead.`
+        : `لا يمكن حذف "${station.name}" لوجود ${linkedStaff.length} موظف مرتبط به (${linkedStaff
             .slice(0, 2)
             .map((s) => s.name)
-            .join('، ')}). أزل الصلاحية عنهم أولاً.`
+            .join('، ')}). أزل الصلاحية عنهم أو استخدم "أرشفة" بدلاً من الحذف.`
     );
   }
 
@@ -348,8 +545,8 @@ export async function deleteRestaurantStationChecked(params: {
       actorRole: actor.role,
       screen: targetId,
       details: isEn
-        ? `Deleted prep station: ${stationLabel}`
-        : `تم حذف القسم الرئيسي: ${station.name}`,
+        ? `Deleted ${isCaptainScreen ? 'captain screen' : 'prep station'}: ${stationLabel}`
+        : `تم حذف ${isCaptainScreen ? 'شاشة الكابتن' : 'القسم الرئيسي'}: ${station.name}`,
       createdAt: serverTimestamp(),
     });
   } catch (error) {

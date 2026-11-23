@@ -48,7 +48,7 @@ import {
   validateStaffPassword,
 } from './staffAuthUtils';
 import { getActiveLang } from '../data/translations';
-import { cleanStationId, screenToStationId } from './stationUtils';
+import { cleanStationId, cleanStationIdList, screenToStationId } from './stationUtils';
 
 function makeStaffDocId(prefix: string): string {
   const rand = Math.random().toString(36).slice(2, 8);
@@ -172,6 +172,7 @@ export interface CreateStaffInput {
   role: StaffRole;
   allowedScreens: StaffScreen[];
   allowedStations?: string[];
+  allowedCaptainScreens?: string[];
   defaultScreen: StaffScreen;
   defaultStationId?: string;
   hallId?: string;
@@ -227,13 +228,19 @@ export async function createManagerOrStaffAccount(
     }
   }
 
+  const allowedCaptainScreens = cleanStationIdList(input.allowedCaptainScreens).slice(0, 30);
+  const rawInputScreens =
+    allowedCaptainScreens.length > 0 && !input.allowedScreens.includes('captain')
+      ? ([...input.allowedScreens, 'captain'] as StaffScreen[])
+      : input.allowedScreens;
+
   const allowedScreens = Array.from(
     new Set<StaffScreen>(
       input.role === 'manager'
-        ? input.allowedScreens.length > 0
-          ? input.allowedScreens
+        ? rawInputScreens.length > 0
+          ? rawInputScreens
           : ['staff_management', 'cashier', 'kitchen', 'bar', 'pastry', 'captain', 'halls']
-        : input.allowedScreens.filter((s) => s !== 'staff_management' && s !== 'halls')
+        : rawInputScreens.filter((s) => s !== 'staff_management' && s !== 'halls')
     )
   ).slice(0, 30);
 
@@ -347,6 +354,7 @@ export async function createManagerOrStaffAccount(
     role: input.role,
     allowedScreens,
     allowedStations,
+    allowedCaptainScreens,
     defaultScreen,
     defaultStationId,
     hallId: (input.hallId || '').trim().slice(0, 128),
@@ -366,6 +374,7 @@ export async function createManagerOrStaffAccount(
     role: input.role,
     allowedScreens,
     allowedStations,
+    allowedCaptainScreens,
     defaultScreen,
     defaultStationId,
     hallId: (input.hallId || '').trim().slice(0, 128),
@@ -406,6 +415,7 @@ export async function createManagerOrStaffAccount(
         staffHallName: (input.hallName || '').trim().slice(0, 80),
         allowedScreens,
         allowedStations,
+        allowedCaptainScreens,
         defaultScreen,
         defaultStationId,
         expiresAt: Timestamp.fromMillis(expiresAtMs),
@@ -522,6 +532,7 @@ export async function createManagerOrStaffAccount(
       role: input.role,
       allowedScreens,
       allowedStations,
+      allowedCaptainScreens,
       defaultScreen,
       defaultStationId,
       hallId: input.hallId || '',
@@ -620,6 +631,7 @@ export async function regenerateStaffInvite(params: {
       role: existingStaff.role,
       allowedScreens: existingStaff.allowedScreens,
       allowedStations: existingStaff.allowedStations || [],
+      allowedCaptainScreens: existingStaff.allowedCaptainScreens || [],
       defaultScreen: existingStaff.defaultScreen,
       defaultStationId: existingStaff.defaultStationId || '',
       hallId: existingStaff.hallId || '',
@@ -638,6 +650,7 @@ export async function regenerateStaffInvite(params: {
       role: existingStaff.role,
       allowedScreens: existingStaff.allowedScreens,
       allowedStations: existingStaff.allowedStations || [],
+      allowedCaptainScreens: existingStaff.allowedCaptainScreens || [],
       defaultScreen: existingStaff.defaultScreen,
       defaultStationId: existingStaff.defaultStationId || '',
       hallId: existingStaff.hallId || '',
@@ -665,6 +678,7 @@ export async function regenerateStaffInvite(params: {
       staffHallName: existingStaff.hallName || '',
       allowedScreens: existingStaff.allowedScreens,
       allowedStations: existingStaff.allowedStations || [],
+      allowedCaptainScreens: existingStaff.allowedCaptainScreens || [],
       defaultScreen: existingStaff.defaultScreen,
       defaultStationId: existingStaff.defaultStationId || '',
       expiresAt: Timestamp.fromMillis(expiresAtMs),
@@ -837,6 +851,7 @@ export async function updateStaffPermissionsAndProfile(params: {
     role?: StaffRole;
     allowedScreens?: StaffScreen[];
     allowedStations?: string[];
+    allowedCaptainScreens?: string[];
     defaultScreen?: StaffScreen;
     defaultStationId?: string;
     hallId?: string;
@@ -850,7 +865,14 @@ export async function updateStaffPermissionsAndProfile(params: {
   const nextEmail = (updates.email ?? staff.email ?? '').trim().toLowerCase().slice(0, 254);
   const nextJobTitle = (updates.jobTitle ?? staff.jobTitle ?? '').trim().slice(0, 80);
   const nextRole = updates.role ?? staff.role;
-  const rawScreens = updates.allowedScreens ?? staff.allowedScreens;
+  const nextCaptainScreens = cleanStationIdList(
+    updates.allowedCaptainScreens ?? staff.allowedCaptainScreens ?? []
+  ).slice(0, 30);
+  const baseScreens = updates.allowedScreens ?? staff.allowedScreens;
+  const rawScreens =
+    nextCaptainScreens.length > 0 && !baseScreens.includes('captain')
+      ? ([...baseScreens, 'captain'] as StaffScreen[])
+      : baseScreens;
   const nextScreens = Array.from(
     new Set<StaffScreen>(
       nextRole === 'manager'
@@ -923,6 +945,7 @@ export async function updateStaffPermissionsAndProfile(params: {
     role: nextRole,
     allowedScreens: nextScreens,
     allowedStations: nextStations,
+    allowedCaptainScreens: nextCaptainScreens,
     defaultScreen: nextDefault,
     defaultStationId: nextDefaultStation,
     hallId: nextHallId,
@@ -935,6 +958,7 @@ export async function updateStaffPermissionsAndProfile(params: {
     role: nextRole,
     allowedScreens: nextScreens,
     allowedStations: nextStations,
+    allowedCaptainScreens: nextCaptainScreens,
     defaultScreen: nextDefault,
     defaultStationId: nextDefaultStation,
     hallId: nextHallId,
@@ -1630,6 +1654,7 @@ export async function completeStaffOnboarding(params: {
     role: latestInvite.staffRole,
     allowedScreens: latestInvite.allowedScreens,
     allowedStations: latestInvite.allowedStations || [],
+    allowedCaptainScreens: latestInvite.allowedCaptainScreens || [],
     defaultScreen: latestInvite.defaultScreen,
     defaultStationId: latestInvite.defaultStationId || '',
     hallId: cleanHallId,

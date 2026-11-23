@@ -140,6 +140,16 @@ service cloud.firestore {
         );
     }
 
+    function managerHasStationsPermission(restId) {
+      return isActiveManagerForRestaurant(restId) &&
+        exists(/databases/$(database)/documents/restaurants/$(restId)) && (
+          !('operationsConfig' in get(/databases/$(database)/documents/restaurants/$(restId)).data) ||
+          !('managerPermissions' in get(/databases/$(database)/documents/restaurants/$(restId)).data.operationsConfig) ||
+          !('canManageStations' in get(/databases/$(database)/documents/restaurants/$(restId)).data.operationsConfig.managerPermissions) ||
+          get(/databases/$(database)/documents/restaurants/$(restId)).data.operationsConfig.managerPermissions.canManageStations == true
+        );
+    }
+
     function staffHasAnyStationAccess(restId) {
       return isSignedIn() &&
         hasStaffAccess() &&
@@ -327,7 +337,7 @@ service cloud.firestore {
 
     function isValidCategoryShape(data, catId) {
       return data.keys().hasAll(['id', 'restaurantId', 'ownerId', 'name', 'sortOrder', 'createdAt']) &&
-        data.keys().hasOnly(['id', 'restaurantId', 'ownerId', 'parentId', 'name', 'name_en', 'imageUrl', 'station', 'stationId', 'sortOrder', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'restaurantId', 'ownerId', 'parentId', 'name', 'name_en', 'imageUrl', 'station', 'stationId', 'stationIds', 'sortOrder', 'createdAt']) &&
         isValidId(data.id) &&
         data.id == catId &&
         isValidId(data.restaurantId) &&
@@ -338,6 +348,7 @@ service cloud.firestore {
         (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 300000)) &&
         (!('station' in data) || isValidStation(data.station)) &&
         (!('stationId' in data) || isValidStation(data.stationId)) &&
+        (!('stationIds' in data) || (data.stationIds is list && data.stationIds.size() <= 20 && (data.stationIds.size() == 0 || isValidStation(data.stationIds[0])))) &&
         data.sortOrder is number && data.sortOrder >= 0 && data.sortOrder <= 10000 &&
         data.createdAt is timestamp;
     }
@@ -352,7 +363,7 @@ service cloud.firestore {
           'id', 'restaurantId', 'ownerId', 'categoryId', 'name', 'name_en',
           'description', 'description_en', 'basePrice', 'imageUrl', 'calories',
           'isSpicy', 'isAvailable', 'ordersCount',
-          'sizes', 'addons', 'badge', 'isBogo', 'suggestedItemIds', 'station', 'stationId',
+          'sizes', 'addons', 'badge', 'isBogo', 'suggestedItemIds', 'station', 'stationId', 'stationIds',
           'sortOrder', 'createdAt', 'updatedAt'
         ]) &&
         isValidId(data.id) &&
@@ -377,6 +388,7 @@ service cloud.firestore {
         (!('suggestedItemIds' in data) || (data.suggestedItemIds is list && data.suggestedItemIds.size() <= 8 && (data.suggestedItemIds.size() == 0 || data.suggestedItemIds[0] is string))) &&
         (!('station' in data) || isValidStation(data.station)) &&
         (!('stationId' in data) || isValidStation(data.stationId)) &&
+        (!('stationIds' in data) || (data.stationIds is list && data.stationIds.size() <= 20 && (data.stationIds.size() == 0 || isValidStation(data.stationIds[0])))) &&
         data.sortOrder is number && data.sortOrder >= 0 && data.sortOrder <= 10000 &&
         data.createdAt is timestamp &&
         data.updatedAt is timestamp;
@@ -522,7 +534,7 @@ service cloud.firestore {
           'isActive', 'mustChangePassword', 'updatedAt'
         ]) &&
         data.keys().hasOnly([
-          'uid', 'restaurantId', 'ownerId', 'role', 'allowedScreens', 'allowedStations',
+          'uid', 'restaurantId', 'ownerId', 'role', 'allowedScreens', 'allowedStations', 'allowedCaptainScreens',
           'defaultScreen', 'defaultStationId', 'hallId', 'isActive', 'mustChangePassword',
           'suspendedType', 'suspendedUntil', 'updatedAt'
         ]) &&
@@ -534,6 +546,7 @@ service cloud.firestore {
         data.allowedScreens is list && data.allowedScreens.size() >= 1 && data.allowedScreens.size() <= 30 &&
         data.allowedScreens[0] is string &&
         (!('allowedStations' in data) || (data.allowedStations is list && data.allowedStations.size() <= 30 && (data.allowedStations.size() == 0 || isValidStation(data.allowedStations[0])))) &&
+        (!('allowedCaptainScreens' in data) || (data.allowedCaptainScreens is list && data.allowedCaptainScreens.size() <= 30 && (data.allowedCaptainScreens.size() == 0 || isValidStation(data.allowedCaptainScreens[0])))) &&
         isValidStaffScreen(data.defaultScreen) &&
         (!('defaultStationId' in data) || data.defaultStationId == '' || isValidStation(data.defaultStationId)) &&
         (!('hallId' in data) || data.hallId == '' || isValidId(data.hallId)) &&
@@ -552,7 +565,7 @@ service cloud.firestore {
         ]) &&
         data.keys().hasOnly([
           'uid', 'restaurantId', 'ownerId', 'name', 'username', 'phone',
-          'email', 'authEmail', 'jobTitle', 'role', 'allowedScreens', 'allowedStations',
+          'email', 'authEmail', 'jobTitle', 'role', 'allowedScreens', 'allowedStations', 'allowedCaptainScreens',
           'defaultScreen', 'defaultStationId', 'hallId', 'hallName', 'isActive', 'mustChangePassword',
           'suspendedType', 'suspendedUntil', 'suspendedReason', 'suspendedByRole', 'suspendedByName',
           'activeInviteHash', 'createdBy', 'lastLoginAt', 'passwordChangedAt', 'createdAt', 'updatedAt'
@@ -572,6 +585,7 @@ service cloud.firestore {
         data.allowedScreens is list && data.allowedScreens.size() >= 1 && data.allowedScreens.size() <= 30 &&
         data.allowedScreens[0] is string &&
         (!('allowedStations' in data) || (data.allowedStations is list && data.allowedStations.size() <= 30 && (data.allowedStations.size() == 0 || isValidStation(data.allowedStations[0])))) &&
+        (!('allowedCaptainScreens' in data) || (data.allowedCaptainScreens is list && data.allowedCaptainScreens.size() <= 30 && (data.allowedCaptainScreens.size() == 0 || isValidStation(data.allowedCaptainScreens[0])))) &&
         isValidStaffScreen(data.defaultScreen) &&
         (!('defaultStationId' in data) || data.defaultStationId == '' || isValidStation(data.defaultStationId)) &&
         (!('hallId' in data) || data.hallId == '' || isValidId(data.hallId)) &&
@@ -602,7 +616,7 @@ service cloud.firestore {
           'id', 'staffId', 'restaurantId', 'ownerId', 'restaurantSlug', 'restaurantName', 'restaurantName_en',
           'tokenHash', 'authEmail', 'staffName', 'staffUsername', 'staffPhone', 'staffEmail',
           'staffRole', 'staffJobTitle', 'staffHallId', 'staffHallName',
-          'allowedScreens', 'allowedStations', 'defaultScreen', 'defaultStationId',
+          'allowedScreens', 'allowedStations', 'allowedCaptainScreens', 'defaultScreen', 'defaultStationId',
           'expiresAt', 'usedAt', 'usedByUid', 'revokedAt',
           'createdBy', 'createdAt', 'updatedAt'
         ]) &&
@@ -629,6 +643,7 @@ service cloud.firestore {
         data.allowedScreens is list && data.allowedScreens.size() >= 1 && data.allowedScreens.size() <= 30 &&
         data.allowedScreens[0] is string &&
         (!('allowedStations' in data) || (data.allowedStations is list && data.allowedStations.size() <= 30 && (data.allowedStations.size() == 0 || isValidStation(data.allowedStations[0])))) &&
+        (!('allowedCaptainScreens' in data) || (data.allowedCaptainScreens is list && data.allowedCaptainScreens.size() <= 30 && (data.allowedCaptainScreens.size() == 0 || isValidStation(data.allowedCaptainScreens[0])))) &&
         isValidStaffScreen(data.defaultScreen) &&
         (!('defaultStationId' in data) || data.defaultStationId == '' || isValidStation(data.defaultStationId)) &&
         data.expiresAt is timestamp &&
@@ -703,7 +718,11 @@ service cloud.firestore {
         ]) &&
         data.keys().hasOnly([
           'id', 'stationId', 'restaurantId', 'ownerId', 'name', 'nameEn', 'color', 'icon',
-          'isActive', 'sortOrder', 'createdBy', 'createdAt', 'updatedAt'
+          'screenType', 'isActive', 'isArchived', 'isDefaultFallback', 'showPrices',
+          'allowedOrderTypes', 'soundAlertEnabled', 'overdueAlertMinutes',
+          'thermalPrintMode', 'availableStatusButtons', 'assignedHallIds',
+          'assignedTableNumbers', 'tableVisibilityScope',
+          'sortOrder', 'createdBy', 'createdAt', 'updatedAt'
         ]) &&
         isValidStation(data.id) &&
         data.id == stationId &&
@@ -717,9 +736,32 @@ service cloud.firestore {
         data.color is string && data.color.size() >= 4 && data.color.size() <= 16 && data.color.matches('^#[0-9a-fA-F]{6}$') &&
         data.icon in [
           'chef-hat', 'flame', 'wine', 'croissant', 'coffee', 'pizza',
-          'fish', 'salad', 'cup-soda', 'wind', 'utensils', 'sparkles'
+          'fish', 'salad', 'cup-soda', 'wind', 'utensils', 'sparkles',
+          'user-check', 'bell-ring'
         ] &&
+        (!('screenType' in data) || (data.screenType in ['prep', 'captain'])) &&
         data.isActive is bool &&
+        (!('isArchived' in data) || data.isArchived is bool) &&
+        (!('isDefaultFallback' in data) || data.isDefaultFallback is bool) &&
+        (!('showPrices' in data) || data.showPrices is bool) &&
+        (!('allowedOrderTypes' in data) || (
+          data.allowedOrderTypes is list &&
+          data.allowedOrderTypes.size() >= 1 &&
+          data.allowedOrderTypes.size() <= 3 &&
+          data.allowedOrderTypes[0] in ['dine_in', 'pickup', 'delivery']
+        )) &&
+        (!('soundAlertEnabled' in data) || data.soundAlertEnabled is bool) &&
+        (!('overdueAlertMinutes' in data) || (data.overdueAlertMinutes is number && data.overdueAlertMinutes >= 1 && data.overdueAlertMinutes <= 240)) &&
+        (!('thermalPrintMode' in data) || (data.thermalPrintMode in ['manual', 'auto', 'off'])) &&
+        (!('availableStatusButtons' in data) || (
+          data.availableStatusButtons is list &&
+          data.availableStatusButtons.size() >= 1 &&
+          data.availableStatusButtons.size() <= 3 &&
+          data.availableStatusButtons[0] in ['preparing', 'ready', 'served']
+        )) &&
+        (!('assignedHallIds' in data) || (data.assignedHallIds is list && data.assignedHallIds.size() <= 30 && (data.assignedHallIds.size() == 0 || isValidId(data.assignedHallIds[0])))) &&
+        (!('assignedTableNumbers' in data) || (data.assignedTableNumbers is list && data.assignedTableNumbers.size() <= 200 && (data.assignedTableNumbers.size() == 0 || data.assignedTableNumbers[0] is string))) &&
+        (!('tableVisibilityScope' in data) || (data.tableVisibilityScope in ['assigned_only', 'all'])) &&
         data.sortOrder is number && data.sortOrder >= 0 && data.sortOrder <= 10000 &&
         isValidId(data.createdBy) &&
         data.createdAt is timestamp &&
@@ -1527,7 +1569,7 @@ service cloud.firestore {
         );
       }
 
-      // 3g-2. Dynamic Unlimited Kitchen / Prep Stations subcollection
+      // 3g-2. Dynamic Unlimited Kitchen / Prep Stations & Captain Screens subcollection
       match /stations/{stationId} {
         allow get: if isValidId(restaurantId) &&
           isValidStation(stationId) &&
@@ -1542,7 +1584,7 @@ service cloud.firestore {
           get(/databases/$(database)/documents/restaurants/$(restaurantId)).data.ownerId == incoming().ownerId && (
             isSuperAdmin() ||
             (isOwnerOfRestaurant(restaurantId) && incoming().createdBy == request.auth.uid) ||
-            (isActiveManagerForRestaurant(restaurantId) && incoming().createdBy == request.auth.uid)
+            (managerHasStationsPermission(restaurantId) && incoming().createdBy == request.auth.uid)
           );
         allow update: if isValidId(restaurantId) &&
           isValidStation(stationId) &&
@@ -1555,16 +1597,21 @@ service cloud.firestore {
           incoming().createdAt == existing().createdAt &&
           incoming().updatedAt == request.time &&
           incoming().diff(existing()).affectedKeys().hasOnly([
-            'name', 'nameEn', 'color', 'icon', 'isActive', 'sortOrder', 'updatedAt'
+            'name', 'nameEn', 'color', 'icon', 'screenType',
+            'isActive', 'isArchived', 'isDefaultFallback', 'showPrices',
+            'allowedOrderTypes', 'soundAlertEnabled', 'overdueAlertMinutes',
+            'thermalPrintMode', 'availableStatusButtons', 'assignedHallIds',
+            'assignedTableNumbers', 'tableVisibilityScope',
+            'sortOrder', 'updatedAt'
           ]) && (
             isSuperAdmin() ||
             isOwnerOfRestaurant(restaurantId) ||
-            isActiveManagerForRestaurant(restaurantId)
+            managerHasStationsPermission(restaurantId)
           );
         allow delete: if isValidId(restaurantId) && isValidStation(stationId) && (
           isSuperAdmin() ||
           isOwnerOfRestaurant(restaurantId) ||
-          isActiveManagerForRestaurant(restaurantId)
+          managerHasStationsPermission(restaurantId)
         );
       }
 
@@ -1902,7 +1949,7 @@ service cloud.firestore {
         incoming().restaurantId == existing().restaurantId &&
         incoming().createdAt == existing().createdAt &&
         incoming().diff(existing()).affectedKeys().hasOnly([
-          'parentId', 'name', 'name_en', 'imageUrl', 'station', 'stationId', 'sortOrder'
+          'parentId', 'name', 'name_en', 'imageUrl', 'station', 'stationId', 'stationIds', 'sortOrder'
         ]) && (
           (
             isVerifiedAccount() &&
@@ -1977,10 +2024,11 @@ service cloud.firestore {
               incoming().diff(existing()).affectedKeys().hasOnly(['sortOrder', 'updatedAt']) ||
               incoming().diff(existing()).affectedKeys().hasOnly(['station', 'updatedAt']) ||
               incoming().diff(existing()).affectedKeys().hasOnly(['station', 'stationId', 'updatedAt']) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['station', 'stationId', 'stationIds', 'updatedAt']) ||
               incoming().diff(existing()).affectedKeys().hasOnly([
                 'categoryId', 'name', 'name_en', 'description', 'description_en', 'basePrice', 'imageUrl', 'calories',
                 'isSpicy', 'isAvailable', 'ordersCount', 'sizes', 'addons', 'badge', 'isBogo', 'suggestedItemIds',
-                'station', 'stationId', 'sortOrder', 'updatedAt'
+                'station', 'stationId', 'stationIds', 'sortOrder', 'updatedAt'
               ])
             )
           ) || (
