@@ -195,11 +195,11 @@ export function LoyaltyBar({
                 <p className="text-xs sm:text-sm font-extrabold">
                   {birthdayStatus.isExactToday
                     ? isEn
-                      ? `Happy Birthday, ${customer.fullName}! 🎉`
-                      : `عيد ميلاد سعيد يا ${customer.fullName}! 🎉`
+                      ? `Happy Birthday, ${customer.fullName}!`
+                      : `عيد ميلاد سعيد يا ${customer.fullName}!`
                     : isEn
-                      ? `Birthday Week Treat for ${customer.fullName}! 🎉`
-                      : `احتفال عيد ميلاد سعيد يا ${customer.fullName}! 🎉`}
+                      ? `Birthday Week Treat for ${customer.fullName}!`
+                      : `احتفال عيد ميلاد سعيد يا ${customer.fullName}!`}
                 </p>
                 <p className="text-[11px] sm:text-xs opacity-95 leading-relaxed mt-0.5">
                   {loc(loyaltyConfig.birthdayOfferText, loyaltyConfig.birthdayOfferText_en)}
@@ -222,7 +222,7 @@ export function LoyaltyBar({
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0 space-y-0.5">
               <p className="text-sm font-extrabold truncate">
-                {isEn ? `Welcome back, ${customer.fullName} 👋` : `أهلاً بيك يا ${customer.fullName} 👋`}
+                {isEn ? `Welcome back, ${customer.fullName}` : `أهلاً بيك يا ${customer.fullName}`}
               </p>
               <p className={`text-xs leading-relaxed ${mutedText}`}>
                 {lastVisitLabel ? (
@@ -280,11 +280,11 @@ export function LoyaltyBar({
                 <p className="text-xs font-bold leading-snug">
                   {rewardReached
                     ? isEn
-                      ? `Completed ${punchTarget} of ${punchTarget} orders — Reward ready: ${rewardText} 🏆`
-                      : `أكملت ${punchTarget} من ${punchTarget} طلبات — مكافأتك جاهزة: ${rewardText} 🏆`
+                      ? `Completed ${punchTarget} of ${punchTarget} orders — Reward ready: ${rewardText}`
+                      : `أكملت ${punchTarget} من ${punchTarget} طلبات — مكافأتك جاهزة: ${rewardText}`
                     : isEn
-                      ? `Completed ${completedInCycle} of ${punchTarget} orders toward: ${rewardText} 🏆`
-                      : `أكملت ${completedInCycle} من ${punchTarget} طلبات للحصول على مكافأتك القادمة 🏆 (${rewardText})`}
+                      ? `Completed ${completedInCycle} of ${punchTarget} orders toward: ${rewardText}`
+                      : `أكملت ${completedInCycle} من ${punchTarget} طلبات للحصول على مكافأتك القادمة (${rewardText})`}
                 </p>
               </div>
 
@@ -334,7 +334,7 @@ export function LoyaltyBar({
                   style={{ color: isDarkSurface ? '#fb7185' : '#e11d48' }}
                 />
                 <h3 className="text-xs sm:text-sm font-extrabold">
-                  {isEn ? 'Your Top Favorites ❤️ (1-Tap Add)' : 'مختاراتك المفضلة ❤️ (اطلبها بضغطة)'}
+                  {isEn ? 'Your Top Favorites (1-Tap Add)' : 'مختاراتك المفضلة (اطلبها بضغطة)'}
                 </h3>
               </div>
 

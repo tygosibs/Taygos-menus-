@@ -276,7 +276,7 @@ export function CaptainWaiterTab({
             if (staffMode) {
               const firstCall = newPendingCalls[0];
               void showOperationalNotification({
-                title: `نداء طاولة ${firstCall.tableNumber}`,
+                title: isEn ? `Table Call ${firstCall.tableNumber}` : `نداء طاولة ${firstCall.tableNumber}`,
                 body: `${firstCall.hallName ? `${firstCall.hallName} · ` : ''}${firstCall.guestName}`,
                 url: `/staff/${restaurant.slug}`,
                 tag: `call_${firstCall.id}`,
@@ -322,8 +322,10 @@ export function CaptainWaiterTab({
             if (soundEnabled) playOrderAlertChime();
             if (staffMode) {
               void showOperationalNotification({
-                title: 'صنف جاهز للاستلام!',
-                body: 'أحد الأقسام جهّز أصنافاً جديدة بانتظار التقديم للطاولة.',
+                title: isEn ? 'Dish ready for pickup!' : 'صنف جاهز للاستلام!',
+                body: isEn
+                  ? 'A station has prepared new items awaiting table delivery.'
+                  : 'أحد الأقسام جهّز أصنافاً جديدة بانتظار التقديم للطاولة.',
                 url: `/staff/${restaurant.slug}`,
                 tag: `ready_${Date.now()}`,
               });
@@ -340,7 +342,7 @@ export function CaptainWaiterTab({
       unsubCalls();
       unsubOrders();
     };
-  }, [restaurant.id, restaurant.ownerId, restaurant.slug, soundEnabled, staffMode]);
+  }, [restaurant.id, restaurant.ownerId, restaurant.slug, soundEnabled, staffMode, isEn]);
 
   const effectiveStations = useMemo(
     () => buildEffectiveStations(dynamicStations),
@@ -485,7 +487,7 @@ export function CaptainWaiterTab({
       await updateServiceCallStatus(call.id, nextStatus, {
         restaurantId: restaurant.id,
         ownerId: restaurant.ownerId,
-        tableLabel: `${call.hallName ? `${call.hallName} · ` : ''}ترابيزة ${call.tableNumber}`,
+        tableLabel: `${call.hallName ? `${call.hallName} · ` : ''}${isEn ? `Table ${call.tableNumber}` : `ترابيزة ${call.tableNumber}`}`,
         actor,
       });
     } finally {
@@ -637,13 +639,17 @@ export function CaptainWaiterTab({
         ownerId: restaurant.ownerId,
         hallName,
         tableNumber,
-        guestName: actor?.name || 'الكابتن',
+        guestName: actor?.name || (isEn ? 'Captain' : 'الكابتن'),
         callType: type,
       });
       setDrawerNotice(
         type === 'request_bill_cash'
-          ? 'تم إرسال طلب الشيك (كاش) للكاشير.'
-          : 'تم إرسال طلب الشيك (فيزا) للكاشير.'
+          ? isEn
+            ? 'Bill request (Cash) sent to cashier.'
+            : 'تم إرسال طلب الشيك (كاش) للكاشير.'
+          : isEn
+            ? 'Bill request (Visa / Card) sent to cashier.'
+            : 'تم إرسال طلب الشيك (فيزا) للكاشير.'
       );
     } finally {
       setRequestingBillBusy(false);
@@ -729,15 +735,24 @@ export function CaptainWaiterTab({
   const handleSubmitCaptainOrder = async () => {
     setPosFeedback(null);
     if (posCart.length === 0) {
-      setPosFeedback({ type: 'err', text: 'أضف صنفاً واحداً على الأقل قبل الإرسال.' });
+      setPosFeedback({
+        type: 'err',
+        text: isEn ? 'Add at least one item before sending.' : 'أضف صنفاً واحداً على الأقل قبل الإرسال.',
+      });
       return;
     }
     if (posOrderType === 'dine_in' && !posTableNumber.trim()) {
-      setPosFeedback({ type: 'err', text: 'يرجى تحديد رقم الترابيزة لطلب الصالة.' });
+      setPosFeedback({
+        type: 'err',
+        text: isEn ? 'Please enter the table number for dine-in.' : 'يرجى تحديد رقم الترابيزة لطلب الصالة.',
+      });
       return;
     }
     if (posOrderType !== 'dine_in' && !posCustomerName.trim()) {
-      setPosFeedback({ type: 'err', text: 'يرجى إدخال اسم العميل للطلب.' });
+      setPosFeedback({
+        type: 'err',
+        text: isEn ? 'Please enter the customer name for the order.' : 'يرجى إدخال اسم العميل للطلب.',
+      });
       return;
     }
 
@@ -779,7 +794,7 @@ export function CaptainWaiterTab({
         ownerId: restaurant.ownerId,
         customerName:
           posOrderType === 'dine_in'
-            ? posCustomerName.trim() || `كابتن (${actor?.name || 'صالة'})`
+            ? posCustomerName.trim() || (isEn ? `Captain (${actor?.name || 'Floor'})` : `كابتن (${actor?.name || 'صالة'})`)
             : posCustomerName.trim(),
         customerPhone: posCustomerPhone.trim() || '000000',
         orderType: posOrderType,
@@ -800,12 +815,14 @@ export function CaptainWaiterTab({
       setPosOrderNotes('');
       setPosFeedback({
         type: 'ok',
-        text: `تم إرسال الطلب #${res.orderNumber} إلى المحطات والكاشير بنجاح.`,
+        text: isEn
+          ? `Order #${res.orderNumber} sent to stations and cashier successfully.`
+          : `تم إرسال الطلب #${res.orderNumber} إلى المحطات والكاشير بنجاح.`,
       });
     } catch (err) {
       setPosFeedback({
         type: 'err',
-        text: err instanceof Error ? err.message : 'تعذر إرسال الطلب.',
+        text: err instanceof Error ? err.message : isEn ? 'Could not send order.' : 'تعذر إرسال الطلب.',
       });
     } finally {
       setPosSubmitting(false);
@@ -877,7 +894,15 @@ export function CaptainWaiterTab({
             }
           >
             <Printer className="w-4 h-4" />
-            <span>{printerStatusLabel ? `طابعة: ${printerStatusLabel}` : isEn ? 'Printer' : 'طابعة حرارية'}</span>
+            <span>
+              {printerStatusLabel
+                ? isEn
+                  ? `Printer: ${printerStatusLabel}`
+                  : `طابعة: ${printerStatusLabel}`
+                : isEn
+                  ? 'Thermal Printer'
+                  : 'طابعة حرارية'}
+            </span>
           </button>
 
           <button
@@ -1121,10 +1146,12 @@ export function CaptainWaiterTab({
             >
               <Grid className="w-8 h-8 mx-auto opacity-40" style={{ color: ui.theme.mutedText }} />
               <h3 className="text-sm font-extrabold" style={{ color: ui.theme.surfaceText }}>
-                لا توجد صالات مضافة بعد
+                {isEn ? 'No halls added yet' : 'لا توجد صالات مضافة بعد'}
               </h3>
               <p className="text-xs max-w-md mx-auto" style={{ color: ui.theme.mutedText }}>
-                أضف الصالات وأرقام الترابيزات من تبويب الصالات و QR، أو استخدم نقطة طلب الكابتن لتسجيل الطلبات مباشرة.
+                {isEn
+                  ? 'Add halls and table numbers from the Halls & QR tab, or use the Captain Order Pad to place orders directly.'
+                  : 'أضف الصالات وأرقام الترابيزات من تبويب الصالات و QR، أو استخدم نقطة طلب الكابتن لتسجيل الطلبات مباشرة.'}
               </p>
             </div>
           ) : (
@@ -1158,7 +1185,8 @@ export function CaptainWaiterTab({
                     )}
                   </div>
                   <span className="text-[11px] font-mono-num font-bold" style={{ color: ui.theme.mutedText }}>
-                    {tableNumbers.length} ترابيزة
+                    {tableNumbers.length}{' '}
+                    {isEn ? (tableNumbers.length === 1 ? 'table' : 'tables') : 'ترابيزة'}
                   </span>
                 </div>
 
@@ -1180,15 +1208,26 @@ export function CaptainWaiterTab({
                         <div className="w-full flex items-center justify-between text-[10px] font-extrabold opacity-90">
                           <span>
                             {snap.state === 'empty'
-                              ? 'شاغرة'
+                              ? isEn
+                                ? 'Open'
+                                : 'شاغرة'
                               : snap.state === 'billRequested'
-                                ? 'شيك'
+                                ? isEn
+                                  ? 'Bill'
+                                  : 'شيك'
                                 : snap.state === 'overdue'
-                                  ? 'متأخرة'
-                                  : 'مشغولة'}
+                                  ? isEn
+                                    ? 'Overdue'
+                                    : 'متأخرة'
+                                  : isEn
+                                    ? 'Seated'
+                                    : 'مشغولة'}
                           </span>
                           {snap.elapsedMins > 0 && (
-                            <span className="font-mono-num">{snap.elapsedMins}د</span>
+                            <span className="font-mono-num">
+                              {snap.elapsedMins}
+                              {isEn ? 'm' : 'د'}
+                            </span>
                           )}
                         </div>
 
@@ -1199,9 +1238,11 @@ export function CaptainWaiterTab({
                         <div className="text-[10px] font-bold opacity-95 truncate w-full text-center">
                           {snap.itemsCount > 0
                             ? showCaptainPrices
-                              ? `${snap.itemsCount} صنف · ${formatMoney(snap.total)}`
-                              : `${snap.itemsCount} صنف`
-                            : 'جاهزة للجلوس'}
+                              ? `${snap.itemsCount} ${isEn ? 'items' : 'صنف'} · ${formatMoney(snap.total)}`
+                              : `${snap.itemsCount} ${isEn ? 'items' : 'صنف'}`
+                            : isEn
+                              ? 'Ready for guests'
+                              : 'جاهزة للجلوس'}
                         </div>
                       </button>
                     );
@@ -1220,34 +1261,40 @@ export function CaptainWaiterTab({
               color: ui.theme.surfaceText,
             }}
           >
-            <span className="text-[11px] font-extrabold" style={{ color: ui.theme.mutedText }}>دليل الألوان:</span>
+            <span className="text-[11px] font-extrabold" style={{ color: ui.theme.mutedText }}>
+              {isEn ? 'Color Legend:' : 'دليل الألوان:'}
+            </span>
             <span className="flex items-center gap-1.5">
               <span
                 className="w-3.5 h-3.5 rounded-sm inline-block"
                 style={{ backgroundColor: opsConfig.tableColors.empty }}
               />
-              <span>شاغرة</span>
+              <span>{isEn ? 'Available' : 'شاغرة'}</span>
             </span>
             <span className="flex items-center gap-1.5">
               <span
                 className="w-3.5 h-3.5 rounded-sm inline-block"
                 style={{ backgroundColor: opsConfig.tableColors.occupied }}
               />
-              <span>مشغولة</span>
+              <span>{isEn ? 'Occupied' : 'مشغولة'}</span>
             </span>
             <span className="flex items-center gap-1.5">
               <span
                 className="w-3.5 h-3.5 rounded-sm inline-block"
                 style={{ backgroundColor: opsConfig.tableColors.billRequested }}
               />
-              <span>طلب الشيك</span>
+              <span>{isEn ? 'Bill Requested' : 'طلب الشيك'}</span>
             </span>
             <span className="flex items-center gap-1.5">
               <span
                 className="w-3.5 h-3.5 rounded-sm inline-block"
                 style={{ backgroundColor: opsConfig.tableColors.overdue }}
               />
-              <span>متأخرة (+{opsConfig.tableOverdueMinutes} د)</span>
+              <span>
+                {isEn
+                  ? `Overdue (+${opsConfig.tableOverdueMinutes}m)`
+                  : `متأخرة (+${opsConfig.tableOverdueMinutes} د)`}
+              </span>
             </span>
           </div>
         </div>
@@ -1274,7 +1321,7 @@ export function CaptainWaiterTab({
                   type="text"
                   value={posSearchQuery}
                   onChange={(e) => setPosSearchQuery(e.target.value)}
-                  placeholder="ابحث عن صنف بالاسم للطلب السريع..."
+                  placeholder={isEn ? 'Search item by name for quick order...' : 'ابحث عن صنف بالاسم للطلب السريع...'}
                   className="w-full ps-9 pe-3 py-2.5 rounded-xl border text-xs font-bold"
                   style={{
                     backgroundColor: ui.theme.surfaceSubtleBg,
@@ -1304,7 +1351,7 @@ export function CaptainWaiterTab({
                       }
                 }
               >
-                كل الأقسام ({menuItems.filter((m) => m.isAvailable !== false).length})
+                {isEn ? 'All Categories' : 'كل الأقسام'} ({menuItems.filter((m) => m.isAvailable !== false).length})
               </button>
               {categories.map((cat) => (
                 <button
@@ -1334,7 +1381,7 @@ export function CaptainWaiterTab({
             {/* Text-Only Compact Menu Buttons (NO images) */}
             {posFilteredItems.length === 0 ? (
               <p className="text-xs text-center py-8" style={{ color: ui.theme.mutedText }}>
-                لا توجد أصناف متاحة تطابق البحث الآن.
+                {isEn ? 'No available items match your search.' : 'لا توجد أصناف متاحة تطابق البحث الآن.'}
               </p>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
@@ -1370,7 +1417,9 @@ export function CaptainWaiterTab({
                             {formatMoney(item.sizes[0]?.price ?? item.basePrice)}
                           </span>
                         ) : (
-                          <span className="font-bold" style={{ color: ui.theme.mutedText }}>+ أضف</span>
+                          <span className="font-bold" style={{ color: ui.theme.mutedText }}>
+                            {isEn ? '+ Add' : '+ أضف'}
+                          </span>
                         )}
                         {hasOptions && (
                           <span
@@ -1381,7 +1430,7 @@ export function CaptainWaiterTab({
                               color: ui.theme.mutedText,
                             }}
                           >
-                            خيارات
+                            {isEn ? 'Options' : 'خيارات'}
                           </span>
                         )}
                       </div>
@@ -1404,9 +1453,9 @@ export function CaptainWaiterTab({
             <div className="grid grid-cols-3 gap-1.5">
               {(
                 [
-                  { id: 'dine_in' as const, label: 'صالة' },
-                  { id: 'pickup' as const, label: 'استلام' },
-                  { id: 'delivery' as const, label: 'توصيل' },
+                  { id: 'dine_in' as const, label: isEn ? 'Dine-in' : 'صالة' },
+                  { id: 'pickup' as const, label: isEn ? 'Pickup' : 'استلام' },
+                  { id: 'delivery' as const, label: isEn ? 'Delivery' : 'توصيل' },
                 ] as const
               ).map((ot) => (
                 <button
@@ -1443,14 +1492,14 @@ export function CaptainWaiterTab({
                   >
                     {halls.map((h) => (
                       <option key={h.id} value={h.name}>
-                        {h.name}
+                        {loc(h.name, h.name_en)}
                       </option>
                     ))}
                   </select>
                 ) : (
                   <input
                     type="text"
-                    placeholder="الصالة"
+                    placeholder={isEn ? 'Hall' : 'الصالة'}
                     value={posHallName}
                     onChange={(e) => setPosHallName(e.target.value)}
                     className="px-3 py-2 rounded-xl border border-zinc-200 text-xs font-bold"
@@ -1458,14 +1507,14 @@ export function CaptainWaiterTab({
                 )}
                 <input
                   type="text"
-                  placeholder="رقم الترابيزة *"
+                  placeholder={isEn ? 'Table # *' : 'رقم الترابيزة *'}
                   value={posTableNumber}
                   onChange={(e) => setPosTableNumber(e.target.value)}
                   className="px-3 py-2 rounded-xl border border-zinc-300 text-xs font-mono-num font-extrabold"
                 />
                 <input
                   type="text"
-                  placeholder="اسم الضيف (اختياري)"
+                  placeholder={isEn ? 'Guest name (optional)' : 'اسم الضيف (اختياري)'}
                   value={posCustomerName}
                   onChange={(e) => setPosCustomerName(e.target.value)}
                   className="col-span-2 px-3 py-2 rounded-xl border border-zinc-200 text-xs"
@@ -1476,7 +1525,7 @@ export function CaptainWaiterTab({
                 <input
                   type="tel"
                   dir="ltr"
-                  placeholder="هاتف العميل (بحث أو تسجيل)"
+                  placeholder={isEn ? 'Customer phone (search or register)' : 'هاتف العميل (بحث أو تسجيل)'}
                   value={posCustomerPhone}
                   onChange={(e) => setPosCustomerPhone(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl border border-zinc-200 text-xs font-mono-num"
@@ -1502,7 +1551,7 @@ export function CaptainWaiterTab({
                 )}
                 <input
                   type="text"
-                  placeholder="اسم العميل *"
+                  placeholder={isEn ? 'Customer name *' : 'اسم العميل *'}
                   value={posCustomerName}
                   onChange={(e) => setPosCustomerName(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl border border-zinc-200 text-xs font-bold"
@@ -1510,7 +1559,7 @@ export function CaptainWaiterTab({
                 {posOrderType === 'delivery' && (
                   <input
                     type="text"
-                    placeholder="عنوان التوصيل"
+                    placeholder={isEn ? 'Delivery address' : 'عنوان التوصيل'}
                     value={posDeliveryAddress}
                     onChange={(e) => setPosDeliveryAddress(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl border border-zinc-200 text-xs"
@@ -1523,7 +1572,9 @@ export function CaptainWaiterTab({
             <div className="border-t border-zinc-100 pt-3 space-y-2 max-h-60 overflow-y-auto">
               {posCart.length === 0 ? (
                 <p className="text-xs text-zinc-400 text-center py-4">
-                  اضغط على أي صنف من القائمة لإضافته للأوردر
+                  {isEn
+                    ? 'Tap any menu item to add it to the order'
+                    : 'اضغط على أي صنف من القائمة لإضافته للأوردر'}
                 </p>
               ) : (
                 posCart.map((c) => (
@@ -1533,11 +1584,11 @@ export function CaptainWaiterTab({
                   >
                     <div className="min-w-0">
                       <p className="font-extrabold text-zinc-900 truncate">
-                        {c.item.name} {c.size ? `(${c.size.name})` : ''}
+                        {loc(c.item.name, c.item.name_en)} {c.size ? `(${c.size.name})` : ''}
                       </p>
                       {c.addons.length > 0 && (
                         <p className="text-[10px] text-zinc-500 truncate">
-                          + {c.addons.map((a) => a.name).join('، ')}
+                          + {c.addons.map((a) => a.name).join(isEn ? ', ' : '، ')}
                         </p>
                       )}
                       {c.notes && (
@@ -1596,7 +1647,7 @@ export function CaptainWaiterTab({
 
             <input
               type="text"
-              placeholder="ملاحظات على الأوردر (اختياري)"
+              placeholder={isEn ? 'Order notes (optional)' : 'ملاحظات على الأوردر (اختياري)'}
               value={posOrderNotes}
               onChange={(e) => setPosOrderNotes(e.target.value)}
               className="w-full px-3 py-2 rounded-xl border border-zinc-200 text-xs"
@@ -1605,11 +1656,11 @@ export function CaptainWaiterTab({
             {showCaptainPrices && posCart.length > 0 && (
               <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-200 space-y-1 text-xs">
                 <div className="flex justify-between text-zinc-600">
-                  <span>المجموع الفرعي:</span>
+                  <span>{isEn ? 'Subtotal:' : 'المجموع الفرعي:'}</span>
                   <span className="font-mono-num font-bold">{formatMoney(posTotals.subtotal)}</span>
                 </div>
                 <div className="flex justify-between font-extrabold text-zinc-950 text-sm pt-1 border-t border-zinc-200">
-                  <span>الإجمالي:</span>
+                  <span>{isEn ? 'Total:' : 'الإجمالي:'}</span>
                   <span className="font-mono-num">{formatMoney(posTotals.total)}</span>
                 </div>
               </div>
@@ -1638,7 +1689,15 @@ export function CaptainWaiterTab({
               }}
             >
               <Send className="w-4 h-4" style={{ color: ui.theme.highlightHex || '#E8833A' }} />
-              <span>{posSubmitting ? 'جاري الإرسال...' : 'إرسال الطلب للمحطات 🚀'}</span>
+              <span>
+                {posSubmitting
+                  ? isEn
+                    ? 'Sending...'
+                    : 'جاري الإرسال...'
+                  : isEn
+                    ? 'Send Order to Stations'
+                    : 'إرسال الطلب للمحطات'}
+              </span>
             </button>
           </div>
         </div>
@@ -1989,7 +2048,9 @@ export function CaptainWaiterTab({
                       {selectedTableDrawer.hallName}
                     </p>
                     <h3 className="text-lg font-extrabold" style={{ color: ui.theme.surfaceText }}>
-                      ترابيزة {selectedTableDrawer.tableNumber}
+                      {isEn
+                        ? `Table ${selectedTableDrawer.tableNumber}`
+                        : `ترابيزة ${selectedTableDrawer.tableNumber}`}
                     </h3>
                   </div>
                   <button
@@ -2013,7 +2074,9 @@ export function CaptainWaiterTab({
                     className="p-5 rounded-2xl border text-center space-y-2"
                     style={{ backgroundColor: ui.theme.surfaceSubtleBg, borderColor: ui.theme.surfaceBorder }}
                   >
-                    <p className="text-xs font-bold" style={{ color: ui.theme.mutedText }}>الترابيزة شاغرة حالياً</p>
+                    <p className="text-xs font-bold" style={{ color: ui.theme.mutedText }}>
+                      {isEn ? 'Table is currently available' : 'الترابيزة شاغرة حالياً'}
+                    </p>
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -2046,10 +2109,16 @@ export function CaptainWaiterTab({
                                 }}
                               >
                                 {ord.itemProgress?.[String(idx)] === 'ready'
-                                  ? 'جاهز'
+                                  ? isEn
+                                    ? 'Ready'
+                                    : 'جاهز'
                                   : ord.itemProgress?.[String(idx)] === 'served'
-                                    ? 'تم التقديم'
-                                    : 'تحضير'}
+                                    ? isEn
+                                      ? 'Served'
+                                      : 'تم التقديم'
+                                    : isEn
+                                      ? 'Preparing'
+                                      : 'تحضير'}
                               </span>
                             </div>
                           ))}
@@ -2080,7 +2149,7 @@ export function CaptainWaiterTab({
                   }}
                 >
                   <Plus className="w-4 h-4" style={{ color: ui.theme.highlightHex || '#E8833A' }} />
-                  <span>إضافة أصناف على الترابيزة</span>
+                  <span>{isEn ? 'Add Items to Table' : 'إضافة أصناف على الترابيزة'}</span>
                 </button>
 
                 {snap.tblOrders.length > 0 && (
@@ -2098,7 +2167,7 @@ export function CaptainWaiterTab({
                       className="min-h-[42px] rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50"
                     >
                       <Banknote className="w-3.5 h-3.5" />
-                      <span>طلب الشيك كاش</span>
+                      <span>{isEn ? 'Request Bill (Cash)' : 'طلب الشيك كاش'}</span>
                     </button>
                     <button
                       type="button"
@@ -2113,7 +2182,7 @@ export function CaptainWaiterTab({
                       className="min-h-[42px] rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50"
                     >
                       <CreditCard className="w-3.5 h-3.5" />
-                      <span>طلب الشيك فيزا</span>
+                      <span>{isEn ? 'Request Bill (Visa)' : 'طلب الشيك فيزا'}</span>
                     </button>
                   </div>
                 )}
@@ -2141,7 +2210,9 @@ export function CaptainWaiterTab({
           >
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-extrabold" style={{ color: ui.theme.surfaceText }}>
-                تخصيص ألوان خريطة الترابيزات ووقت التنبيه
+                {isEn
+                  ? 'Customize Table Grid Colors & Alert SLA'
+                  : 'تخصيص ألوان خريطة الترابيزات ووقت التنبيه'}
               </h3>
               <button
                 type="button"
@@ -2156,10 +2227,10 @@ export function CaptainWaiterTab({
             <div className="grid grid-cols-2 gap-3 text-xs font-bold">
               {(
                 [
-                  { key: 'empty' as const, label: 'ترابيزة شاغرة' },
-                  { key: 'occupied' as const, label: 'ترابيزة مشغولة' },
-                  { key: 'billRequested' as const, label: 'طلب الشيك' },
-                  { key: 'overdue' as const, label: 'ترابيزة متأخرة' },
+                  { key: 'empty' as const, label: isEn ? 'Available Table' : 'ترابيزة شاغرة' },
+                  { key: 'occupied' as const, label: isEn ? 'Occupied Table' : 'ترابيزة مشغولة' },
+                  { key: 'billRequested' as const, label: isEn ? 'Bill Requested' : 'طلب الشيك' },
+                  { key: 'overdue' as const, label: isEn ? 'Overdue Table' : 'ترابيزة متأخرة' },
                 ] as const
               ).map((entry) => (
                 <label
@@ -2181,7 +2252,11 @@ export function CaptainWaiterTab({
             </div>
 
             <label className="block space-y-1 text-xs font-bold" style={{ color: ui.theme.surfaceText }}>
-              <span>حد التأخير لتغيير لون الترابيزة (بالدقائق):</span>
+              <span>
+                {isEn
+                  ? 'Overdue threshold to change table color (minutes):'
+                  : 'حد التأخير لتغيير لون الترابيزة (بالدقائق):'}
+              </span>
               <input
                 type="number"
                 min={10}
@@ -2208,7 +2283,13 @@ export function CaptainWaiterTab({
                 color: ui.theme.accentTextHex,
               }}
             >
-              {savingGridSettings ? 'جاري الحفظ...' : 'حفظ ألوان وإعدادات الصالة'}
+              {savingGridSettings
+                ? isEn
+                  ? 'Saving...'
+                  : 'جاري الحفظ...'
+                : isEn
+                  ? 'Save Floor Colors & Settings'
+                  : 'حفظ ألوان وإعدادات الصالة'}
             </button>
           </div>
         </div>
@@ -2246,7 +2327,9 @@ export function CaptainWaiterTab({
 
             {posPickerItem.sizes.length > 0 && (
               <div className="space-y-1.5">
-                <p className="text-xs font-bold" style={{ color: ui.theme.mutedText }}>الحجم:</p>
+                <p className="text-xs font-bold" style={{ color: ui.theme.mutedText }}>
+                  {isEn ? 'Size:' : 'الحجم:'}
+                </p>
                 <div className="flex flex-wrap gap-1.5">
                   {posPickerItem.sizes.map((sz) => (
                     <button
@@ -2278,7 +2361,9 @@ export function CaptainWaiterTab({
 
             {posPickerItem.addons.length > 0 && (
               <div className="space-y-1.5">
-                <p className="text-xs font-bold" style={{ color: ui.theme.mutedText }}>الإضافات:</p>
+                <p className="text-xs font-bold" style={{ color: ui.theme.mutedText }}>
+                  {isEn ? 'Add-ons:' : 'الإضافات:'}
+                </p>
                 <div className="flex flex-wrap gap-1.5">
                   {posPickerItem.addons.map((ad) => {
                     const active = posPickerAddons.some((a) => a.name === ad.name);
@@ -2317,7 +2402,7 @@ export function CaptainWaiterTab({
 
             <input
               type="text"
-              placeholder="ملاحظة خاصة على الصنف (بدون ملح / زيادة صوص...)"
+              placeholder={isEn ? 'Special item note (no salt / extra sauce...)' : 'ملاحظة خاصة على الصنف (بدون ملح / زيادة صوص...)'}
               value={posPickerNotes}
               onChange={(e) => setPosPickerNotes(e.target.value)}
               className="w-full px-3 py-2 rounded-xl border text-xs"
@@ -2340,7 +2425,7 @@ export function CaptainWaiterTab({
                 color: ui.theme.accentTextHex,
               }}
             >
-              إضافة للطلب
+              {isEn ? 'Add to Order' : 'إضافة للطلب'}
             </button>
           </div>
         </div>

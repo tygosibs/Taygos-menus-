@@ -239,7 +239,7 @@ export function OffersPromosTab({
       type: 'percent',
       value: 15,
       minOrder: 0,
-      description: 'خصم خاص 15% على الطلب',
+      description: isEn ? '15% off your order' : 'خصم خاص 15% على الطلب',
       description_en: '15% off your order',
       isActive: true,
     };
@@ -919,7 +919,7 @@ export function OffersPromosTab({
                 className="min-h-[38px] px-3 py-1.5 rounded-xl bg-zinc-950 text-white text-xs font-bold hover:bg-zinc-800 flex items-center gap-1.5 cursor-pointer"
               >
                 <Users className="w-3.5 h-3.5" />
-                <span>{isEn ? 'Open Customers CRM' : 'فتح صفحة عملائي CRM'}</span>
+                <span>{isEn ? 'Open Customers & Marketing' : 'فتح صفحة عملائي والتسويق'}</span>
               </button>
             )}
             <label className="flex items-center gap-2 text-xs font-extrabold cursor-pointer px-3 py-2 rounded-xl border border-zinc-200 bg-zinc-50">
@@ -1156,8 +1156,8 @@ export function OffersPromosTab({
             </h3>
             <p className="text-[11px] text-zinc-500 mt-0.5">
               {isEn
-                ? 'Quick preview — open "Customers & Smart CRM" tab for Birthday Radar, Smart Filters, WhatsApp Retargeting & CSV Export.'
-                : 'معاينة سريعة — انتقل لتبويب "عملائي (CRM والتسويق الذكي)" لرادار أعياد الميلاد، الفلاتر، واتساب التسويقي، وتصدير الإكسل.'}
+                ? 'Quick preview — open "Customers & Smart Marketing" tab for Birthday Radar, Smart Filters, WhatsApp Retargeting & CSV Export.'
+                : 'معاينة سريعة — انتقل لتبويب "عملائي والتسويق الذكي" لرادار أعياد الميلاد، الفلاتر، واتساب التسويقي، وتصدير الإكسل.'}
             </p>
           </div>
           {onOpenCustomersTab && (

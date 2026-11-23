@@ -279,8 +279,8 @@ export function PlatformUiProvider({ children }: { children: ReactNode }) {
             <CheckCircle2 className="w-4 h-4 text-[#2F8F5B] shrink-0" />
             <span>
               {isEn
-                ? 'Screen updated smoothly — all your work is intact ✓'
-                : 'تم تحديث تصميم المنظومة بنجاح — كل شغلك وبياناتك محفوظة كما هي ✓'}
+                ? 'Screen updated smoothly — all your work is intact'
+                : 'تم تحديث تصميم المنظومة بنجاح — كل شغلك وبياناتك محفوظة كما هي'}
             </span>
           </div>
         </div>

@@ -37,6 +37,7 @@ import {
 } from '../../lib/operationsService';
 import { getScreenMetaDynamic } from '../../lib/staffAuthUtils';
 import {
+  buildEffectiveStations,
   cleanStationId,
   getStationIconComponent,
   stationIdToScreen,
@@ -53,7 +54,6 @@ import {
   StaffShift,
   TreasuryTransfer,
 } from '../../types/menu';
-import { buildEffectiveStations } from '../../lib/stationUtils';
 
 interface ManagerSupervisionDashboardProps {
   restaurant: Restaurant;
@@ -65,13 +65,15 @@ interface ManagerSupervisionDashboardProps {
   onRestaurantUpdated?: (updated: Restaurant) => void;
 }
 
-function formatLiveDuration(startedAt: unknown, nowMs: number): string {
+function formatLiveDuration(startedAt: unknown, nowMs: number, isEn: boolean): string {
   const startMs = getTimestampMillis(startedAt);
   if (!startMs) return '00:00';
   const diffMin = Math.max(0, Math.floor((nowMs - startMs) / 60000));
   const h = Math.floor(diffMin / 60);
   const m = diffMin % 60;
-  return `${h}س ${String(m).padStart(2, '0')}د`;
+  return isEn
+    ? `${h}h ${String(m).padStart(2, '0')}m`
+    : `${h}س ${String(m).padStart(2, '0')}د`;
 }
 
 export function ManagerSupervisionDashboard({
@@ -83,7 +85,8 @@ export function ManagerSupervisionDashboard({
   onNavigateScreen,
   onRestaurantUpdated,
 }: ManagerSupervisionDashboardProps) {
-  const { formatCurrency, loc } = useLanguage();
+  const { lang, dir, formatCurrency, loc } = useLanguage();
+  const isEn = lang === 'en';
   const ui = useScreenUi('manager_console');
   const theme = ui.theme;
   const currencyLabel = formatCurrency(restaurant.currency);
@@ -148,7 +151,7 @@ export function ManagerSupervisionDashboard({
       .slice(0, 8);
   }, [menuItems, menuSearch]);
 
-  // Supervisory station & screen cards: Cashier, Captain, and every KDS prep station
+  // Supervisory station & screen cards: Cashier, Captain, and every prep station
   const supervisoryCards = useMemo(() => {
     const entries: Array<{
       key: string;
@@ -161,26 +164,33 @@ export function ManagerSupervisionDashboard({
       {
         key: 'cashier',
         screen: 'cashier',
-        title: 'الكاشير والحسابات (Master)',
-        subtitle: 'تحصيل الفواتير، حساب الدرج، ومتابعة الطلبات الجارية',
+        title: isEn ? 'Cashier & Billing (Master)' : 'الكاشير والحسابات (الأساسي)',
+        subtitle: isEn
+          ? 'Collect checks, manage cash drawer, and monitor active orders'
+          : 'تحصيل الفواتير، حساب الدرج، ومتابعة الطلبات الجارية',
         activeShift: activeShifts.find((s) => cleanStationId(s.stationId) === 'cashier') || null,
         iconName: 'cashier',
       },
       {
         key: 'captain',
         screen: 'captain',
-        title: 'الكابتن وخدمة الصالات',
-        subtitle: 'خريطة الترابيزات الحية، نداءات العملاء، ونقطة طلب الكابتن',
+        title: isEn ? 'Captain & Floor Service' : 'الكابتن وخدمة الصالات',
+        subtitle: isEn
+          ? 'Live floor map, customer service calls, and captain ordering'
+          : 'خريطة الترابيزات الحية، نداءات العملاء، ونقطة طلب الكابتن',
         activeShift: activeShifts.find((s) => cleanStationId(s.stationId) === 'captain') || null,
         iconName: 'captain',
       },
       ...effectiveStations.map((st) => {
         const scr = stationIdToScreen(st.stationId);
+        const scrMeta = getScreenMetaDynamic(scr, effectiveStations);
         return {
           key: st.stationId,
           screen: scr,
-          title: getScreenMetaDynamic(scr, effectiveStations).labelAr,
-          subtitle: 'شاشة التحضير اللحظية للأصناف المسندة لهذا القسم',
+          title: isEn ? scrMeta.labelEn : scrMeta.labelAr,
+          subtitle: isEn
+            ? 'Live preparation screen for items routed to this station'
+            : 'شاشة التحضير اللحظية للأصناف المسندة لهذا القسم',
           activeShift:
             activeShifts.find((s) => cleanStationId(s.stationId) === cleanStationId(st.stationId)) ||
             null,
@@ -189,17 +199,22 @@ export function ManagerSupervisionDashboard({
       }),
     ];
     return entries;
-  }, [activeShifts, effectiveStations]);
+  }, [activeShifts, effectiveStations, isEn]);
 
   const formatMoney = (val: number) => `${Number(val || 0).toFixed(2).replace(/\.00$/, '')} ${currencyLabel}`;
 
   const handleToggleItemAvailability = async (item: MenuItem, nextAvailable: boolean) => {
     if (!isOwner && !managerPerms.canPauseItems && !managerPerms.canEditMenu) {
-      setErrorMsg('صلاحية إيقاف وتفعيل الأصناف غير مفعّلة لحساب المدير من المالك.');
+      setErrorMsg(
+        isEn
+          ? 'Pausing/resuming items is not enabled for manager accounts by the owner.'
+          : 'صلاحية إيقاف وتفعيل الأصناف غير مفعّلة لحساب المدير من المالك.'
+      );
       return;
     }
     setReactivatingId(item.id);
     setErrorMsg(null);
+    const itemNameDisplay = loc(item.name, item.name_en);
     try {
       await toggleMenuItemAvailability(item.id, nextAvailable);
       await writeStaffAuditLog({
@@ -215,11 +230,21 @@ export function ManagerSupervisionDashboard({
       });
       setFeedback(
         nextAvailable
-          ? `تمت إعادة تفعيل "${item.name}" وظهوره للعملاء بالمنيو.`
-          : `تم إيقاف "${item.name}" مؤقتاً وإخفاؤه من المنيو.`
+          ? isEn
+            ? `Re-enabled "${itemNameDisplay}" on the public menu.`
+            : `تمت إعادة تفعيل "${itemNameDisplay}" وظهوره للعملاء بالمنيو.`
+          : isEn
+            ? `Paused "${itemNameDisplay}" and temporarily hid it from the menu.`
+            : `تم إيقاف "${itemNameDisplay}" مؤقتاً وإخفاؤه من المنيو.`
       );
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'تعذر تحديث حالة الصنف.');
+      setErrorMsg(
+        err instanceof Error
+          ? err.message
+          : isEn
+            ? 'Unable to update item status.'
+            : 'تعذر تحديث حالة الصنف.'
+      );
     } finally {
       setReactivatingId(null);
     }
@@ -231,7 +256,11 @@ export function ManagerSupervisionDashboard({
     setFeedback(null);
     const amountNum = Number(transferAmount);
     if (!Number.isFinite(amountNum) || amountNum <= 0) {
-      setErrorMsg('أدخل مبلغاً صحيحاً لتحويله للخزنة الرئيسية.');
+      setErrorMsg(
+        isEn
+          ? 'Enter a valid amount to transfer to the owner vault.'
+          : 'أدخل مبلغاً صحيحاً لتحويله للخزنة الرئيسية.'
+      );
       return;
     }
     setTransferring(true);
@@ -244,9 +273,19 @@ export function ManagerSupervisionDashboard({
       });
       setTransferAmount('');
       setTransferNote('');
-      setFeedback(`تم تحويل ${formatMoney(amountNum)} من خزنة المدير إلى خزنة صاحب المطعم الرئيسية.`);
+      setFeedback(
+        isEn
+          ? `Transferred ${formatMoney(amountNum)} from Manager Custody to Owner Main Vault.`
+          : `تم تحويل ${formatMoney(amountNum)} من خزنة المدير إلى خزنة صاحب المطعم الرئيسية.`
+      );
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'تعذر تنفيذ التحويل.');
+      setErrorMsg(
+        err instanceof Error
+          ? err.message
+          : isEn
+            ? 'Unable to complete transfer.'
+            : 'تعذر تنفيذ التحويل.'
+      );
     } finally {
       setTransferring(false);
     }
@@ -265,9 +304,19 @@ export function ManagerSupervisionDashboard({
       });
       onRestaurantUpdated?.({ ...restaurant, operationsConfig: draftConfig });
       setSettingsOpen(false);
-      setFeedback('تم حفظ إعدادات الورديات والشاشات وأسعار الأقسام بنجاح.');
+      setFeedback(
+        isEn
+          ? 'Shift schedule, screens, and price visibility settings saved.'
+          : 'تم حفظ إعدادات الورديات والشاشات وأسعار الأقسام بنجاح.'
+      );
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'تعذر حفظ الإعدادات.');
+      setErrorMsg(
+        err instanceof Error
+          ? err.message
+          : isEn
+            ? 'Unable to save operational settings.'
+            : 'تعذر حفظ الإعدادات.'
+      );
     } finally {
       setSavingSettings(false);
     }
@@ -284,7 +333,7 @@ export function ManagerSupervisionDashboard({
   const canPauseOrEditMenu = isOwner || managerPerms.canPauseItems || managerPerms.canEditMenu;
 
   return (
-    <div dir="rtl" className="space-y-6">
+    <div dir={dir} className="space-y-6">
       {/* Header Summary Bar */}
       <section
         className={`border p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4 ${ui.radiusClasses.card}`}
@@ -298,11 +347,15 @@ export function ManagerSupervisionDashboard({
           <div className="flex items-center gap-2">
             <Crown className="w-5 h-5 shrink-0" style={{ color: theme.accentHex }} />
             <h2 className="text-base sm:text-lg font-extrabold" style={{ color: theme.surfaceText }}>
-              لوحة الإشراف العام ومتابعة الكادر — {loc(restaurant.name, restaurant.name_en)}
+              {isEn
+                ? `Supervisory Console & Staff Monitoring — ${loc(restaurant.name, restaurant.name_en)}`
+                : `لوحة الإشراف العام ومتابعة الكادر — ${loc(restaurant.name, restaurant.name_en)}`}
             </h2>
           </div>
           <p className="text-xs max-w-3xl leading-relaxed" style={{ color: theme.mutedText }}>
-            راقب كل قسم وشاشة باسم الموظف المشغّل لها حالياً. إذا كان القسم مغطى بموظف تدخل بوضع الإشراف للمراجعة والتعديل أو إلغاء أصناف مع سبب؛ وإذا كان شاغراً يمكنك تغطيته بوردية بديلة.
+            {isEn
+              ? 'Monitor every station and screen by the currently assigned employee. Covered screens open in supervisory mode to review, edit, or cancel with a reason; uncovered screens can be staffed immediately.'
+              : 'راقب كل قسم وشاشة باسم الموظف المشغّل لها حالياً. إذا كان القسم مغطى بموظف تدخل بوضع الإشراف للمراجعة والتعديل أو إلغاء أصناف مع سبب؛ وإذا كان شاغراً يمكنك تغطيته بوردية بديلة.'}
           </p>
         </div>
 
@@ -315,7 +368,8 @@ export function ManagerSupervisionDashboard({
               color: theme.mutedText,
             }}
           >
-            الورديات النشطة: <strong className="ms-1" style={{ color: theme.surfaceText }}>{activeShifts.length}</strong>
+            {isEn ? 'Active Shifts:' : 'الورديات النشطة:'}{' '}
+            <strong className="ms-1" style={{ color: theme.surfaceText }}>{activeShifts.length}</strong>
           </div>
           {(isOwner || managerPerms.canManageHalls) && (
             <button
@@ -329,7 +383,7 @@ export function ManagerSupervisionDashboard({
               }}
             >
               <LayoutGrid className="w-4 h-4" style={{ color: theme.highlightHex || '#E8833A' }} />
-              <span>الصالات وأكواد QR</span>
+              <span>{isEn ? 'Halls & Table QR' : 'الصالات وأكواد QR'}</span>
             </button>
           )}
           {canModifyOperations && (
@@ -344,7 +398,7 @@ export function ManagerSupervisionDashboard({
               }}
             >
               <Settings className="w-4 h-4" style={{ color: theme.accentHex }} />
-              <span>إعدادات الورديات والأسعار</span>
+              <span>{isEn ? 'Shifts & Prices Settings' : 'إعدادات الورديات والأسعار'}</span>
             </button>
           )}
         </div>
@@ -354,7 +408,7 @@ export function ManagerSupervisionDashboard({
         <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-900 flex items-center justify-between gap-2">
           <span>{feedback}</span>
           <button type="button" onClick={() => setFeedback(null)} className="text-emerald-700 underline text-[11px] cursor-pointer">
-            إغلاق
+            {isEn ? 'Close' : 'إغلاق'}
           </button>
         </div>
       )}
@@ -363,7 +417,7 @@ export function ManagerSupervisionDashboard({
         <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-xs font-bold text-rose-900 flex items-center justify-between gap-2">
           <span>{errorMsg}</span>
           <button type="button" onClick={() => setErrorMsg(null)} className="text-rose-700 underline text-[11px] cursor-pointer">
-            إغلاق
+            {isEn ? 'Close' : 'إغلاق'}
           </button>
         </div>
       )}
@@ -394,14 +448,22 @@ export function ManagerSupervisionDashboard({
                 )}
                 <h3 className="text-sm font-extrabold text-zinc-950">
                   {pausedItems.length > 0
-                    ? `تنبيه الأصناف الموقوفة حالياً (${pausedItems.length} صنف مخفي من المنيو)`
-                    : 'كل أصناف المنيو متاحة ومفعّلة حالياً'}
+                    ? isEn
+                      ? `Paused Items Alert (${pausedItems.length} hidden from menu)`
+                      : `تنبيه الأصناف الموقوفة حالياً (${pausedItems.length} صنف مخفي من المنيو)`
+                    : isEn
+                      ? 'All menu items are currently available and active'
+                      : 'كل أصناف المنيو متاحة ومفعّلة حالياً'}
                 </h3>
               </div>
               <p className="text-xs text-zinc-600">
                 {pausedItems.length > 0
-                  ? 'تظهر هذه القائمة مع الأسعار حتى لا يُنسى أي صنف مغلق عن العملاء بعد توفر خاماته.'
-                  : 'يمكنك إيقاف أي صنف غير متوفر مؤقتاً من البحث أدناه أو إعادة تفعيله بضغطة واحدة.'}
+                  ? isEn
+                    ? 'Listed here with prices so out-of-stock dishes are not forgotten once ingredients are restocked.'
+                    : 'تظهر هذه القائمة مع الأسعار حتى لا يُنسى أي صنف مغلق عن العملاء بعد توفر خاماته.'
+                  : isEn
+                    ? 'Quickly pause an unavailable item or restore it in one click using search below.'
+                    : 'يمكنك إيقاف أي صنف غير متوفر مؤقتاً من البحث أدناه أو إعادة تفعيله بضغطة واحدة.'}
               </p>
             </div>
 
@@ -410,7 +472,7 @@ export function ManagerSupervisionDashboard({
                 type="search"
                 value={menuSearch}
                 onChange={(e) => setMenuSearch(e.target.value)}
-                placeholder="بحث سريع لإيقاف أو تفعيل صنف..."
+                placeholder={isEn ? 'Quick search to pause or resume...' : 'بحث سريع لإيقاف أو تفعيل صنف...'}
                 className="w-full px-3.5 py-2 rounded-xl border border-zinc-300 bg-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-zinc-900"
               />
             </div>
@@ -419,7 +481,8 @@ export function ManagerSupervisionDashboard({
           {quickSearchItems.length > 0 && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-1">
               {quickSearchItems.map((it) => {
-                const catName = categoryMap.get(it.categoryId)?.name || '';
+                const catObj = categoryMap.get(it.categoryId);
+                const catName = catObj ? loc(catObj.name, catObj.name_en) : '';
                 const busy = reactivatingId === it.id;
                 return (
                   <div
@@ -427,7 +490,9 @@ export function ManagerSupervisionDashboard({
                     className="bg-white border border-zinc-200 rounded-xl p-3 flex items-center justify-between gap-2"
                   >
                     <div className="min-w-0">
-                      <p className="text-xs font-extrabold text-zinc-950 truncate">{it.name}</p>
+                      <p className="text-xs font-extrabold text-zinc-950 truncate">
+                        {loc(it.name, it.name_en)}
+                      </p>
                       <p className="text-[11px] text-zinc-500 font-mono-num truncate">
                         {formatMoney(it.basePrice)} {catName ? `· ${catName}` : ''}
                       </p>
@@ -442,7 +507,15 @@ export function ManagerSupervisionDashboard({
                           : 'bg-emerald-600 text-white hover:bg-emerald-700'
                       }`}
                     >
-                      {busy ? '...' : it.isAvailable ? 'إيقاف مؤقت' : 'تفعيل'}
+                      {busy
+                        ? '...'
+                        : it.isAvailable
+                          ? isEn
+                            ? 'Pause'
+                            : 'إيقاف مؤقت'
+                          : isEn
+                            ? 'Resume'
+                            : 'تفعيل'}
                     </button>
                   </div>
                 );
@@ -453,7 +526,8 @@ export function ManagerSupervisionDashboard({
           {pausedItems.length > 0 && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {pausedItems.map((item) => {
-                const catName = categoryMap.get(item.categoryId)?.name || 'صنف';
+                const catObj = categoryMap.get(item.categoryId);
+                const catName = catObj ? loc(catObj.name, catObj.name_en) : isEn ? 'Item' : 'صنف';
                 const busy = reactivatingId === item.id;
                 return (
                   <div
@@ -464,11 +538,12 @@ export function ManagerSupervisionDashboard({
                       <div className="flex items-center gap-1.5">
                         <PauseCircle className="w-4 h-4 text-amber-600 shrink-0" />
                         <p className="text-xs sm:text-sm font-extrabold text-zinc-950 truncate">
-                          {item.name}
+                          {loc(item.name, item.name_en)}
                         </p>
                       </div>
                       <p className="text-xs text-zinc-600 font-mono-num">
-                        السعر: <strong className="text-zinc-950">{formatMoney(item.basePrice)}</strong>
+                        {isEn ? 'Price:' : 'السعر:'}{' '}
+                        <strong className="text-zinc-950">{formatMoney(item.basePrice)}</strong>
                         {' · '}
                         <span className="text-zinc-500">{catName}</span>
                       </p>
@@ -481,7 +556,7 @@ export function ManagerSupervisionDashboard({
                       className="min-h-[38px] px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold inline-flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-50"
                     >
                       {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                      <span>إعادة تفعيل</span>
+                      <span>{isEn ? 'Restore' : 'إعادة تفعيل'}</span>
                     </button>
                   </div>
                 );
@@ -506,7 +581,9 @@ export function ManagerSupervisionDashboard({
             <div className="flex items-center gap-2">
               <Sliders className="w-4 h-4" style={{ color: theme.accentHex }} />
               <h3 className="text-sm font-extrabold" style={{ color: theme.surfaceText }}>
-                ضبط الورديات والعهدة الافتراضية وإظهار الأسعار للشاشات
+                {isEn
+                  ? 'Shift Slots, Default Float & Screen Price Visibility'
+                  : 'ضبط الورديات والعهدة الافتراضية وإظهار الأسعار للشاشات'}
               </h3>
             </div>
             <button
@@ -515,7 +592,7 @@ export function ManagerSupervisionDashboard({
               className="text-xs font-bold cursor-pointer hover:opacity-80"
               style={{ color: theme.mutedText }}
             >
-              إغلاق
+              {isEn ? 'Close' : 'إغلاق'}
             </button>
           </div>
 
@@ -523,9 +600,14 @@ export function ManagerSupervisionDashboard({
             <>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <label className="space-y-1 text-xs font-bold text-zinc-800">
-                  <span>العهدة الافتراضية لبداية درج الكاشير ({currencyLabel})</span>
+                  <span>
+                    {isEn
+                      ? `Default Cashier Opening Float (${currencyLabel})`
+                      : `العهدة الافتراضية لبداية درج الكاشير (${currencyLabel})`}
+                  </span>
                   <input
                     type="number"
+                    dir="ltr"
                     min={0}
                     step="any"
                     value={draftConfig.defaultCashierFloat}
@@ -540,9 +622,14 @@ export function ManagerSupervisionDashboard({
                 </label>
 
                 <label className="space-y-1 text-xs font-bold text-zinc-800">
-                  <span>مهلة اعتبار الترابيزة متأخرة (بالدقائق)</span>
+                  <span>
+                    {isEn
+                      ? 'Table Overdue Threshold (minutes)'
+                      : 'مهلة اعتبار الترابيزة متأخرة (بالدقائق)'}
+                  </span>
                   <input
                     type="number"
+                    dir="ltr"
                     min={15}
                     max={720}
                     value={draftConfig.tableOverdueMinutes}
@@ -557,7 +644,9 @@ export function ManagerSupervisionDashboard({
                 </label>
 
                 <div className="space-y-1 text-xs font-bold text-zinc-800">
-                  <span>عدد فترات الورديات اليومية (1–4)</span>
+                  <span>
+                    {isEn ? 'Daily Shift Slots Count (1–4)' : 'عدد فترات الورديات اليومية (1–4)'}
+                  </span>
                   <select
                     value={draftConfig.shiftSlots.length}
                     onChange={(e) => {
@@ -568,6 +657,7 @@ export function ManagerSupervisionDashboard({
                           const fallback = DEFAULT_SHIFT_SLOTS[base.length] || {
                             id: `shift_${base.length + 1}`,
                             name: `الوردية ${base.length + 1}`,
+                            nameEn: `Shift ${base.length + 1}`,
                             startTime: '08:00',
                             endTime: '16:00',
                           };
@@ -578,39 +668,52 @@ export function ManagerSupervisionDashboard({
                     }}
                     className="w-full px-3 py-2 rounded-xl border border-zinc-300 text-sm bg-white"
                   >
-                    <option value={1}>وردية واحدة</option>
-                    <option value={2}>ورديتان</option>
-                    <option value={3}>3 ورديات (صباحية · مسائية · ليلية)</option>
-                    <option value={4}>4 ورديات</option>
+                    <option value={1}>{isEn ? '1 Shift' : 'وردية واحدة'}</option>
+                    <option value={2}>{isEn ? '2 Shifts' : 'ورديتان'}</option>
+                    <option value={3}>
+                      {isEn
+                        ? '3 Shifts (Morning · Evening · Night)'
+                        : '3 ورديات (صباحية · مسائية · ليلية)'}
+                    </option>
+                    <option value={4}>{isEn ? '4 Shifts' : '4 ورديات'}</option>
                   </select>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <p className="text-xs font-extrabold text-zinc-800">جدول مواعيد الورديات:</p>
+                <p className="text-xs font-extrabold text-zinc-800">
+                  {isEn ? 'Shift Schedule:' : 'جدول مواعيد الورديات:'}
+                </p>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   {draftConfig.shiftSlots.map((slot, idx) => (
                     <div key={slot.id} className="p-3 rounded-xl border border-zinc-200 bg-zinc-50 space-y-2">
                       <input
                         type="text"
-                        value={slot.name}
-                        onChange={(e) => handleSlotChange(idx, { name: e.target.value })}
+                        value={isEn ? slot.nameEn || slot.name : slot.name}
+                        onChange={(e) =>
+                          handleSlotChange(
+                            idx,
+                            isEn ? { nameEn: e.target.value } : { name: e.target.value }
+                          )
+                        }
                         className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-300 bg-white text-xs font-extrabold"
                       />
                       <div className="grid grid-cols-2 gap-2 text-[11px]">
                         <label className="space-y-0.5">
-                          <span className="text-zinc-500">من</span>
+                          <span className="text-zinc-500">{isEn ? 'From' : 'من'}</span>
                           <input
                             type="time"
+                            dir="ltr"
                             value={slot.startTime}
                             onChange={(e) => handleSlotChange(idx, { startTime: e.target.value })}
                             className="w-full px-2 py-1 rounded-lg border border-zinc-300 bg-white font-mono-num"
                           />
                         </label>
                         <label className="space-y-0.5">
-                          <span className="text-zinc-500">إلى</span>
+                          <span className="text-zinc-500">{isEn ? 'To' : 'إلى'}</span>
                           <input
                             type="time"
+                            dir="ltr"
                             value={slot.endTime}
                             onChange={(e) => handleSlotChange(idx, { endTime: e.target.value })}
                             className="w-full px-2 py-1 rounded-lg border border-zinc-300 bg-white font-mono-num"
@@ -627,22 +730,24 @@ export function ManagerSupervisionDashboard({
           {(isOwner || managerPerms.canToggleScreenPrices) && (
             <div className="space-y-2 pt-2 border-t border-zinc-100">
               <p className="text-xs font-extrabold text-zinc-800">
-                إظهار أو إخفاء الأسعار على الشاشات والتذاكر:
+                {isEn
+                  ? 'Show or Hide Item Prices on Screens & Tickets:'
+                  : 'إظهار أو إخفاء الأسعار على الشاشات والتذاكر:'}
               </p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 {(
                   [
-                    { key: 'kitchen', label: 'شاشة المطبخ (KDS)' },
-                    { key: 'bar', label: 'شاشة البار (KDS)' },
-                    { key: 'pastry', label: 'شاشة الباستري (KDS)' },
-                    { key: 'captain', label: 'شاشة الكابتن والنداءات' },
+                    { key: 'kitchen', labelAr: 'شاشة المطبخ', labelEn: 'Kitchen Screen' },
+                    { key: 'bar', labelAr: 'شاشة البار', labelEn: 'Bar Screen' },
+                    { key: 'pastry', labelAr: 'شاشة الباستري', labelEn: 'Pastry Screen' },
+                    { key: 'captain', labelAr: 'شاشة الكابتن والنداءات', labelEn: 'Captain & Calls' },
                   ] as const
                 ).map((entry) => (
                   <label
                     key={entry.key}
                     className="flex items-center justify-between gap-2 p-2.5 rounded-xl border border-zinc-200 bg-zinc-50 text-xs font-bold cursor-pointer"
                   >
-                    <span>{entry.label}</span>
+                    <span>{isEn ? entry.labelEn : entry.labelAr}</span>
                     <input
                       type="checkbox"
                       checked={Boolean(draftConfig.showPricesByRole[entry.key])}
@@ -674,7 +779,7 @@ export function ManagerSupervisionDashboard({
               }}
             >
               {savingSettings ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              <span>حفظ الإعدادات التشغيلية</span>
+              <span>{isEn ? 'Save Operational Settings' : 'حفظ الإعدادات التشغيلية'}</span>
             </button>
           </div>
         </form>
@@ -685,10 +790,16 @@ export function ManagerSupervisionDashboard({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-extrabold flex items-center gap-2" style={{ color: theme.canvasText }}>
             <ShieldCheck className="w-4 h-4" style={{ color: theme.accentHex }} />
-            <span>الشاشات والأقسام المباشرة واسم الموظف المسؤول الآن</span>
+            <span>
+              {isEn
+                ? 'Live Screens, Prep Stations & Active Staff in Charge'
+                : 'الشاشات والأقسام المباشرة واسم الموظف المسؤول الآن'}
+            </span>
           </h3>
           <span className="text-[11px]" style={{ color: theme.mutedText }}>
-            الدخول الإشرافي يسمح بالمراقبة والتعديل وكتابة ملاحظات الصنف/الترابيزة دون فتح وردية مكررة
+            {isEn
+              ? 'Supervisory entry lets you inspect, edit, or note items/tables without opening a duplicate shift'
+              : 'الدخول الإشرافي يسمح بالمراقبة والتعديل وكتابة ملاحظات الصنف/الترابيزة دون فتح وردية مكررة'}
           </span>
         </div>
 
@@ -746,24 +857,32 @@ export function ManagerSupervisionDashboard({
                     <div className="p-3 rounded-xl bg-emerald-50/80 border border-emerald-200 space-y-1">
                       <div className="flex items-center justify-between gap-2 text-xs">
                         <span className="font-extrabold text-emerald-950 truncate">
-                          الموظف الحالي: {card.activeShift.staffName}
+                          {isEn ? 'Current Staff:' : 'الموظف الحالي:'} {card.activeShift.staffName}
                         </span>
                         <span className="font-mono-num text-[11px] font-bold text-emerald-800 shrink-0">
-                          {formatLiveDuration(card.activeShift.startedAt, nowMs)}
+                          {formatLiveDuration(card.activeShift.startedAt, nowMs, isEn)}
                         </span>
                       </div>
                       <div className="flex items-center gap-3 text-[11px] text-emerald-900/80 font-mono-num">
                         {card.activeShift.shiftSlotName && <span>{card.activeShift.shiftSlotName}</span>}
-                        <span>طلبات: {card.activeShift.ordersHandled || 0}</span>
+                        <span>
+                          {isEn ? 'Orders:' : 'طلبات:'} {card.activeShift.ordersHandled || 0}
+                        </span>
                         {card.activeShift.itemsMarkedReady > 0 && (
-                          <span>تجهيز: {card.activeShift.itemsMarkedReady}</span>
+                          <span>
+                            {isEn ? 'Prepared:' : 'تجهيز:'} {card.activeShift.itemsMarkedReady}
+                          </span>
                         )}
                       </div>
                     </div>
                   ) : (
                     <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs font-bold text-amber-950 flex items-center gap-2">
                       <Clock className="w-4 h-4 text-amber-600 shrink-0" />
-                      <span>القسم شاغر حالياً — لا يوجد موظف مسجل لوردية</span>
+                      <span>
+                        {isEn
+                          ? 'Station uncovered — no active shift logged'
+                          : 'القسم شاغر حالياً — لا يوجد موظف مسجل لوردية'}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -784,7 +903,11 @@ export function ManagerSupervisionDashboard({
                     }}
                   >
                     <Eye className="w-4 h-4" style={{ color: theme.highlightHex || '#E8833A' }} />
-                    <span>مراقبة وإشراف على شاشة {card.activeShift?.staffName}</span>
+                    <span>
+                      {isEn
+                        ? `Supervise ${card.activeShift?.staffName}'s Screen`
+                        : `مراقبة وإشراف على شاشة ${card.activeShift?.staffName}`}
+                    </span>
                   </button>
                 ) : coveredByMe ? (
                   <button
@@ -797,7 +920,9 @@ export function ManagerSupervisionDashboard({
                     }}
                   >
                     <LayoutGrid className="w-4 h-4" />
-                    <span>العودة لورديتي البديلة في هذا القسم</span>
+                    <span>
+                      {isEn ? 'Return to My Coverage Shift Here' : 'العودة لورديتي البديلة في هذا القسم'}
+                    </span>
                   </button>
                 ) : (
                   <button
@@ -806,7 +931,11 @@ export function ManagerSupervisionDashboard({
                     className={`w-full min-h-[44px] px-4 py-2 border border-emerald-600 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold inline-flex items-center justify-center gap-2 cursor-pointer ${ui.radiusClasses.button}`}
                   >
                     <Play className="w-4 h-4" />
-                    <span>دخول وبدء وردية بديلة (القسم شاغر)</span>
+                    <span>
+                      {isEn
+                        ? 'Enter & Start Coverage Shift (Uncovered)'
+                        : 'دخول وبدء وردية بديلة (القسم شاغر)'}
+                    </span>
                   </button>
                 )}
               </article>
@@ -828,20 +957,22 @@ export function ManagerSupervisionDashboard({
           <div className="flex items-center gap-2">
             <Wallet className="w-5 h-5" style={{ color: theme.accentHex }} />
             <h3 className="text-sm font-extrabold" style={{ color: theme.surfaceText }}>
-              خزنة وعهدة المدير
+              {isEn ? 'Manager Cash Custody Vault' : 'خزنة وعهدة المدير'}
             </h3>
           </div>
           <p className="text-xs leading-relaxed" style={{ color: theme.mutedText }}>
-            المبالغ الكاش التي يسلمها الكاشير للمدير عند انتهاء الوردية تتجمع هنا حتى تسليمها لصاحب المطعم أو ترحيلها لكاشير الوردية التالية.
+            {isEn
+              ? 'Cash handed over by cashiers at shift end accumulates here until transferred to the owner vault or carried over to the next cashier shift.'
+              : 'المبالغ الكاش التي يسلمها الكاشير للمدير عند انتهاء الوردية تتجمع هنا حتى تسليمها لصاحب المطعم أو ترحيلها لكاشير الوردية التالية.'}
           </p>
           <div
             className="p-4 rounded-xl border flex items-center justify-between"
             style={{ backgroundColor: theme.surfaceSubtleBg, borderColor: theme.surfaceBorder }}
           >
             <span className="text-xs font-bold" style={{ color: theme.mutedText }}>
-              الرصيد الكاش في عهدة المدير
+              {isEn ? 'Cash Balance in Manager Custody' : 'الرصيد الكاش في عهدة المدير'}
             </span>
-            <span className="text-xl font-extrabold font-mono-num" style={{ color: theme.surfaceText }}>
+            <span className="text-xl font-extrabold font-mono-num" dir="ltr" style={{ color: theme.surfaceText }}>
               {formatMoney(treasury.managerCustodyBalance)}
             </span>
           </div>
@@ -854,17 +985,22 @@ export function ManagerSupervisionDashboard({
         >
           <p className="text-xs font-extrabold flex items-center gap-1.5" style={{ color: theme.surfaceText }}>
             <ArrowRightLeft className="w-4 h-4 text-emerald-600" />
-            <span>توريد / تسليم نقدية إلى الخزنة الرئيسية لصاحب المطعم</span>
+            <span>
+              {isEn
+                ? 'Transfer Cash to Owner Main Safe Vault'
+                : 'توريد / تسليم نقدية إلى الخزنة الرئيسية لصاحب المطعم'}
+            </span>
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <input
               type="number"
+              dir="ltr"
               min={1}
               max={Math.max(1, treasury.managerCustodyBalance)}
               step="any"
               value={transferAmount}
               onChange={(e) => setTransferAmount(e.target.value)}
-              placeholder={`المبلغ (${currencyLabel})`}
+              placeholder={isEn ? `Amount (${currencyLabel})` : `المبلغ (${currencyLabel})`}
               className="w-full px-3 py-2 rounded-xl border text-xs font-mono-num font-bold"
               style={{
                 backgroundColor: theme.surfaceBg,
@@ -876,7 +1012,7 @@ export function ManagerSupervisionDashboard({
               type="text"
               value={transferNote}
               onChange={(e) => setTransferNote(e.target.value)}
-              placeholder="ملاحظة التسليم (اختياري)"
+              placeholder={isEn ? 'Handover note (optional)' : 'ملاحظة التسليم (اختياري)'}
               className="w-full px-3 py-2 rounded-xl border text-xs"
               style={{
                 backgroundColor: theme.surfaceBg,
@@ -893,7 +1029,9 @@ export function ManagerSupervisionDashboard({
               className="text-[11px] font-bold underline cursor-pointer disabled:opacity-40"
               style={{ color: theme.accentHex }}
             >
-              تحديد كامل العهدة ({formatMoney(treasury.managerCustodyBalance)})
+              {isEn
+                ? `Select full custody (${formatMoney(treasury.managerCustodyBalance)})`
+                : `تحديد كامل العهدة (${formatMoney(treasury.managerCustodyBalance)})`}
             </button>
             <button
               type="submit"
@@ -901,7 +1039,7 @@ export function ManagerSupervisionDashboard({
               className={`min-h-[42px] px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50 ${ui.radiusClasses.button}`}
             >
               {transferring ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Utensils className="w-3.5 h-3.5" />}
-              <span>توريد للخزنة الرئيسية</span>
+              <span>{isEn ? 'Transfer to Owner Vault' : 'توريد للخزنة الرئيسية'}</span>
             </button>
           </div>
           {treasuryTransfers.length > 0 && (
@@ -909,9 +1047,9 @@ export function ManagerSupervisionDashboard({
               {treasuryTransfers.slice(0, 4).map((tr) => (
                 <div key={tr.id} className="flex items-center justify-between text-[11px]" style={{ color: theme.mutedText }}>
                   <span className="truncate">
-                    {tr.fromName} ← {tr.toName}
+                    {tr.fromName} → {tr.toName}
                   </span>
-                  <span className="font-mono-num font-bold shrink-0" style={{ color: theme.surfaceText }}>
+                  <span className="font-mono-num font-bold shrink-0" dir="ltr" style={{ color: theme.surfaceText }}>
                     {formatMoney(tr.amountCash)}
                   </span>
                 </div>

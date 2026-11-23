@@ -747,7 +747,7 @@ export async function printThermalJobsSequentially(
 }
 
 function formatOrderTime(ts: unknown, lang: AppLang = getActiveLang()): string {
-  const locale = lang === 'en' ? 'en-US' : 'ar-EG';
+  const locale = lang === 'en' ? 'en-US' : 'ar-EG-u-nu-latn';
   if (!ts) {
     return new Date().toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
   }

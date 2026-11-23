@@ -16,9 +16,9 @@ export const DEFAULT_LOYALTY_CONFIG: Required<LoyaltyConfig> = {
   enabled: true,
   firstOrderEnabled: true,
   promoBannerText:
-    '🎁 سجّل بياناتك الآن واحصل على خصم 5% على أول طلب + هدية خاصة في عيد ميلادك!',
+    'سجّل بياناتك الآن واحصل على خصم 5% على أول طلب + هدية خاصة في عيد ميلادك!',
   promoBannerText_en:
-    '🎁 Register now for 5% off your first order + a special birthday gift!',
+    'Register now for 5% off your first order + a special birthday gift!',
   firstOrderDiscountPercent: 5,
   punchCardEnabled: true,
   punchCardTarget: 5,
@@ -26,9 +26,9 @@ export const DEFAULT_LOYALTY_CONFIG: Required<LoyaltyConfig> = {
   punchCardRewardText: 'خصم 20% على طلبك القادم بعد إكمال البطاقة',
   punchCardRewardText_en: '20% off your next order after completing the card',
   birthdayOfferText:
-    '🎂 كل سنة وأنت طيب! استمتع بخصم 15% + هدية خاصة في عيد ميلادك من المطعم',
+    'كل سنة وأنت طيب! استمتع بخصم 15% + هدية خاصة في عيد ميلادك من المطعم',
   birthdayOfferText_en:
-    '🎂 Happy Birthday! Enjoy 15% off + a special birthday treat from us',
+    'Happy Birthday! Enjoy 15% off + a special birthday treat from us',
   birthdayDiscountPercent: 15,
   birthdayWhatsappMessage:
     'كل سنة وأنت طيب يا {name}! 🎂🎉 بمناسبة عيد ميلادك، مطعم {restaurant} بيدعوك للاحتفال معانا وبنقدملك {offer} 🎁 اطلب من المنيو: {url}',
@@ -256,7 +256,7 @@ export function formatLastVisitDate(ts: unknown, lang: 'ar' | 'en'): string {
   const ms = getLoyaltyTimestampMillis(ts);
   if (!ms) return '';
   try {
-    return new Intl.DateTimeFormat(lang === 'en' ? 'en-US' : 'ar-EG', {
+    return new Intl.DateTimeFormat(lang === 'en' ? 'en-US' : 'ar-EG-u-nu-latn', {
       day: 'numeric',
       month: 'long',
       year: 'numeric',

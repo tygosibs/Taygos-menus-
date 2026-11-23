@@ -116,7 +116,10 @@ export async function seedStarterStationsForRestaurant(params: {
         actorName: actor.name.slice(0, 100),
         actorRole: actor.role,
         screen: 'stations',
-        details: `تمت تهيئة ${created.length} محطة تحضير أساسية`,
+        details:
+          getActiveLang() === 'en'
+            ? `Initialized ${created.length} core prep stations`
+            : `تمت تهيئة ${created.length} محطة تحضير أساسية`,
         createdAt: serverTimestamp(),
       });
       await batch.commit();
@@ -210,9 +213,14 @@ export async function saveRestaurantStation(params: {
       actorName: actor.name.slice(0, 100),
       actorRole: actor.role,
       screen: stId,
-      details: isNew
-        ? `تم إنشاء قسم رئيسي جديد: ${cleanName} (${stId})`
-        : `تم تحديث القسم الرئيسي: ${cleanName} (${station.isActive ? 'نشط' : 'موقف'})`,
+      details:
+        getActiveLang() === 'en'
+          ? isNew
+            ? `Created prep station: ${cleanNameEn || cleanName} (${stId})`
+            : `Updated prep station: ${cleanNameEn || cleanName} (${station.isActive ? 'active' : 'paused'})`
+          : isNew
+            ? `تم إنشاء قسم رئيسي جديد: ${cleanName} (${stId})`
+            : `تم تحديث القسم الرئيسي: ${cleanName} (${station.isActive ? 'نشط' : 'موقف'})`,
       createdAt: serverTimestamp(),
     });
 
@@ -339,7 +347,9 @@ export async function deleteRestaurantStationChecked(params: {
       actorName: actor.name.slice(0, 100),
       actorRole: actor.role,
       screen: targetId,
-      details: `تم حذف القسم الرئيسي: ${station.name}`,
+      details: isEn
+        ? `Deleted prep station: ${stationLabel}`
+        : `تم حذف القسم الرئيسي: ${station.name}`,
       createdAt: serverTimestamp(),
     });
   } catch (error) {

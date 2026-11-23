@@ -1089,7 +1089,10 @@ export async function submitPublicOrder(input: SubmitOrderInput): Promise<{ id: 
       targetUid: orderId,
       targetName: orderNumber,
       screen: 'cashier',
-      details: `إنشاء طلب ${orderNumber}`,
+      details:
+        getActiveLang() === 'en'
+          ? `Created order ${orderNumber}`
+          : `إنشاء طلب ${orderNumber}`,
     });
   }
 
@@ -1154,7 +1157,11 @@ export function subscribeOwnerOrders(
     },
     (error) => {
       if (onError) {
-        onError(error instanceof Error ? error : new Error('Failed to load orders'));
+        onError(
+          error instanceof Error
+            ? error
+            : new Error(getActiveLang() === 'en' ? 'Failed to load orders' : 'تعذر تحميل الطلبات')
+        );
       } else {
         handleFirestoreError(error, OperationType.LIST, path);
       }
@@ -1199,7 +1206,10 @@ export async function updateOrderStatus(
         targetUid: orderId,
         targetName: meta.orderNumber || orderId,
         screen: 'cashier',
-        details: `تحديث حالة الطلب ${meta.orderNumber || ''} إلى ${status}`,
+        details:
+          getActiveLang() === 'en'
+            ? `Updated order ${meta.orderNumber || ''} status to ${status}`
+            : `تحديث حالة الطلب ${meta.orderNumber || ''} إلى ${status}`,
       });
       if (meta.actor.role !== 'owner' && status === 'completed') {
         void incrementActiveShiftMetric({
@@ -1283,7 +1293,10 @@ export async function updateOrderItemProgress(
         targetUid: orderId,
         targetName: meta.orderNumber || orderId,
         screen: meta.station || 'kitchen',
-        details: `تحديث حالة تجهيز أصناف في الطلب ${meta.orderNumber || ''}`,
+        details:
+          getActiveLang() === 'en'
+            ? `Updated item prep status in order ${meta.orderNumber || ''}`
+            : `تحديث حالة تجهيز أصناف في الطلب ${meta.orderNumber || ''}`,
       });
       if (meta.actor.role !== 'owner') {
         const readyCount = Object.values(itemUpdates).filter((st) => st === 'ready').length;
@@ -1354,7 +1367,10 @@ export async function closeTableOrdersAndSession(params: {
             ? 'Table'
             : 'طاولة',
         screen: 'cashier',
-        details: `إقفال حساب ${params.hallName ? `${params.hallName} - ` : ''}طاولة ${params.tableNumber || ''}`,
+        details:
+          getActiveLang() === 'en'
+            ? `Closed bill for ${params.hallName ? `${params.hallName} - ` : ''}Table ${params.tableNumber || ''}`
+            : `إقفال حساب ${params.hallName ? `${params.hallName} - ` : ''}طاولة ${params.tableNumber || ''}`,
       });
     }
   } catch (error) {
@@ -2174,7 +2190,13 @@ export function subscribeTableSession(
     },
     (error) => {
       if (onError) {
-        onError(error instanceof Error ? error : new Error('Table session sync error'));
+        onError(
+          error instanceof Error
+            ? error
+            : new Error(
+                getActiveLang() === 'en' ? 'Table session sync error' : 'تعذر مزامنة جلسة الطاولة'
+              )
+        );
       } else {
         handleFirestoreError(error, OperationType.GET, path);
       }
@@ -2397,7 +2419,13 @@ export function subscribeOwnerServiceCalls(
     },
     (error) => {
       if (onError) {
-        onError(error instanceof Error ? error : new Error('Failed to load service calls'));
+        onError(
+          error instanceof Error
+            ? error
+            : new Error(
+                getActiveLang() === 'en' ? 'Failed to load service calls' : 'تعذر تحميل نداءات الخدمة'
+              )
+        );
       } else {
         handleFirestoreError(error, OperationType.LIST, path);
       }
@@ -2437,7 +2465,10 @@ export async function updateServiceCallStatus(
         targetUid: callId,
         targetName: meta.tableLabel || (getActiveLang() === 'en' ? 'Table' : 'طاولة'),
         screen: 'captain',
-        details: `استجابة لطلب خدمة (${status}) — ${meta.tableLabel || ''}`,
+        details:
+          getActiveLang() === 'en'
+            ? `Service call (${status}) — ${meta.tableLabel || ''}`
+            : `استجابة لطلب خدمة (${status}) — ${meta.tableLabel || ''}`,
       });
       if (meta.actor.role !== 'owner' && (status === 'acknowledged' || status === 'resolved')) {
         void incrementActiveShiftMetric({
@@ -2475,7 +2506,11 @@ export function subscribeHalls(
     },
     (error) => {
       if (onError) {
-        onError(error instanceof Error ? error : new Error('Failed to load halls'));
+        onError(
+          error instanceof Error
+            ? error
+            : new Error(getActiveLang() === 'en' ? 'Failed to load halls' : 'تعذر تحميل الصالات')
+        );
       } else {
         handleFirestoreError(error, OperationType.LIST, path);
       }
@@ -2814,7 +2849,11 @@ export function subscribeRestaurantCustomers(
     },
     (error) => {
       if (onError) {
-        onError(error instanceof Error ? error : new Error('Failed to load customers'));
+        onError(
+          error instanceof Error
+            ? error
+            : new Error(getActiveLang() === 'en' ? 'Failed to load customers' : 'تعذر تحميل بيانات العملاء')
+        );
       } else {
         handleFirestoreError(error, OperationType.LIST, path);
       }

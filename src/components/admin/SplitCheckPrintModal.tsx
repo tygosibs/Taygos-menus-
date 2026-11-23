@@ -26,6 +26,7 @@ import {
   PrintableTicketJob,
   printThermalJobsSequentially,
 } from '../../lib/thermalPrinterService';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 interface SplitCheckPrintModalProps {
   isOpen: boolean;
@@ -48,6 +49,8 @@ export const SplitCheckPrintModal: React.FC<SplitCheckPrintModalProps> = ({
   categoriesMap,
   onOpenPrinterSettings,
 }) => {
+  const { lang, dir, loc, formatCurrency } = useLanguage();
+  const isEn = lang === 'en';
   const [includePricesOnCombined, setIncludePricesOnCombined] = useState(true);
   const [printingKey, setPrintingKey] = useState<string | null>(null);
   const [toastMsg, setToastMsg] = useState('');
@@ -88,7 +91,7 @@ export const SplitCheckPrintModal: React.FC<SplitCheckPrintModalProps> = ({
 
   if (!isOpen || !order) return null;
 
-  const currencyLabel = restaurant.currency || 'ج.م';
+  const currencyLabel = formatCurrency(restaurant.currency);
 
   const runPrint = async (key: string, jobs: PrintableTicketJob[], label: string) => {
     setPrintingKey(key);
@@ -98,11 +101,21 @@ export const SplitCheckPrintModal: React.FC<SplitCheckPrintModalProps> = ({
       const res = await printThermalJobsSequentially(jobs);
       setToastMsg(
         res.mode === 'hardware'
-          ? `تمت طباعة "${label}" (${res.count} تذكرة) على الطابعة الحرارية بالتتابع.`
-          : `تم تجهيز "${label}" (${res.count} تذكرة) للطباعة الحرارية عبر المتصفح.`
+          ? isEn
+            ? `Printed "${label}" (${res.count} tickets) sequentially to thermal printer.`
+            : `تمت طباعة "${label}" (${res.count} تذكرة) على الطابعة الحرارية بالتتابع.`
+          : isEn
+            ? `Prepared "${label}" (${res.count} tickets) for browser thermal printing.`
+            : `تم تجهيز "${label}" (${res.count} تذكرة) للطباعة الحرارية عبر المتصفح.`
       );
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'تعذر إتمام الطباعة.');
+      setErrorMsg(
+        err instanceof Error
+          ? err.message
+          : isEn
+            ? 'Unable to complete printing.'
+            : 'تعذر إتمام الطباعة.'
+      );
     } finally {
       setPrintingKey(null);
     }
@@ -116,17 +129,22 @@ export const SplitCheckPrintModal: React.FC<SplitCheckPrintModalProps> = ({
       includePrices: includePricesOnCombined,
       includeSeparateChecks: true,
     });
-    void runPrint('combined', [combinedJob], 'الأوردر المجمع فقط');
+    void runPrint('combined', [combinedJob], isEn ? 'Combined Order Only' : 'الأوردر المجمع فقط');
   };
 
   const handlePrintSingleStation = (bucket: { meta: StationMeta; items: OrderItemPayload[] }) => {
+    const stationName = loc(bucket.meta.shortLabel, bucket.meta.shortLabel_en);
     const job = buildStationTicketJob({
       restaurant,
       order,
       station: bucket.meta,
       stationItems: bucket.items,
     });
-    void runPrint(bucket.meta.stationId, [job], `تذكرة ${bucket.meta.shortLabel}`);
+    void runPrint(
+      bucket.meta.stationId,
+      [job],
+      isEn ? `${stationName} Ticket` : `تذكرة ${stationName}`
+    );
   };
 
   const handlePrintAll = () => {
@@ -145,23 +163,29 @@ export const SplitCheckPrintModal: React.FC<SplitCheckPrintModalProps> = ({
         stationItems: b.items,
       })
     );
-    void runPrint('all', [combinedJob, ...stationJobs], 'الطلب المجمع + جميع الأقسام');
+    void runPrint(
+      'all',
+      [combinedJob, ...stationJobs],
+      isEn ? 'Combined Order + All Stations' : 'الطلب المجمع + جميع الأقسام'
+    );
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
-      <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl" dir="rtl">
+      <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl" dir={dir}>
         <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
           <div className="flex items-center gap-2">
             <Scissors className="h-5 w-5 text-orange-600" />
             <div>
               <h4 className="text-base font-extrabold text-zinc-900">
-                تقسيم الشيك والطباعة حسب الأقسام
+                {isEn ? 'Split Check & Station Ticket Printing' : 'تقسيم الشيك والطباعة حسب الأقسام'}
               </h4>
               <p className="text-[11px] font-bold text-zinc-500">
-                طلب #{order.orderNumber} ·{' '}
+                {isEn ? 'Order' : 'طلب'} <span className="font-mono-num">#{order.orderNumber}</span> ·{' '}
                 {order.orderType === 'dine_in'
-                  ? `${order.hallName || 'صالة'} - طاولة ${order.tableNumber || '-'}`
+                  ? `${order.hallName || (isEn ? 'Hall' : 'صالة')} - ${
+                      isEn ? 'Table' : 'طاولة'
+                    } ${order.tableNumber || '-'}`
                   : order.customerName}
               </p>
             </div>
@@ -172,16 +196,17 @@ export const SplitCheckPrintModal: React.FC<SplitCheckPrintModalProps> = ({
               <button
                 type="button"
                 onClick={onOpenPrinterSettings}
-                className="inline-flex items-center gap-1 rounded-xl border border-zinc-200 px-2.5 py-1.5 text-[11px] font-bold text-zinc-700 hover:bg-zinc-50"
+                className="inline-flex items-center gap-1 rounded-xl border border-zinc-200 px-2.5 py-1.5 text-[11px] font-bold text-zinc-700 hover:bg-zinc-50 cursor-pointer"
               >
                 <Settings className="h-3.5 w-3.5" />
-                الطابعة
+                {isEn ? 'Printer' : 'الطابعة'}
               </button>
             )}
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg p-1 text-zinc-500 hover:bg-zinc-100"
+              aria-label={isEn ? 'Close' : 'إغلاق'}
+              className="rounded-lg p-1 text-zinc-500 hover:bg-zinc-100 cursor-pointer"
             >
               <X className="h-5 w-5" />
             </button>
@@ -191,14 +216,16 @@ export const SplitCheckPrintModal: React.FC<SplitCheckPrintModalProps> = ({
         <div className="mt-4 space-y-4">
           {/* Primary actions: Combined + Print All */}
           <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-3.5 space-y-3">
-            <label className="flex items-center gap-2 text-xs font-bold text-zinc-800">
+            <label className="flex items-center gap-2 text-xs font-bold text-zinc-800 cursor-pointer">
               <input
                 type="checkbox"
                 checked={includePricesOnCombined}
                 onChange={(e) => setIncludePricesOnCombined(e.target.checked)}
                 className="h-4 w-4 rounded accent-zinc-900"
               />
-              إظهار الأسعار وتفاصيل الفاتورة في تذكرة "الأوردر الأساسي المجمع"
+              {isEn
+                ? 'Show prices and bill breakdown on the "Combined Master Order" ticket'
+                : 'إظهار الأسعار وتفاصيل الفاتورة في تذكرة "الأوردر الأساسي المجمع"'}
             </label>
 
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -206,28 +233,30 @@ export const SplitCheckPrintModal: React.FC<SplitCheckPrintModalProps> = ({
                 type="button"
                 disabled={printingKey !== null}
                 onClick={handlePrintCombinedOnly}
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-300 bg-white px-4 py-2.5 text-xs font-extrabold text-zinc-900 hover:bg-zinc-100 disabled:opacity-50"
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-300 bg-white px-4 py-2.5 text-xs font-extrabold text-zinc-900 hover:bg-zinc-100 disabled:opacity-50 cursor-pointer"
               >
                 {printingKey === 'combined' ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <Printer className="h-4 w-4" />
                 )}
-                طباعة الأوردر المجمع فقط
+                {isEn ? 'Print Combined Ticket Only' : 'طباعة الأوردر المجمع فقط'}
               </button>
 
               <button
                 type="button"
                 disabled={printingKey !== null}
                 onClick={handlePrintAll}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-zinc-900 px-4 py-2.5 text-xs font-extrabold text-white hover:bg-zinc-800 disabled:opacity-50"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-zinc-900 px-4 py-2.5 text-xs font-extrabold text-white hover:bg-zinc-800 disabled:opacity-50 cursor-pointer"
               >
                 {printingKey === 'all' ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <Layers className="h-4 w-4" />
                 )}
-                طباعة الكل ({stationBuckets.length + 1} تذاكر بالتتابع)
+                {isEn
+                  ? `Print All (${stationBuckets.length + 1} Tickets)`
+                  : `طباعة الكل (${stationBuckets.length + 1} تذاكر بالتتابع)`}
               </button>
             </div>
           </div>
@@ -235,9 +264,11 @@ export const SplitCheckPrintModal: React.FC<SplitCheckPrintModalProps> = ({
           {/* Dynamic stations present in order */}
           <div>
             <div className="mb-2 text-xs font-extrabold text-zinc-700">
-              الأقسام المشاركة في هذا الطلب ({stationBuckets.length}):
+              {isEn
+                ? `Stations Involved in This Order (${stationBuckets.length}):`
+                : `الأقسام المشاركة في هذا الطلب (${stationBuckets.length}):`}
             </div>
-            <div className="max-h-72 space-y-2 overflow-y-auto pr-0.5">
+            <div className="max-h-72 space-y-2 overflow-y-auto pe-0.5">
               {stationBuckets.map((bucket) => {
                 const IconComp = getStationIconComponent(bucket.meta.icon);
                 const qtySum = bucket.items.reduce((s, it) => s + (it.quantity || 1), 0);
@@ -255,10 +286,10 @@ export const SplitCheckPrintModal: React.FC<SplitCheckPrintModalProps> = ({
                           <IconComp className="h-3.5 w-3.5" />
                         </span>
                         <span className="text-xs font-extrabold text-zinc-900">
-                          {bucket.meta.shortLabel}
+                          {loc(bucket.meta.shortLabel, bucket.meta.shortLabel_en)}
                         </span>
-                        <span className="rounded-md bg-zinc-100 px-1.5 py-0.5 text-[10px] font-bold text-zinc-700">
-                          {qtySum} صنف
+                        <span className="rounded-md bg-zinc-100 px-1.5 py-0.5 text-[10px] font-bold text-zinc-700 font-mono-num">
+                          {isEn ? `${qtySum} items` : `${qtySum} صنف`}
                         </span>
                       </div>
                       <div className="mt-1.5 space-y-0.5 text-[11px] text-zinc-600">
@@ -275,14 +306,14 @@ export const SplitCheckPrintModal: React.FC<SplitCheckPrintModalProps> = ({
                       type="button"
                       disabled={printingKey !== null}
                       onClick={() => handlePrintSingleStation(bucket)}
-                      className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-zinc-300 bg-zinc-50 px-3 py-2 text-xs font-extrabold text-zinc-900 hover:bg-zinc-900 hover:text-white disabled:opacity-50"
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-zinc-300 bg-zinc-50 px-3 py-2 text-xs font-extrabold text-zinc-900 hover:bg-zinc-900 hover:text-white disabled:opacity-50 cursor-pointer"
                     >
                       {printingKey === bucket.meta.stationId ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
                       ) : (
                         <Printer className="h-3.5 w-3.5" />
                       )}
-                      طباعة
+                      {isEn ? 'Print' : 'طباعة'}
                     </button>
                   </div>
                 );

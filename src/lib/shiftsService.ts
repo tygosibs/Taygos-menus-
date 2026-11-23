@@ -181,7 +181,10 @@ export async function startStaffShift(params: {
       targetUid: staffId,
       targetName: staffName.slice(0, 100),
       screen: stationId,
-      details: `بدأ ${staffName} ورديته على قسم/شاشة: ${stationName}`,
+      details:
+        getActiveLang() === 'en'
+          ? `${staffName} started shift on station: ${stationName}`
+          : `بدأ ${staffName} ورديته على قسم/شاشة: ${stationName}`,
       createdAt: serverTimestamp(),
     });
 
@@ -222,7 +225,10 @@ export async function endStaffShift(params: {
       targetUid: shift.staffId,
       targetName: shift.staffName.slice(0, 100),
       screen: shift.stationId,
-      details: `أنهى ${shift.staffName} ورديته على قسم/شاشة: ${shift.stationName}`,
+      details:
+        getActiveLang() === 'en'
+          ? `${shift.staffName} ended shift on station: ${shift.stationName}`
+          : `أنهى ${shift.staffName} ورديته على قسم/شاشة: ${shift.stationName}`,
       createdAt: serverTimestamp(),
     });
 

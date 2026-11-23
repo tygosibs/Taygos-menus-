@@ -230,7 +230,7 @@ export function WhatsAppChatTheme({
 
   const nowTime = useMemo(() => {
     try {
-      return new Intl.DateTimeFormat(isEn ? 'en-US' : 'ar-EG', {
+      return new Intl.DateTimeFormat(isEn ? 'en-US' : 'ar-EG-u-nu-latn', {
         hour: '2-digit',
         minute: '2-digit',
       }).format(new Date());
@@ -427,8 +427,8 @@ export function WhatsAppChatTheme({
             <p className="text-[11px] font-extrabold text-[#00A884]">{restName}</p>
             <p className="text-sm leading-relaxed font-semibold">
               {isEn
-                ? `Welcome to ${restName} 👋 Choose the category you'd like to order from:`
-                : `أهلاً بيك في ${restName} 👋 اختار القسم اللي حابب تطلب منه:`}
+                ? `Welcome to ${restName} — Choose the category you'd like to order from:`
+                : `أهلاً بيك في ${restName} — اختار القسم اللي حابب تطلب منه:`}
             </p>
             <div
               className={`flex items-center justify-end gap-1 text-[10px] font-mono-num ${
@@ -810,8 +810,8 @@ export function WhatsAppChatTheme({
                   <Sparkles className="w-4 h-4 shrink-0" />
                   <span>
                     {isEn
-                      ? 'Would you like to add to your order? 🍟🥤'
-                      : 'تحب تضيف مع طلبك؟ 🍟🥤'}
+                      ? 'Would you like to add to your order?'
+                      : 'تحب تضيف مع طلبك؟'}
                   </span>
                 </p>
               </div>

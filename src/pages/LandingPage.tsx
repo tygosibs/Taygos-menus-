@@ -667,7 +667,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                 <span>
                   {isSuperAdmin
                     ? isAr
-                      ? 'لوحة السوبر أدمن'
+                      ? 'لوحة مدير المنصة'
                       : 'Super Admin'
                     : isAr
                       ? 'لوحة التحكم'

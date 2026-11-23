@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { Restaurant, StaffActorInfo, StaffAuditLog } from '../../types/menu';
 import { writeStaffAuditLog } from '../../lib/firestoreService';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 interface AuthorizedDomainsCardProps {
   restaurant: Restaurant;
@@ -24,6 +25,8 @@ export const AuthorizedDomainsCard: React.FC<AuthorizedDomainsCardProps> = ({
   actor,
   auditLogs = [],
 }) => {
+  const { lang, dir } = useLanguage();
+  const isEn = lang === 'en';
   const [copiedDomain, setCopiedDomain] = useState<string | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
@@ -80,7 +83,11 @@ export const AuthorizedDomainsCard: React.FC<AuthorizedDomainsCardProps> = ({
           isDevLocal ? 'بيئة تطوير محلية فقط' : 'نطاق تشغيل معتمد'
         })`,
       });
-      setStatusMessage(`تم توثيق الدومين "${currentHost}" في سجل المراجعة بنجاح.`);
+      setStatusMessage(
+        isEn
+          ? `Domain "${currentHost}" recorded in the audit log.`
+          : `تم توثيق النطاق "${currentHost}" في سجل المراجعة بنجاح.`
+      );
     } finally {
       setVerifying(false);
     }
@@ -89,23 +96,38 @@ export const AuthorizedDomainsCard: React.FC<AuthorizedDomainsCardProps> = ({
   return (
     <div
       className="rounded-2xl border border-indigo-200 bg-linear-to-br from-indigo-50/60 via-white to-white p-5 shadow-xs"
-      dir="rtl"
+      dir={dir}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Globe className="h-5 w-5 text-indigo-600" />
             <h4 className="text-sm font-extrabold text-zinc-900">
-              النطاقات المعتمدة لـ Firebase Authentication (للمالك فقط)
+              {isEn
+                ? 'Authorized Domains for Firebase Authentication (Owner Only)'
+                : 'النطاقات المعتمدة لتسجيل الدخول (للمالك فقط)'}
             </h4>
             <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-[10px] font-extrabold text-emerald-800">
-              خطة مجانية بدون فوتره (Spark)
+              {isEn ? 'Free Spark Plan (No Billing)' : 'الخطة المجانية بدون فوتره'}
             </span>
           </div>
           <p className="max-w-3xl text-xs leading-relaxed text-zinc-600">
-            لضمان تسجيل دخول الموظفين والمالك بسلاسة دون رفض الطلبات، يجب أن يكون دومين النشر
-            (<span className="font-mono font-bold text-zinc-900">suofra.vercel.app</span> وأي نطاق معاينة نشط)
-            مدرجاً داخل <span className="font-bold">Authorized domains</span> في Firebase Console.
+            {isEn ? (
+              <>
+                To ensure smooth staff and owner sign-in, your deployment domain (
+                <span className="font-mono font-bold text-zinc-900">suofra.vercel.app</span> and any
+                active preview domain) must be listed under{' '}
+                <span className="font-bold">Authorized domains</span> in Firebase Console.
+              </>
+            ) : (
+              <>
+                لضمان تسجيل دخول الموظفين والمالك بسلاسة دون رفض الطلبات، يجب أن يكون نطاق النشر (
+                <span className="font-mono font-bold text-zinc-900" dir="ltr">
+                  suofra.vercel.app
+                </span>{' '}
+                وأي نطاق معاينة نشط) مدرجاً داخل النطاقات المعتمدة في إعدادات المصادقة.
+              </>
+            )}
           </p>
         </div>
 
@@ -116,7 +138,7 @@ export const AuthorizedDomainsCard: React.FC<AuthorizedDomainsCardProps> = ({
           className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-300 bg-white px-3.5 py-2 text-xs font-extrabold text-indigo-700 hover:bg-indigo-50"
         >
           <ExternalLink className="h-3.5 w-3.5" />
-          فتح إعدادات Firebase Console
+          {isEn ? 'Open Firebase Auth Settings' : 'فتح إعدادات المصادقة'}
         </a>
       </div>
 
@@ -138,29 +160,37 @@ export const AuthorizedDomainsCard: React.FC<AuthorizedDomainsCardProps> = ({
                 </div>
                 <div className="mt-0.5 text-[10px] font-bold text-zinc-500">
                   {dom === 'suofra.vercel.app'
-                    ? 'الدومين الرئيسي للإنتاج'
+                    ? isEn
+                      ? 'Primary Production Domain'
+                      : 'النطاق الرئيسي للإنتاج'
                     : isRunApp
-                      ? 'دومين المعاينة التلقائي'
+                      ? isEn
+                        ? 'Auto Preview Domain'
+                        : 'نطاق المعاينة التلقائي'
                       : isCurrent
-                        ? 'الدومين المفتوح حالياً'
-                        : 'نطاق مضاف'}
+                        ? isEn
+                          ? 'Currently Active Domain'
+                          : 'النطاق المفتوح حالياً'
+                        : isEn
+                          ? 'Added Domain'
+                          : 'نطاق مضاف'}
                 </div>
               </div>
 
               <button
                 type="button"
                 onClick={() => handleCopy(dom)}
-                className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-1.5 text-[11px] font-bold text-zinc-700 hover:bg-zinc-100"
+                className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-1.5 text-[11px] font-bold text-zinc-700 hover:bg-zinc-100 cursor-pointer"
               >
                 {copiedDomain === dom ? (
                   <>
                     <Check className="h-3 w-3 text-emerald-600" />
-                    تم النسخ
+                    {isEn ? 'Copied' : 'تم النسخ'}
                   </>
                 ) : (
                   <>
                     <Copy className="h-3 w-3" />
-                    نسخ
+                    {isEn ? 'Copy' : 'نسخ'}
                   </>
                 )}
               </button>
@@ -175,7 +205,9 @@ export const AuthorizedDomainsCard: React.FC<AuthorizedDomainsCardProps> = ({
                 {currentHost}
               </div>
               <div className="text-[10px] font-bold text-amber-800">
-                وضع التطوير المحلي فقط (Dev-only) — لا يُعتمد كبيئة إنتاج عامة
+                {isEn
+                  ? 'Local development mode only — not for public production'
+                  : 'وضع التطوير المحلي فقط — لا يُعتمد كبيئة إنتاج عامة'}
               </div>
             </div>
           </div>
@@ -187,7 +219,9 @@ export const AuthorizedDomainsCard: React.FC<AuthorizedDomainsCardProps> = ({
         <div className="flex items-center gap-2 text-[11px] font-bold text-zinc-600">
           <Sparkles className="h-4 w-4 shrink-0 text-indigo-500" />
           <span>
-            ملاحظة التوفير: إضافة الدومين آلياً عبر Cloud IAM محجوبة لحماية الحساب على الباقة المجانية دون فوتره؛ يكتفي المالك بنسخ النطاق أعلاه وإضافته مرة واحدة فقط من الرابط.
+            {isEn
+              ? 'Cost-saving note: Automated Cloud IAM domain provisioning is disabled to keep your account on the free tier. Copy the domain above and add it once via the link.'
+              : 'ملاحظة التوفير: إضافة النطاق آلياً محجوبة لحماية الحساب على الباقة المجانية دون فوتره؛ يكتفي المالك بنسخ النطاق أعلاه وإضافته مرة واحدة فقط من الرابط.'}
           </span>
         </div>
 
@@ -195,10 +229,16 @@ export const AuthorizedDomainsCard: React.FC<AuthorizedDomainsCardProps> = ({
           type="button"
           disabled={verifying}
           onClick={handleVerifyAndAuditDomain}
-          className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-extrabold text-white hover:bg-indigo-700 disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-extrabold text-white hover:bg-indigo-700 disabled:opacity-50 cursor-pointer"
         >
           <ShieldCheck className="h-4 w-4" />
-          {isVercelProd ? 'توثيق الدومين الرئيسي الآن' : 'فحص وتوثيق الدومين الحالي'}
+          {isVercelProd
+            ? isEn
+              ? 'Verify Primary Domain Now'
+              : 'توثيق النطاق الرئيسي الآن'
+            : isEn
+              ? 'Check & Verify Current Domain'
+              : 'فحص وتوثيق النطاق الحالي'}
         </button>
       </div>
 
@@ -210,7 +250,7 @@ export const AuthorizedDomainsCard: React.FC<AuthorizedDomainsCardProps> = ({
 
       {lastDomainLog && !statusMessage && (
         <div className="mt-2 text-[11px] font-bold text-zinc-500">
-          آخر توثيق مسجل: {lastDomainLog.details}
+          {isEn ? 'Last recorded check:' : 'آخر توثيق مسجل:'} {lastDomainLog.details}
         </div>
       )}
     </div>

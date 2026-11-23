@@ -313,7 +313,13 @@ export function CashierFloorPosPanel({
       onRestaurantUpdated?.({ ...restaurant, operationsConfig: nextConfig });
       setGridSettingsOpen(false);
     } catch (err) {
-      setGridSettingsError(err instanceof Error ? err.message : 'تعذر حفظ إعدادات الألوان.');
+      setGridSettingsError(
+        err instanceof Error
+          ? err.message
+          : isEn
+            ? 'Could not save color settings.'
+            : 'تعذر حفظ إعدادات الألوان.'
+      );
     } finally {
       setSavingGridSettings(false);
     }
@@ -430,27 +436,39 @@ export function CashierFloorPosPanel({
   const handleSubmitCashierPos = async (andSettleNow: boolean) => {
     setPosFeedback(null);
     if (posCart.length === 0) {
-      setPosFeedback({ type: 'err', text: 'أضف صنفاً واحداً على الأقل قبل إرسال الطلب.' });
+      setPosFeedback({
+        type: 'err',
+        text: isEn ? 'Add at least one item before sending the order.' : 'أضف صنفاً واحداً على الأقل قبل إرسال الطلب.',
+      });
       return;
     }
     if (posOrderType === 'dine_in' && !posTableNumber.trim()) {
-      setPosFeedback({ type: 'err', text: 'يرجى تحديد رقم الترابيزة لطلب الصالة.' });
+      setPosFeedback({
+        type: 'err',
+        text: isEn ? 'Please select the table number for dine-in.' : 'يرجى تحديد رقم الترابيزة لطلب الصالة.',
+      });
       return;
     }
     if (posOrderType === 'delivery' && !posDeliveryAddress.trim()) {
-      setPosFeedback({ type: 'err', text: 'يرجى كتابة عنوان التوصيل لطلب الدليفري.' });
+      setPosFeedback({
+        type: 'err',
+        text: isEn ? 'Please enter the delivery address.' : 'يرجى كتابة عنوان التوصيل لطلب الدليفري.',
+      });
       return;
     }
     if (posOrderType === 'delivery' && !posCustomerName.trim()) {
-      setPosFeedback({ type: 'err', text: 'يرجى إدخال اسم العميل لطلب الدليفري.' });
+      setPosFeedback({
+        type: 'err',
+        text: isEn ? 'Please enter the customer name for delivery.' : 'يرجى إدخال اسم العميل لطلب الدليفري.',
+      });
       return;
     }
 
     const resolvedCustomerName =
       posOrderType === 'dine_in'
-        ? posCustomerName.trim() || `صالة (${actor.name})`
+        ? posCustomerName.trim() || (isEn ? `Dine-in (${actor.name})` : `صالة (${actor.name})`)
         : posOrderType === 'pickup'
-          ? posCustomerName.trim() || 'عميل تيك أواي'
+          ? posCustomerName.trim() || (isEn ? 'Takeaway Guest' : 'عميل تيك أواي')
           : posCustomerName.trim();
 
     setPosSubmitting(andSettleNow ? 'settle' : 'send');
@@ -506,7 +524,7 @@ export function CashierFloorPosPanel({
           posTotals.manualDiscountPercent > 0 ? posTotals.manualDiscountPercent : undefined,
         manualDiscountReason:
           posTotals.discountAmount > 0
-            ? posDiscountReason.trim() || 'خصم من نقطة بيع الكاشير'
+            ? posDiscountReason.trim() || (isEn ? 'Cashier POS Discount' : 'خصم من نقطة بيع الكاشير')
             : undefined,
         taxAmount: posTotals.taxAmount,
         total: posTotals.total,
@@ -535,7 +553,7 @@ export function CashierFloorPosPanel({
           posTotals.manualDiscountPercent > 0 ? posTotals.manualDiscountPercent : undefined,
         manualDiscountReason:
           posTotals.discountAmount > 0
-            ? posDiscountReason.trim() || 'خصم من نقطة بيع الكاشير'
+            ? posDiscountReason.trim() || (isEn ? 'Cashier POS Discount' : 'خصم من نقطة بيع الكاشير')
             : undefined,
         taxAmount: posTotals.taxAmount,
         total: posTotals.total,
@@ -559,8 +577,12 @@ export function CashierFloorPosPanel({
       setPosFeedback({
         type: 'ok',
         text: andSettleNow
-          ? `تم إرسال الطلب #${res.orderNumber} للمحطات وجاري فتح نافذة التحصيل الفوري...`
-          : `تم إرسال الطلب #${res.orderNumber} للمحطات والمطبخ بنجاح.`,
+          ? isEn
+            ? `Order #${res.orderNumber} sent to stations — opening instant settlement...`
+            : `تم إرسال الطلب #${res.orderNumber} للمحطات وجاري فتح نافذة التحصيل الفوري...`
+          : isEn
+            ? `Order #${res.orderNumber} sent to kitchen and stations.`
+            : `تم إرسال الطلب #${res.orderNumber} للمحطات والمطبخ بنجاح.`,
       });
 
       if (andSettleNow) {
@@ -569,7 +591,7 @@ export function CashierFloorPosPanel({
     } catch (err) {
       setPosFeedback({
         type: 'err',
-        text: err instanceof Error ? err.message : 'تعذر إرسال الطلب الآن.',
+        text: err instanceof Error ? err.message : isEn ? 'Could not submit order right now.' : 'تعذر إرسال الطلب الآن.',
       });
     } finally {
       setPosSubmitting(null);
@@ -588,7 +610,9 @@ export function CashierFloorPosPanel({
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
               <div className="p-3 rounded-xl border border-zinc-200 bg-zinc-50 flex items-center justify-between gap-2">
                 <div>
-                  <p className="text-[11px] font-bold text-zinc-500">ترابيزات شاغرة</p>
+                  <p className="text-[11px] font-bold text-zinc-500">
+                    {isEn ? 'Available Tables' : 'ترابيزات شاغرة'}
+                  </p>
                   <p className="text-lg font-extrabold font-mono-num text-zinc-950">{floorSummary.empty}</p>
                 </div>
                 <span
@@ -599,7 +623,9 @@ export function CashierFloorPosPanel({
 
               <div className="p-3 rounded-xl border border-zinc-200 bg-zinc-50 flex items-center justify-between gap-2">
                 <div>
-                  <p className="text-[11px] font-bold text-zinc-500">مشغولة الآن</p>
+                  <p className="text-[11px] font-bold text-zinc-500">
+                    {isEn ? 'Occupied Now' : 'مشغولة الآن'}
+                  </p>
                   <p className="text-lg font-extrabold font-mono-num text-zinc-950">{floorSummary.occupied}</p>
                 </div>
                 <span
@@ -610,7 +636,9 @@ export function CashierFloorPosPanel({
 
               <div className="p-3 rounded-xl border border-zinc-200 bg-zinc-50 flex items-center justify-between gap-2">
                 <div>
-                  <p className="text-[11px] font-bold text-zinc-500">طلب الشيك</p>
+                  <p className="text-[11px] font-bold text-zinc-500">
+                    {isEn ? 'Bill Requested' : 'طلب الشيك'}
+                  </p>
                   <p className="text-lg font-extrabold font-mono-num text-zinc-950">{floorSummary.billRequested}</p>
                 </div>
                 <span
@@ -621,7 +649,11 @@ export function CashierFloorPosPanel({
 
               <div className="p-3 rounded-xl border border-zinc-200 bg-zinc-50 flex items-center justify-between gap-2">
                 <div>
-                  <p className="text-[11px] font-bold text-zinc-500">متأخرة (+{opsConfig.tableOverdueMinutes}د)</p>
+                  <p className="text-[11px] font-bold text-zinc-500">
+                    {isEn
+                      ? `Overdue (+${opsConfig.tableOverdueMinutes}m)`
+                      : `متأخرة (+${opsConfig.tableOverdueMinutes}د)`}
+                  </p>
                   <p className="text-lg font-extrabold font-mono-num text-zinc-950">{floorSummary.overdue}</p>
                 </div>
                 <span
@@ -642,7 +674,7 @@ export function CashierFloorPosPanel({
                       : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
                   }`}
                 >
-                  كل الصالات ({halls.length})
+                  {isEn ? `All Halls (${halls.length})` : `كل الصالات (${halls.length})`}
                 </button>
                 {hallFilterOptions.map((hName) => (
                   <button
@@ -664,7 +696,7 @@ export function CashierFloorPosPanel({
               <div className="flex items-center gap-2">
                 {floorSummary.activeRevenue > 0 && (
                   <span className="px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-extrabold font-mono-num whitespace-nowrap">
-                    شيكات مفتوحة: {formatMoney(floorSummary.activeRevenue)}
+                    {isEn ? 'Open Checks:' : 'شيكات مفتوحة:'} {formatMoney(floorSummary.activeRevenue)}
                   </span>
                 )}
                 {canConfigureGridColors && (
@@ -674,7 +706,7 @@ export function CashierFloorPosPanel({
                     className="min-h-[36px] px-3 py-1.5 rounded-xl border border-zinc-300 bg-white hover:bg-zinc-50 text-xs font-extrabold text-zinc-800 inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
                   >
                     <Settings className="w-3.5 h-3.5 text-indigo-600" />
-                    <span>ألوان الترابيزات ووقت التأخير</span>
+                    <span>{isEn ? 'Table Colors & Overdue SLA' : 'ألوان الترابيزات ووقت التأخير'}</span>
                   </button>
                 )}
               </div>
@@ -686,10 +718,12 @@ export function CashierFloorPosPanel({
             <div className="bg-white border border-zinc-200 rounded-2xl p-8 text-center space-y-2">
               <Grid className="w-8 h-8 text-zinc-300 mx-auto" />
               <h3 className="text-sm font-extrabold text-zinc-900">
-                لا توجد صالات أو ترابيزات مضافة بعد
+                {isEn ? 'No halls or tables added yet' : 'لا توجد صالات أو ترابيزات مضافة بعد'}
               </h3>
               <p className="text-xs text-zinc-500 max-w-md mx-auto">
-                تُنشأ الصالات وأكواد QR من لوحة صاحب المطعم أو المدير المصرّح له، ويمكنك حالياً استقبال طلبات التيك أواي والدليفري من نقطة بيع الكاشير.
+                {isEn
+                  ? 'Halls and QR codes are created from the Owner or Manager panel. You can still take Takeaway & Delivery orders from the Cashier POS.'
+                  : 'تُنشأ الصالات وأكواد QR من لوحة صاحب المطعم أو المدير المصرّح له، ويمكنك حالياً استقبال طلبات التيك أواي والدليفري من نقطة بيع الكاشير.'}
               </p>
             </div>
           ) : (
@@ -708,7 +742,8 @@ export function CashierFloorPosPanel({
                     )}
                   </div>
                   <span className="text-[11px] font-mono-num text-zinc-500 font-bold">
-                    {tableNumbers.length} ترابيزة
+                    {tableNumbers.length}{' '}
+                    {isEn ? (tableNumbers.length === 1 ? 'table' : 'tables') : 'ترابيزة'}
                   </span>
                 </div>
 
@@ -727,16 +762,24 @@ export function CashierFloorPosPanel({
                         <div className="w-full flex items-center justify-between text-[10px] font-extrabold opacity-95">
                           <span>
                             {snap.state === 'empty'
-                              ? 'شاغرة'
+                              ? isEn
+                                ? 'Open'
+                                : 'شاغرة'
                               : snap.state === 'billRequested'
-                                ? 'شيك'
+                                ? isEn
+                                  ? 'Bill'
+                                  : 'شيك'
                                 : snap.state === 'overdue'
-                                  ? 'متأخرة'
-                                  : 'مشغولة'}
+                                  ? isEn
+                                    ? 'Overdue'
+                                    : 'متأخرة'
+                                  : isEn
+                                    ? 'Seated'
+                                    : 'مشغولة'}
                           </span>
                           <span className="flex items-center gap-1 font-mono-num">
                             {snap.tblCalls.length > 0 && <BellRing className="w-3 h-3 animate-pulse" />}
-                            {snap.elapsedMins > 0 ? `${snap.elapsedMins}د` : ''}
+                            {snap.elapsedMins > 0 ? `${snap.elapsedMins}${isEn ? 'm' : 'د'}` : ''}
                           </span>
                         </div>
 
@@ -746,8 +789,10 @@ export function CashierFloorPosPanel({
 
                         <div className="text-[10px] font-bold opacity-95 truncate w-full text-center font-mono-num">
                           {snap.itemsCount > 0
-                            ? `${snap.itemsCount} صنف · ${formatMoney(snap.total)}`
-                            : 'جاهزة للجلوس'}
+                            ? `${snap.itemsCount} ${isEn ? 'items' : 'صنف'} · ${formatMoney(snap.total)}`
+                            : isEn
+                              ? 'Ready for guests'
+                              : 'جاهزة للجلوس'}
                         </div>
                       </button>
                     );
@@ -759,34 +804,40 @@ export function CashierFloorPosPanel({
 
           {/* Bottom Color Legend */}
           <div className="bg-white border border-zinc-200 rounded-2xl p-3.5 flex flex-wrap items-center justify-center gap-4 text-xs font-bold text-zinc-700">
-            <span className="text-[11px] font-extrabold text-zinc-500">دليل الألوان:</span>
+            <span className="text-[11px] font-extrabold text-zinc-500">
+              {isEn ? 'Color Legend:' : 'دليل الألوان:'}
+            </span>
             <span className="flex items-center gap-1.5">
               <span
                 className="w-3.5 h-3.5 rounded-sm inline-block"
                 style={{ backgroundColor: opsConfig.tableColors.empty }}
               />
-              <span>شاغرة</span>
+              <span>{isEn ? 'Available' : 'شاغرة'}</span>
             </span>
             <span className="flex items-center gap-1.5">
               <span
                 className="w-3.5 h-3.5 rounded-sm inline-block"
                 style={{ backgroundColor: opsConfig.tableColors.occupied }}
               />
-              <span>مشغولة</span>
+              <span>{isEn ? 'Occupied' : 'مشغولة'}</span>
             </span>
             <span className="flex items-center gap-1.5">
               <span
                 className="w-3.5 h-3.5 rounded-sm inline-block"
                 style={{ backgroundColor: opsConfig.tableColors.billRequested }}
               />
-              <span>طلب الشيك</span>
+              <span>{isEn ? 'Bill Requested' : 'طلب الشيك'}</span>
             </span>
             <span className="flex items-center gap-1.5">
               <span
                 className="w-3.5 h-3.5 rounded-sm inline-block"
                 style={{ backgroundColor: opsConfig.tableColors.overdue }}
               />
-              <span>متأخرة (+{opsConfig.tableOverdueMinutes} د)</span>
+              <span>
+                {isEn
+                  ? `Overdue (+${opsConfig.tableOverdueMinutes}m)`
+                  : `متأخرة (+${opsConfig.tableOverdueMinutes} د)`}
+              </span>
             </span>
           </div>
         </div>
@@ -806,12 +857,12 @@ export function CashierFloorPosPanel({
                   type="text"
                   value={posSearchQuery}
                   onChange={(e) => setPosSearchQuery(e.target.value)}
-                  placeholder="ابحث عن صنف بالاسم لإضافته فوراً للفاتورة..."
+                  placeholder={isEn ? 'Search item by name to add instantly...' : 'ابحث عن صنف بالاسم لإضافته فوراً للفاتورة...'}
                   className="w-full ps-9 pe-3 py-2.5 rounded-xl border border-zinc-200 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-zinc-900"
                 />
               </div>
               <span className="text-[11px] font-bold text-zinc-500 whitespace-nowrap">
-                {posFilteredItems.length} صنف متاح
+                {posFilteredItems.length} {isEn ? 'available items' : 'صنف متاح'}
               </span>
             </div>
 
@@ -825,7 +876,7 @@ export function CashierFloorPosPanel({
                     : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
                 }`}
               >
-                كل الأقسام ({menuItems.filter((m) => m.isAvailable !== false).length})
+                {isEn ? 'All Categories' : 'كل الأقسام'} ({menuItems.filter((m) => m.isAvailable !== false).length})
               </button>
               {categories.map((cat) => (
                 <button
@@ -845,7 +896,7 @@ export function CashierFloorPosPanel({
 
             {posFilteredItems.length === 0 ? (
               <p className="text-xs text-zinc-500 text-center py-8">
-                لا توجد أصناف متاحة تطابق البحث الآن.
+                {isEn ? 'No available items match your search.' : 'لا توجد أصناف متاحة تطابق البحث الآن.'}
               </p>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
@@ -876,7 +927,7 @@ export function CashierFloorPosPanel({
                         </span>
                         {hasOptions && (
                           <span className="text-[10px] px-1.5 py-0.5 rounded bg-white border border-zinc-200 text-zinc-600 font-bold">
-                            خيارات
+                            {isEn ? 'Options' : 'خيارات'}
                           </span>
                         )}
                       </div>
@@ -892,9 +943,9 @@ export function CashierFloorPosPanel({
             <div className="grid grid-cols-3 gap-1.5">
               {(
                 [
-                  { id: 'dine_in' as const, label: 'صالة', Icon: Utensils },
-                  { id: 'pickup' as const, label: 'تيك أواي', Icon: ShoppingBag },
-                  { id: 'delivery' as const, label: 'دليفري', Icon: Truck },
+                  { id: 'dine_in' as const, label: isEn ? 'Dine-in' : 'صالة', Icon: Utensils },
+                  { id: 'pickup' as const, label: isEn ? 'Takeaway' : 'تيك أواي', Icon: ShoppingBag },
+                  { id: 'delivery' as const, label: isEn ? 'Delivery' : 'دليفري', Icon: Truck },
                 ] as const
               ).map(({ id, label, Icon }) => (
                 <button
@@ -926,14 +977,14 @@ export function CashierFloorPosPanel({
                   >
                     {halls.map((h) => (
                       <option key={h.id} value={h.name}>
-                        {h.name}
+                        {loc(h.name, h.name_en)}
                       </option>
                     ))}
                   </select>
                 ) : (
                   <input
                     type="text"
-                    placeholder="اسم الصالة"
+                    placeholder={isEn ? 'Hall name' : 'اسم الصالة'}
                     value={posHallName}
                     onChange={(e) => setPosHallName(e.target.value)}
                     className="px-3 py-2 rounded-xl border border-zinc-200 text-xs font-bold"
@@ -946,17 +997,17 @@ export function CashierFloorPosPanel({
                     onChange={(e) => setPosTableNumber(e.target.value)}
                     className="px-3 py-2 rounded-xl border border-zinc-300 text-xs font-mono-num font-extrabold bg-white"
                   >
-                    <option value="">رقم الترابيزة *</option>
+                    <option value="">{isEn ? 'Table # *' : 'رقم الترابيزة *'}</option>
                     {selectedHallTableOptions.map((tbl) => (
                       <option key={tbl} value={tbl}>
-                        ترابيزة {tbl}
+                        {isEn ? `Table ${tbl}` : `ترابيزة ${tbl}`}
                       </option>
                     ))}
                   </select>
                 ) : (
                   <input
                     type="text"
-                    placeholder="رقم الترابيزة *"
+                    placeholder={isEn ? 'Table # *' : 'رقم الترابيزة *'}
                     value={posTableNumber}
                     onChange={(e) => setPosTableNumber(e.target.value)}
                     className="px-3 py-2 rounded-xl border border-zinc-300 text-xs font-mono-num font-extrabold"
@@ -965,7 +1016,7 @@ export function CashierFloorPosPanel({
 
                 <input
                   type="text"
-                  placeholder="اسم الضيف على الطاولة (اختياري)"
+                  placeholder={isEn ? 'Guest name on table (optional)' : 'اسم الضيف على الطاولة (اختياري)'}
                   value={posCustomerName}
                   onChange={(e) => setPosCustomerName(e.target.value)}
                   className="col-span-2 px-3 py-2 rounded-xl border border-zinc-200 text-xs"
@@ -980,8 +1031,12 @@ export function CashierFloorPosPanel({
                     dir="ltr"
                     placeholder={
                       posOrderType === 'delivery'
-                        ? 'رقم هاتف العميل (بحث تلقائي عن العنوان)'
-                        : 'هاتف العميل (اختياري للبحث أو الحفظ)'
+                        ? isEn
+                          ? 'Customer phone (auto-lookup address)'
+                          : 'رقم هاتف العميل (بحث تلقائي عن العنوان)'
+                        : isEn
+                          ? 'Customer phone (optional for lookup/save)'
+                          : 'هاتف العميل (اختياري للبحث أو الحفظ)'
                     }
                     value={posCustomerPhone}
                     onChange={(e) => setPosCustomerPhone(e.target.value)}
@@ -1013,8 +1068,12 @@ export function CashierFloorPosPanel({
                     type="text"
                     placeholder={
                       posOrderType === 'pickup'
-                        ? 'اسم العميل (اختياري — افتراضي: عميل تيك أواي)'
-                        : 'اسم العميل *'
+                        ? isEn
+                          ? 'Customer name (optional — default: Takeaway Guest)'
+                          : 'اسم العميل (اختياري — افتراضي: عميل تيك أواي)'
+                        : isEn
+                          ? 'Customer name *'
+                          : 'اسم العميل *'
                     }
                     value={posCustomerName}
                     onChange={(e) => setPosCustomerName(e.target.value)}
@@ -1024,7 +1083,7 @@ export function CashierFloorPosPanel({
                 {posOrderType === 'delivery' && (
                   <input
                     type="text"
-                    placeholder="عنوان التوصيل بالتفصيل *"
+                    placeholder={isEn ? 'Full delivery address *' : 'عنوان التوصيل بالتفصيل *'}
                     value={posDeliveryAddress}
                     onChange={(e) => setPosDeliveryAddress(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl border border-zinc-300 text-xs font-bold"
@@ -1037,7 +1096,9 @@ export function CashierFloorPosPanel({
             <div className="border-t border-zinc-100 pt-3 space-y-2 max-h-60 overflow-y-auto">
               {posCart.length === 0 ? (
                 <p className="text-xs text-zinc-400 text-center py-5">
-                  اضغط على أي صنف من القائمة لإضافته للفاتورة
+                  {isEn
+                    ? 'Tap any menu item to add it to the check'
+                    : 'اضغط على أي صنف من القائمة لإضافته للفاتورة'}
                 </p>
               ) : (
                 posCart.map((c) => (
@@ -1047,11 +1108,11 @@ export function CashierFloorPosPanel({
                   >
                     <div className="min-w-0">
                       <p className="font-extrabold text-zinc-900 truncate">
-                        {c.item.name} {c.size ? `(${c.size.name})` : ''}
+                        {loc(c.item.name, c.item.name_en)} {c.size ? `(${c.size.name})` : ''}
                       </p>
                       {c.addons.length > 0 && (
                         <p className="text-[10px] text-zinc-500 truncate">
-                          + {c.addons.map((a) => a.name).join('، ')}
+                          + {c.addons.map((a) => a.name).join(isEn ? ', ' : '، ')}
                         </p>
                       )}
                       {c.notes && (
@@ -1108,7 +1169,7 @@ export function CashierFloorPosPanel({
 
             <input
               type="text"
-              placeholder="ملاحظات عامة على الطلب (اختياري)"
+              placeholder={isEn ? 'General order notes (optional)' : 'ملاحظات عامة على الطلب (اختياري)'}
               value={posOrderNotes}
               onChange={(e) => setPosOrderNotes(e.target.value)}
               className="w-full px-3 py-2 rounded-xl border border-zinc-200 text-xs"
@@ -1120,13 +1181,13 @@ export function CashierFloorPosPanel({
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[11px] font-extrabold text-indigo-950 flex items-center gap-1">
                     <Percent className="w-3.5 h-3.5 text-indigo-700" />
-                    <span>خصم فوري خاص</span>
+                    <span>{isEn ? 'Special Instant Discount' : 'خصم فوري خاص'}</span>
                   </span>
                   <div className="flex items-center gap-1">
                     {(
                       [
-                        { id: 'none' as const, label: 'بدون' },
-                        { id: 'amount' as const, label: 'مبلغ' },
+                        { id: 'none' as const, label: isEn ? 'None' : 'بدون' },
+                        { id: 'amount' as const, label: isEn ? 'Amount' : 'مبلغ' },
                         { id: 'percent' as const, label: '%' },
                       ] as const
                     ).map((opt) => (
@@ -1151,14 +1212,22 @@ export function CashierFloorPosPanel({
                       type="number"
                       min={0}
                       dir="ltr"
-                      placeholder={posDiscountMode === 'percent' ? 'النسبة %' : 'القيمة'}
+                      placeholder={
+                        posDiscountMode === 'percent'
+                          ? isEn
+                            ? 'Percent %'
+                            : 'النسبة %'
+                          : isEn
+                            ? 'Amount'
+                            : 'القيمة'
+                      }
                       value={posDiscountValue}
                       onChange={(e) => setPosDiscountValue(e.target.value)}
                       className="px-2.5 py-1.5 rounded-lg border border-indigo-200 bg-white text-xs font-mono-num font-bold"
                     />
                     <input
                       type="text"
-                      placeholder="سبب الخصم"
+                      placeholder={isEn ? 'Discount reason' : 'سبب الخصم'}
                       value={posDiscountReason}
                       onChange={(e) => setPosDiscountReason(e.target.value)}
                       className="px-2.5 py-1.5 rounded-lg border border-indigo-200 bg-white text-xs"
@@ -1172,35 +1241,41 @@ export function CashierFloorPosPanel({
             {posCart.length > 0 && (
               <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-200 space-y-1 text-xs">
                 <div className="flex justify-between text-zinc-600">
-                  <span>المجموع الفرعي:</span>
+                  <span>{isEn ? 'Subtotal:' : 'المجموع الفرعي:'}</span>
                   <span className="font-mono-num font-bold">{formatMoney(posTotals.subtotal)}</span>
                 </div>
                 {posTotals.discountAmount > 0 && (
                   <div className="flex justify-between text-emerald-700 font-bold">
-                    <span>الخصم الإداري:</span>
+                    <span>{isEn ? 'Admin Discount:' : 'الخصم الإداري:'}</span>
                     <span className="font-mono-num">-{formatMoney(posTotals.discountAmount)}</span>
                   </div>
                 )}
                 {posTotals.serviceCharge > 0 && (
                   <div className="flex justify-between text-zinc-600">
-                    <span>رسوم الخدمة ({restaurant.serviceCharge || 0}%):</span>
+                    <span>
+                      {isEn
+                        ? `Service Charge (${restaurant.serviceCharge || 0}%):`
+                        : `رسوم الخدمة (${restaurant.serviceCharge || 0}%):`}
+                    </span>
                     <span className="font-mono-num font-bold">{formatMoney(posTotals.serviceCharge)}</span>
                   </div>
                 )}
                 {posTotals.deliveryFee > 0 && (
                   <div className="flex justify-between text-zinc-600">
-                    <span>رسوم التوصيل:</span>
+                    <span>{isEn ? 'Delivery Fee:' : 'رسوم التوصيل:'}</span>
                     <span className="font-mono-num font-bold">{formatMoney(posTotals.deliveryFee)}</span>
                   </div>
                 )}
                 {posTotals.taxAmount > 0 && (
                   <div className="flex justify-between text-zinc-600">
-                    <span>الضريبة ({restaurant.taxRate || 0}%):</span>
+                    <span>
+                      {isEn ? `Tax (${restaurant.taxRate || 0}%):` : `الضريبة (${restaurant.taxRate || 0}%):`}
+                    </span>
                     <span className="font-mono-num font-bold">{formatMoney(posTotals.taxAmount)}</span>
                   </div>
                 )}
                 <div className="flex justify-between font-extrabold text-zinc-950 text-sm pt-1.5 border-t border-zinc-200">
-                  <span>الإجمالي المستحق:</span>
+                  <span>{isEn ? 'Total Due:' : 'الإجمالي المستحق:'}</span>
                   <span className="font-mono-num">{formatMoney(posTotals.total)}</span>
                 </div>
               </div>
@@ -1228,8 +1303,12 @@ export function CashierFloorPosPanel({
                 <Send className="w-4 h-4 text-amber-400" />
                 <span>
                   {posSubmitting === 'send'
-                    ? 'جاري الإرسال للمطبخ...'
-                    : 'إرسال للمطبخ والمحطات (حساب مفتوح)'}
+                    ? isEn
+                      ? 'Sending to kitchen...'
+                      : 'جاري الإرسال للمطبخ...'
+                    : isEn
+                      ? 'Send to Kitchen & Stations (Open Check)'
+                      : 'إرسال للمطبخ والمحطات (حساب مفتوح)'}
                 </span>
               </button>
 
@@ -1242,8 +1321,12 @@ export function CashierFloorPosPanel({
                 <Banknote className="w-4 h-4" />
                 <span>
                   {posSubmitting === 'settle'
-                    ? 'جاري الإنشاء وفتح التحصيل...'
-                    : 'إرسال + تحصيل فوري (كاش / فيزا)'}
+                    ? isEn
+                      ? 'Creating & opening settlement...'
+                      : 'جاري الإنشاء وفتح التحصيل...'
+                    : isEn
+                      ? 'Send + Instant Settle (Cash / Visa)'
+                      : 'إرسال + تحصيل فوري (كاش / فيزا)'}
                 </span>
               </button>
             </div>
@@ -1280,24 +1363,40 @@ export function CashierFloorPosPanel({
                       {selectedTableDrawer.hallName}
                     </p>
                     <h3 className="text-lg font-extrabold text-zinc-950 flex items-center gap-2">
-                      <span>ترابيزة {selectedTableDrawer.tableNumber}</span>
+                      <span>
+                        {isEn
+                          ? `Table ${selectedTableDrawer.tableNumber}`
+                          : `ترابيزة ${selectedTableDrawer.tableNumber}`}
+                      </span>
                       <span
                         className="px-2 py-0.5 rounded-md text-[10px] font-extrabold text-white"
                         style={{ backgroundColor: opsConfig.tableColors[snap.state] }}
                       >
                         {snap.state === 'empty'
-                          ? 'شاغرة'
+                          ? isEn
+                            ? 'Open'
+                            : 'شاغرة'
                           : snap.state === 'billRequested'
-                            ? 'طلب شيك'
+                            ? isEn
+                              ? 'Bill Requested'
+                              : 'طلب شيك'
                             : snap.state === 'overdue'
-                              ? 'متأخرة'
-                              : 'مشغولة'}
+                              ? isEn
+                                ? 'Overdue'
+                                : 'متأخرة'
+                              : isEn
+                                ? 'Occupied'
+                                : 'مشغولة'}
                       </span>
                     </h3>
                     {snap.elapsedMins > 0 && (
                       <p className="text-[11px] text-zinc-500 flex items-center gap-1 mt-0.5 font-mono-num">
                         <Clock className="w-3 h-3" />
-                        <span>مضى {snap.elapsedMins} دقيقة منذ فتح الطاولة</span>
+                        <span>
+                          {isEn
+                            ? `${snap.elapsedMins} min elapsed since opening`
+                            : `مضى ${snap.elapsedMins} دقيقة منذ فتح الطاولة`}
+                        </span>
                       </p>
                     )}
                   </div>
@@ -1315,7 +1414,11 @@ export function CashierFloorPosPanel({
                   <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-300 space-y-2">
                     <p className="text-xs font-extrabold text-amber-950 flex items-center gap-1.5">
                       <BellRing className="w-4 h-4 text-amber-600" />
-                      <span>نداءات نشطة على الطاولة ({snap.tblCalls.length})</span>
+                      <span>
+                        {isEn
+                          ? `Active Calls on Table (${snap.tblCalls.length})`
+                          : `نداءات نشطة على الطاولة (${snap.tblCalls.length})`}
+                      </span>
                     </p>
                     {snap.tblCalls.map((call) => (
                       <div
@@ -1325,14 +1428,24 @@ export function CashierFloorPosPanel({
                         <div className="min-w-0">
                           <p className="font-extrabold text-zinc-900">
                             {call.callType === 'request_bill_cash'
-                              ? 'طلب الشيك (كاش)'
+                              ? isEn
+                                ? 'Bill Request (Cash)'
+                                : 'طلب الشيك (كاش)'
                               : call.callType === 'request_bill_card'
-                                ? 'طلب الشيك (فيزا)'
+                                ? isEn
+                                  ? 'Bill Request (Visa)'
+                                  : 'طلب الشيك (فيزا)'
                                 : call.callType === 'call_waiter'
-                                  ? 'نداء كابتن / ويتر'
-                                  : 'أدوات طعام / مياه'}
+                                  ? isEn
+                                    ? 'Call Captain / Waiter'
+                                    : 'نداء كابتن / ويتر'
+                                  : isEn
+                                    ? 'Cutlery & Water'
+                                    : 'أدوات طعام / مياه'}
                           </p>
-                          <p className="text-[10px] text-zinc-500 truncate">باسم: {call.guestName}</p>
+                          <p className="text-[10px] text-zinc-500 truncate">
+                            {isEn ? `Guest: ${call.guestName}` : `باسم: ${call.guestName}`}
+                          </p>
                         </div>
                         <button
                           type="button"
@@ -1348,7 +1461,7 @@ export function CashierFloorPosPanel({
                           className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-extrabold flex items-center gap-1 shrink-0 cursor-pointer disabled:opacity-50"
                         >
                           <CheckCheck className="w-3.5 h-3.5" />
-                          <span>تم</span>
+                          <span>{isEn ? 'Done' : 'تم'}</span>
                         </button>
                       </div>
                     ))}
@@ -1357,9 +1470,13 @@ export function CashierFloorPosPanel({
 
                 {snap.tblOrders.length === 0 ? (
                   <div className="p-5 rounded-2xl bg-zinc-50 border border-zinc-200 text-center space-y-1.5">
-                    <p className="text-xs font-extrabold text-zinc-800">الترابيزة شاغرة حالياً</p>
+                    <p className="text-xs font-extrabold text-zinc-800">
+                      {isEn ? 'Table is currently available' : 'الترابيزة شاغرة حالياً'}
+                    </p>
                     <p className="text-[11px] text-zinc-500">
-                      يمكنك فتح طلب جديد على هذه الترابيزة مباشرة من نقطة بيع الكاشير.
+                      {isEn
+                        ? 'You can open a new check for this table directly from the Cashier POS.'
+                        : 'يمكنك فتح طلب جديد على هذه الترابيزة مباشرة من نقطة بيع الكاشير.'}
                     </p>
                   </div>
                 ) : (
@@ -1367,13 +1484,16 @@ export function CashierFloorPosPanel({
                     {matchedGroup && (
                       <div className="p-3 rounded-2xl bg-zinc-950 text-white flex items-center justify-between">
                         <div>
-                          <p className="text-[11px] text-zinc-400 font-bold">إجمالي حساب الترابيزة</p>
+                          <p className="text-[11px] text-zinc-400 font-bold">
+                            {isEn ? 'Table Check Total' : 'إجمالي حساب الترابيزة'}
+                          </p>
                           <p className="text-base font-extrabold font-mono-num text-amber-400">
                             {formatMoney(matchedGroup.grandTotal)}
                           </p>
                         </div>
                         <span className="text-[11px] font-mono-num text-zinc-300">
-                          {matchedGroup.orders.length} طلب
+                          {matchedGroup.orders.length}{' '}
+                          {isEn ? (matchedGroup.orders.length === 1 ? 'order' : 'orders') : 'طلب'}
                         </span>
                       </div>
                     )}
@@ -1398,10 +1518,16 @@ export function CashierFloorPosPanel({
                               </span>
                               <span className="text-[10px] px-1.5 py-0.5 rounded bg-white border border-zinc-200 font-bold shrink-0">
                                 {ord.itemProgress?.[String(idx)] === 'ready'
-                                  ? 'جاهز'
+                                  ? isEn
+                                    ? 'Ready'
+                                    : 'جاهز'
                                   : ord.itemProgress?.[String(idx)] === 'served'
-                                    ? 'تم التقديم'
-                                    : 'تحضير'}
+                                    ? isEn
+                                      ? 'Served'
+                                      : 'تم التقديم'
+                                    : isEn
+                                      ? 'Preparing'
+                                      : 'تحضير'}
                               </span>
                             </div>
                           ))}
@@ -1413,7 +1539,7 @@ export function CashierFloorPosPanel({
                       <div className="p-3 rounded-2xl bg-zinc-50 border border-zinc-200 space-y-1.5">
                         <p className="text-[11px] font-extrabold text-zinc-800 flex items-center gap-1.5">
                           <Users className="w-3.5 h-3.5 text-amber-600" />
-                          <span>تفصيل حساب الضيوف</span>
+                          <span>{isEn ? 'Guest Check Breakdown' : 'تفصيل حساب الضيوف'}</span>
                         </p>
                         <div className="grid grid-cols-2 gap-1.5">
                           {matchedGroup.guestsBreakdown.map((g, i) => (
@@ -1448,8 +1574,12 @@ export function CashierFloorPosPanel({
                   <Plus className="w-4 h-4 text-amber-400" />
                   <span>
                     {snap.tblOrders.length > 0
-                      ? 'إضافة أصناف للترابيزة من الكاشير'
-                      : 'فتح طلب جديد على الترابيزة'}
+                      ? isEn
+                        ? 'Add Items to Table from Cashier'
+                        : 'إضافة أصناف للترابيزة من الكاشير'
+                      : isEn
+                        ? 'Open New Order on Table'
+                        : 'فتح طلب جديد على الترابيزة'}
                   </span>
                 </button>
 
@@ -1465,7 +1595,7 @@ export function CashierFloorPosPanel({
                         className="min-h-[40px] rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold flex items-center justify-center gap-1 cursor-pointer"
                       >
                         <Banknote className="w-3.5 h-3.5" />
-                        <span>تحصيل كاش/مختلط</span>
+                        <span>{isEn ? 'Settle Cash/Mixed' : 'تحصيل كاش/مختلط'}</span>
                       </button>
 
                       <button
@@ -1477,7 +1607,7 @@ export function CashierFloorPosPanel({
                         className="min-h-[40px] rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold flex items-center justify-center gap-1 cursor-pointer"
                       >
                         <CreditCard className="w-3.5 h-3.5" />
-                        <span>تحصيل فيزا</span>
+                        <span>{isEn ? 'Settle Visa' : 'تحصيل فيزا'}</span>
                       </button>
                     </div>
 
@@ -1491,7 +1621,7 @@ export function CashierFloorPosPanel({
                         className="flex-1 min-h-[38px] rounded-xl border border-zinc-300 bg-white hover:bg-zinc-100 text-zinc-900 text-xs font-extrabold flex items-center justify-center gap-1 cursor-pointer"
                       >
                         <Printer className="w-3.5 h-3.5" />
-                        <span>طباعة الريسيت</span>
+                        <span>{isEn ? 'Print Receipt' : 'طباعة الريسيت'}</span>
                       </button>
 
                       <button
@@ -1525,7 +1655,7 @@ export function CashierFloorPosPanel({
                         className="flex-1 min-h-[38px] rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-950 text-xs font-extrabold flex items-center justify-center gap-1 cursor-pointer"
                       >
                         <Scissors className="w-3.5 h-3.5" />
-                        <span>تقسيم الشيك</span>
+                        <span>{isEn ? 'Split Check' : 'تقسيم الشيك'}</span>
                       </button>
 
                       {(canEditOpenOrders || canApplyInstantDiscount || canCancelOpenOrders) &&
@@ -1539,7 +1669,7 @@ export function CashierFloorPosPanel({
                             className="w-full min-h-[38px] rounded-xl border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-900 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer"
                           >
                             <Edit3 className="w-3.5 h-3.5" />
-                            <span>تعديل / خصم إداري / إلغاء</span>
+                            <span>{isEn ? 'Edit / Discount / Cancel' : 'تعديل / خصم إداري / إلغاء'}</span>
                           </button>
                         )}
                     </div>
@@ -1564,7 +1694,9 @@ export function CashierFloorPosPanel({
           >
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-extrabold text-zinc-950">
-                تخصيص ألوان خريطة الترابيزات ووقت التأخير
+                {isEn
+                  ? 'Customize Table Grid Colors & Overdue SLA'
+                  : 'تخصيص ألوان خريطة الترابيزات ووقت التأخير'}
               </h3>
               <button
                 type="button"
@@ -1578,10 +1710,10 @@ export function CashierFloorPosPanel({
             <div className="grid grid-cols-2 gap-3 text-xs font-bold">
               {(
                 [
-                  { key: 'empty' as const, label: 'ترابيزة شاغرة' },
-                  { key: 'occupied' as const, label: 'ترابيزة مشغولة' },
-                  { key: 'billRequested' as const, label: 'طلب الشيك' },
-                  { key: 'overdue' as const, label: 'ترابيزة متأخرة' },
+                  { key: 'empty' as const, label: isEn ? 'Available Table' : 'ترابيزة شاغرة' },
+                  { key: 'occupied' as const, label: isEn ? 'Occupied Table' : 'ترابيزة مشغولة' },
+                  { key: 'billRequested' as const, label: isEn ? 'Bill Requested' : 'طلب الشيك' },
+                  { key: 'overdue' as const, label: isEn ? 'Overdue Table' : 'ترابيزة متأخرة' },
                 ] as const
               ).map((entry) => (
                 <label
@@ -1602,7 +1734,11 @@ export function CashierFloorPosPanel({
             </div>
 
             <label className="block space-y-1 text-xs font-bold text-zinc-800">
-              <span>حد التأخير لتغيير لون الترابيزة (بالدقائق):</span>
+              <span>
+                {isEn
+                  ? 'Overdue threshold to change table color (minutes):'
+                  : 'حد التأخير لتغيير لون الترابيزة (بالدقائق):'}
+              </span>
               <input
                 type="number"
                 min={10}
@@ -1627,7 +1763,13 @@ export function CashierFloorPosPanel({
               onClick={handleSaveGridSettings}
               className="w-full min-h-[42px] rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-extrabold cursor-pointer disabled:opacity-50"
             >
-              {savingGridSettings ? 'جاري الحفظ...' : 'حفظ ألوان وإعدادات الصالة'}
+              {savingGridSettings
+                ? isEn
+                  ? 'Saving...'
+                  : 'جاري الحفظ...'
+                : isEn
+                  ? 'Save Floor Colors & Settings'
+                  : 'حفظ ألوان وإعدادات الصالة'}
             </button>
           </div>
         </div>
@@ -1659,7 +1801,7 @@ export function CashierFloorPosPanel({
 
             {posPickerItem.sizes.length > 0 && (
               <div className="space-y-1.5">
-                <p className="text-xs font-bold text-zinc-700">الحجم:</p>
+                <p className="text-xs font-bold text-zinc-700">{isEn ? 'Size:' : 'الحجم:'}</p>
                 <div className="flex flex-wrap gap-1.5">
                   {posPickerItem.sizes.map((sz) => (
                     <button
@@ -1681,7 +1823,7 @@ export function CashierFloorPosPanel({
 
             {posPickerItem.addons.length > 0 && (
               <div className="space-y-1.5">
-                <p className="text-xs font-bold text-zinc-700">الإضافات:</p>
+                <p className="text-xs font-bold text-zinc-700">{isEn ? 'Add-ons:' : 'الإضافات:'}</p>
                 <div className="flex flex-wrap gap-1.5">
                   {posPickerItem.addons.map((ad) => {
                     const active = posPickerAddons.some((a) => a.name === ad.name);
@@ -1710,7 +1852,7 @@ export function CashierFloorPosPanel({
 
             <input
               type="text"
-              placeholder="ملاحظة خاصة على الصنف (بدون بصل / زيادة صوص...)"
+              placeholder={isEn ? 'Special item note (no onions / extra sauce...)' : 'ملاحظة خاصة على الصنف (بدون بصل / زيادة صوص...)'}
               value={posPickerNotes}
               onChange={(e) => setPosPickerNotes(e.target.value)}
               className="w-full px-3 py-2 rounded-xl border border-zinc-200 text-xs"
@@ -1724,7 +1866,7 @@ export function CashierFloorPosPanel({
               }}
               className="w-full min-h-[42px] rounded-xl bg-zinc-950 text-white text-xs font-extrabold cursor-pointer"
             >
-              إضافة للفاتورة
+              {isEn ? 'Add to Check' : 'إضافة للفاتورة'}
             </button>
           </div>
         </div>

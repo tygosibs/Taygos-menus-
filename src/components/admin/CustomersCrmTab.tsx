@@ -92,14 +92,14 @@ function getBirthdayCountdownLabel(
   lang: 'ar' | 'en'
 ): string {
   if (lang === 'en') {
-    if (daysUntil === 0) return `Today is ${name}'s birthday! 🎉`;
-    if (daysUntil === 1) return `1 day until ${name}'s birthday 🎈`;
-    return `${daysUntil} days until ${name}'s birthday 🎈`;
+    if (daysUntil === 0) return `Today is ${name}'s birthday!`;
+    if (daysUntil === 1) return `1 day until ${name}'s birthday`;
+    return `${daysUntil} days until ${name}'s birthday`;
   }
-  if (daysUntil === 0) return `اليوم عيد ميلاد أستاذ ${name}! 🎉`;
-  if (daysUntil === 1) return `باقي يوم واحد على عيد ميلاد أستاذ ${name} 🎈`;
-  if (daysUntil === 2) return `باقي يومين على عيد ميلاد أستاذ ${name} 🎈`;
-  return `باقي ${daysUntil} أيام على عيد ميلاد أستاذ ${name} 🎈`;
+  if (daysUntil === 0) return `اليوم عيد ميلاد ${name}!`;
+  if (daysUntil === 1) return `باقي يوم واحد على عيد ميلاد ${name}`;
+  if (daysUntil === 2) return `باقي يومان على عيد ميلاد ${name}`;
+  return `باقي ${daysUntil} أيام على عيد ميلاد ${name}`;
 }
 
 function getOrderTypeLabel(orderType: OrderType, lang: 'ar' | 'en'): string {
@@ -270,7 +270,7 @@ export function CustomersCrmTab({ restaurant, onRestaurantUpdated }: CustomersCr
     { id: 'all', label: isEn ? 'All' : 'الكل', count: counts.all },
     {
       id: 'upcoming_birthdays',
-      label: isEn ? 'Upcoming Birthdays 🎂' : 'أعياد ميلاد قريبة 🎂',
+      label: isEn ? 'Upcoming Birthdays' : 'أعياد ميلاد قريبة',
       count: counts.upcomingBirthdays,
     },
     { id: 'dine_in', label: isEn ? 'Dine-In' : 'صالة', count: counts.dineIn },
@@ -291,7 +291,7 @@ export function CustomersCrmTab({ restaurant, onRestaurantUpdated }: CustomersCr
           <h2 className="text-base sm:text-lg font-extrabold text-zinc-950 flex items-center gap-2">
             <Users className="w-5 h-5 text-[#A61C1C] shrink-0" />
             <span className="truncate">
-              {isEn ? 'My Customers (CRM & Smart Marketing)' : 'عملائي (CRM والتسويق الذكي)'}
+              {isEn ? 'My Customers & Smart Marketing' : 'عملائي وإدارة الولاء والتسويق الذكي'}
             </span>
           </h2>
           <p className="text-xs text-zinc-500 mt-0.5 leading-relaxed">
@@ -324,8 +324,8 @@ export function CustomersCrmTab({ restaurant, onRestaurantUpdated }: CustomersCr
             <div className="min-w-0">
               <h3 className="text-sm sm:text-base font-extrabold text-zinc-950">
                 {isEn
-                  ? '🎂 Customer Birthdays in the Next 3 Days'
-                  : '🎂 أعياد ميلاد عملائك خلال الـ 3 أيام القادمة'}
+                  ? 'Customer Birthdays in the Next 3 Days'
+                  : 'أعياد ميلاد عملائك خلال الـ 3 أيام القادمة'}
               </h3>
               <p className="text-[11px] text-zinc-500">
                 {isEn
@@ -410,8 +410,8 @@ export function CustomersCrmTab({ restaurant, onRestaurantUpdated }: CustomersCr
                     <Gift className="w-4 h-4 shrink-0" />
                     <span>
                       {isEn
-                        ? 'Send Birthday Offer via WhatsApp 🎁'
-                        : 'أرسل عرض عيد الميلاد عبر واتساب 🎁'}
+                        ? 'Send Birthday Offer via WhatsApp'
+                        : 'أرسل عرض عيد الميلاد عبر واتساب'}
                     </span>
                   </a>
                 </div>
@@ -1050,7 +1050,7 @@ export function CustomersCrmTab({ restaurant, onRestaurantUpdated }: CustomersCr
                             className="inline-flex items-center gap-1.5 min-h-[36px] px-3 py-1.5 rounded-lg border border-emerald-600 text-emerald-700 hover:bg-emerald-50 font-bold text-[11px] whitespace-nowrap transition-colors"
                           >
                             <MessageCircle className="w-3.5 h-3.5 shrink-0" />
-                            <span>{isEn ? 'WhatsApp Marketing 💬' : 'واتساب تسويقي 💬'}</span>
+                            <span>{isEn ? 'WhatsApp Marketing' : 'واتساب تسويقي'}</span>
                           </a>
                         </td>
                       </tr>
@@ -1155,7 +1155,7 @@ export function CustomersCrmTab({ restaurant, onRestaurantUpdated }: CustomersCr
                       className="w-full min-h-[44px] px-3 py-2 rounded-xl border border-emerald-600 text-emerald-700 hover:bg-emerald-50 font-extrabold text-xs flex items-center justify-center gap-2 transition-colors"
                     >
                       <MessageCircle className="w-4 h-4 shrink-0" />
-                      <span>{isEn ? 'WhatsApp Marketing 💬' : 'واتساب تسويقي 💬'}</span>
+                      <span>{isEn ? 'WhatsApp Marketing' : 'واتساب تسويقي'}</span>
                     </a>
                   </div>
                 );

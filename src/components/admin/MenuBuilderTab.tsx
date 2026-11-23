@@ -1409,7 +1409,7 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
                   required
                   value={catName}
                   onChange={(e) => setCatName(e.target.value)}
-                  placeholder="مثال: برجر اللحم"
+                  placeholder={isEn ? 'e.g. برجر اللحم' : 'مثال: برجر اللحم'}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm"
                 />
               </div>
@@ -1595,7 +1595,7 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
                   required
                   value={itemName}
                   onChange={(e) => setItemName(e.target.value)}
-                  placeholder="مثال: دبل سماش برجر"
+                  placeholder={isEn ? 'e.g. دبل سماش برجر' : 'مثال: دبل سماش برجر'}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm"
                 />
               </div>
@@ -1669,7 +1669,11 @@ export function MenuBuilderTab({ restaurant }: MenuBuilderTabProps) {
                   rows={2}
                   value={itemDesc}
                   onChange={(e) => setItemDesc(e.target.value)}
-                  placeholder="وصف شهي مختصر يظهر تحت اسم الوجبة..."
+                  placeholder={
+                    isEn
+                      ? 'Short appetizing description in Arabic...'
+                      : 'وصف شهي مختصر يظهر تحت اسم الوجبة...'
+                  }
                   className="w-full px-3.5 py-2 rounded-xl border border-zinc-200 text-sm"
                 />
               </div>

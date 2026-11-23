@@ -614,14 +614,29 @@ export function QrGeneratorTab({ restaurant }: QrGeneratorTabProps) {
                   key={tbl.tableNum}
                   className="break-inside-avoid rounded-2xl border-2 border-dashed border-zinc-300 bg-white p-3.5 text-center space-y-2.5 flex flex-col justify-between"
                 >
-                  {/* Top: Welcome Header AR / EN */}
+                  {/* Top: Welcome Header */}
                   <div className="space-y-0.5">
-                    <p className="text-[10px] font-extrabold text-zinc-700 leading-tight">
-                      مرحباً بكم في {restaurant.name}
-                    </p>
-                    <p className="text-[9px] font-bold text-zinc-400 leading-tight" dir="ltr">
-                      Welcome to {restaurant.name_en || restaurant.name}
-                    </p>
+                    {isEn ? (
+                      <>
+                        <p className="text-[10px] font-extrabold text-zinc-700 leading-tight" dir="ltr">
+                          Welcome to {restaurant.name_en || restaurant.name}
+                        </p>
+                        {restaurant.name && (
+                          <p className="text-[9px] font-bold text-zinc-400 leading-tight" dir="rtl">
+                            مرحباً بكم في {restaurant.name}
+                          </p>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-[10px] font-extrabold text-zinc-700 leading-tight">
+                          مرحباً بكم في {restaurant.name}
+                        </p>
+                        <p className="text-[9px] font-bold text-zinc-400 leading-tight" dir="ltr">
+                          Welcome to {restaurant.name_en || restaurant.name}
+                        </p>
+                      </>
+                    )}
                   </div>
 
                   {/* Center: Large Prominent Table Number + QR Code */}
@@ -800,12 +815,25 @@ export function QrGeneratorTab({ restaurant }: QrGeneratorTabProps) {
                   className="w-16 h-16 rounded-2xl object-cover mx-auto border border-zinc-200"
                 />
               )}
-              <p className="text-sm font-extrabold text-zinc-900">
-                مرحباً بكم في {restaurant.name}
-              </p>
-              <p className="text-xs font-bold text-zinc-500" dir="ltr">
-                Welcome to {restaurant.name_en || restaurant.name}
-              </p>
+              {isEn ? (
+                <>
+                  <p className="text-sm font-extrabold text-zinc-900" dir="ltr">
+                    Welcome to {restaurant.name_en || restaurant.name}
+                  </p>
+                  <p className="text-xs font-bold text-zinc-500" dir="rtl">
+                    مرحباً بكم في {restaurant.name}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-extrabold text-zinc-900">
+                    مرحباً بكم في {restaurant.name}
+                  </p>
+                  <p className="text-xs font-bold text-zinc-500" dir="ltr">
+                    Welcome to {restaurant.name_en || restaurant.name}
+                  </p>
+                </>
+              )}
             </div>
 
             {/* Large Center Table Number */}
@@ -922,7 +950,7 @@ export function QrGeneratorTab({ restaurant }: QrGeneratorTabProps) {
                   required
                   value={hallNameInput}
                   onChange={(e) => setHallNameInput(e.target.value)}
-                  placeholder="مثال: الصالة الرئيسية"
+                  placeholder={isEn ? 'e.g. الصالة الرئيسية' : 'مثال: الصالة الرئيسية'}
                   maxLength={80}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm"
                 />
@@ -952,7 +980,7 @@ export function QrGeneratorTab({ restaurant }: QrGeneratorTabProps) {
                   type="text"
                   value={hallTypeInput}
                   onChange={(e) => setHallTypeInput(e.target.value)}
-                  placeholder="مثال: صالة داخلية / تراس / VIP"
+                  placeholder={isEn ? 'e.g. Indoor / Terrace / VIP' : 'مثال: صالة داخلية / تراس / VIP'}
                   maxLength={60}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm"
                 />
@@ -996,8 +1024,12 @@ export function QrGeneratorTab({ restaurant }: QrGeneratorTabProps) {
                   }`}
                 >
                   {!parseTableNumbersCsv(tableNumbersText).includes('13')
-                    ? 'رقم 13 مخفي ✓ (إعادة)'
-                    : 'إخفاء رقم 13'}
+                    ? isEn
+                      ? '13 Hidden (Restore)'
+                      : 'رقم 13 مخفي (إعادة)'
+                    : isEn
+                      ? 'Hide Table #13'
+                      : 'إخفاء رقم 13'}
                 </button>
               </div>
               <textarea

@@ -14,9 +14,9 @@ export const SCREEN_META: Record<
 > = {
   super_admin: {
     id: 'super_admin',
-    labelAr: 'لوحة السوبر أدمن',
+    labelAr: 'لوحة مدير المنصة',
     labelEn: 'Super Admin Console',
-    descAr: 'تحكم في بطاقات وأزرار وثيم لوحة السوبر أدمن الخاصة بك شخصياً.',
+    descAr: 'تحكم في بطاقات وأزرار وثيم لوحة إدارة المنصة الخاصة بك شخصياً.',
     descEn: 'Customize cards, button labels, layout, and theme of your own Super Admin console.',
   },
   owner_admin: {

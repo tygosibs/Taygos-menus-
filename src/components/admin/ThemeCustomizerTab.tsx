@@ -1144,7 +1144,7 @@ export function ThemeCustomizerTab({
               <h3 className="text-sm font-extrabold text-zinc-950">
                 {isEn
                   ? 'Platform Gift & Subscription Promo Code'
-                  : 'تفعيل كود خصم أو هدية اشتراك المنصة 🎁'}
+                  : 'تفعيل كود خصم أو هدية اشتراك المنصة'}
               </h3>
               <p className="text-xs text-zinc-600 mt-0.5">
                 {isEn
@@ -1354,8 +1354,8 @@ export function ThemeCustomizerTab({
             <Cake className="w-4 h-4 text-amber-600 shrink-0" />
             <span>
               {isEn
-                ? 'Your Birthday (for exclusive platform gifts & discounts 🎂)'
-                : 'تاريخ ميلادك (للحصول على هدايا وخصومات حصرية من المنصة 🎂)'}
+                ? 'Your Birthday (for exclusive platform gifts & discounts)'
+                : 'تاريخ ميلادك (للحصول على هدايا وخصومات حصرية من المنصة)'}
             </span>
           </label>
           <input
@@ -1438,7 +1438,9 @@ export function ThemeCustomizerTab({
                     ? name.trim().startsWith('مطعم')
                       ? `${name.trim()} يرحب بكم`
                       : `مطعم ${name.trim()} يرحب بكم`
-                    : 'مثال: مطعم حورس يرحب بكم'
+                    : isEn
+                      ? 'e.g. مطعم حورس يرحب بكم'
+                      : 'مثال: مطعم حورس يرحب بكم'
                 }
                 className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm"
               />
@@ -1470,7 +1472,11 @@ export function ThemeCustomizerTab({
                 maxLength={300}
                 value={shareDescription}
                 onChange={(e) => setShareDescription(e.target.value)}
-                placeholder="تصفح المنيو الإلكتروني التفاعلي، اختر وجبتك المفضلة مع الإضافات، واطلب مباشرة بضغطة واحدة."
+                placeholder={
+                  isEn
+                    ? 'Brief 2-line Arabic greeting shown when sharing menu link...'
+                    : 'تصفح المنيو الإلكتروني التفاعلي، اختر وجبتك المفضلة مع الإضافات، واطلب مباشرة بضغطة واحدة.'
+                }
                 className="w-full px-3.5 py-2 rounded-xl border border-zinc-200 text-sm"
               />
             </div>

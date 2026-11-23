@@ -436,7 +436,10 @@ export async function addDrawerExpense(params: {
       actorName: actor.name.slice(0, 100),
       actorRole: actor.role,
       screen: 'cashier',
-      details: `مصروف من الدرج (${amount}): ${description}${note ? ` — ${note}` : ''}`,
+      details:
+        getActiveLang() === 'en'
+          ? `Drawer expense (${amount}): ${description}${note ? ` — ${note}` : ''}`
+          : `مصروف من الدرج (${amount}): ${description}${note ? ` — ${note}` : ''}`,
       createdAt: serverTimestamp(),
     }).catch(() => {});
   } catch (error) {
@@ -593,9 +596,16 @@ export async function settleOrdersCheck(params: {
       actorName: actor.name.slice(0, 100),
       actorRole: actor.role,
       targetUid: openOrders[0].id,
-      targetName: tableNumber ? `طاولة ${tableNumber}` : openOrders[0].orderNumber,
+      targetName: tableNumber
+        ? getActiveLang() === 'en'
+          ? `Table ${tableNumber}`
+          : `طاولة ${tableNumber}`
+        : openOrders[0].orderNumber,
       screen: 'cashier',
-      details: `إقفال فاتورة ${hallName ? `${hallName} - ` : ''}${tableNumber ? `طاولة ${tableNumber}` : openOrders[0].orderNumber} (${paymentMethod}: كاش ${cashPaidAmount} / فيزا ${visaPaidAmount}${drawerVariance ? ` / فرق درج ${drawerVariance > 0 ? `+${drawerVariance}` : drawerVariance}` : ''})`,
+      details:
+        getActiveLang() === 'en'
+          ? `Closed check for ${hallName ? `${hallName} - ` : ''}${tableNumber ? `Table ${tableNumber}` : openOrders[0].orderNumber} (${paymentMethod}: Cash ${cashPaidAmount} / Card ${visaPaidAmount}${drawerVariance ? ` / Drawer variance ${drawerVariance > 0 ? `+${drawerVariance}` : drawerVariance}` : ''})`
+          : `إقفال فاتورة ${hallName ? `${hallName} - ` : ''}${tableNumber ? `طاولة ${tableNumber}` : openOrders[0].orderNumber} (${paymentMethod}: كاش ${cashPaidAmount} / فيزا ${visaPaidAmount}${drawerVariance ? ` / فرق درج ${drawerVariance > 0 ? `+${drawerVariance}` : drawerVariance}` : ''})`,
       createdAt: serverTimestamp(),
     }).catch(() => {});
   } catch (error) {
@@ -674,7 +684,11 @@ export async function modifyOrderWithAudit(params: {
       action: actionType,
       reason: cleanReason,
       details: updates.cancelOrder
-        ? `إلغاء الطلب: ${cleanReason}`
+        ? isEn
+          ? `Order cancelled: ${cleanReason}`
+          : `إلغاء الطلب: ${cleanReason}`
+        : isEn
+        ? `Updated total: ${nextTotal}`
         : `الإجمالي بعد التعديل: ${nextTotal}`,
     },
   ];
@@ -728,7 +742,9 @@ export async function modifyOrderWithAudit(params: {
       targetUid: order.id,
       targetName: order.orderNumber,
       screen: 'cashier',
-      details: `${updates.cancelOrder ? 'إلغاء' : 'تعديل'} الطلب ${order.orderNumber} (${order.tableNumber ? `طاولة ${order.tableNumber}` : order.customerName}) — السبب: ${cleanReason}`,
+      details: isEn
+        ? `${updates.cancelOrder ? 'Cancelled' : 'Modified'} order ${order.orderNumber} (${order.tableNumber ? `Table ${order.tableNumber}` : order.customerName}) — Reason: ${cleanReason}`
+        : `${updates.cancelOrder ? 'إلغاء' : 'تعديل'} الطلب ${order.orderNumber} (${order.tableNumber ? `طاولة ${order.tableNumber}` : order.customerName}) — السبب: ${cleanReason}`,
       createdAt: serverTimestamp(),
     }).catch(() => {});
   } catch (error) {
@@ -864,7 +880,9 @@ export async function closeCashierShiftWithHandover(params: {
       actorName: actor.name.slice(0, 100),
       actorRole: actor.role,
       screen: 'cashier',
-      details: `تسليم وردية الكاشير (${shift.shiftSlotName || 'الوردية'}) إلى ${cleanRecipientName} — كاش الدرج: ${expectedCashHandover} | فيزا: ${visaTotal}${openTables.length ? ` | ترابيزات مفتوحة: ${openTables.join('، ')}` : ''}`,
+      details: isEn
+        ? `Cashier shift handover (${shift.shiftSlotName || 'Shift'}) to ${cleanRecipientName} — Cash: ${expectedCashHandover} | Card: ${visaTotal}${openTables.length ? ` | Open tables: ${openTables.join(', ')}` : ''}`
+        : `تسليم وردية الكاشير (${shift.shiftSlotName || 'الوردية'}) إلى ${cleanRecipientName} — كاش الدرج: ${expectedCashHandover} | فيزا: ${visaTotal}${openTables.length ? ` | ترابيزات مفتوحة: ${openTables.join('، ')}` : ''}`,
       createdAt: serverTimestamp(),
     }).catch(() => {});
 
@@ -1022,7 +1040,9 @@ export async function transferManagerCustodyToOwnerVault(params: {
       actorName: actor.name.slice(0, 100),
       actorRole: actor.role,
       screen: 'cashier',
-      details: `تحويل ${amountCash} ${restaurant.currency} من عهدة المدير إلى الخزنة الرئيسية لصاحب المطعم`,
+      details: isEn
+        ? `Transferred ${amountCash} ${restaurant.currency} from Manager Float to Owner's Safe`
+        : `تحويل ${amountCash} ${restaurant.currency} من عهدة المدير إلى الخزنة الرئيسية لصاحب المطعم`,
       createdAt: serverTimestamp(),
     }).catch(() => {});
   } catch (error) {
@@ -1062,7 +1082,10 @@ export async function adjustActiveCashierFloat(params: {
       targetUid: shift.staffId,
       targetName: shift.staffName,
       screen: 'cashier',
-      details: `تعديل عهدة درج الكاشير إلى ${safeFloat} ${restaurant.currency}`,
+      details:
+        getActiveLang() === 'en'
+          ? `Adjusted cashier opening float to ${safeFloat} ${restaurant.currency}`
+          : `تعديل عهدة درج الكاشير إلى ${safeFloat} ${restaurant.currency}`,
       createdAt: serverTimestamp(),
     }).catch(() => {});
   } catch (error) {
@@ -1147,7 +1170,10 @@ export async function superAdminUnlockShiftAndOrders(params: {
       actorRole: 'superadmin',
       targetUid: shift.id,
       targetName: `${shift.staffName} (${shift.stationName})`,
-      details: `فتح استثنائي للوردية المغلقة بواسطة السوبر أدمن (${superAdminActor.name})`,
+      details:
+        getActiveLang() === 'en'
+          ? `Closed shift exceptionally unlocked by Platform Admin (${superAdminActor.name})`
+          : `فتح استثنائي للوردية المغلقة بواسطة مدير المنصة (${superAdminActor.name})`,
       createdAt: serverTimestamp(),
     }).catch(() => {});
   } catch (error) {

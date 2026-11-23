@@ -471,7 +471,10 @@ export async function createManagerOrStaffAccount(
           targetUid: staffUid,
           targetName: cleanName,
           screen: 'staff_management',
-          details: `تم إنشاء حساب ${input.role} (${cleanUsername})`,
+          details:
+            getActiveLang() === 'en'
+              ? `Created ${input.role} account (${cleanUsername})`
+              : `تم إنشاء حساب ${input.role} (${cleanUsername})`,
           ...(tokenHash ? { inviteHash: tokenHash } : {}),
           createdAt: serverTimestamp(),
         }
@@ -492,7 +495,10 @@ export async function createManagerOrStaffAccount(
             targetUid: staffUid,
             targetName: cleanName,
             screen: 'staff_management',
-            details: 'تم إنشاء رابط دعوة QR صالح لمرة واحدة ولمدة 24 ساعة',
+            details:
+              getActiveLang() === 'en'
+                ? 'Generated one-time QR invite link valid for 24 hours'
+                : 'تم إنشاء رابط دعوة QR صالح لمرة واحدة ولمدة 24 ساعة',
             inviteHash: tokenHash,
             createdAt: serverTimestamp(),
           }
@@ -748,7 +754,10 @@ export async function regenerateStaffInvite(params: {
         targetUid: newUid,
         targetName: existingStaff.name,
         screen: 'staff_management',
-        details: 'تمت إعادة إصدار رابط دعوة QR جديد وإلغاء الوصول السابق',
+        details:
+          getActiveLang() === 'en'
+            ? 'Reissued a new QR invite link and revoked previous access'
+            : 'تمت إعادة إصدار رابط دعوة QR جديد وإلغاء الوصول السابق',
         inviteHash: tokenHash,
         createdAt: serverTimestamp(),
       });
@@ -1016,9 +1025,15 @@ export async function updateStaffPermissionsAndProfile(params: {
       targetName: nextName,
       screen: 'staff_management',
       details: roleChanged
-        ? `تم تعديل/ترقية المسمى الوظيفي للموظف ${nextName} إلى (${nextRole}${nextJobTitle ? ` - ${nextJobTitle}` : ''})`
+        ? isEn
+          ? `Updated/promoted role for ${nextName} to (${nextRole}${nextJobTitle ? ` - ${nextJobTitle}` : ''})`
+          : `تم تعديل/ترقية المسمى الوظيفي للموظف ${nextName} إلى (${nextRole}${nextJobTitle ? ` - ${nextJobTitle}` : ''})`
         : nextActive
-        ? `تم تحديث صلاحيات وبيانات ${nextName} (${nextRole})`
+        ? isEn
+          ? `Updated permissions & profile for ${nextName} (${nextRole})`
+          : `تم تحديث صلاحيات وبيانات ${nextName} (${nextRole})`
+        : isEn
+        ? `Temporarily suspended ${nextName}'s account`
         : `تم إيقاف حساب ${nextName} مؤقتاً`,
       createdAt: serverTimestamp(),
     });
@@ -1066,7 +1081,7 @@ export function resolveStaffSuspensionState(staff: StaffMember): {
   if (staff.suspendedType === 'timed') {
     const untilMs = getTsMillis(staff.suspendedUntil);
     if (untilMs > Date.now() && !staff.isActive) {
-      const formatted = new Date(untilMs).toLocaleString(isEn ? 'en-US' : 'ar-EG', {
+      const formatted = new Date(untilMs).toLocaleString(isEn ? 'en-US' : 'ar-EG-u-nu-latn', {
         dateStyle: 'medium',
         timeStyle: 'short',
       });
@@ -1133,7 +1148,7 @@ export async function suspendStaffMember(params: {
         : Date.now() + Math.max(1, Number(params.durationHours) || 24) * 60 * 60 * 1000;
     untilTs = Timestamp.fromMillis(targetMs);
     durationLabel = `${isEn ? 'Until' : 'حتى'} ${new Date(targetMs).toLocaleString(
-      isEn ? 'en-US' : 'ar-EG',
+      isEn ? 'en-US' : 'ar-EG-u-nu-latn',
       {
         dateStyle: 'medium',
         timeStyle: 'short',
@@ -1174,7 +1189,9 @@ export async function suspendStaffMember(params: {
       targetUid: staff.uid,
       targetName: staff.name,
       screen: 'staff_management',
-      details: `إيقاف ${staff.name} (${durationLabel}) — السبب: ${cleanReason}`,
+      details: isEn
+        ? `Suspended ${staff.name} (${durationLabel}) — Reason: ${cleanReason}`
+        : `إيقاف ${staff.name} (${durationLabel}) — السبب: ${cleanReason}`,
       createdAt: serverTimestamp(),
     });
     await logBatch.commit();
@@ -1221,7 +1238,10 @@ export async function unsuspendStaffMember(params: {
       targetUid: staff.uid,
       targetName: staff.name,
       screen: 'staff_management',
-      details: `تم رفع الإيقاف وإعادة تفعيل شاشة ${staff.name}`,
+      details:
+        getActiveLang() === 'en'
+          ? `Lifted suspension and reactivated ${staff.name}'s screen`
+          : `تم رفع الإيقاف وإعادة تفعيل شاشة ${staff.name}`,
       createdAt: serverTimestamp(),
     });
     await logBatch.commit();
@@ -1560,7 +1580,10 @@ export async function completeStaffOnboarding(params: {
       targetUid: cred.user.uid,
       targetName: cleanName,
       screen: latestInvite.defaultScreen,
-      details: 'تم تفعيل الحساب عبر رابط الدعوة QR لمرة واحدة',
+      details:
+        getActiveLang() === 'en'
+          ? 'Account activated via one-time QR invite link'
+          : 'تم تفعيل الحساب عبر رابط الدعوة QR لمرة واحدة',
       inviteHash: tokenHash,
       createdAt: serverTimestamp(),
     });
@@ -1577,7 +1600,10 @@ export async function completeStaffOnboarding(params: {
       targetUid: cred.user.uid,
       targetName: cleanName,
       screen: latestInvite.defaultScreen,
-      details: 'تم تعيين كلمة المرور الدائمة من قِبل الموظف',
+      details:
+        getActiveLang() === 'en'
+          ? 'Permanent password set by staff member'
+          : 'تم تعيين كلمة المرور الدائمة من قِبل الموظف',
       createdAt: serverTimestamp(),
     });
     await auditBatch.commit();
@@ -1726,7 +1752,9 @@ export async function loginStaffMember(params: {
         actorName: staff.name,
         actorRole: staff.role,
         screen: staff.defaultScreen,
-        details: `تسجيل دخول عبر ${resolved.identifierType === 'email' ? 'البريد الإلكتروني' : resolved.identifierType === 'phone' ? 'رقم الهاتف' : 'اسم المستخدم'}`,
+        details: isEn
+          ? `Signed in via ${resolved.identifierType === 'email' ? 'email' : resolved.identifierType === 'phone' ? 'phone number' : 'username'}`
+          : `تسجيل دخول عبر ${resolved.identifierType === 'email' ? 'البريد الإلكتروني' : resolved.identifierType === 'phone' ? 'رقم الهاتف' : 'اسم المستخدم'}`,
         createdAt: serverTimestamp(),
       });
       await batch.commit();
@@ -1895,7 +1923,7 @@ export async function completeForcedPasswordChange(params: {
     actorRole: params.staff.role,
     targetUid: params.staff.uid,
     targetName: params.staff.name,
-    details: 'تم تحديث كلمة المرور',
+    details: isEn ? 'Password updated' : 'تم تحديث كلمة المرور',
     createdAt: serverTimestamp(),
   });
   await batch.commit();
@@ -2001,7 +2029,10 @@ export async function deleteRestaurantStaffMember(params: {
         targetUid: staff.uid,
         targetName: staff.name,
         screen: 'staff_management',
-        details: `تم حذف حساب الموظف: ${staff.name} (${staff.username})`,
+        details:
+          getActiveLang() === 'en'
+            ? `Deleted staff account: ${staff.name} (${staff.username})`
+            : `تم حذف حساب الموظف: ${staff.name} (${staff.username})`,
         createdAt: serverTimestamp(),
       });
       await auditBatch.commit();

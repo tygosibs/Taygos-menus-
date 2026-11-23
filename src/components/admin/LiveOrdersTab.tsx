@@ -445,11 +445,13 @@ export function LiveOrdersTab({
             if (staffMode) {
               const firstNew = newPendingOrders[0];
               void showOperationalNotification({
-                title: `طلب جديد #${firstNew.orderNumber}`,
+                title: isEn ? `New Order #${firstNew.orderNumber}` : `طلب جديد #${firstNew.orderNumber}`,
                 body:
                   firstNew.orderType === 'dine_in'
-                    ? `${firstNew.hallName ? `${firstNew.hallName} · ` : ''}ترابيزة ${firstNew.tableNumber || '-'}`
-                    : `${firstNew.customerName} · ${firstNew.items.length} أصناف`,
+                    ? `${firstNew.hallName ? `${firstNew.hallName} · ` : ''}${
+                        isEn ? `Table ${firstNew.tableNumber || '-'}` : `ترابيزة ${firstNew.tableNumber || '-'}`
+                      }`
+                    : `${firstNew.customerName} · ${firstNew.items.length} ${isEn ? 'items' : 'أصناف'}`,
                 url: `/staff/${restaurant.slug}`,
                 tag: `order_${firstNew.id}`,
               });
@@ -757,8 +759,12 @@ export function LiveOrdersTab({
       const res = await printThermalJobsSequentially([job]);
       setPrintFeedback(
         res.mode === 'hardware'
-          ? `تمت طباعة تذكرة #${order.orderNumber} (${stationMeta.shortLabel}) على الطابعة الحرارية.`
-          : `تم تجهيز تذكرة #${order.orderNumber} (${stationMeta.shortLabel}) للطباعة.`
+          ? isEn
+            ? `Ticket #${order.orderNumber} (${stationMeta.shortLabel_en}) printed to thermal printer.`
+            : `تمت طباعة تذكرة #${order.orderNumber} (${stationMeta.shortLabel}) على الطابعة الحرارية.`
+          : isEn
+            ? `Ticket #${order.orderNumber} (${stationMeta.shortLabel_en}) prepared for printing.`
+            : `تم تجهيز تذكرة #${order.orderNumber} (${stationMeta.shortLabel}) للطباعة.`
       );
     } finally {
       setPrintingKdsOrderId(null);
@@ -883,7 +889,13 @@ export function LiveOrdersTab({
       });
       setSettleTarget(null);
     } catch (err) {
-      setSettleError(err instanceof Error ? err.message : 'تعذر إقفال الحساب حالياً.');
+      setSettleError(
+        err instanceof Error
+          ? err.message
+          : isEn
+            ? 'Could not close the check right now.'
+            : 'تعذر إقفال الحساب حالياً.'
+      );
     } finally {
       setSettlingBusy(false);
     }
@@ -912,7 +924,9 @@ export function LiveOrdersTab({
   const handleSaveModifiedOrder = async (cancelOrder = false) => {
     if (!modifyTargetOrder) return;
     if (!modifyAuditReason.trim()) {
-      setModifyError('يجب كتابة سبب التعديل أو الإلغاء.');
+      setModifyError(
+        isEn ? 'Please enter a reason for modifying or cancelling.' : 'يجب كتابة سبب التعديل أو الإلغاء.'
+      );
       return;
     }
     setModifyBusy(true);
@@ -951,7 +965,7 @@ export function LiveOrdersTab({
       });
       setModifyTargetOrder(null);
     } catch (err) {
-      setModifyError(err instanceof Error ? err.message : 'تعذر حفظ التعديل.');
+      setModifyError(err instanceof Error ? err.message : isEn ? 'Could not save changes.' : 'تعذر حفظ التعديل.');
     } finally {
       setModifyBusy(false);
     }
@@ -961,7 +975,9 @@ export function LiveOrdersTab({
     if (!effectiveActiveCashierShift) return;
     const amt = Number(expenseAmountInput);
     if (!amt || amt <= 0 || !expenseDescInput.trim()) {
-      setDrawerFeedback('أدخل مبلغاً صحيحاً وبيان المصروف أولاً.');
+      setDrawerFeedback(
+        isEn ? 'Enter a valid amount and expense description first.' : 'أدخل مبلغاً صحيحاً وبيان المصروف أولاً.'
+      );
       return;
     }
     setSavingExpense(true);
@@ -979,9 +995,13 @@ export function LiveOrdersTab({
       setExpenseAmountInput('');
       setExpenseDescInput('');
       setExpenseNoteInput('');
-      setDrawerFeedback('تم خصم المصروف من الدرج وتسجيله بنجاح.');
+      setDrawerFeedback(
+        isEn ? 'Expense deducted from drawer and recorded.' : 'تم خصم المصروف من الدرج وتسجيله بنجاح.'
+      );
     } catch (err) {
-      setDrawerFeedback(err instanceof Error ? err.message : 'تعذر تسجيل المصروف.');
+      setDrawerFeedback(
+        err instanceof Error ? err.message : isEn ? 'Could not record expense.' : 'تعذر تسجيل المصروف.'
+      );
     } finally {
       setSavingExpense(false);
     }
@@ -999,9 +1019,13 @@ export function LiveOrdersTab({
         actor: effectiveActor,
       });
       setEditingFloatOpen(false);
-      setDrawerFeedback('تم تحديث العهدة الافتتاحية للدرج.');
+      setDrawerFeedback(
+        isEn ? 'Opening drawer float updated.' : 'تم تحديث العهدة الافتتاحية للدرج.'
+      );
     } catch (err) {
-      setDrawerFeedback(err instanceof Error ? err.message : 'تعذر تحديث العهدة.');
+      setDrawerFeedback(
+        err instanceof Error ? err.message : isEn ? 'Could not update float.' : 'تعذر تحديث العهدة.'
+      );
     } finally {
       setSavingFloat(false);
     }
@@ -1021,11 +1045,11 @@ export function LiveOrdersTab({
       recipientName = effectiveActor.name;
       recipientUid = effectiveActor.uid;
     } else if (handoverRecipientType === 'owner') {
-      recipientName = recipientName || 'صاحب المطعم (الخزنة الرئيسية)';
+      recipientName = recipientName || (isEn ? 'Owner (Main Vault)' : 'صاحب المطعم (الخزنة الرئيسية)');
       recipientUid = restaurant.ownerId;
     } else if (handoverRecipientType === 'manager') {
       const m = managers.find((x) => x.uid === handoverRecipientUid) || managers[0];
-      recipientName = m?.name || recipientName || 'مدير المطعم';
+      recipientName = m?.name || recipientName || (isEn ? 'Restaurant Manager' : 'مدير المطعم');
       recipientUid = m?.uid || '';
     } else {
       const c = cashiers.find((x) => x.uid === handoverRecipientUid);
@@ -1036,7 +1060,11 @@ export function LiveOrdersTab({
     }
 
     if (!recipientName) {
-      setDrawerFeedback('يرجى تحديد أو كتابة اسم مستلم العهدة والكاش.');
+      setDrawerFeedback(
+        isEn
+          ? 'Please select or enter the custody recipient name.'
+          : 'يرجى تحديد أو كتابة اسم مستلم العهدة والكاش.'
+      );
       return;
     }
 
@@ -1044,7 +1072,7 @@ export function LiveOrdersTab({
     setDrawerFeedback(null);
     try {
       const openTablesList = openTableGroups.map(
-        (g) => `${g.hallName ? `${g.hallName} · ` : ''}ترابيزة ${g.tableNumber}`
+        (g) => `${g.hallName ? `${g.hallName} · ` : ''}${isEn ? `Table ${g.tableNumber}` : `ترابيزة ${g.tableNumber}`}`
       );
       const nextSlot = getNextShiftSlot(opsConfig, effectiveActiveCashierShift.shiftSlotId);
       const res = await closeCashierShiftWithHandover({
@@ -1061,12 +1089,22 @@ export function LiveOrdersTab({
       setHandoverNote('');
       setDrawerFeedback(
         handoverRecipientType === 'self_next_slot'
-          ? `تم ترحيل ${formatMoney(res.expectedCashHandover)} وبدء وردية ${nextSlot.name} تلقائياً.`
-          : `تم تسليم الوردية وإغلاق الدرج بقيمة ${formatMoney(res.expectedCashHandover)} إلى ${recipientName}.`
+          ? isEn
+            ? `Carried over ${formatMoney(res.expectedCashHandover)} and started ${loc(nextSlot.name, nextSlot.nameEn)} shift.`
+            : `تم ترحيل ${formatMoney(res.expectedCashHandover)} وبدء وردية ${nextSlot.name} تلقائياً.`
+          : isEn
+            ? `Shift closed and ${formatMoney(res.expectedCashHandover)} handed over to ${recipientName}.`
+            : `تم تسليم الوردية وإغلاق الدرج بقيمة ${formatMoney(res.expectedCashHandover)} إلى ${recipientName}.`
       );
       window.setTimeout(() => setDrawerModalOpen(false), 1200);
     } catch (err) {
-      setDrawerFeedback(err instanceof Error ? err.message : 'تعذر إغلاق الوردية وتسليم الدرج.');
+      setDrawerFeedback(
+        err instanceof Error
+          ? err.message
+          : isEn
+            ? 'Could not close shift and hand over drawer.'
+            : 'تعذر إغلاق الوردية وتسليم الدرج.'
+      );
     } finally {
       setClosingHandover(false);
     }
@@ -1078,7 +1116,7 @@ export function LiveOrdersTab({
       await updateServiceCallStatus(call.id, nextStatus, {
         restaurantId: restaurant.id,
         ownerId: restaurant.ownerId,
-        tableLabel: `${call.hallName ? `${call.hallName} · ` : ''}ترابيزة ${call.tableNumber}`,
+        tableLabel: `${call.hallName ? `${call.hallName} · ` : ''}${isEn ? `Table ${call.tableNumber}` : `ترابيزة ${call.tableNumber}`}`,
         actor,
       });
     } finally {
@@ -1220,7 +1258,7 @@ export function LiveOrdersTab({
                 ? visibleStationTabs[0].label
                 : isEn
                   ? 'Multi-Station Operations & KDS'
-                  : 'شاشات التشغيل والمحطات (Cashier & Multi-KDS)'}
+                  : 'شاشات التشغيل والمحطات'}
             </h2>
             <p className="text-xs mt-0.5 leading-relaxed" style={{ color: ui.theme.mutedText }}>
               {t.admin.orders.subtitle}
@@ -1287,7 +1325,15 @@ export function LiveOrdersTab({
               }
             >
               <Printer className="w-4 h-4" />
-              <span>{printerStatusLabel ? `طابعة: ${printerStatusLabel}` : isEn ? 'Thermal Printer' : 'طابعة حرارية'}</span>
+              <span>
+                {printerStatusLabel
+                  ? isEn
+                    ? `Printer: ${printerStatusLabel}`
+                    : `طابعة: ${printerStatusLabel}`
+                  : isEn
+                    ? 'Thermal Printer'
+                    : 'طابعة حرارية'}
+              </span>
             </button>
 
             <button
@@ -2114,7 +2160,7 @@ export function LiveOrdersTab({
 
                     {group.orders.some((o) => o.tableNotes) && (
                       <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] font-bold text-amber-950">
-                        ملاحظات الترابيزة:{' '}
+                        {isEn ? 'Table Notes:' : 'ملاحظات الترابيزة:'}{' '}
                         {group.orders
                           .map((o) => o.tableNotes)
                           .filter(Boolean)
@@ -2206,7 +2252,7 @@ export function LiveOrdersTab({
                       color: ui.theme.accentHex,
                     }}
                   >
-                    إشراف على وردية: {coveringStaffName}
+                    {isEn ? `Supervising shift: ${coveringStaffName}` : `إشراف على وردية: ${coveringStaffName}`}
                   </span>
                 )}
                 {onOpenShiftReports && (
@@ -2427,12 +2473,12 @@ export function LiveOrdersTab({
                         )}
                         {order.tableNotes && (
                           <p className="text-xs text-indigo-900 bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2 font-semibold">
-                            ملاحظات الترابيزة: {order.tableNotes}
+                            {isEn ? 'Table Notes:' : 'ملاحظات الترابيزة:'} {order.tableNotes}
                           </p>
                         )}
                         {order.cancelReason && (
                           <p className="text-xs text-rose-800 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 font-bold">
-                            سبب الإلغاء: {order.cancelReason}
+                            {isEn ? 'Cancel Reason:' : 'سبب الإلغاء:'} {order.cancelReason}
                           </p>
                         )}
                       </div>
@@ -2466,7 +2512,8 @@ export function LiveOrdersTab({
                             {typeof order.manualDiscountAmount === 'number' &&
                               order.manualDiscountAmount > 0 && (
                                 <span className="text-indigo-700 font-bold">
-                                  · خصم خاص ({order.manualDiscountReason || 'إدارة'}):{' '}
+                                  · {isEn ? 'Special Discount' : 'خصم خاص'} (
+                                  {order.manualDiscountReason || (isEn ? 'Admin' : 'إدارة')}):{' '}
                                   <span className="font-mono-num">
                                     -{formatMoney(order.manualDiscountAmount)}
                                   </span>
@@ -2481,12 +2528,18 @@ export function LiveOrdersTab({
                         {order.paymentMethod && (
                           <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold text-zinc-700 bg-zinc-50 border border-zinc-200 rounded-lg px-2.5 py-1.5">
                             <span>
-                              الدفع:{' '}
+                              {isEn ? 'Payment:' : 'الدفع:'}{' '}
                               {order.paymentMethod === 'visa'
-                                ? 'فيزا 💳'
+                                ? isEn
+                                  ? 'Visa / Card'
+                                  : 'فيزا / بطاقة'
                                 : order.paymentMethod === 'split'
-                                  ? `مختلط (كاش ${formatMoney(order.cashPaidAmount || 0)} + فيزا ${formatMoney(order.visaPaidAmount || 0)})`
-                                  : `كاش 💵 (${formatMoney(order.cashPaidAmount ?? order.total)})`}
+                                  ? isEn
+                                    ? `Split (Cash ${formatMoney(order.cashPaidAmount || 0)} + Visa ${formatMoney(order.visaPaidAmount || 0)})`
+                                    : `مختلط (كاش ${formatMoney(order.cashPaidAmount || 0)} + فيزا ${formatMoney(order.visaPaidAmount || 0)})`
+                                  : isEn
+                                    ? `Cash (${formatMoney(order.cashPaidAmount ?? order.total)})`
+                                    : `كاش (${formatMoney(order.cashPaidAmount ?? order.total)})`}
                             </span>
                             {typeof order.drawerVariance === 'number' && order.drawerVariance !== 0 && (
                               <span
@@ -2494,7 +2547,8 @@ export function LiveOrdersTab({
                                   order.drawerVariance > 0 ? 'text-emerald-700' : 'text-rose-700'
                                 }`}
                               >
-                                · فرق درج: {order.drawerVariance > 0 ? `+${order.drawerVariance}` : order.drawerVariance}
+                                · {isEn ? 'Drawer variance:' : 'فرق درج:'}{' '}
+                                {order.drawerVariance > 0 ? `+${order.drawerVariance}` : order.drawerVariance}
                               </span>
                             )}
                           </div>
@@ -2554,7 +2608,9 @@ export function LiveOrdersTab({
                               )}
                               <span>
                                 {isOrderShiftLocked(order)
-                                  ? 'وردية مغلقة 🔒'
+                                  ? isEn
+                                    ? 'Shift Locked'
+                                    : 'وردية مغلقة'
                                   : isEn
                                     ? 'Edit / Discount'
                                     : 'تعديل / خصم'}
@@ -2820,11 +2876,15 @@ export function LiveOrdersTab({
                 <div>
                   <h3 className="text-sm font-extrabold">
                     {settleTarget.type === 'table'
-                      ? `تحصيل وإقفال ${settleTarget.group.hallName ? `${settleTarget.group.hallName} · ` : ''}ترابيزة ${settleTarget.group.tableNumber}`
-                      : `تحصيل الطلب #${settleTarget.order.orderNumber}`}
+                      ? isEn
+                        ? `Settle & Close ${settleTarget.group.hallName ? `${settleTarget.group.hallName} · ` : ''}Table ${settleTarget.group.tableNumber}`
+                        : `تحصيل وإقفال ${settleTarget.group.hallName ? `${settleTarget.group.hallName} · ` : ''}ترابيزة ${settleTarget.group.tableNumber}`
+                      : isEn
+                        ? `Settle Order #${settleTarget.order.orderNumber}`
+                        : `تحصيل الطلب #${settleTarget.order.orderNumber}`}
                   </h3>
                   <p className="text-[11px] font-mono-num" style={{ color: ui.theme.sidebarMuted }}>
-                    المطلوب سداده: {formatMoney(settleTotalDue)}
+                    {isEn ? 'Amount Due:' : 'المطلوب سداده:'} {formatMoney(settleTotalDue)}
                   </p>
                 </div>
               </div>
@@ -2842,9 +2902,9 @@ export function LiveOrdersTab({
               <div className="grid grid-cols-3 gap-2">
                 {(
                   [
-                    { id: 'cash' as const, label: 'كاش 💵' },
-                    { id: 'visa' as const, label: 'فيزا 💳' },
-                    { id: 'split' as const, label: 'مختلط ⚖️' },
+                    { id: 'cash' as const, label: isEn ? 'Cash' : 'كاش' },
+                    { id: 'visa' as const, label: isEn ? 'Visa / Card' : 'فيزا / بطاقة' },
+                    { id: 'split' as const, label: isEn ? 'Split' : 'مختلط' },
                   ] as const
                 ).map((m) => (
                   <button
@@ -2886,7 +2946,7 @@ export function LiveOrdersTab({
 
               {settleMethod === 'split' && (
                 <label className="block space-y-1 text-xs font-bold" style={{ color: ui.theme.surfaceText }}>
-                  <span>المبلغ المدفوع بالفيزا *</span>
+                  <span>{isEn ? 'Amount paid by Visa / Card *' : 'المبلغ المدفوع بالفيزا *'}</span>
                   <input
                     type="number"
                     min={0}
@@ -2908,7 +2968,11 @@ export function LiveOrdersTab({
               {(settleMethod === 'cash' || settleMethod === 'split') && (
                 <div className="space-y-2.5">
                   <label className="block space-y-1 text-xs font-bold" style={{ color: ui.theme.surfaceText }}>
-                    <span>المبلغ المستلم نقداً من العميل (كاش مستحق: {formatMoney(settlementCalc.cashDue)})</span>
+                    <span>
+                      {isEn
+                        ? `Cash tendered by guest (Cash due: ${formatMoney(settlementCalc.cashDue)})`
+                        : `المبلغ المستلم نقداً من العميل (كاش مستحق: ${formatMoney(settlementCalc.cashDue)})`}
+                    </span>
                     <input
                       type="number"
                       min={0}
@@ -2936,7 +3000,7 @@ export function LiveOrdersTab({
                         color: ui.theme.surfaceText,
                       }}
                     >
-                      المبلغ بالضبط
+                      {isEn ? 'Exact Amount' : 'المبلغ بالضبط'}
                     </button>
                     {[50, 100, 200, 500].map((bill) => (
                       <button
@@ -2964,7 +3028,9 @@ export function LiveOrdersTab({
                       style={{ accentColor: ui.theme.accentHex }}
                     />
                     <span>
-                      تقريب الباقي تلقائياً بدون فكة (مضاعفات {settlementCalc.roundingStep}) وتسجيل فرق الدرج
+                      {isEn
+                        ? `Auto-round change (step ${settlementCalc.roundingStep}) and log drawer variance`
+                        : `تقريب الباقي تلقائياً بدون فكة (مضاعفات ${settlementCalc.roundingStep}) وتسجيل فرق الدرج`}
                     </span>
                   </label>
 
@@ -2973,15 +3039,17 @@ export function LiveOrdersTab({
                     style={{ backgroundColor: ui.theme.surfaceSubtleBg, borderColor: ui.theme.surfaceBorder }}
                   >
                     <div className="flex justify-between">
-                      <span style={{ color: ui.theme.mutedText }}>الباقي الدقيق:</span>
+                      <span style={{ color: ui.theme.mutedText }}>
+                        {isEn ? 'Exact Change Due:' : 'الباقي الدقيق:'}
+                      </span>
                       <span className="font-mono-num font-bold">{formatMoney(settlementCalc.exactChangeDue)}</span>
                     </div>
                     <div className="flex justify-between text-emerald-800 font-extrabold">
-                      <span>الباقي المردود للعميل:</span>
+                      <span>{isEn ? 'Change Returned to Guest:' : 'الباقي المردود للعميل:'}</span>
                       <span className="font-mono-num">{formatMoney(settlementCalc.changeReturned)}</span>
                     </div>
                     <div className="flex justify-between font-extrabold pt-1 border-t" style={{ borderColor: ui.theme.surfaceBorder }}>
-                      <span>فرق الدرج (كسر الفكة):</span>
+                      <span>{isEn ? 'Drawer Variance (Rounding):' : 'فرق الدرج (كسر الفكة):'}</span>
                       <span
                         className={`font-mono-num ${
                           settlementCalc.drawerVariance > 0
@@ -3013,7 +3081,13 @@ export function LiveOrdersTab({
                   onClick={handleConfirmSettlement}
                   className="flex-1 min-h-[44px] px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold cursor-pointer disabled:opacity-50"
                 >
-                  {settlingBusy ? 'جاري التحصيل...' : 'تأكيد التحصيل وإقفال الشيك'}
+                  {settlingBusy
+                    ? isEn
+                      ? 'Settling...'
+                      : 'جاري التحصيل...'
+                    : isEn
+                      ? 'Confirm Settlement & Close Check'
+                      : 'تأكيد التحصيل وإقفال الشيك'}
                 </button>
                 <button
                   type="button"
@@ -3026,7 +3100,7 @@ export function LiveOrdersTab({
                     color: ui.theme.surfaceText,
                   }}
                 >
-                  إلغاء
+                  {isEn ? 'Cancel' : 'إلغاء'}
                 </button>
               </div>
             </div>
@@ -3058,12 +3132,16 @@ export function LiveOrdersTab({
                 <Wallet className="w-5 h-5" style={{ color: ui.theme.highlightHex || '#E8833A' }} />
                 <div>
                   <h3 className="text-sm sm:text-base font-extrabold">
-                    حساب الدرج والمصروفات وتسليم الوردية (ح/الدرج)
+                    {isEn
+                      ? 'Cash Drawer, Expenses & Shift Handover'
+                      : 'حساب الدرج والمصروفات وتسليم الوردية (ح/الدرج)'}
                   </h3>
                   <p className="text-[11px]" style={{ color: ui.theme.sidebarMuted }}>
                     {effectiveActiveCashierShift
-                      ? `${effectiveActiveCashierShift.staffName} · ${effectiveActiveCashierShift.shiftSlotName || 'الوردية الحالية'}`
-                      : 'لا توجد وردية كاشير مفتوحة حالياً'}
+                      ? `${effectiveActiveCashierShift.staffName} · ${effectiveActiveCashierShift.shiftSlotName || (isEn ? 'Current Shift' : 'الوردية الحالية')}`
+                      : isEn
+                        ? 'No active cashier shift currently open'
+                        : 'لا توجد وردية كاشير مفتوحة حالياً'}
                   </p>
                 </div>
               </div>
@@ -3086,10 +3164,12 @@ export function LiveOrdersTab({
               {!effectiveActiveCashierShift ? (
                 <div className="p-6 rounded-2xl bg-zinc-50 border border-zinc-200 text-center space-y-2">
                   <p className="text-sm font-extrabold text-zinc-900">
-                    لم تبدأ وردية كاشير نشطة بعد
+                    {isEn ? 'No active cashier shift started yet' : 'لم تبدأ وردية كاشير نشطة بعد'}
                   </p>
                   <p className="text-xs text-zinc-500">
-                    ابدأ وردية الكاشير من شريط الورديات أعلى الصفحة لتسجيل مبيعات الدرج والمصروفات وتسليم العهدة.
+                    {isEn
+                      ? 'Start the cashier shift from the Shift Bar at the top to record drawer sales, expenses, and cash handover.'
+                      : 'ابدأ وردية الكاشير من شريط الورديات أعلى الصفحة لتسجيل مبيعات الدرج والمصروفات وتسليم العهدة.'}
                   </p>
                 </div>
               ) : (
@@ -3123,7 +3203,9 @@ export function LiveOrdersTab({
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
                           <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-200">
                             <div className="flex items-center justify-between gap-1">
-                              <span className="text-[11px] font-bold text-zinc-500">العهدة الافتتاحية</span>
+                              <span className="text-[11px] font-bold text-zinc-500">
+                                {isEn ? 'Opening Float' : 'العهدة الافتتاحية'}
+                              </span>
                               {canEditDrawerFloat && (
                                 <button
                                   type="button"
@@ -3133,7 +3215,7 @@ export function LiveOrdersTab({
                                   }}
                                   className="text-[10px] font-extrabold text-indigo-700 hover:underline cursor-pointer"
                                 >
-                                  تعديل
+                                  {isEn ? 'Edit' : 'تعديل'}
                                 </button>
                               )}
                             </div>
@@ -3143,35 +3225,45 @@ export function LiveOrdersTab({
                           </div>
 
                           <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-200">
-                            <span className="text-[11px] font-bold text-zinc-500">رصيد مرحّل للدرج</span>
+                            <span className="text-[11px] font-bold text-zinc-500">
+                              {isEn ? 'Carried Over Cash' : 'رصيد مرحّل للدرج'}
+                            </span>
                             <p className="text-sm font-extrabold font-mono-num text-zinc-950 mt-1">
                               {formatMoney(carried)}
                             </p>
                           </div>
 
                           <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200">
-                            <span className="text-[11px] font-bold text-emerald-700">مبيعات الكاش</span>
+                            <span className="text-[11px] font-bold text-emerald-700">
+                              {isEn ? 'Cash Sales' : 'مبيعات الكاش'}
+                            </span>
                             <p className="text-sm font-extrabold font-mono-num text-emerald-950 mt-1">
                               {formatMoney(cashSales)}
                             </p>
                           </div>
 
                           <div className="p-3 rounded-xl bg-blue-50 border border-blue-200">
-                            <span className="text-[11px] font-bold text-blue-700">مبيعات الفيزا</span>
+                            <span className="text-[11px] font-bold text-blue-700">
+                              {isEn ? 'Visa / Card Sales' : 'مبيعات الفيزا'}
+                            </span>
                             <p className="text-sm font-extrabold font-mono-num text-blue-950 mt-1">
                               {formatMoney(visaSales)}
                             </p>
                           </div>
 
                           <div className="p-3 rounded-xl bg-amber-50 border border-amber-200">
-                            <span className="text-[11px] font-bold text-amber-800">فرق الدرج (كسر الفكة)</span>
+                            <span className="text-[11px] font-bold text-amber-800">
+                              {isEn ? 'Drawer Variance (Rounding)' : 'فرق الدرج (كسر الفكة)'}
+                            </span>
                             <p className="text-sm font-extrabold font-mono-num text-amber-950 mt-1">
                               {variance > 0 ? `+${formatMoney(variance)}` : formatMoney(variance)}
                             </p>
                           </div>
 
                           <div className="p-3 rounded-xl bg-rose-50 border border-rose-200">
-                            <span className="text-[11px] font-bold text-rose-700">مصروفات الدرج</span>
+                            <span className="text-[11px] font-bold text-rose-700">
+                              {isEn ? 'Drawer Expenses' : 'مصروفات الدرج'}
+                            </span>
                             <p className="text-sm font-extrabold font-mono-num text-rose-950 mt-1">
                               -{formatMoney(expensesSum)}
                             </p>
@@ -3181,7 +3273,9 @@ export function LiveOrdersTab({
                         {editingFloatOpen && canEditDrawerFloat && (
                           <div className="p-3 rounded-xl bg-indigo-50 border border-indigo-200 flex flex-wrap items-end gap-2">
                             <label className="flex-1 min-w-[160px] text-xs font-bold text-indigo-950 space-y-1">
-                              <span>قيمة العهدة الافتتاحية الجديدة</span>
+                              <span>
+                                {isEn ? 'New Opening Float Value' : 'قيمة العهدة الافتتاحية الجديدة'}
+                              </span>
                               <input
                                 type="number"
                                 min={0}
@@ -3197,7 +3291,13 @@ export function LiveOrdersTab({
                               onClick={handleSaveFloatAdjustment}
                               className="min-h-[38px] px-4 py-2 rounded-lg bg-indigo-700 text-white text-xs font-extrabold cursor-pointer disabled:opacity-50"
                             >
-                              {savingFloat ? 'جاري التحديث...' : 'حفظ العهدة'}
+                              {savingFloat
+                                ? isEn
+                                  ? 'Updating...'
+                                  : 'جاري التحديث...'
+                                : isEn
+                                  ? 'Save Float'
+                                  : 'حفظ العهدة'}
                             </button>
                           </div>
                         )}
@@ -3208,35 +3308,40 @@ export function LiveOrdersTab({
                         >
                           <div>
                             <p className="text-[11px] font-bold" style={{ color: ui.theme.sidebarMuted }}>
-                              صافي الكاش المتوقع تسليمه بالدرج الآن
+                              {isEn
+                                ? 'Net Expected Cash in Drawer Now'
+                                : 'صافي الكاش المتوقع تسليمه بالدرج الآن'}
                             </p>
                             <p className="text-xl font-extrabold font-mono-num mt-0.5" style={{ color: ui.theme.highlightHex || '#E8833A' }}>
                               {formatMoney(netExpectedCash)}
                             </p>
                           </div>
                           <span className="text-[11px] font-mono-num" style={{ color: ui.theme.sidebarMuted }}>
-                            {effectiveActiveCashierShift.ordersHandled} طلب
+                            {effectiveActiveCashierShift.ordersHandled}{' '}
+                            {isEn ? 'orders' : 'طلب'}
                           </span>
                         </div>
 
                         {/* Quick Expense Entry */}
                         <div className="p-4 rounded-2xl border border-zinc-200 space-y-3">
                           <h4 className="text-xs font-extrabold text-zinc-950">
-                            إضافة مصروف/نثريات من الدرج
+                            {isEn ? 'Add Drawer Expense / Petty Cash' : 'إضافة مصروف/نثريات من الدرج'}
                           </h4>
                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                             <input
                               type="number"
                               min={1}
                               dir="ltr"
-                              placeholder="المبلغ *"
+                              placeholder={isEn ? 'Amount *' : 'المبلغ *'}
                               value={expenseAmountInput}
                               onChange={(e) => setExpenseAmountInput(e.target.value)}
                               className="px-3 py-2 rounded-xl border border-zinc-300 text-xs font-mono-num font-bold"
                             />
                             <input
                               type="text"
-                              placeholder="بيان المصروف (مثال: ثلج / دليفري) *"
+                              placeholder={
+                                isEn ? 'Expense description (e.g. ice / supplies) *' : 'بيان المصروف (مثال: ثلج / دليفري) *'
+                              }
                               value={expenseDescInput}
                               onChange={(e) => setExpenseDescInput(e.target.value)}
                               className="sm:col-span-2 px-3 py-2 rounded-xl border border-zinc-300 text-xs font-bold"
@@ -3245,7 +3350,7 @@ export function LiveOrdersTab({
                           <div className="flex flex-wrap items-center gap-2">
                             <input
                               type="text"
-                              placeholder="ملاحظة إضافية (اختياري)"
+                              placeholder={isEn ? 'Extra note (optional)' : 'ملاحظة إضافية (اختياري)'}
                               value={expenseNoteInput}
                               onChange={(e) => setExpenseNoteInput(e.target.value)}
                               className="flex-1 px-3 py-2 rounded-xl border border-zinc-200 text-xs"
@@ -3256,7 +3361,13 @@ export function LiveOrdersTab({
                               onClick={handleAddShiftExpense}
                               className="min-h-[38px] px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-extrabold cursor-pointer disabled:opacity-50"
                             >
-                              {savingExpense ? 'جاري التسجيل...' : 'تسجيل مصروف من الدرج'}
+                              {savingExpense
+                                ? isEn
+                                  ? 'Recording...'
+                                  : 'جاري التسجيل...'
+                                : isEn
+                                  ? 'Record Drawer Expense'
+                                  : 'تسجيل مصروف من الدرج'}
                             </button>
                           </div>
 
@@ -3286,14 +3397,23 @@ export function LiveOrdersTab({
                             <p className="font-extrabold flex items-center gap-1.5">
                               <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
                               <span>
-                                تنبيه: توجد ({openTableGroups.length}) ترابيزات مفتوحة لم تُغلق بعد:
+                                {isEn
+                                  ? `Warning: ${openTableGroups.length} open table(s) still unclosed:`
+                                  : `تنبيه: توجد (${openTableGroups.length}) ترابيزات مفتوحة لم تُغلق بعد:`}
                               </span>
                             </p>
                             <p className="text-[11px] font-bold text-amber-900">
                               {openTableGroups
-                                .map((g) => `${g.hallName ? `${g.hallName} · ` : ''}ترابيزة ${g.tableNumber}`)
-                                .join(' ، ')}{' '}
-                              — سيتم توثيقها في محضر استلام الوردية.
+                                .map(
+                                  (g) =>
+                                    `${g.hallName ? `${g.hallName} · ` : ''}${
+                                      isEn ? `Table ${g.tableNumber}` : `ترابيزة ${g.tableNumber}`
+                                    }`
+                                )
+                                .join(isEn ? ', ' : ' ، ')}{' '}
+                              {isEn
+                                ? '— will be logged in the shift handover report.'
+                                : '— سيتم توثيقها في محضر استلام الوردية.'}
                             </p>
                           </div>
                         )}
@@ -3302,16 +3422,21 @@ export function LiveOrdersTab({
                         <div className="p-4 rounded-2xl bg-zinc-50 border border-zinc-200 space-y-3">
                           <h4 className="text-xs font-extrabold text-zinc-950 flex items-center gap-1.5">
                             <ArrowRightLeft className="w-4 h-4 text-indigo-600" />
-                            <span>تقفيل الوردية وتسليم الدرج إلى:</span>
+                            <span>
+                              {isEn ? 'Close Shift & Hand Over Drawer To:' : 'تقفيل الوردية وتسليم الدرج إلى:'}
+                            </span>
                           </h4>
 
                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                             {(
                               [
-                                { id: 'cashier' as const, label: 'كاشير تالي' },
-                                { id: 'manager' as const, label: 'عهدة المدير' },
-                                { id: 'owner' as const, label: 'خزنة المالك' },
-                                { id: 'self_next_slot' as const, label: 'استمر للوردية التالية' },
+                                { id: 'cashier' as const, label: isEn ? 'Next Cashier' : 'كاشير تالي' },
+                                { id: 'manager' as const, label: isEn ? 'Manager Custody' : 'عهدة المدير' },
+                                { id: 'owner' as const, label: isEn ? 'Owner Vault' : 'خزنة المالك' },
+                                {
+                                  id: 'self_next_slot' as const,
+                                  label: isEn ? 'Continue Next Shift' : 'استمر للوردية التالية',
+                                },
                               ] as const
                             ).map((opt) => (
                               <button
@@ -3337,7 +3462,9 @@ export function LiveOrdersTab({
                                   onChange={(e) => setHandoverRecipientUid(e.target.value)}
                                   className="w-full px-3 py-2 rounded-xl border border-zinc-300 bg-white text-xs font-bold"
                                 >
-                                  <option value="">اختر الكاشير المستلم...</option>
+                                  <option value="">
+                                    {isEn ? 'Select receiving cashier...' : 'اختر الكاشير المستلم...'}
+                                  </option>
                                   {otherCashiers.map((c) => (
                                     <option key={c.uid} value={c.uid}>
                                       {c.name} (@{c.username})
@@ -3348,7 +3475,11 @@ export function LiveOrdersTab({
                               {(!otherCashiers.length || !handoverRecipientUid) && (
                                 <input
                                   type="text"
-                                  placeholder="أو اكتب اسم الكاشير المستلم يدوياً"
+                                  placeholder={
+                                    isEn
+                                      ? 'Or enter receiving cashier name manually'
+                                      : 'أو اكتب اسم الكاشير المستلم يدوياً'
+                                  }
                                   value={handoverCustomName}
                                   onChange={(e) => setHandoverCustomName(e.target.value)}
                                   className="w-full px-3 py-2 rounded-xl border border-zinc-300 bg-white text-xs font-bold"
@@ -3365,7 +3496,9 @@ export function LiveOrdersTab({
                                   onChange={(e) => setHandoverRecipientUid(e.target.value)}
                                   className="w-full px-3 py-2 rounded-xl border border-zinc-300 bg-white text-xs font-bold"
                                 >
-                                  <option value="">اختر المدير المستلم...</option>
+                                  <option value="">
+                                    {isEn ? 'Select receiving manager...' : 'اختر المدير المستلم...'}
+                                  </option>
                                   {activeManagers.map((m) => (
                                     <option key={m.uid} value={m.uid}>
                                       {m.name}
@@ -3375,7 +3508,11 @@ export function LiveOrdersTab({
                               ) : (
                                 <input
                                   type="text"
-                                  placeholder="اسم المدير المستلم (افتراضي: مدير المطعم)"
+                                  placeholder={
+                                    isEn
+                                      ? 'Receiving manager name (default: Restaurant Manager)'
+                                      : 'اسم المدير المستلم (افتراضي: مدير المطعم)'
+                                  }
                                   value={handoverCustomName}
                                   onChange={(e) => setHandoverCustomName(e.target.value)}
                                   className="w-full px-3 py-2 rounded-xl border border-zinc-300 bg-white text-xs font-bold"
@@ -3386,7 +3523,7 @@ export function LiveOrdersTab({
 
                           <input
                             type="text"
-                            placeholder="ملاحظة التسليم (اختياري)"
+                            placeholder={isEn ? 'Handover note (optional)' : 'ملاحظة التسليم (اختياري)'}
                             value={handoverNote}
                             onChange={(e) => setHandoverNote(e.target.value)}
                             className="w-full px-3 py-2 rounded-xl border border-zinc-200 bg-white text-xs"
@@ -3403,10 +3540,16 @@ export function LiveOrdersTab({
                             }}
                           >
                             {closingHandover
-                              ? 'جاري تسليم وإغلاق الوردية...'
+                              ? isEn
+                                ? 'Closing & handing over shift...'
+                                : 'جاري تسليم وإغلاق الوردية...'
                               : handoverRecipientType === 'self_next_slot'
-                                ? 'ترحيل الكاش وبدء الوردية التالية'
-                                : 'تأكيد تسليم الدرج وإنهاء الوردية'}
+                                ? isEn
+                                  ? 'Carry Over Cash & Start Next Shift'
+                                  : 'ترحيل الكاش وبدء الوردية التالية'
+                                : isEn
+                                  ? 'Confirm Drawer Handover & Close Shift'
+                                  : 'تأكيد تسليم الدرج وإنهاء الوردية'}
                           </button>
                         </div>
                       </>
@@ -3441,12 +3584,16 @@ export function LiveOrdersTab({
             >
               <div>
                 <h3 className="text-sm font-extrabold">
-                  إدارة وتعديل الطلب #{modifyTargetOrder.orderNumber}
+                  {isEn
+                    ? `Manage & Edit Order #${modifyTargetOrder.orderNumber}`
+                    : `إدارة وتعديل الطلب #${modifyTargetOrder.orderNumber}`}
                 </h3>
                 <p className="text-[11px]" style={{ color: ui.theme.sidebarMuted }}>
                   {modifyTargetOrder.hallName ? `${modifyTargetOrder.hallName} · ` : ''}
                   {modifyTargetOrder.tableNumber
-                    ? `ترابيزة ${modifyTargetOrder.tableNumber}`
+                    ? isEn
+                      ? `Table ${modifyTargetOrder.tableNumber}`
+                      : `ترابيزة ${modifyTargetOrder.tableNumber}`
                     : modifyTargetOrder.customerName}
                 </p>
               </div>
@@ -3464,7 +3611,9 @@ export function LiveOrdersTab({
                 <div className="p-4 rounded-2xl bg-rose-50 border-2 border-rose-300 text-xs font-extrabold text-rose-950 flex items-start gap-2.5">
                   <Lock className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
                   <span>
-                    مغلقة 🔒 — التعديل مغلق بعد تسليم الوردية إلا بفتح استثنائي من السوبر أدمن.
+                    {isEn
+                      ? 'Shift Locked — Editing is locked after shift handover unless unlocked exceptionally by Super Admin.'
+                      : 'وردية مغلقة — التعديل مغلق بعد تسليم الوردية إلا بفتح استثنائي من مدير المنصة.'}
                   </span>
                 </div>
               ) : (
@@ -3472,7 +3621,9 @@ export function LiveOrdersTab({
                   {/* Items Adjustment */}
                   {(canEditOpenOrders || canEditClosedChecks) && (
                     <div className="space-y-2">
-                      <p className="text-xs font-extrabold text-zinc-900">الأصناف والكميات</p>
+                      <p className="text-xs font-extrabold text-zinc-900">
+                        {isEn ? 'Items & Quantities' : 'الأصناف والكميات'}
+                      </p>
                       <div className="space-y-2">
                         {modifyItems.map((it, idx) => (
                           <div
@@ -3537,7 +3688,7 @@ export function LiveOrdersTab({
                                   setModifyItems((prev) => prev.filter((_, i) => i !== idx))
                                 }
                                 className="w-7 h-7 rounded-lg border border-rose-200 bg-rose-50 text-rose-600 flex items-center justify-center cursor-pointer disabled:opacity-40"
-                                title="إزالة الصنف"
+                                title={isEn ? 'Remove item' : 'إزالة الصنف'}
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -3553,14 +3704,16 @@ export function LiveOrdersTab({
                     <div className="p-3.5 rounded-2xl bg-indigo-50/70 border border-indigo-200 space-y-2.5">
                       <p className="text-xs font-extrabold text-indigo-950 flex items-center gap-1.5">
                         <Percent className="w-3.5 h-3.5 text-indigo-700" />
-                        <span>خصم فوري خاص مع السبب</span>
+                        <span>
+                          {isEn ? 'Special Instant Discount with Reason' : 'خصم فوري خاص مع السبب'}
+                        </span>
                       </p>
                       <div className="grid grid-cols-3 gap-2">
                         {(
                           [
-                            { id: 'none' as const, label: 'بدون خصم' },
-                            { id: 'amount' as const, label: 'مبلغ ثابت' },
-                            { id: 'percent' as const, label: 'نسبة %' },
+                            { id: 'none' as const, label: isEn ? 'No discount' : 'بدون خصم' },
+                            { id: 'amount' as const, label: isEn ? 'Fixed amount' : 'مبلغ ثابت' },
+                            { id: 'percent' as const, label: isEn ? 'Percent %' : 'نسبة %' },
                           ] as const
                         ).map((opt) => (
                           <button
@@ -3583,14 +3736,24 @@ export function LiveOrdersTab({
                             type="number"
                             min={0}
                             dir="ltr"
-                            placeholder={modifyDiscountMode === 'percent' ? 'النسبة %' : 'قيمة الخصم'}
+                            placeholder={
+                              modifyDiscountMode === 'percent'
+                                ? isEn
+                                  ? 'Percent %'
+                                  : 'النسبة %'
+                                : isEn
+                                  ? 'Discount amount'
+                                  : 'قيمة الخصم'
+                            }
                             value={modifyDiscountValue}
                             onChange={(e) => setModifyDiscountValue(e.target.value)}
                             className="px-3 py-2 rounded-xl border border-indigo-200 bg-white text-xs font-mono-num font-bold"
                           />
                           <input
                             type="text"
-                            placeholder="سبب الخصم الخاص (مثال: ترضية ضيف)"
+                            placeholder={
+                              isEn ? 'Special discount reason (e.g. Guest comp)' : 'سبب الخصم الخاص (مثال: ترضية ضيف)'
+                            }
                             value={modifyDiscountReason}
                             onChange={(e) => setModifyDiscountReason(e.target.value)}
                             className="px-3 py-2 rounded-xl border border-indigo-200 bg-white text-xs font-bold"
@@ -3603,7 +3766,7 @@ export function LiveOrdersTab({
                   {/* Notes & Table Notes */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     <label className="block space-y-1 text-xs font-bold text-zinc-800">
-                      <span>ملاحظات الطلب</span>
+                      <span>{isEn ? 'Order Notes' : 'ملاحظات الطلب'}</span>
                       <input
                         type="text"
                         value={modifyOrderNotes}
@@ -3612,12 +3775,12 @@ export function LiveOrdersTab({
                       />
                     </label>
                     <label className="block space-y-1 text-xs font-bold text-zinc-800">
-                      <span>ملاحظات الترابيزة</span>
+                      <span>{isEn ? 'Table Notes' : 'ملاحظات الترابيزة'}</span>
                       <input
                         type="text"
                         value={modifyTableNotes}
                         onChange={(e) => setModifyTableNotes(e.target.value)}
-                        placeholder="مثال: ضيف VIP / بدون بصل..."
+                        placeholder={isEn ? 'e.g. VIP guest / no onions...' : 'مثال: ضيف VIP / بدون بصل...'}
                         className="w-full px-3 py-2 rounded-xl border border-zinc-200 text-xs"
                       />
                     </label>
@@ -3625,13 +3788,21 @@ export function LiveOrdersTab({
 
                   {/* Mandatory Audit Reason */}
                   <label className="block space-y-1 text-xs font-extrabold text-zinc-950">
-                    <span>سبب التعديل أو الإلغاء (إجباري للتدقيق) *</span>
+                    <span>
+                      {isEn
+                        ? 'Reason for Modification or Cancellation (Required for Audit) *'
+                        : 'سبب التعديل أو الإلغاء (إجباري للتدقيق) *'}
+                    </span>
                     <input
                       type="text"
                       required
                       value={modifyAuditReason}
                       onChange={(e) => setModifyAuditReason(e.target.value)}
-                      placeholder="اكتب السبب بوضوح لتوثيقه في سجل الرقابة..."
+                      placeholder={
+                        isEn
+                          ? 'State the reason clearly to log it in the audit trail...'
+                          : 'اكتب السبب بوضوح لتوثيقه في سجل الرقابة...'
+                      }
                       className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 text-xs font-bold"
                     />
                   </label>
@@ -3653,7 +3824,13 @@ export function LiveOrdersTab({
                         color: ui.theme.accentTextHex,
                       }}
                     >
-                      {modifyBusy ? 'جاري الحفظ...' : 'حفظ التعديلات في الفاتورة'}
+                      {modifyBusy
+                        ? isEn
+                          ? 'Saving...'
+                          : 'جاري الحفظ...'
+                        : isEn
+                          ? 'Save Check Changes'
+                          : 'حفظ التعديلات في الفاتورة'}
                     </button>
                     {canCancelOpenOrders &&
                       modifyTargetOrder.status !== 'completed' &&
@@ -3665,7 +3842,7 @@ export function LiveOrdersTab({
                           className="min-h-[42px] px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-extrabold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                         >
                           <XCircle className="w-4 h-4" />
-                          <span>إلغاء الطلب</span>
+                          <span>{isEn ? 'Cancel Order' : 'إلغاء الطلب'}</span>
                         </button>
                       )}
                   </div>
@@ -3675,7 +3852,9 @@ export function LiveOrdersTab({
               {Array.isArray(modifyTargetOrder.adjustmentHistory) &&
                 modifyTargetOrder.adjustmentHistory.length > 0 && (
                   <div className="pt-3 border-t border-zinc-200 space-y-1.5">
-                    <p className="text-[11px] font-extrabold text-zinc-600">سجل التعديلات السابقة:</p>
+                    <p className="text-[11px] font-extrabold text-zinc-600">
+                      {isEn ? 'Previous Adjustment History:' : 'سجل التعديلات السابقة:'}
+                    </p>
                     <div className="space-y-1 max-h-28 overflow-y-auto">
                       {modifyTargetOrder.adjustmentHistory.map((h, i) => (
                         <div key={i} className="text-[11px] bg-zinc-50 rounded-lg px-2.5 py-1.5 text-zinc-700">

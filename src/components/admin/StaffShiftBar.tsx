@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
+  ArrowLeft,
   ArrowRight,
   Bell,
   BellOff,
@@ -36,6 +37,7 @@ import {
   StaffScreen,
   StaffShift,
 } from '../../types/menu';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 interface StaffShiftBarProps {
   restaurant: Restaurant;
@@ -83,6 +85,10 @@ export const StaffShiftBar: React.FC<StaffShiftBarProps> = ({
   onRequestCashierHandoverModal,
   onSwitchCashierNextSlot,
 }) => {
+  const { lang, dir, isRtl, loc, formatCurrency } = useLanguage();
+  const isEn = lang === 'en';
+  const currencyText = formatCurrency(restaurant.currency);
+
   const opsConfig = useMemo(() => getResolvedOperationsConfig(restaurant), [restaurant]);
   const treasury = useMemo(() => getResolvedTreasuryState(restaurant), [restaurant]);
 
@@ -209,7 +215,13 @@ export const StaffShiftBar: React.FC<StaffShiftBarProps> = ({
       await syncTopicsAfterShiftChange(updatedStations);
       setCashierModalOpen(false);
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'تعذر بدء وردية الكاشير.');
+      setErrorMsg(
+        err instanceof Error
+          ? err.message
+          : isEn
+            ? 'Unable to start cashier shift.'
+            : 'تعذر بدء وردية الكاشير.'
+      );
     } finally {
       setBusy(false);
     }
@@ -242,7 +254,13 @@ export const StaffShiftBar: React.FC<StaffShiftBarProps> = ({
       );
       await syncTopicsAfterShiftChange(updatedStations);
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'تعذر بدء الوردية.');
+      setErrorMsg(
+        err instanceof Error
+          ? err.message
+          : isEn
+            ? 'Unable to start shift.'
+            : 'تعذر بدء الوردية.'
+      );
     } finally {
       setBusy(false);
     }
@@ -272,7 +290,13 @@ export const StaffShiftBar: React.FC<StaffShiftBarProps> = ({
         setWarningMsg(res.uncoveredWarning);
       }
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'تعذر إنهاء الوردية.');
+      setErrorMsg(
+        err instanceof Error
+          ? err.message
+          : isEn
+            ? 'Unable to end shift.'
+            : 'تعذر إنهاء الوردية.'
+      );
     } finally {
       setBusy(false);
     }
@@ -290,7 +314,13 @@ export const StaffShiftBar: React.FC<StaffShiftBarProps> = ({
       });
       setSoftBannerDismissed(true);
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'تعذر تمديد الوردية.');
+      setErrorMsg(
+        err instanceof Error
+          ? err.message
+          : isEn
+            ? 'Unable to extend shift.'
+            : 'تعذر تمديد الوردية.'
+      );
     } finally {
       setBusy(false);
     }
@@ -310,20 +340,28 @@ export const StaffShiftBar: React.FC<StaffShiftBarProps> = ({
   };
 
   const isBlockedSupervisory = Boolean(supervisoryMode && coveringStaffName && !activeShiftForScreen);
+  const nextSlot = getNextShiftSlot(opsConfig, activeSlotObj.id);
+  const activeSlotLabel = loc(activeSlotObj.name, activeSlotObj.nameEn);
+  const nextSlotLabel = loc(nextSlot.name, nextSlot.nameEn);
+  const DirectionArrow = isRtl ? ArrowLeft : ArrowRight;
 
   return (
-    <div className="space-y-2" dir="rtl">
+    <div className="space-y-2" dir={dir}>
       {isBlockedSupervisory && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-indigo-300 bg-indigo-950 text-white px-4 py-2.5 text-xs shadow-xs">
           <div className="flex items-center gap-2 min-w-0">
             <Crown className="w-4 h-4 text-amber-400 shrink-0" />
             <span className="font-extrabold">
-              وضع الإشراف المباشر — القسم مغطى حالياً بواسطة الموظف:{' '}
+              {isEn
+                ? 'Direct Supervisory Mode — Currently covered by:'
+                : 'وضع الإشراف المباشر — القسم مغطى حالياً بواسطة الموظف:'}{' '}
               <strong className="text-amber-300">{coveringStaffName}</strong>
             </span>
           </div>
           <span className="text-[11px] text-indigo-200 font-semibold">
-            يُفتح هذا القسم للمراجعة والإدارة دون الحاجة لبدء وردية جديدة بدلاً عن الموظف المداوم.
+            {isEn
+              ? 'Opened for review and management without starting a duplicate shift over the on-duty staff member.'
+              : 'يُفتح هذا القسم للمراجعة والإدارة دون الحاجة لبدء وردية جديدة بدلاً عن الموظف المداوم.'}
           </span>
         </div>
       )}
@@ -333,7 +371,9 @@ export const StaffShiftBar: React.FC<StaffShiftBarProps> = ({
           <div className="flex items-center gap-2">
             <Clock className="w-4 h-4 text-amber-700 shrink-0" />
             <span className="font-extrabold">
-              انتهى الموعد الرسمي لوردية "{activeSlotObj.name}" ({activeSlotObj.endTime}) — يمكنك الاستمرار بساعة إضافية، الانتقال لـ "{getNextShiftSlot(opsConfig, activeSlotObj.id).name}"، أو تسليم الدرج.
+              {isEn
+                ? `Scheduled time for shift "${activeSlotLabel}" (${activeSlotObj.endTime}) has ended — you can continue for 1 extra hour, switch to "${nextSlotLabel}", or close the drawer.`
+                : `انتهى الموعد الرسمي لوردية "${activeSlotLabel}" (${activeSlotObj.endTime}) — يمكنك الاستمرار بساعة إضافية، الانتقال لـ "${nextSlotLabel}"، أو تسليم الدرج.`}
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -343,7 +383,7 @@ export const StaffShiftBar: React.FC<StaffShiftBarProps> = ({
               onClick={handleExtendShift}
               className="px-3 py-1.5 rounded-xl bg-white border border-amber-300 hover:bg-amber-100 text-amber-950 font-extrabold cursor-pointer disabled:opacity-50"
             >
-              تكملة (+1 ساعة)
+              {isEn ? 'Continue (+1h)' : 'تكملة (+1 ساعة)'}
             </button>
             {isCashierScreen && onSwitchCashierNextSlot && (
               <button
@@ -352,8 +392,8 @@ export const StaffShiftBar: React.FC<StaffShiftBarProps> = ({
                 onClick={onSwitchCashierNextSlot}
                 className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold inline-flex items-center gap-1 cursor-pointer disabled:opacity-50"
               >
-                <span>تطبيق للوردية التالية</span>
-                <ArrowRight className="w-3.5 h-3.5" />
+                <span>{isEn ? 'Switch to Next Shift' : 'الانتقال للوردية التالية'}</span>
+                <DirectionArrow className="w-3.5 h-3.5" />
               </button>
             )}
             <button
@@ -362,7 +402,13 @@ export const StaffShiftBar: React.FC<StaffShiftBarProps> = ({
               onClick={handleEndShift}
               className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold cursor-pointer disabled:opacity-50"
             >
-              {isCashierScreen ? 'تسليم وإنهاء الوردية' : 'إنهاء ورديتي'}
+              {isCashierScreen
+                ? isEn
+                  ? 'Handover & End Shift'
+                  : 'تسليم وإنهاء الوردية'
+                : isEn
+                  ? 'End My Shift'
+                  : 'إنهاء ورديتي'}
             </button>
           </div>
         </div>
@@ -376,11 +422,17 @@ export const StaffShiftBar: React.FC<StaffShiftBarProps> = ({
               <span className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-extrabold text-emerald-800">
                 <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
                 <span>
-                  ورديتك نشطة ({screenLabel}
-                  {activeShiftForScreen.shiftSlotName ? ` · ${activeShiftForScreen.shiftSlotName}` : ''})
+                  {isEn ? 'Active Shift' : 'ورديتك نشطة'} ({screenLabel}
+                  {activeShiftForScreen.shiftSlotName
+                    ? ` · ${loc(activeShiftForScreen.shiftSlotName, activeSlotObj.nameEn)}`
+                    : ''}
+                  )
                 </span>
               </span>
-              <span className="inline-flex items-center gap-1 rounded-xl bg-zinc-100 px-2.5 py-1.5 font-mono text-xs font-bold text-zinc-700">
+              <span
+                dir="ltr"
+                className="inline-flex items-center gap-1 rounded-xl bg-zinc-100 px-2.5 py-1.5 font-mono text-xs font-bold text-zinc-700"
+              >
                 <Clock className="h-3.5 w-3.5 text-zinc-500" />
                 {formatDuration(activeShiftForScreen.startedAt, nowMs)}
               </span>
@@ -389,13 +441,22 @@ export const StaffShiftBar: React.FC<StaffShiftBarProps> = ({
                 activeShiftForScreen.serviceCallsHandled > 0) && (
                 <span className="hidden sm:inline-flex items-center gap-2 text-[11px] font-bold text-zinc-600">
                   {activeShiftForScreen.itemsMarkedReady > 0 && (
-                    <span>تجهيز: {activeShiftForScreen.itemsMarkedReady}</span>
+                    <span>
+                      {isEn ? 'Prepared:' : 'تجهيز:'}{' '}
+                      <span className="font-mono-num">{activeShiftForScreen.itemsMarkedReady}</span>
+                    </span>
                   )}
                   {activeShiftForScreen.ordersHandled > 0 && (
-                    <span>طلبات: {activeShiftForScreen.ordersHandled}</span>
+                    <span>
+                      {isEn ? 'Orders:' : 'طلبات:'}{' '}
+                      <span className="font-mono-num">{activeShiftForScreen.ordersHandled}</span>
+                    </span>
                   )}
                   {activeShiftForScreen.serviceCallsHandled > 0 && (
-                    <span>نداءات: {activeShiftForScreen.serviceCallsHandled}</span>
+                    <span>
+                      {isEn ? 'Calls:' : 'نداءات:'}{' '}
+                      <span className="font-mono-num">{activeShiftForScreen.serviceCallsHandled}</span>
+                    </span>
                   )}
                 </span>
               )}
@@ -406,17 +467,29 @@ export const StaffShiftBar: React.FC<StaffShiftBarProps> = ({
                 className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3.5 py-1.5 text-xs font-extrabold text-red-700 transition hover:bg-red-100 disabled:opacity-50 cursor-pointer"
               >
                 {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Square className="h-3.5 w-3.5" />}
-                <span>{isCashierScreen ? 'تسليم الدرج وإنهاء الوردية' : 'إنهاء ورديتي'}</span>
+                <span>
+                  {isCashierScreen
+                    ? isEn
+                      ? 'Close Drawer & End Shift'
+                      : 'تسليم الدرج وإنهاء الوردية'
+                    : isEn
+                      ? 'End My Shift'
+                      : 'إنهاء ورديتي'}
+                </span>
               </button>
             </>
           ) : isBlockedSupervisory ? (
             <span className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-900">
-              معاينة إشرافية (شاشة {coveringStaffName})
+              {isEn
+                ? `Supervisory View (${coveringStaffName})`
+                : `معاينة إشرافية (شاشة ${coveringStaffName})`}
             </span>
           ) : (
             <>
               <span className="inline-flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-900">
-                لم تبدأ ورديتك على "{screenLabel}" بعد
+                {isEn
+                  ? `You haven't started your shift on "${screenLabel}" yet`
+                  : `لم تبدأ ورديتك على "${screenLabel}" بعد`}
               </span>
               <button
                 type="button"
@@ -425,7 +498,15 @@ export const StaffShiftBar: React.FC<StaffShiftBarProps> = ({
                 className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-1.5 text-xs font-extrabold text-white transition hover:bg-emerald-700 disabled:opacity-50 cursor-pointer"
               >
                 {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
-                <span>{isCashierScreen ? 'فتح درج وبدء وردية الكاشير' : 'بدء ورديتي'}</span>
+                <span>
+                  {isCashierScreen
+                    ? isEn
+                      ? 'Open Drawer & Start Cashier Shift'
+                      : 'فتح درج وبدء وردية الكاشير'
+                    : isEn
+                      ? 'Start My Shift'
+                      : 'بدء ورديتي'}
+                </span>
               </button>
             </>
           )}
@@ -436,7 +517,7 @@ export const StaffShiftBar: React.FC<StaffShiftBarProps> = ({
           {notifPerm === 'granted' ? (
             <span className="inline-flex items-center gap-1 rounded-xl border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-bold text-emerald-800">
               <CheckCircle2 className="h-3.5 w-3.5" />
-              الإشعارات اللحظية مفعلة
+              {isEn ? 'Live Alerts Enabled' : 'الإشعارات اللحظية مفعلة'}
             </span>
           ) : notifPerm === 'default' ? (
             <button
@@ -445,12 +526,12 @@ export const StaffShiftBar: React.FC<StaffShiftBarProps> = ({
               className="inline-flex items-center gap-1 rounded-xl border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11px] font-extrabold text-amber-900 hover:bg-amber-100 cursor-pointer"
             >
               <Bell className="h-3.5 w-3.5" />
-              تفعيل إشعارات الخلفية
+              {isEn ? 'Enable Background Alerts' : 'تفعيل إشعارات الخلفية'}
             </button>
           ) : (
             <span className="inline-flex items-center gap-1 rounded-xl border border-zinc-200 bg-zinc-50 px-2.5 py-1.5 text-[11px] font-bold text-zinc-500">
               <BellOff className="h-3.5 w-3.5" />
-              الإشعارات مغلقة بالمتصفح
+              {isEn ? 'Alerts Blocked in Browser' : 'الإشعارات مغلقة بالمتصفح'}
             </span>
           )}
 
@@ -460,7 +541,7 @@ export const StaffShiftBar: React.FC<StaffShiftBarProps> = ({
             className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-300 bg-white px-3 py-1.5 text-[11px] font-extrabold text-zinc-800 hover:bg-zinc-50 cursor-pointer"
           >
             <Printer className="h-3.5 w-3.5" />
-            <span>{printerLabel || 'طابعة حرارية'}</span>
+            <span>{printerLabel || (isEn ? 'Thermal Printer' : 'طابعة حرارية')}</span>
           </button>
         </div>
       </div>
@@ -468,7 +549,9 @@ export const StaffShiftBar: React.FC<StaffShiftBarProps> = ({
       {warningMsg && (
         <div className="flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-extrabold text-amber-950">
           <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
-          <span>تنبيه تغطية القسم: {warningMsg}</span>
+          <span>
+            {isEn ? 'Station coverage notice:' : 'تنبيه تغطية القسم:'} {warningMsg}
+          </span>
         </div>
       )}
 
@@ -483,6 +566,7 @@ export const StaffShiftBar: React.FC<StaffShiftBarProps> = ({
         <div
           className="fixed inset-0 z-50 bg-zinc-950/65 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
           onClick={() => !busy && setCashierModalOpen(false)}
+          dir={dir}
         >
           <form
             onSubmit={handleStartCashierShiftConfirm}
@@ -496,10 +580,12 @@ export const StaffShiftBar: React.FC<StaffShiftBarProps> = ({
                 </span>
                 <div>
                   <h3 className="text-base font-extrabold text-zinc-950">
-                    فتح درج الكاشير وبدء الوردية
+                    {isEn ? 'Open Cashier Drawer & Start Shift' : 'فتح درج الكاشير وبدء الوردية'}
                   </h3>
                   <p className="text-[11px] text-zinc-500">
-                    اختر فترة الوردية وحدد العهدة الافتتاحية وأي كاش مرحّل بالدرج
+                    {isEn
+                      ? 'Select shift slot, opening float, and any carried-over cash in the drawer'
+                      : 'اختر فترة الوردية وحدد العهدة الافتتاحية وأي كاش مرحّل بالدرج'}
                   </p>
                 </div>
               </div>
@@ -507,6 +593,7 @@ export const StaffShiftBar: React.FC<StaffShiftBarProps> = ({
                 type="button"
                 disabled={busy}
                 onClick={() => setCashierModalOpen(false)}
+                aria-label={isEn ? 'Close' : 'إغلاق'}
                 className="p-1.5 rounded-lg text-zinc-400 hover:bg-zinc-100 cursor-pointer"
               >
                 <X className="w-5 h-5" />
@@ -514,7 +601,7 @@ export const StaffShiftBar: React.FC<StaffShiftBarProps> = ({
             </div>
 
             <label className="block space-y-1 text-xs font-bold text-zinc-800">
-              <span>فترة الوردية:</span>
+              <span>{isEn ? 'Shift Slot:' : 'فترة الوردية:'}</span>
               <select
                 value={selectedSlotId}
                 onChange={(e) => setSelectedSlotId(e.target.value)}
@@ -522,16 +609,21 @@ export const StaffShiftBar: React.FC<StaffShiftBarProps> = ({
               >
                 {opsConfig.shiftSlots.map((slot) => (
                   <option key={slot.id} value={slot.id}>
-                    {slot.name} ({slot.startTime} – {slot.endTime})
+                    {loc(slot.name, slot.nameEn)} ({slot.startTime} – {slot.endTime})
                   </option>
                 ))}
               </select>
             </label>
 
             <label className="block space-y-1 text-xs font-bold text-zinc-800">
-              <span>العهدة الافتتاحية (فكّة بداية الدرج) — {restaurant.currency}</span>
+              <span>
+                {isEn
+                  ? `Opening Float (Starting Change) — ${currencyText}`
+                  : `العهدة الافتتاحية (فكّة بداية الدرج) — ${currencyText}`}
+              </span>
               <input
                 type="number"
+                dir="ltr"
                 min={0}
                 step="0.5"
                 value={openingFloatInput}
@@ -542,7 +634,9 @@ export const StaffShiftBar: React.FC<StaffShiftBarProps> = ({
 
             <div className="space-y-2 p-3 rounded-2xl bg-zinc-50 border border-zinc-200">
               <span className="text-xs font-extrabold text-zinc-800 block">
-                استلام رصيد مرحّل بالدرج (اختياري):
+                {isEn
+                  ? 'Receive Carried-Over Cash in Drawer (Optional):'
+                  : 'استلام رصيد مرحّل بالدرج (اختياري):'}
               </span>
               <div className="space-y-1.5 text-xs">
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -555,7 +649,9 @@ export const StaffShiftBar: React.FC<StaffShiftBarProps> = ({
                       setCustomCarryoverAmount(0);
                     }}
                   />
-                  <span>درج فارغ بدون ترحيل كاش سابق</span>
+                  <span>
+                    {isEn ? 'Empty drawer (no prior cash carryover)' : 'درج فارغ بدون ترحيل كاش سابق'}
+                  </span>
                 </label>
 
                 {lastClosedCashierShift && (lastClosedCashierShift.expectedCashHandover || 0) > 0 && (
@@ -572,9 +668,11 @@ export const StaffShiftBar: React.FC<StaffShiftBarProps> = ({
                       }}
                     />
                     <span>
-                      استلام المتبقي من وردية ({lastClosedCashierShift.staffName}):{' '}
+                      {isEn
+                        ? `Receive balance from previous shift (${lastClosedCashierShift.staffName}):`
+                        : `استلام المتبقي من وردية (${lastClosedCashierShift.staffName}):`}{' '}
                       <strong className="font-mono-num">
-                        {lastClosedCashierShift.expectedCashHandover} {restaurant.currency}
+                        {lastClosedCashierShift.expectedCashHandover} {currencyText}
                       </strong>
                     </span>
                   </label>
@@ -592,8 +690,11 @@ export const StaffShiftBar: React.FC<StaffShiftBarProps> = ({
                       }}
                     />
                     <span>
-                      صرف من عهدة المدير الحالية ({treasury.managerCustodyBalance}{' '}
-                      {restaurant.currency})
+                      {isEn ? 'Fund from current manager custody' : 'صرف من عهدة المدير الحالية'} (
+                      <span className="font-mono-num">
+                        {treasury.managerCustodyBalance} {currencyText}
+                      </span>
+                      )
                     </span>
                   </label>
                 )}
@@ -601,9 +702,14 @@ export const StaffShiftBar: React.FC<StaffShiftBarProps> = ({
 
               {carryoverSource !== 'none' && (
                 <label className="block space-y-1 text-[11px] font-bold text-zinc-700 pt-1">
-                  <span>المبلغ المستلم بالدرج ({restaurant.currency}):</span>
+                  <span>
+                    {isEn
+                      ? `Amount Received in Drawer (${currencyText}):`
+                      : `المبلغ المستلم بالدرج (${currencyText}):`}
+                  </span>
                   <input
                     type="number"
+                    dir="ltr"
                     min={0}
                     step="0.5"
                     value={customCarryoverAmount}
@@ -621,7 +727,9 @@ export const StaffShiftBar: React.FC<StaffShiftBarProps> = ({
                 className="flex-1 min-h-[42px] px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold inline-flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
                 {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-                <span>تأكيد فتح الدرج وبدء العمل</span>
+                <span>
+                  {isEn ? 'Confirm Open Drawer & Start Shift' : 'تأكيد فتح الدرج وبدء العمل'}
+                </span>
               </button>
               <button
                 type="button"
@@ -629,7 +737,7 @@ export const StaffShiftBar: React.FC<StaffShiftBarProps> = ({
                 onClick={() => setCashierModalOpen(false)}
                 className="min-h-[42px] px-4 py-2 rounded-xl border border-zinc-300 text-xs font-bold text-zinc-700 hover:bg-zinc-50 cursor-pointer"
               >
-                إلغاء
+                {isEn ? 'Cancel' : 'إلغاء'}
               </button>
             </div>
           </form>

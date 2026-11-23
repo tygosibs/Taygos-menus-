@@ -415,8 +415,8 @@ export function LoyaltyRegisterModal({
             </div>
             <p className={`text-[11px] mt-1.5 leading-relaxed ${mutedText}`}>
               {isEn
-                ? 'To receive a special discount or birthday treat on your birthday 🎂'
-                : 'للحصول على خصم أو هدية خاصة في عيد ميلادك 🎂'}
+                ? 'To receive a special discount or birthday treat on your birthday'
+                : 'للحصول على خصم أو هدية خاصة في عيد ميلادك'}
             </p>
           </div>
 

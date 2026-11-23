@@ -461,7 +461,7 @@ export function CartDrawer({
     const effectiveCustomerName =
       customerName.trim() ||
       guestName.trim() ||
-      (activeGuests.length > 0 ? activeGuests.join('، ') : '') ||
+      (activeGuests.length > 0 ? activeGuests.join(lang === 'en' ? ', ' : '، ') : '') ||
       (lang === 'en' ? 'Guest' : 'ضيف');
     const safePhone = customerPhone.trim() || '-';
 
@@ -676,8 +676,8 @@ export function CartDrawer({
 
     const resolvedName =
       isGroupTableMode && separateChecks.groups.length > 1
-        ? separateChecks.groups.map((g) => g.summary.guestName).join('، ')
-        : customerName.trim() || guestName.trim() || 'ضيف';
+        ? separateChecks.groups.map((g) => g.summary.guestName).join(lang === 'en' ? ', ' : '، ')
+        : customerName.trim() || guestName.trim() || (lang === 'en' ? 'Guest' : 'ضيف');
 
     setSubmitting(true);
     setErrorMsg(null);

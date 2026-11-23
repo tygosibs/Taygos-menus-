@@ -58,16 +58,21 @@ function toIsoDateLocal(ms: number): string {
   return `${y}-${m}-${day}`;
 }
 
-function getArabicDayName(isoDate: string): string {
+function getDayName(isoDate: string, isEn: boolean): string {
   const [y, m, d] = isoDate.split('-').map(Number);
   if (!y || !m || !d) return '';
-  return new Date(y, m - 1, d).toLocaleDateString('ar-EG', { weekday: 'long' });
+  return new Date(y, m - 1, d).toLocaleDateString(isEn ? 'en-US' : 'ar-EG-u-nu-latn', {
+    weekday: 'long',
+  });
 }
 
-function formatShortTime(ts: unknown): string {
+function formatShortTime(ts: unknown, isEn: boolean): string {
   const ms = getTimestampMillis(ts);
   if (!ms) return '—';
-  return new Date(ms).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+  return new Date(ms).toLocaleTimeString(isEn ? 'en-US' : 'ar-EG-u-nu-latn', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 export function OwnerShiftReportTab({
@@ -79,7 +84,8 @@ export function OwnerShiftReportTab({
   transfersOverride,
   onRestaurantUpdated,
 }: OwnerShiftReportTabProps) {
-  const { formatCurrency } = useLanguage();
+  const { lang, dir, isRtl, loc, formatCurrency } = useLanguage();
+  const isEn = lang === 'en';
   const currencyLabel = formatCurrency(restaurant.currency);
   const opsConfig = useMemo(() => getResolvedOperationsConfig(restaurant), [restaurant]);
   const treasury = useMemo(() => getResolvedTreasuryState(restaurant), [restaurant]);
@@ -340,7 +346,9 @@ export function OwnerShiftReportTab({
         const exp = matched.reduce((s, x) => s + Number(x.drawerExpensesTotal || 0), 0);
         const variance = matched.reduce((s, x) => s + Number(x.drawerVarianceTotal || 0), 0);
         const net = cash + visa + variance - exp;
-        const staffNames = Array.from(new Set(matched.map((x) => x.staffName))).join('، ');
+        const staffNames = Array.from(new Set(matched.map((x) => x.staffName))).join(
+          isEn ? ', ' : '، '
+        );
         const allLocked = matched.length > 0 && matched.every((x) => x.status === 'completed');
         const hasUnlocked = matched.some((x) => Boolean(x.superAdminUnlocked));
         return {
@@ -363,7 +371,7 @@ export function OwnerShiftReportTab({
 
       return {
         iso,
-        dayName: getArabicDayName(iso),
+        dayName: getDayName(iso, isEn),
         perSlot,
         dayCash,
         dayVisa,
@@ -388,7 +396,7 @@ export function OwnerShiftReportTab({
       grandExp: rows.reduce((s, r) => s + r.dayExp, 0),
       grandNet: rows.reduce((s, r) => s + r.dayNet, 0),
     };
-  }, [opsConfig.shiftSlots, shifts, fromDate, toDate, searchTerm]);
+  }, [opsConfig.shiftSlots, shifts, fromDate, toDate, searchTerm, isEn]);
 
   const handleAdjustVault = async (e: FormEvent, sign: 1 | -1) => {
     e.preventDefault();
@@ -401,7 +409,15 @@ export function OwnerShiftReportTab({
       await adjustOwnerVaultBalance({
         restaurant,
         deltaCash: delta,
-        note: vaultNote || (sign > 0 ? 'إيداع بالخزنة الرئيسية' : 'سحب من الخزنة الرئيسية'),
+        note:
+          vaultNote ||
+          (sign > 0
+            ? isEn
+              ? 'Deposit to main vault'
+              : 'إيداع بالخزنة الرئيسية'
+            : isEn
+              ? 'Withdrawal from main vault'
+              : 'سحب من الخزنة الرئيسية'),
         actor,
       });
       const nextCash = Math.max(0, treasury.ownerVaultCashBalance + delta);
@@ -415,19 +431,29 @@ export function OwnerShiftReportTab({
       });
       setVaultDelta('');
       setVaultNote('');
-      setVaultMsg(sign > 0 ? `تمت إضافة ${formatMoney(raw)} للخزنة.` : `تم خصم ${formatMoney(raw)} من الخزنة.`);
+      setVaultMsg(
+        sign > 0
+          ? isEn
+            ? `Added ${formatMoney(raw)} to main vault.`
+            : `تمت إضافة ${formatMoney(raw)} للخزنة.`
+          : isEn
+            ? `Withdrew ${formatMoney(raw)} from main vault.`
+            : `تم خصم ${formatMoney(raw)} من الخزنة.`
+      );
     } finally {
       setSavingVault(false);
     }
   };
 
   return (
-    <div dir="rtl" className="space-y-6">
+    <div dir={dir} className="space-y-6">
       {/* Main Treasury Overview */}
       <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white border border-zinc-200 rounded-2xl p-4 sm:p-5 space-y-1">
           <div className="flex items-center justify-between text-xs font-bold text-zinc-500">
-            <span>الخزنة الرئيسية لصاحب المطعم (كاش)</span>
+            <span>
+              {isEn ? 'Owner Main Vault (Cash)' : 'الخزنة الرئيسية لصاحب المطعم (كاش)'}
+            </span>
             <Vault className="w-4 h-4 text-emerald-600" />
           </div>
           <p className="text-2xl font-extrabold font-mono-num text-zinc-950">
@@ -437,7 +463,7 @@ export function OwnerShiftReportTab({
 
         <div className="bg-white border border-zinc-200 rounded-2xl p-4 sm:p-5 space-y-1">
           <div className="flex items-center justify-between text-xs font-bold text-zinc-500">
-            <span>إجمالي مبيعات الفيزا / البنك</span>
+            <span>{isEn ? 'Total Card / Bank Sales' : 'إجمالي مبيعات الفيزا / البنك'}</span>
             <Wallet className="w-4 h-4 text-blue-600" />
           </div>
           <p className="text-2xl font-extrabold font-mono-num text-blue-700">
@@ -447,7 +473,7 @@ export function OwnerShiftReportTab({
 
         <div className="bg-white border border-zinc-200 rounded-2xl p-4 sm:p-5 space-y-1">
           <div className="flex items-center justify-between text-xs font-bold text-zinc-500">
-            <span>رصيد عهدة المدير المعلّقة</span>
+            <span>{isEn ? 'Pending Manager Custody' : 'رصيد عهدة المدير المعلّقة'}</span>
             <UserCheck className="w-4 h-4 text-indigo-600" />
           </div>
           <p className="text-2xl font-extrabold font-mono-num text-indigo-700">
@@ -460,7 +486,9 @@ export function OwnerShiftReportTab({
         <section className="bg-white border border-zinc-200 rounded-2xl p-4 sm:p-5 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-xs sm:text-sm font-extrabold text-zinc-950">
-              تسوية أو سحب / إيداع يدوي بالخزنة الرئيسية (للمالك فقط)
+              {isEn
+                ? 'Manual Main Vault Adjustment / Deposit or Withdrawal (Owner Only)'
+                : 'تسوية أو سحب / إيداع يدوي بالخزنة الرئيسية (للمالك فقط)'}
             </h3>
             {vaultMsg && <span className="text-xs font-bold text-emerald-700">{vaultMsg}</span>}
           </div>
@@ -471,14 +499,14 @@ export function OwnerShiftReportTab({
               step="any"
               value={vaultDelta}
               onChange={(e) => setVaultDelta(e.target.value)}
-              placeholder={`المبلغ (${currencyLabel})`}
+              placeholder={isEn ? `Amount (${currencyLabel})` : `المبلغ (${currencyLabel})`}
               className="px-3 py-2 rounded-xl border border-zinc-300 text-xs font-mono-num font-bold"
             />
             <input
               type="text"
               value={vaultNote}
               onChange={(e) => setVaultNote(e.target.value)}
-              placeholder="البيان / السبب"
+              placeholder={isEn ? 'Note / Reason' : 'البيان / السبب'}
               className="sm:col-span-2 px-3 py-2 rounded-xl border border-zinc-300 text-xs"
             />
             <div className="flex gap-2">
@@ -488,7 +516,7 @@ export function OwnerShiftReportTab({
                 onClick={(e) => handleAdjustVault(e, 1)}
                 className="flex-1 min-h-[38px] px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold cursor-pointer disabled:opacity-50"
               >
-                + إيداع
+                {isEn ? '+ Deposit' : '+ إيداع'}
               </button>
               <button
                 type="button"
@@ -496,7 +524,7 @@ export function OwnerShiftReportTab({
                 onClick={(e) => handleAdjustVault(e, -1)}
                 className="flex-1 min-h-[38px] px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-extrabold cursor-pointer disabled:opacity-50"
               >
-                - سحب
+                {isEn ? '- Withdraw' : '- سحب'}
               </button>
             </div>
           </div>
@@ -516,7 +544,7 @@ export function OwnerShiftReportTab({
             }`}
           >
             <Calendar className="w-4 h-4" />
-            <span>التقرير اليومي المفصل</span>
+            <span>{isEn ? 'Daily Detailed Report' : 'التقرير اليومي المفصل'}</span>
           </button>
           <button
             type="button"
@@ -528,13 +556,17 @@ export function OwnerShiftReportTab({
             }`}
           >
             <FileSpreadsheet className="w-4 h-4" />
-            <span>جدول تقارير الورديات (متعدد الأيام)</span>
+            <span>{isEn ? 'Multi-Day Shift Matrix' : 'جدول تقارير الورديات (متعدد الأيام)'}</span>
           </button>
         </div>
 
         <span className="text-[11px] font-bold text-zinc-500 flex items-center gap-1">
           <Lock className="w-3.5 h-3.5 text-zinc-400" />
-          <span>الورديات المغلقة محمية ضد التعديل (إلا بفتح استثنائي من السوبر أدمن)</span>
+          <span>
+            {isEn
+              ? 'Closed shifts are edit-locked (unless exceptionally unlocked by Super Admin)'
+              : 'الورديات المغلقة محمية ضد التعديل (إلا بفتح استثنائي من مدير المنصة)'}
+          </span>
         </span>
       </div>
 
@@ -545,10 +577,14 @@ export function OwnerShiftReportTab({
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="text-sm sm:text-base font-extrabold text-zinc-950">
-                  ملخص تشغيل اليوم — {getArabicDayName(selectedDayIso)} ({selectedDayIso})
+                  {isEn
+                    ? `Daily Operations Summary — ${getDayName(selectedDayIso, true)} (${selectedDayIso})`
+                    : `ملخص تشغيل اليوم — ${getDayName(selectedDayIso, false)} (${selectedDayIso})`}
                 </h3>
                 <p className="text-xs text-zinc-500">
-                  يوضح كل ما تم خلال اليوم من مبيعات وحضور وانصراف الكادر والشيكات المغلقة والملغاة وأي تعديلات.
+                  {isEn
+                    ? 'Full breakdown of daily sales, staff attendance, settled & cancelled checks, and audit adjustments.'
+                    : 'يوضح كل ما تم خلال اليوم من مبيعات وحضور وانصراف الكادر والشيكات المغلقة والملغاة وأي تعديلات.'}
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -561,7 +597,7 @@ export function OwnerShiftReportTab({
                       : 'bg-zinc-50 text-zinc-700 border-zinc-200 hover:bg-zinc-100'
                   }`}
                 >
-                  اليوم
+                  {isEn ? 'Today' : 'اليوم'}
                 </button>
                 <button
                   type="button"
@@ -572,7 +608,7 @@ export function OwnerShiftReportTab({
                       : 'bg-zinc-50 text-zinc-700 border-zinc-200 hover:bg-zinc-100'
                   }`}
                 >
-                  أمس
+                  {isEn ? 'Yesterday' : 'أمس'}
                 </button>
                 <input
                   type="date"
@@ -585,12 +621,30 @@ export function OwnerShiftReportTab({
 
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               {[
-                { label: 'الطلبات المحصّلة', value: String(dailySummary.dayOrdersCount) },
-                { label: 'مبيعات الكاش', value: formatMoney(dailySummary.cashSales) },
-                { label: 'مبيعات الفيزا', value: formatMoney(dailySummary.visaSales) },
-                { label: 'المصروفات', value: formatMoney(dailySummary.totalExpenses) },
-                { label: 'فرق الدرج (تقريب)', value: formatMoney(dailySummary.variance) },
-                { label: 'صافي إيراد اليوم', value: formatMoney(dailySummary.netDay) },
+                {
+                  label: isEn ? 'Settled Orders' : 'الطلبات المحصّلة',
+                  value: String(dailySummary.dayOrdersCount),
+                },
+                {
+                  label: isEn ? 'Cash Sales' : 'مبيعات الكاش',
+                  value: formatMoney(dailySummary.cashSales),
+                },
+                {
+                  label: isEn ? 'Visa / Card Sales' : 'مبيعات الفيزا',
+                  value: formatMoney(dailySummary.visaSales),
+                },
+                {
+                  label: isEn ? 'Expenses' : 'المصروفات',
+                  value: formatMoney(dailySummary.totalExpenses),
+                },
+                {
+                  label: isEn ? 'Drawer Variance' : 'فرق الدرج (تقريب)',
+                  value: formatMoney(dailySummary.variance),
+                },
+                {
+                  label: isEn ? 'Net Day Revenue' : 'صافي إيراد اليوم',
+                  value: formatMoney(dailySummary.netDay),
+                },
               ].map((stat) => (
                 <div key={stat.label} className="p-3 rounded-xl bg-zinc-50 border border-zinc-200">
                   <p className="text-[11px] font-bold text-zinc-500">{stat.label}</p>
@@ -606,25 +660,41 @@ export function OwnerShiftReportTab({
           <section className="bg-white border border-zinc-200 rounded-2xl overflow-hidden">
             <div className="px-5 py-3.5 bg-zinc-50 border-b border-zinc-200 flex items-center justify-between">
               <h4 className="text-xs sm:text-sm font-extrabold text-zinc-950">
-                سجل حضور وانصراف الكادر ({dailySummary.dayShifts.length})
+                {isEn
+                  ? `Staff Attendance & Shifts (${dailySummary.dayShifts.length})`
+                  : `سجل حضور وانصراف الكادر (${dailySummary.dayShifts.length})`}
               </h4>
-              <span className="text-[11px] text-zinc-500">من ساعة الدخول حتى تسليم الوردية</span>
+              <span className="text-[11px] text-zinc-500">
+                {isEn ? 'From check-in until shift handover' : 'من ساعة الدخول حتى تسليم الوردية'}
+              </span>
             </div>
             {dailySummary.dayShifts.length === 0 ? (
               <div className="p-8 text-center text-xs text-zinc-500">
-                لا توجد ورديات مسجلة في هذا التاريخ.
+                {isEn ? 'No shifts recorded for this date.' : 'لا توجد ورديات مسجلة في هذا التاريخ.'}
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-xs text-start">
                   <thead className="bg-zinc-50/70 text-zinc-600 border-b border-zinc-200">
                     <tr>
-                      <th className="py-2.5 px-4 font-extrabold text-start">الموظف</th>
-                      <th className="py-2.5 px-4 font-extrabold text-start">القسم / الشاشة</th>
-                      <th className="py-2.5 px-4 font-extrabold text-start">دخول</th>
-                      <th className="py-2.5 px-4 font-extrabold text-start">خروج</th>
-                      <th className="py-2.5 px-4 font-extrabold text-start">الأداء / الكاش</th>
-                      <th className="py-2.5 px-4 font-extrabold text-start">الحالة</th>
+                      <th className="py-2.5 px-4 font-extrabold text-start">
+                        {isEn ? 'Staff' : 'الموظف'}
+                      </th>
+                      <th className="py-2.5 px-4 font-extrabold text-start">
+                        {isEn ? 'Station / Screen' : 'القسم / الشاشة'}
+                      </th>
+                      <th className="py-2.5 px-4 font-extrabold text-start">
+                        {isEn ? 'In' : 'دخول'}
+                      </th>
+                      <th className="py-2.5 px-4 font-extrabold text-start">
+                        {isEn ? 'Out' : 'خروج'}
+                      </th>
+                      <th className="py-2.5 px-4 font-extrabold text-start">
+                        {isEn ? 'Performance / Cash' : 'الأداء / الكاش'}
+                      </th>
+                      <th className="py-2.5 px-4 font-extrabold text-start">
+                        {isEn ? 'Status' : 'الحالة'}
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-100">
@@ -635,26 +705,39 @@ export function OwnerShiftReportTab({
                           {sh.stationName}
                           {sh.shiftSlotName ? ` · ${sh.shiftSlotName}` : ''}
                         </td>
-                        <td className="py-2.5 px-4 font-mono-num">{formatShortTime(sh.startedAt)}</td>
                         <td className="py-2.5 px-4 font-mono-num">
-                          {sh.status === 'active' ? 'مستمرة الآن' : formatShortTime(sh.endedAt)}
+                          {formatShortTime(sh.startedAt, isEn)}
+                        </td>
+                        <td className="py-2.5 px-4 font-mono-num">
+                          {sh.status === 'active'
+                            ? isEn
+                              ? 'Active now'
+                              : 'مستمرة الآن'
+                            : formatShortTime(sh.endedAt, isEn)}
                         </td>
                         <td className="py-2.5 px-4 font-mono-num text-zinc-700">
                           {sh.stationId === 'cashier'
-                            ? `كاش ${formatMoney(sh.cashSales || 0)} · فيزا ${formatMoney(sh.visaSales || 0)}`
-                            : `طلبات: ${sh.ordersHandled || 0} · تجهيز: ${sh.itemsMarkedReady || 0}`}
+                            ? isEn
+                              ? `Cash ${formatMoney(sh.cashSales || 0)} · Visa ${formatMoney(sh.visaSales || 0)}`
+                              : `كاش ${formatMoney(sh.cashSales || 0)} · فيزا ${formatMoney(sh.visaSales || 0)}`
+                            : isEn
+                              ? `Orders: ${sh.ordersHandled || 0} · Ready: ${sh.itemsMarkedReady || 0}`
+                              : `طلبات: ${sh.ordersHandled || 0} · تجهيز: ${sh.itemsMarkedReady || 0}`}
                         </td>
                         <td className="py-2.5 px-4">
                           {sh.superAdminUnlocked ? (
                             <span className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-700">
-                              <Unlock className="w-3 h-3" /> مفتوحة استثنائياً
+                              <Unlock className="w-3 h-3" />{' '}
+                              {isEn ? 'Exceptionally Unlocked' : 'مفتوحة استثنائياً'}
                             </span>
                           ) : sh.status === 'completed' ? (
                             <span className="inline-flex items-center gap-1 text-[11px] font-bold text-zinc-600">
-                              <Lock className="w-3 h-3" /> مغلقة
+                              <Lock className="w-3 h-3" /> {isEn ? 'Locked' : 'مغلقة'}
                             </span>
                           ) : (
-                            <span className="text-[11px] font-extrabold text-emerald-700">نشطة</span>
+                            <span className="text-[11px] font-extrabold text-emerald-700">
+                              {isEn ? 'Active' : 'نشطة'}
+                            </span>
                           )}
                         </td>
                       </tr>
@@ -672,21 +755,45 @@ export function OwnerShiftReportTab({
                 <h4 className="text-xs sm:text-sm font-extrabold text-zinc-950 flex items-center gap-2">
                   <Receipt className="w-4 h-4 text-amber-600" />
                   <span>
-                    سجل شيكات وفواتير اليوم ({filteredDayChecks.length} من {dailySummary.dayOrders.length})
+                    {isEn
+                      ? `Daily Checks & Receipts Archive (${filteredDayChecks.length} of ${dailySummary.dayOrders.length})`
+                      : `سجل شيكات وفواتير اليوم (${filteredDayChecks.length} من ${dailySummary.dayOrders.length})`}
                   </span>
                 </h4>
                 <p className="text-[11px] text-zinc-500 mt-0.5">
-                  اضغط على أي شيك لعرض تفاصيل الأصناف والخصومات وطريقة التحصيل أو طباعة نسخة الريسيت.
+                  {isEn
+                    ? 'Click any check to inspect items, discounts, payment split, or print a receipt copy.'
+                    : 'اضغط على أي شيك لعرض تفاصيل الأصناف والخصومات وطريقة التحصيل أو طباعة نسخة الإيصال.'}
                 </p>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
                 {(
                   [
-                    { id: 'all' as const, label: `الكل (${dailySummary.dayOrders.length})` },
-                    { id: 'completed' as const, label: `المحصّلة (${dailySummary.dayOrdersCount})` },
-                    { id: 'cancelled' as const, label: `الملغاة (${dailySummary.cancelledOrdersCount})` },
-                    { id: 'open' as const, label: `المفتوحة (${dailySummary.openOrdersCount})` },
+                    {
+                      id: 'all' as const,
+                      label: isEn
+                        ? `All (${dailySummary.dayOrders.length})`
+                        : `الكل (${dailySummary.dayOrders.length})`,
+                    },
+                    {
+                      id: 'completed' as const,
+                      label: isEn
+                        ? `Settled (${dailySummary.dayOrdersCount})`
+                        : `المحصّلة (${dailySummary.dayOrdersCount})`,
+                    },
+                    {
+                      id: 'cancelled' as const,
+                      label: isEn
+                        ? `Cancelled (${dailySummary.cancelledOrdersCount})`
+                        : `الملغاة (${dailySummary.cancelledOrdersCount})`,
+                    },
+                    {
+                      id: 'open' as const,
+                      label: isEn
+                        ? `Open (${dailySummary.openOrdersCount})`
+                        : `المفتوحة (${dailySummary.openOrdersCount})`,
+                    },
                   ]
                 ).map((stTab) => (
                   <button
@@ -712,7 +819,11 @@ export function OwnerShiftReportTab({
                   type="search"
                   value={checkSearchQuery}
                   onChange={(e) => setCheckSearchQuery(e.target.value)}
-                  placeholder="بحث برقم الشيك أو الطاولة أو العميل أو الكاشير..."
+                  placeholder={
+                    isEn
+                      ? 'Search check #, table, guest, or cashier...'
+                      : 'بحث برقم الشيك أو الطاولة أو العميل أو الكاشير...'
+                  }
                   className="w-full ps-8 pe-3 py-2 rounded-xl border border-zinc-200 text-xs"
                 />
               </div>
@@ -724,10 +835,10 @@ export function OwnerShiftReportTab({
                 }
                 className="px-3 py-2 rounded-xl border border-zinc-200 text-xs font-bold bg-white"
               >
-                <option value="all">كل أنواع الطلبات</option>
-                <option value="dine_in">صالة (طاولات)</option>
-                <option value="pickup">تيك أواي (استلام)</option>
-                <option value="delivery">دليفري (توصيل)</option>
+                <option value="all">{isEn ? 'All Order Types' : 'كل أنواع الطلبات'}</option>
+                <option value="dine_in">{isEn ? 'Dine-In (Tables)' : 'صالة (طاولات)'}</option>
+                <option value="pickup">{isEn ? 'Takeaway (Pickup)' : 'تيك أواي (استلام)'}</option>
+                <option value="delivery">{isEn ? 'Delivery' : 'دليفري (توصيل)'}</option>
               </select>
 
               <select
@@ -735,10 +846,11 @@ export function OwnerShiftReportTab({
                 onChange={(e) => setCheckShiftFilter(e.target.value)}
                 className="px-3 py-2 rounded-xl border border-zinc-200 text-xs font-bold bg-white"
               >
-                <option value="all">كل ورديات هذا اليوم</option>
+                <option value="all">{isEn ? 'All Shifts on This Day' : 'كل ورديات هذا اليوم'}</option>
                 {dailySummary.dayCashierShifts.map((sh) => (
                   <option key={sh.id} value={sh.id}>
-                    {sh.shiftSlotName || 'وردية'} — {sh.staffName} ({formatShortTime(sh.startedAt)})
+                    {sh.shiftSlotName || (isEn ? 'Shift' : 'وردية')} — {sh.staffName} (
+                    {formatShortTime(sh.startedAt, isEn)})
                   </option>
                 ))}
               </select>
@@ -746,21 +858,39 @@ export function OwnerShiftReportTab({
 
             {filteredDayChecks.length === 0 ? (
               <div className="p-8 text-center text-xs text-zinc-500">
-                لا توجد شيكات مطابقة في هذا التاريخ أو الفلتر المحدد.
+                {isEn
+                  ? 'No matching checks found for this date or filter.'
+                  : 'لا توجد شيكات مطابقة في هذا التاريخ أو الفلتر المحدد.'}
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-xs text-start">
                   <thead className="bg-zinc-50/80 text-zinc-600 border-b border-zinc-200">
                     <tr>
-                      <th className="py-2.5 px-4 font-extrabold text-start">رقم الشيك</th>
-                      <th className="py-2.5 px-4 font-extrabold text-start">النوع / الطاولة</th>
-                      <th className="py-2.5 px-4 font-extrabold text-start">العميل</th>
-                      <th className="py-2.5 px-4 font-extrabold text-start">الدفع</th>
-                      <th className="py-2.5 px-4 font-extrabold text-start">الإجمالي</th>
-                      <th className="py-2.5 px-4 font-extrabold text-start">الحالة والمُغلق</th>
-                      <th className="py-2.5 px-4 font-extrabold text-start">الوقت</th>
-                      <th className="py-2.5 px-4 font-extrabold text-end">مراجعة</th>
+                      <th className="py-2.5 px-4 font-extrabold text-start">
+                        {isEn ? 'Check #' : 'رقم الشيك'}
+                      </th>
+                      <th className="py-2.5 px-4 font-extrabold text-start">
+                        {isEn ? 'Type / Table' : 'النوع / الطاولة'}
+                      </th>
+                      <th className="py-2.5 px-4 font-extrabold text-start">
+                        {isEn ? 'Customer' : 'العميل'}
+                      </th>
+                      <th className="py-2.5 px-4 font-extrabold text-start">
+                        {isEn ? 'Payment' : 'الدفع'}
+                      </th>
+                      <th className="py-2.5 px-4 font-extrabold text-start">
+                        {isEn ? 'Total' : 'الإجمالي'}
+                      </th>
+                      <th className="py-2.5 px-4 font-extrabold text-start">
+                        {isEn ? 'Status & Closer' : 'الحالة والمُغلق'}
+                      </th>
+                      <th className="py-2.5 px-4 font-extrabold text-start">
+                        {isEn ? 'Time' : 'الوقت'}
+                      </th>
+                      <th className="py-2.5 px-4 font-extrabold text-end">
+                        {isEn ? 'Inspect' : 'مراجعة'}
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-100">
@@ -769,20 +899,36 @@ export function OwnerShiftReportTab({
                         Number(ord.discountAmount || 0) + Number(ord.manualDiscountAmount || 0);
                       const typeText =
                         ord.orderType === 'dine_in'
-                          ? `صالة${ord.hallName ? ` · ${ord.hallName}` : ''} · طاولة ${ord.tableNumber || '-'}`
+                          ? isEn
+                            ? `Dine-In${ord.hallName ? ` · ${ord.hallName}` : ''} · Table ${ord.tableNumber || '-'}`
+                            : `صالة${ord.hallName ? ` · ${ord.hallName}` : ''} · طاولة ${ord.tableNumber || '-'}`
                           : ord.orderType === 'delivery'
-                            ? 'دليفري'
-                            : 'تيك أواي';
+                            ? isEn
+                              ? 'Delivery'
+                              : 'دليفري'
+                            : isEn
+                              ? 'Takeaway'
+                              : 'تيك أواي';
                       const payText =
                         ord.status === 'cancelled'
-                          ? 'ملغي'
+                          ? isEn
+                            ? 'Cancelled'
+                            : 'ملغي'
                           : ord.paymentMethod === 'visa'
-                            ? 'فيزا 💳'
+                            ? isEn
+                              ? 'Visa / Card'
+                              : 'فيزا'
                             : ord.paymentMethod === 'split'
-                              ? 'مختلط'
+                              ? isEn
+                                ? 'Split'
+                                : 'مختلط'
                               : ord.status === 'completed'
-                                ? 'كاش 💵'
-                                : 'غير محصّل';
+                                ? isEn
+                                  ? 'Cash'
+                                  : 'كاش'
+                                : isEn
+                                  ? 'Unpaid'
+                                  : 'غير محصّل';
                       return (
                         <tr
                           key={ord.id}
@@ -812,27 +958,28 @@ export function OwnerShiftReportTab({
                             </span>
                             {totalDisc > 0 && (
                               <span className="block text-[10px] text-indigo-700 font-bold">
-                                خصم -{formatMoney(totalDisc)}
+                                {isEn ? 'Discount' : 'خصم'} -{formatMoney(totalDisc)}
                               </span>
                             )}
                           </td>
                           <td className="py-2.5 px-4 whitespace-nowrap">
                             {ord.status === 'completed' ? (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-extrabold">
-                                محصّل{ord.closedByName ? ` · ${ord.closedByName}` : ''}
+                                {isEn ? 'Settled' : 'محصّل'}
+                                {ord.closedByName ? ` · ${ord.closedByName}` : ''}
                               </span>
                             ) : ord.status === 'cancelled' ? (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-50 text-rose-800 border border-rose-200 text-[10px] font-extrabold">
-                                ملغي
+                                {isEn ? 'Cancelled' : 'ملغي'}
                               </span>
                             ) : (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-extrabold">
-                                مفتوح الآن
+                                {isEn ? 'Open Now' : 'مفتوح الآن'}
                               </span>
                             )}
                           </td>
                           <td className="py-2.5 px-4 font-mono-num text-zinc-500 whitespace-nowrap">
-                            {formatShortTime(ord.closedAt || ord.createdAt)}
+                            {formatShortTime(ord.closedAt || ord.createdAt, isEn)}
                           </td>
                           <td className="py-2.5 px-4 text-end whitespace-nowrap">
                             <button
@@ -844,7 +991,7 @@ export function OwnerShiftReportTab({
                               className="px-2.5 py-1 rounded-lg border border-zinc-200 bg-white hover:bg-zinc-950 hover:text-white text-[11px] font-extrabold inline-flex items-center gap-1 cursor-pointer transition-colors"
                             >
                               <Eye className="w-3 h-3" />
-                              <span>عرض</span>
+                              <span>{isEn ? 'View' : 'عرض'}</span>
                             </button>
                           </td>
                         </tr>
@@ -861,12 +1008,18 @@ export function OwnerShiftReportTab({
             <div className="px-5 py-3.5 bg-zinc-50 border-b border-zinc-200 flex items-center justify-between">
               <h4 className="text-xs sm:text-sm font-extrabold text-zinc-950 flex items-center gap-2">
                 <ShieldAlert className="w-4 h-4 text-amber-600" />
-                <span>سجل التعديلات والإلغاءات والخصومات والمصروفات لليوم ({dailySummary.dayAudit.length})</span>
+                <span>
+                  {isEn
+                    ? `Sensitive Audit Log (Modifications, Cancellations, Discounts & Expenses) (${dailySummary.dayAudit.length})`
+                    : `سجل التعديلات والإلغاءات والخصومات والمصروفات لليوم (${dailySummary.dayAudit.length})`}
+                </span>
               </h4>
             </div>
             {dailySummary.dayAudit.length === 0 ? (
               <div className="p-8 text-center text-xs text-zinc-500">
-                لا توجد تعديلات أو إلغاءات أو خصومات مسجلة في هذا اليوم.
+                {isEn
+                  ? 'No modifications, cancellations, or discounts recorded on this day.'
+                  : 'لا توجد تعديلات أو إلغاءات أو خصومات مسجلة في هذا اليوم.'}
               </div>
             ) : (
               <div className="divide-y divide-zinc-100">
@@ -876,13 +1029,27 @@ export function OwnerShiftReportTab({
                       <p className="font-extrabold text-zinc-950">
                         {log.actorName}{' '}
                         <span className="font-normal text-zinc-500">
-                          ({log.actorRole === 'owner' ? 'المالك' : log.actorRole === 'superadmin' ? 'السوبر أدمن' : STAFF_ROLE_META[log.actorRole as StaffRole]?.labelAr || log.actorRole})
+                          (
+                          {log.actorRole === 'owner'
+                            ? isEn
+                              ? 'Owner'
+                              : 'المالك'
+                            : log.actorRole === 'superadmin'
+                              ? isEn
+                                ? 'Platform Admin'
+                                : 'إدارة المنصة'
+                              : isEn
+                                ? STAFF_ROLE_META[log.actorRole as StaffRole]?.labelEn ||
+                                  log.actorRole
+                                : STAFF_ROLE_META[log.actorRole as StaffRole]?.labelAr ||
+                                  log.actorRole}
+                          )
                         </span>
                       </p>
                       <p className="text-zinc-700">{log.details}</p>
                     </div>
                     <span className="text-[11px] font-mono-num text-zinc-500 shrink-0">
-                      {formatShortTime(log.createdAt)}
+                      {formatShortTime(log.createdAt, isEn)}
                     </span>
                   </div>
                 ))}
@@ -896,7 +1063,7 @@ export function OwnerShiftReportTab({
           <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-3">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 flex-1">
               <label className="space-y-1 text-[11px] font-bold text-zinc-600">
-                <span>من تاريخ</span>
+                <span>{isEn ? 'From Date' : 'من تاريخ'}</span>
                 <input
                   type="date"
                   value={fromDate}
@@ -905,7 +1072,7 @@ export function OwnerShiftReportTab({
                 />
               </label>
               <label className="space-y-1 text-[11px] font-bold text-zinc-600">
-                <span>إلى تاريخ</span>
+                <span>{isEn ? 'To Date' : 'إلى تاريخ'}</span>
                 <input
                   type="date"
                   value={toDate}
@@ -914,14 +1081,14 @@ export function OwnerShiftReportTab({
                 />
               </label>
               <label className="space-y-1 text-[11px] font-bold text-zinc-600">
-                <span>بحث بالكاشير / المستلم / الوردية</span>
+                <span>{isEn ? 'Search Cashier / Receiver / Shift' : 'بحث بالكاشير / المستلم / الوردية'}</span>
                 <div className="relative">
                   <Search className="w-3.5 h-3.5 text-zinc-400 absolute start-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="search"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="اسم الكاشير..."
+                    placeholder={isEn ? 'Cashier name...' : 'اسم الكاشير...'}
                     className="w-full ps-8 pe-3 py-2 rounded-xl border border-zinc-300 text-xs text-zinc-900"
                   />
                 </div>
@@ -930,10 +1097,10 @@ export function OwnerShiftReportTab({
 
             <div className="flex flex-wrap items-center gap-2 shrink-0">
               {[
-                { days: 0, label: 'اليوم' },
-                { days: 6, label: '7 أيام' },
-                { days: 13, label: '14 يوماً' },
-                { days: 29, label: '30 يوماً' },
+                { days: 0, label: isEn ? 'Today' : 'اليوم' },
+                { days: 6, label: isEn ? '7 Days' : '7 أيام' },
+                { days: 13, label: isEn ? '14 Days' : '14 يوماً' },
+                { days: 29, label: isEn ? '30 Days' : '30 يوماً' },
               ].map((preset) => (
                 <button
                   key={preset.label}
@@ -955,8 +1122,12 @@ export function OwnerShiftReportTab({
                 <Columns className="w-4 h-4 text-indigo-600" />
                 <span>
                   {stickyMode === 'side_day'
-                    ? 'التثبيت: عمود اليوم (اضغط للتبديل)'
-                    : 'التثبيت: الرأس العلوي (اضغط للتبديل)'}
+                    ? isEn
+                      ? 'Sticky: Day Column (Tap to switch)'
+                      : 'التثبيت: عمود اليوم (اضغط للتبديل)'
+                    : isEn
+                      ? 'Sticky: Top Header (Tap to switch)'
+                      : 'التثبيت: الرأس العلوي (اضغط للتبديل)'}
                 </span>
               </button>
             </div>
@@ -973,10 +1144,14 @@ export function OwnerShiftReportTab({
                   <th
                     rowSpan={2}
                     className={`py-3 px-3 font-extrabold text-start border-e border-zinc-300 bg-zinc-100 whitespace-nowrap ${
-                      stickyMode === 'side_day' ? 'sticky right-0 z-30 shadow-2xs' : ''
+                      stickyMode === 'side_day'
+                        ? isRtl
+                          ? 'sticky right-0 z-30 shadow-2xs'
+                          : 'sticky left-0 z-30 shadow-2xs'
+                        : ''
                     }`}
                   >
-                    اليوم والتاريخ
+                    {isEn ? 'Day & Date' : 'اليوم والتاريخ'}
                   </th>
                   {matrixData.slots.map((slot) => (
                     <th
@@ -984,40 +1159,48 @@ export function OwnerShiftReportTab({
                       colSpan={5}
                       className="py-2 px-3 font-extrabold text-center border-e border-zinc-300 bg-zinc-100/90 whitespace-nowrap"
                     >
-                      {slot.name} ({slot.startTime}–{slot.endTime})
+                      {isEn ? slot.nameEn || slot.name : slot.name} ({slot.startTime}–{slot.endTime})
                     </th>
                   ))}
                   <th
                     colSpan={4}
                     className="py-2 px-3 font-extrabold text-center bg-zinc-900 text-white whitespace-nowrap"
                   >
-                    إجماليات اليوم
+                    {isEn ? 'Day Totals' : 'إجماليات اليوم'}
                   </th>
                 </tr>
                 <tr className="border-b border-zinc-300 text-[11px] bg-zinc-50">
                   {matrixData.slots.map((slot) => (
                     <Fragment key={`hdr_${slot.id}`}>
                       <th className="py-2 px-2.5 text-start border-e border-zinc-200 whitespace-nowrap">
-                        الكاشير
+                        {isEn ? 'Cashier' : 'الكاشير'}
                       </th>
                       <th className="py-2 px-2.5 text-end border-e border-zinc-200 whitespace-nowrap">
-                        كاش
+                        {isEn ? 'Cash' : 'كاش'}
                       </th>
                       <th className="py-2 px-2.5 text-end border-e border-zinc-200 whitespace-nowrap">
-                        فيزا
+                        {isEn ? 'Visa' : 'فيزا'}
                       </th>
                       <th className="py-2 px-2.5 text-end border-e border-zinc-200 whitespace-nowrap">
-                        مصروف
+                        {isEn ? 'Exp.' : 'مصروف'}
                       </th>
                       <th className="py-2 px-2.5 text-end border-e border-zinc-300 whitespace-nowrap">
-                        صافي
+                        {isEn ? 'Net' : 'صافي'}
                       </th>
                     </Fragment>
                   ))}
-                  <th className="py-2 px-2.5 text-end bg-zinc-800 text-white whitespace-nowrap">الكاش</th>
-                  <th className="py-2 px-2.5 text-end bg-zinc-800 text-white whitespace-nowrap">الفيزا</th>
-                  <th className="py-2 px-2.5 text-end bg-zinc-800 text-white whitespace-nowrap">المصروف</th>
-                  <th className="py-2 px-2.5 text-end bg-zinc-900 text-amber-400 whitespace-nowrap">الصافي</th>
+                  <th className="py-2 px-2.5 text-end bg-zinc-800 text-white whitespace-nowrap">
+                    {isEn ? 'Cash' : 'الكاش'}
+                  </th>
+                  <th className="py-2 px-2.5 text-end bg-zinc-800 text-white whitespace-nowrap">
+                    {isEn ? 'Visa' : 'الفيزا'}
+                  </th>
+                  <th className="py-2 px-2.5 text-end bg-zinc-800 text-white whitespace-nowrap">
+                    {isEn ? 'Expenses' : 'المصروف'}
+                  </th>
+                  <th className="py-2 px-2.5 text-end bg-zinc-900 text-amber-400 whitespace-nowrap">
+                    {isEn ? 'Net' : 'الصافي'}
+                  </th>
                 </tr>
               </thead>
 
@@ -1028,7 +1211,7 @@ export function OwnerShiftReportTab({
                       colSpan={1 + matrixData.slots.length * 5 + 4}
                       className="py-10 text-center text-zinc-500"
                     >
-                      لا توجد بيانات ورديات في النطاق المحدد.
+                      {isEn ? 'No shift data in the selected range.' : 'لا توجد بيانات ورديات في النطاق المحدد.'}
                     </td>
                   </tr>
                 ) : (
@@ -1039,9 +1222,17 @@ export function OwnerShiftReportTab({
                           setSelectedDayIso(row.iso);
                           setActiveSubTab('daily');
                         }}
-                        title="اضغط لعرض تفاصيل هذا اليوم وشيكاته"
+                        title={
+                          isEn
+                            ? 'Click to view full details and checks for this day'
+                            : 'اضغط لعرض تفاصيل هذا اليوم وشيكاته'
+                        }
                         className={`py-2.5 px-3 font-extrabold text-zinc-950 border-e border-zinc-300 bg-white hover:bg-amber-50/70 cursor-pointer whitespace-nowrap group ${
-                          stickyMode === 'side_day' ? 'sticky right-0 z-10' : ''
+                          stickyMode === 'side_day'
+                            ? isRtl
+                              ? 'sticky right-0 z-10'
+                              : 'sticky left-0 z-10'
+                            : ''
                         }`}
                       >
                         <div className="flex items-center justify-between gap-2">
@@ -1058,8 +1249,13 @@ export function OwnerShiftReportTab({
                             title={cell.staffNames}
                           >
                             {cell.matchedCount > 0 ? (
-                              <span className="font-bold text-zinc-800">
-                                {cell.staffNames} {cell.allLocked ? '🔒' : cell.hasUnlocked ? '🔓' : ''}
+                              <span className="inline-flex items-center gap-1 font-bold text-zinc-800">
+                                <span className="truncate">{cell.staffNames}</span>
+                                {cell.allLocked ? (
+                                  <Lock className="w-3 h-3 text-zinc-500 shrink-0" />
+                                ) : cell.hasUnlocked ? (
+                                  <Unlock className="w-3 h-3 text-indigo-600 shrink-0" />
+                                ) : null}
                               </span>
                             ) : (
                               <span className="text-zinc-300">—</span>
@@ -1109,15 +1305,21 @@ export function OwnerShiftReportTab({
                 <tr>
                   <td
                     className={`py-3 px-3 border-e border-zinc-700 bg-zinc-950 whitespace-nowrap ${
-                      stickyMode === 'side_day' ? 'sticky right-0 z-20' : ''
+                      stickyMode === 'side_day'
+                        ? isRtl
+                          ? 'sticky right-0 z-20'
+                          : 'sticky left-0 z-20'
+                        : ''
                     }`}
                   >
-                    الإجمالي العام ({matrixData.rows.length} يوم)
+                    {isEn
+                      ? `Grand Total (${matrixData.rows.length} days)`
+                      : `الإجمالي العام (${matrixData.rows.length} يوم)`}
                   </td>
                   {matrixData.grandPerSlot.map((gp, idx) => (
                     <Fragment key={`gf_${idx}`}>
                       <td className="py-3 px-2.5 border-e border-zinc-800 text-zinc-400">
-                        المجموع
+                        {isEn ? 'Subtotal' : 'المجموع'}
                       </td>
                       <td className="py-3 px-2.5 text-end font-mono-num border-e border-zinc-800">
                         {gp.cash.toFixed(0)}
@@ -1157,7 +1359,7 @@ export function OwnerShiftReportTab({
             onClick={() => setSelectedCheckOrder(null)}
           >
             <div
-              dir="rtl"
+              dir={dir}
               onClick={(e) => e.stopPropagation()}
               className="w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-zinc-200 overflow-hidden"
             >
@@ -1165,13 +1367,15 @@ export function OwnerShiftReportTab({
                 <div className="flex items-center gap-2">
                   <Receipt className="w-4 h-4 text-amber-600" />
                   <span className="text-xs sm:text-sm font-extrabold text-zinc-950">
-                    تفاصيل ومراجعة الشيك #{selectedCheckOrder.orderNumber}
+                    {isEn
+                      ? `Check Inspection #${selectedCheckOrder.orderNumber}`
+                      : `تفاصيل ومراجعة الشيك #${selectedCheckOrder.orderNumber}`}
                   </span>
                 </div>
                 <button
                   type="button"
                   onClick={() => setSelectedCheckOrder(null)}
-                  aria-label="إغلاق"
+                  aria-label={isEn ? 'Close' : 'إغلاق'}
                   className="w-8 h-8 rounded-lg hover:bg-zinc-200 flex items-center justify-center cursor-pointer"
                 >
                   <X className="w-4 h-4" />
@@ -1180,17 +1384,26 @@ export function OwnerShiftReportTab({
 
               <div className="qr-bulk-print-area p-5 space-y-4 text-zinc-900 bg-white max-h-[72vh] overflow-y-auto print:max-h-none">
                 <div className="text-center border-b border-dashed border-zinc-300 pb-3 space-y-1">
-                  <h3 className="text-base font-extrabold">{restaurant.name}</h3>
+                  <h3 className="text-base font-extrabold">
+                    {loc(restaurant.name, restaurant.name_en)}
+                  </h3>
                   <p className="text-xs font-mono-num font-bold text-zinc-700">
-                    شيك رقم #{selectedCheckOrder.orderNumber} ·{' '}
+                    {isEn ? `Check #${selectedCheckOrder.orderNumber}` : `شيك رقم #${selectedCheckOrder.orderNumber}`} ·{' '}
                     {selectedCheckOrder.orderType === 'dine_in'
-                      ? `صالة${selectedCheckOrder.hallName ? ` (${selectedCheckOrder.hallName})` : ''} · طاولة ${selectedCheckOrder.tableNumber || '-'}`
+                      ? isEn
+                        ? `Dine-In${selectedCheckOrder.hallName ? ` (${selectedCheckOrder.hallName})` : ''} · Table ${selectedCheckOrder.tableNumber || '-'}`
+                        : `صالة${selectedCheckOrder.hallName ? ` (${selectedCheckOrder.hallName})` : ''} · طاولة ${selectedCheckOrder.tableNumber || '-'}`
                       : selectedCheckOrder.orderType === 'delivery'
-                        ? 'توصيل دليفري'
-                        : 'استلام تيك أواي'}
+                        ? isEn
+                          ? 'Delivery'
+                          : 'توصيل دليفري'
+                        : isEn
+                          ? 'Takeaway'
+                          : 'استلام تيك أواي'}
                   </p>
                   <p className="text-[11px] text-zinc-500">
-                    العميل: <strong className="text-zinc-900">{selectedCheckOrder.customerName}</strong>
+                    {isEn ? 'Customer:' : 'العميل:'}{' '}
+                    <strong className="text-zinc-900">{selectedCheckOrder.customerName}</strong>
                     {selectedCheckOrder.customerPhone ? ` · ${selectedCheckOrder.customerPhone}` : ''}
                   </p>
                   <div className="flex flex-wrap items-center justify-center gap-2 pt-1 text-[10px] font-bold">
@@ -1204,23 +1417,29 @@ export function OwnerShiftReportTab({
                       }`}
                     >
                       {selectedCheckOrder.status === 'completed'
-                        ? 'محصّل ومغلق'
+                        ? isEn
+                          ? 'Settled & Closed'
+                          : 'محصّل ومغلق'
                         : selectedCheckOrder.status === 'cancelled'
-                          ? 'ملغي'
-                          : 'مفتوح'}
+                          ? isEn
+                            ? 'Cancelled'
+                            : 'ملغي'
+                          : isEn
+                            ? 'Open'
+                            : 'مفتوح'}
                     </span>
                     {linkedShift && (
                       <span className="px-2 py-0.5 rounded-md bg-zinc-100 text-zinc-700 border border-zinc-200 inline-flex items-center gap-1">
                         {isLockedShift ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
                         <span>
-                          {linkedShift.shiftSlotName || 'وردية'} ({linkedShift.staffName})
+                          {linkedShift.shiftSlotName || (isEn ? 'Shift' : 'وردية')} ({linkedShift.staffName})
                         </span>
                       </span>
                     )}
                     <span className="font-mono-num text-zinc-500">
-                      إنشاء: {formatShortTime(selectedCheckOrder.createdAt)}
+                      {isEn ? 'Opened:' : 'إنشاء:'} {formatShortTime(selectedCheckOrder.createdAt, isEn)}
                       {selectedCheckOrder.closedAt
-                        ? ` · إقفال: ${formatShortTime(selectedCheckOrder.closedAt)}`
+                        ? ` · ${isEn ? 'Closed:' : 'إقفال:'} ${formatShortTime(selectedCheckOrder.closedAt, isEn)}`
                         : ''}
                     </span>
                   </div>
@@ -1237,10 +1456,12 @@ export function OwnerShiftReportTab({
                           {item.guestName ? ` [${item.guestName}]` : ''}
                         </p>
                         {item.addonNames?.length > 0 && (
-                          <p className="text-[11px] text-zinc-500">+ {item.addonNames.join('، ')}</p>
+                          <p className="text-[11px] text-zinc-500">+ {item.addonNames.join(isEn ? ', ' : '، ')}</p>
                         )}
                         {item.notes && (
-                          <p className="text-[11px] text-amber-700 font-semibold">ملاحظة: {item.notes}</p>
+                          <p className="text-[11px] text-amber-700 font-semibold">
+                            {isEn ? 'Note:' : 'ملاحظة:'} {item.notes}
+                          </p>
                         )}
                       </div>
                       <span className="font-mono-num font-bold text-zinc-900 shrink-0">
@@ -1253,20 +1474,24 @@ export function OwnerShiftReportTab({
                 {/* Financial Totals */}
                 <div className="space-y-1.5 text-xs border-b border-dashed border-zinc-300 pb-3">
                   <div className="flex justify-between">
-                    <span className="text-zinc-600">المجموع الفرعي</span>
+                    <span className="text-zinc-600">{isEn ? 'Subtotal' : 'المجموع الفرعي'}</span>
                     <span className="font-mono-num font-bold">{formatMoney(selectedCheckOrder.subtotal)}</span>
                   </div>
                   {Number(selectedCheckOrder.discountAmount || 0) > 0 && (
                     <div className="flex justify-between text-emerald-700 font-bold">
                       <span>
-                        خصم العرض{selectedCheckOrder.promoCode ? ` (${selectedCheckOrder.promoCode})` : ''}
+                        {isEn ? 'Promo Discount' : 'خصم العرض'}
+                        {selectedCheckOrder.promoCode ? ` (${selectedCheckOrder.promoCode})` : ''}
                       </span>
                       <span className="font-mono-num">-{formatMoney(selectedCheckOrder.discountAmount || 0)}</span>
                     </div>
                   )}
                   {Number(selectedCheckOrder.manualDiscountAmount || 0) > 0 && (
                     <div className="flex justify-between text-indigo-700 font-bold">
-                      <span>خصم إداري خاص ({selectedCheckOrder.manualDiscountReason || 'إدارة'})</span>
+                      <span>
+                        {isEn ? 'Special Discount' : 'خصم إداري خاص'} (
+                        {selectedCheckOrder.manualDiscountReason || (isEn ? 'Management' : 'إدارة')})
+                      </span>
                       <span className="font-mono-num">
                         -{formatMoney(selectedCheckOrder.manualDiscountAmount || 0)}
                       </span>
@@ -1274,24 +1499,24 @@ export function OwnerShiftReportTab({
                   )}
                   {selectedCheckOrder.serviceCharge > 0 && (
                     <div className="flex justify-between">
-                      <span className="text-zinc-600">رسوم الخدمة</span>
+                      <span className="text-zinc-600">{isEn ? 'Service Charge' : 'رسوم الخدمة'}</span>
                       <span className="font-mono-num">{formatMoney(selectedCheckOrder.serviceCharge)}</span>
                     </div>
                   )}
                   {Number(selectedCheckOrder.deliveryFee || 0) > 0 && (
                     <div className="flex justify-between">
-                      <span className="text-zinc-600">رسوم التوصيل</span>
+                      <span className="text-zinc-600">{isEn ? 'Delivery Fee' : 'رسوم التوصيل'}</span>
                       <span className="font-mono-num">{formatMoney(selectedCheckOrder.deliveryFee || 0)}</span>
                     </div>
                   )}
                   {selectedCheckOrder.taxAmount > 0 && (
                     <div className="flex justify-between">
-                      <span className="text-zinc-600">الضريبة</span>
+                      <span className="text-zinc-600">{isEn ? 'Tax' : 'الضريبة'}</span>
                       <span className="font-mono-num">{formatMoney(selectedCheckOrder.taxAmount)}</span>
                     </div>
                   )}
                   <div className="flex justify-between text-sm font-extrabold text-zinc-950 pt-1 border-t border-zinc-200">
-                    <span>الإجمالي النهائي</span>
+                    <span>{isEn ? 'Final Total' : 'الإجمالي النهائي'}</span>
                     <span className="font-mono-num">{formatMoney(selectedCheckOrder.total)}</span>
                   </div>
                 </div>
@@ -1300,23 +1525,32 @@ export function OwnerShiftReportTab({
                 {selectedCheckOrder.status === 'completed' && (
                   <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-200 text-xs space-y-1">
                     <p className="font-extrabold text-zinc-900">
-                      وسيلة الدفع:{' '}
+                      {isEn ? 'Payment Method: ' : 'وسيلة الدفع: '}
                       {selectedCheckOrder.paymentMethod === 'visa'
-                        ? 'فيزا / بطاقة 💳'
+                        ? isEn
+                          ? 'Visa / Card'
+                          : 'فيزا / بطاقة'
                         : selectedCheckOrder.paymentMethod === 'split'
-                          ? `مختلط (كاش ${formatMoney(selectedCheckOrder.cashPaidAmount || 0)} + فيزا ${formatMoney(selectedCheckOrder.visaPaidAmount || 0)})`
-                          : `كاش 💵 (${formatMoney(selectedCheckOrder.cashPaidAmount ?? selectedCheckOrder.total)})`}
+                          ? isEn
+                            ? `Split (Cash ${formatMoney(selectedCheckOrder.cashPaidAmount || 0)} + Visa ${formatMoney(selectedCheckOrder.visaPaidAmount || 0)})`
+                            : `مختلط (كاش ${formatMoney(selectedCheckOrder.cashPaidAmount || 0)} + فيزا ${formatMoney(selectedCheckOrder.visaPaidAmount || 0)})`
+                          : isEn
+                            ? `Cash (${formatMoney(selectedCheckOrder.cashPaidAmount ?? selectedCheckOrder.total)})`
+                            : `كاش (${formatMoney(selectedCheckOrder.cashPaidAmount ?? selectedCheckOrder.total)})`}
                     </p>
                     {typeof selectedCheckOrder.customerCashTendered === 'number' &&
                       selectedCheckOrder.customerCashTendered > 0 && (
                         <p className="text-[11px] text-zinc-600 font-mono-num">
-                          المبلغ المستلم: {formatMoney(selectedCheckOrder.customerCashTendered)} · الباقي:{' '}
+                          {isEn ? 'Tendered:' : 'المبلغ المستلم:'}{' '}
+                          {formatMoney(selectedCheckOrder.customerCashTendered)} ·{' '}
+                          {isEn ? 'Change:' : 'الباقي:'}{' '}
                           {formatMoney(selectedCheckOrder.changeReturned || 0)}
                         </p>
                       )}
                     {selectedCheckOrder.closedByName && (
                       <p className="text-[11px] text-zinc-600">
-                        أُغلق بواسطة: <strong>{selectedCheckOrder.closedByName}</strong>
+                        {isEn ? 'Settled by:' : 'أُغلق بواسطة:'}{' '}
+                        <strong>{selectedCheckOrder.closedByName}</strong>
                       </p>
                     )}
                   </div>
@@ -1324,22 +1558,30 @@ export function OwnerShiftReportTab({
 
                 {selectedCheckOrder.cancelReason && (
                   <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-900 font-bold">
-                    سبب الإلغاء: {selectedCheckOrder.cancelReason}
+                    {isEn ? 'Cancellation Reason:' : 'سبب الإلغاء:'} {selectedCheckOrder.cancelReason}
                   </div>
                 )}
 
                 {(selectedCheckOrder.notes || selectedCheckOrder.tableNotes) && (
                   <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-950 space-y-1">
-                    {selectedCheckOrder.notes && <p>ملاحظات الطلب: {selectedCheckOrder.notes}</p>}
+                    {selectedCheckOrder.notes && (
+                      <p>
+                        {isEn ? 'Order Notes:' : 'ملاحظات الطلب:'} {selectedCheckOrder.notes}
+                      </p>
+                    )}
                     {selectedCheckOrder.tableNotes && (
-                      <p className="font-bold">ملاحظات الطاولة: {selectedCheckOrder.tableNotes}</p>
+                      <p className="font-bold">
+                        {isEn ? 'Table Notes:' : 'ملاحظات الطاولة:'} {selectedCheckOrder.tableNotes}
+                      </p>
                     )}
                   </div>
                 )}
 
                 {selectedCheckOrder.adjustmentHistory && selectedCheckOrder.adjustmentHistory.length > 0 && (
                   <div className="space-y-1.5 pt-1 print:hidden">
-                    <p className="text-[11px] font-extrabold text-zinc-700">سجل التعديلات على هذا الشيك:</p>
+                    <p className="text-[11px] font-extrabold text-zinc-700">
+                      {isEn ? 'Check Adjustment History:' : 'سجل التعديلات على هذا الشيك:'}
+                    </p>
                     <div className="space-y-1">
                       {selectedCheckOrder.adjustmentHistory.map((adj, i) => (
                         <div
@@ -1363,14 +1605,14 @@ export function OwnerShiftReportTab({
                   className="px-4 py-2 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-extrabold inline-flex items-center gap-1.5 cursor-pointer"
                 >
                   <Printer className="w-4 h-4" />
-                  <span>طباعة نسخة الشيك</span>
+                  <span>{isEn ? 'Print Check Copy' : 'طباعة نسخة الشيك'}</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setSelectedCheckOrder(null)}
                   className="px-4 py-2 rounded-xl border border-zinc-300 bg-white hover:bg-zinc-100 text-xs font-bold text-zinc-800 cursor-pointer"
                 >
-                  إغلاق
+                  {isEn ? 'Close' : 'إغلاق'}
                 </button>
               </div>
             </div>

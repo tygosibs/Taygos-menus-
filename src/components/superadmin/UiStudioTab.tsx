@@ -759,7 +759,7 @@ export function UiStudioTab({ adminEmail }: UiStudioTabProps) {
                 <p className="text-[11px] text-zinc-500 mt-0.5">
                   {isEn
                     ? 'Double-click any card header or button label to rename it safely without affecting permissions or routes.'
-                    : 'اسحب أي زر وأفلته داخل بطاقة أخرى، أو اضغط مرتين (Double-Click) على اسم البطاقة أو الزر لتعديله بدون تغيير البرمجة.'}
+                    : 'اسحب أي زر وأفلته داخل بطاقة أخرى، أو اضغط مرتين على اسم البطاقة أو الزر لتعديله بدون تغيير البرمجة.'}
                 </p>
               </div>
               <div className="flex items-center gap-2">

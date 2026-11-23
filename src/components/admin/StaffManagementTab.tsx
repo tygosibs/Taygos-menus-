@@ -31,6 +31,7 @@ import {
   UserX,
   X,
 } from 'lucide-react';
+import { useLanguage } from '../../contexts/LanguageContext';
 import { subscribeHalls } from '../../lib/firestoreService';
 import {
   getResolvedOperationsConfig,
@@ -91,24 +92,98 @@ interface StaffManagementTabProps {
 
 const MANAGER_PERMISSION_LABELS: Array<{
   key: keyof ManagerPermissions;
-  label: string;
-  hint: string;
+  labelAr: string;
+  labelEn: string;
+  hintAr: string;
+  hintEn: string;
 }> = [
-  { key: 'canEditMenu', label: 'تعديل وإضافة أصناف المنيو', hint: 'إنشاء وتعديل الأسعار والأصناف والتصنيفات' },
-  { key: 'canPauseItems', label: 'إيقاف/تفعيل الأصناف المؤقت', hint: 'إخفاء صنف ناقص من المنيو وإعادة تفعيله' },
-  { key: 'canEditOpenOrders', label: 'تعديل طلبات الترابيزات المفتوحة', hint: 'إضافة/إزالة أصناف أو كتابة ملاحظات الطاولة' },
-  { key: 'canCancelOpenOrders', label: 'إلغاء الطلبات المفتوحة مع سبب', hint: 'إلغاء طلب قيد التشغيل بتوثيق السبب' },
-  { key: 'canEditClosedChecks', label: 'تعديل شيكات مغلقة قبل التسليم', hint: 'تصحيح فاتورة مغلقة في نفس الوردية قبل الإقفال' },
-  { key: 'canApplyInstantDiscount', label: 'منح خصومات فورية خاصة', hint: 'خصم مبلغ أو نسبة مع تدوين السبب' },
-  { key: 'canViewShiftReports', label: 'عرض تقرير الورديات اليومي', hint: 'متابعة الحضور والمبيعات وصافي الدرج' },
-  { key: 'canEditDrawerFloat', label: 'تعديل عهدة الدرج (الافتتاحية)', hint: 'رفع أو خفض رصيد بداية الوردية للكاشير' },
-  { key: 'canManageStaff', label: 'إضافة وترقية وإيقاف الموظفين', hint: 'تعيين وإيقاف (مؤقت/مفتوح) وفصل الموظفين' },
-  { key: 'canConfigureOperations', label: 'ضبط مواعيد الورديات وألوان الطاولات', hint: 'تعديل جدول الورديات ووقت تأخير الترابيزة' },
-  { key: 'canToggleScreenPrices', label: 'إظهار/إخفاء الأسعار على الشاشات', hint: 'التحكم بظهور الأسعار في المطبخ/البار/الكابتن' },
-  { key: 'canManageHalls', label: 'إدارة الصالات وأكواد QR للطاولات', hint: 'إنشاء وتعديل الصالات وتوليد وطباعة باركود الترابيزات' },
+  {
+    key: 'canEditMenu',
+    labelAr: 'تعديل وإضافة أصناف المنيو',
+    labelEn: 'Edit & Add Menu Items',
+    hintAr: 'إنشاء وتعديل الأسعار والأصناف والتصنيفات',
+    hintEn: 'Create and edit prices, dishes, and categories',
+  },
+  {
+    key: 'canPauseItems',
+    labelAr: 'إيقاف/تفعيل الأصناف المؤقت',
+    labelEn: 'Pause / Resume Menu Items',
+    hintAr: 'إخفاء صنف ناقص من المنيو وإعادة تفعيله',
+    hintEn: 'Temporarily hide out-of-stock dishes and re-enable them',
+  },
+  {
+    key: 'canEditOpenOrders',
+    labelAr: 'تعديل طلبات الترابيزات المفتوحة',
+    labelEn: 'Edit Open Table Orders',
+    hintAr: 'إضافة/إزالة أصناف أو كتابة ملاحظات الطاولة',
+    hintEn: 'Add/remove order items or write table notes',
+  },
+  {
+    key: 'canCancelOpenOrders',
+    labelAr: 'إلغاء الطلبات المفتوحة مع سبب',
+    labelEn: 'Cancel Open Orders (With Reason)',
+    hintAr: 'إلغاء طلب قيد التشغيل بتوثيق السبب',
+    hintEn: 'Cancel an active order with a mandatory reason',
+  },
+  {
+    key: 'canEditClosedChecks',
+    labelAr: 'تعديل شيكات مغلقة قبل التسليم',
+    labelEn: 'Edit Closed Checks Before Handover',
+    hintAr: 'تصحيح فاتورة مغلقة في نفس الوردية قبل الإقفال',
+    hintEn: 'Amend a settled check within the same open shift',
+  },
+  {
+    key: 'canApplyInstantDiscount',
+    labelAr: 'منح خصومات فورية خاصة',
+    labelEn: 'Apply Instant Discounts',
+    hintAr: 'خصم مبلغ أو نسبة مع تدوين السبب',
+    hintEn: 'Apply fixed or percentage discount with reason',
+  },
+  {
+    key: 'canViewShiftReports',
+    labelAr: 'عرض تقرير الورديات اليومي',
+    labelEn: 'View Daily Shift Reports',
+    hintAr: 'متابعة الحضور والمبيعات وصافي الدرج',
+    hintEn: 'Monitor attendance, sales, and drawer net totals',
+  },
+  {
+    key: 'canEditDrawerFloat',
+    labelAr: 'تعديل عهدة الدرج (الافتتاحية)',
+    labelEn: 'Adjust Opening Drawer Float',
+    hintAr: 'رفع أو خفض رصيد بداية الوردية للكاشير',
+    hintEn: 'Increase or decrease cashier starting cash float',
+  },
+  {
+    key: 'canManageStaff',
+    labelAr: 'إضافة وترقية وإيقاف الموظفين',
+    labelEn: 'Add, Promote & Suspend Staff',
+    hintAr: 'تعيين وإيقاف (مؤقت/مفتوح) وفصل الموظفين',
+    hintEn: 'Onboard, suspend (timed/indefinite), or remove staff',
+  },
+  {
+    key: 'canConfigureOperations',
+    labelAr: 'ضبط مواعيد الورديات وألوان الطاولات',
+    labelEn: 'Configure Shift Slots & Table Colors',
+    hintAr: 'تعديل جدول الورديات ووقت تأخير الترابيزة',
+    hintEn: 'Adjust shift schedules and table overdue thresholds',
+  },
+  {
+    key: 'canToggleScreenPrices',
+    labelAr: 'إظهار/إخفاء الأسعار على الشاشات',
+    labelEn: 'Show/Hide Prices on Screens',
+    hintAr: 'التحكم بظهور الأسعار في المطبخ والبار والكابتن',
+    hintEn: 'Control price visibility on Kitchen/Bar/Captain screens',
+  },
+  {
+    key: 'canManageHalls',
+    labelAr: 'إدارة الصالات وأكواد QR للطاولات',
+    labelEn: 'Manage Halls & Table QR Codes',
+    hintAr: 'إنشاء وتعديل الصالات وتوليد وطباعة باركود الترابيزات',
+    hintEn: 'Create/edit halls and print table QR stands',
+  },
 ];
 
-const AUDIT_LABELS: Record<string, string> = {
+const AUDIT_LABELS_AR: Record<string, string> = {
   staff_created: 'إنشاء عضو كادر',
   staff_updated: 'تحديث بيانات / صلاحيات',
   staff_deleted: 'حذف عضو كادر',
@@ -129,8 +204,8 @@ const AUDIT_LABELS: Record<string, string> = {
   cash_handover_recorded: 'تسليم وردية وعهدة كاشير',
   treasury_transferred: 'توريد للخزنة الرئيسية',
   float_adjusted: 'تعديل عهدة الدرج',
-  superadmin_shift_unlocked: 'فتح استثنائي للوردية (سوبر أدمن)',
-  kds_item_updated: 'تحديث شاشة تحضير (KDS)',
+  superadmin_shift_unlocked: 'فتح استثنائي للوردية (إدارة المنصة)',
+  kds_item_updated: 'تحديث شاشة التحضير',
   table_closed: 'إقفال حساب طاولة',
   service_call_handled: 'تلبية نداء طاولة',
   station_created: 'إضافة قسم تحضير',
@@ -142,16 +217,50 @@ const AUDIT_LABELS: Record<string, string> = {
   domain_verified: 'فحص نطاق المصادقة',
 };
 
-function formatAuditTime(ts: unknown): string {
-  if (!ts) return 'الآن';
+const AUDIT_LABELS_EN: Record<string, string> = {
+  staff_created: 'Staff Member Created',
+  staff_updated: 'Profile / Permissions Updated',
+  staff_deleted: 'Staff Member Deleted',
+  staff_suspended: 'Staff Access Suspended',
+  staff_unsuspended: 'Staff Suspension Lifted',
+  staff_promoted: 'Staff Role Updated / Promoted',
+  invite_created: 'QR Invite Generated',
+  invite_used: 'Account Activated via QR',
+  password_changed: 'Password Changed',
+  staff_login: 'Staff Sign-In',
+  order_created: 'Order Created',
+  order_status_updated: 'Order Status Updated',
+  order_modified: 'Order Modified by Management',
+  order_cancelled: 'Order Cancelled (With Reason)',
+  instant_discount_applied: 'Instant Discount Applied',
+  menu_item_paused: 'Menu Item Paused / Resumed',
+  drawer_expense_added: 'Drawer Expense Recorded',
+  cash_handover_recorded: 'Cashier Shift Handover',
+  treasury_transferred: 'Transferred to Main Vault',
+  float_adjusted: 'Drawer Float Adjusted',
+  superadmin_shift_unlocked: 'Super Admin Shift Audit Unlock',
+  kds_item_updated: 'Prep Station Item Updated',
+  table_closed: 'Table Check Closed',
+  service_call_handled: 'Service Call Handled',
+  station_created: 'Prep Station Created',
+  station_updated: 'Prep Station Updated',
+  station_deleted: 'Prep Station Deleted',
+  shift_started: 'Shift Started',
+  shift_ended: 'Shift Ended',
+  station_uncovered_alert: 'Uncovered Station Alert',
+  domain_verified: 'Auth Domain Verified',
+};
+
+function formatAuditTime(ts: unknown, isEn: boolean): string {
+  if (!ts) return isEn ? 'Just now' : 'الآن';
   let ms = 0;
   if (typeof ts === 'object' && ts !== null && 'seconds' in ts) {
     ms = Number((ts as { seconds: number }).seconds) * 1000;
   } else if (ts instanceof Date) {
     ms = ts.getTime();
   }
-  if (!ms) return 'الآن';
-  return new Date(ms).toLocaleString('ar-EG', {
+  if (!ms) return isEn ? 'Just now' : 'الآن';
+  return new Date(ms).toLocaleString(isEn ? 'en-US' : 'ar-EG-u-nu-latn', {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
@@ -165,9 +274,15 @@ export function StaffManagementTab({
   actor,
   onRestaurantUpdated,
 }: StaffManagementTabProps) {
+  const { lang, dir, loc } = useLanguage();
+  const isEn = lang === 'en';
+  const restDisplayName = loc(restaurant.name, restaurant.name_en);
+
   const opsConfig = useMemo(() => getResolvedOperationsConfig(restaurant), [restaurant]);
   const [managerPermsOpen, setManagerPermsOpen] = useState(false);
-  const [draftManagerPerms, setDraftManagerPerms] = useState<ManagerPermissions>(() => opsConfig.managerPermissions);
+  const [draftManagerPerms, setDraftManagerPerms] = useState<ManagerPermissions>(
+    () => opsConfig.managerPermissions
+  );
   const [savingManagerPerms, setSavingManagerPerms] = useState(false);
 
   const [staffList, setStaffList] = useState<StaffMember[]>([]);
@@ -233,7 +348,9 @@ export function StaffManagementTab({
         setLoading(false);
       },
       (err) => {
-        setLoadError(err.message || 'تعذر تحميل قائمة الكادر');
+        setLoadError(
+          err.message || (isEn ? 'Unable to load staff roster' : 'تعذر تحميل قائمة الكادر')
+        );
         setLoading(false);
       }
     );
@@ -269,7 +386,7 @@ export function StaffManagementTab({
       unsubStations();
       unsubShifts();
     };
-  }, [restaurant.id]);
+  }, [restaurant.id, isEn]);
 
   useEffect(() => {
     if (!inviteModalData?.inviteUrl || !inviteCanvasRef.current) return;
@@ -344,7 +461,7 @@ export function StaffManagementTab({
     setUsernameInput('');
     setPhoneInput('');
     setEmailInput('');
-    setJobTitleInput('مدير تشغيل المطعم');
+    setJobTitleInput(isEn ? 'Restaurant Operations Manager' : 'مدير تشغيل المطعم');
     setRoleInput('manager');
     setHallIdInput('');
     setAllowedScreensInput([...dynamicManagerScreens]);
@@ -471,7 +588,11 @@ export function StaffManagementTab({
           },
         });
         setFormOpen(false);
-        setActionMsg(`تم تحديث بيانات وصلاحيات "${nameInput.trim()}" بنجاح.`);
+        setActionMsg(
+          isEn
+            ? `Updated profile & permissions for "${nameInput.trim()}".`
+            : `تم تحديث بيانات وصلاحيات "${nameInput.trim()}" بنجاح.`
+        );
       } else {
         const result = await createManagerOrStaffAccount({
           restaurant,
@@ -497,13 +618,23 @@ export function StaffManagementTab({
           setInviteCopied(false);
           setInviteModalData(result);
         } else {
+          const roleMeta = STAFF_ROLE_META[result.staff.role];
+          const roleText = isEn ? roleMeta?.labelEn || result.staff.role : roleMeta?.labelAr || result.staff.role;
           setActionMsg(
-            `تم إنشاء حساب "${result.staff.name}" (${STAFF_ROLE_META[result.staff.role]?.labelAr || result.staff.role}) وتفعيله مباشرة.`
+            isEn
+              ? `Account created and activated for "${result.staff.name}" (${roleText}).`
+              : `تم إنشاء حساب "${result.staff.name}" (${roleText}) وتفعيله مباشرة.`
           );
         }
       }
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'تعذر حفظ بيانات الموظف.');
+      setFormError(
+        err instanceof Error
+          ? err.message
+          : isEn
+            ? 'Unable to save staff member details.'
+            : 'تعذر حفظ بيانات الموظف.'
+      );
     } finally {
       setSubmitting(false);
     }
@@ -511,11 +642,19 @@ export function StaffManagementTab({
 
   const handleDeleteStaffMember = async (member: StaffMember) => {
     if (mode === 'manager' && member.role === 'manager') {
-      setActionError('حذف المدير يتم من حساب المالك فقط.');
+      setActionError(
+        isEn
+          ? 'Only the restaurant owner can delete a manager account.'
+          : 'حذف المدير يتم من حساب المالك فقط.'
+      );
       return;
     }
     if (member.uid === actor.uid) {
-      setActionError('لا يمكنك حذف حسابك الحالي أثناء تسجيل الدخول.');
+      setActionError(
+        isEn
+          ? 'You cannot delete your own account while signed in.'
+          : 'لا يمكنك حذف حسابك الحالي أثناء تسجيل الدخول.'
+      );
       return;
     }
     setBusyUid(member.uid);
@@ -528,9 +667,19 @@ export function StaffManagementTab({
         actor,
       });
       setConfirmDeleteUid(null);
-      setActionMsg(`تم حذف "${member.name}" وإلغاء وصوله وصلاحياته فوراً.`);
+      setActionMsg(
+        isEn
+          ? `Deleted "${member.name}" and revoked all access immediately.`
+          : `تم حذف "${member.name}" وإلغاء وصوله وصلاحياته فوراً.`
+      );
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'تعذر حذف الموظف.');
+      setActionError(
+        err instanceof Error
+          ? err.message
+          : isEn
+            ? 'Unable to delete staff member.'
+            : 'تعذر حذف الموظف.'
+      );
     } finally {
       setBusyUid(null);
     }
@@ -549,9 +698,19 @@ export function StaffManagementTab({
         actor,
       });
       onRestaurantUpdated?.({ ...restaurant, operationsConfig: nextCfg });
-      setActionMsg('تم حفظ صلاحيات المدير وتطبيقها لحظياً على حسابه.');
+      setActionMsg(
+        isEn
+          ? 'Manager permissions saved and applied immediately.'
+          : 'تم حفظ صلاحيات المدير وتطبيقها لحظياً على حسابه.'
+      );
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'تعذر حفظ صلاحيات المدير.');
+      setActionError(
+        err instanceof Error
+          ? err.message
+          : isEn
+            ? 'Unable to save manager permissions.'
+            : 'تعذر حفظ صلاحيات المدير.'
+      );
     } finally {
       setSavingManagerPerms(false);
     }
@@ -559,11 +718,19 @@ export function StaffManagementTab({
 
   const openSuspendModal = (member: StaffMember) => {
     if (mode === 'manager' && member.role === 'manager' && member.uid !== actor.uid) {
-      setActionError('لا يمكن للمدير إيقاف مدير آخر. يتم هذا من حساب المالك فقط.');
+      setActionError(
+        isEn
+          ? 'Managers cannot suspend another manager. Owner access required.'
+          : 'لا يمكن للمدير إيقاف مدير آخر. يتم هذا من حساب المالك فقط.'
+      );
       return;
     }
     if (member.uid === actor.uid) {
-      setActionError('لا يمكنك إيقاف حسابك الحالي أثناء تسجيل الدخول.');
+      setActionError(
+        isEn
+          ? 'You cannot suspend your own account while signed in.'
+          : 'لا يمكنك إيقاف حسابك الحالي أثناء تسجيل الدخول.'
+      );
       return;
     }
     setSuspendTarget(member);
@@ -578,7 +745,11 @@ export function StaffManagementTab({
     e.preventDefault();
     if (!suspendTarget) return;
     if (!suspendReason.trim()) {
-      setActionError('يجب كتابة سبب واضح لإيقاف الموظف ليظهر له عند محاولة الدخول.');
+      setActionError(
+        isEn
+          ? 'Please write a clear suspension reason to show on sign-in attempt.'
+          : 'يجب كتابة سبب واضح لإيقاف الموظف ليظهر له عند محاولة الدخول.'
+      );
       return;
     }
     setSuspending(true);
@@ -595,10 +766,20 @@ export function StaffManagementTab({
         suspendedUntilMs: suspendType === 'timed' && customMs > Date.now() ? customMs : undefined,
         reason: suspendReason.trim(),
       });
-      setActionMsg(`تم إيقاف شاشة "${suspendTarget.name}" بنجاح وتسجيل السبب في السجل.`);
+      setActionMsg(
+        isEn
+          ? `Suspended "${suspendTarget.name}" and logged the reason.`
+          : `تم إيقاف شاشة "${suspendTarget.name}" بنجاح وتسجيل السبب في السجل.`
+      );
       setSuspendTarget(null);
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'تعذر إيقاف الموظف.');
+      setActionError(
+        err instanceof Error
+          ? err.message
+          : isEn
+            ? 'Unable to suspend staff member.'
+            : 'تعذر إيقاف الموظف.'
+      );
     } finally {
       setSuspending(false);
     }
@@ -606,7 +787,11 @@ export function StaffManagementTab({
 
   const handleUnsuspend = async (member: StaffMember) => {
     if (mode === 'manager' && member.role === 'manager' && member.uid !== actor.uid) {
-      setActionError('لا يمكن للمدير تفعيل مدير آخر. يتم هذا من حساب المالك فقط.');
+      setActionError(
+        isEn
+          ? 'Managers cannot unsuspend another manager. Owner access required.'
+          : 'لا يمكن للمدير تفعيل مدير آخر. يتم هذا من حساب المالك فقط.'
+      );
       return;
     }
     setBusyUid(member.uid);
@@ -618,9 +803,19 @@ export function StaffManagementTab({
         staff: member,
         actor,
       });
-      setActionMsg(`تم رفع الإيقاف وإعادة تفعيل شاشة "${member.name}" بنجاح.`);
+      setActionMsg(
+        isEn
+          ? `Lifted suspension and restored access for "${member.name}".`
+          : `تم رفع الإيقاف وإعادة تفعيل شاشة "${member.name}" بنجاح.`
+      );
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'تعذر رفع الإيقاف.');
+      setActionError(
+        err instanceof Error
+          ? err.message
+          : isEn
+            ? 'Unable to lift suspension.'
+            : 'تعذر رفع الإيقاف.'
+      );
     } finally {
       setBusyUid(null);
     }
@@ -628,7 +823,11 @@ export function StaffManagementTab({
 
   const handleRegenerateInvite = async (member: StaffMember) => {
     if (mode === 'manager' && member.role === 'manager' && member.uid !== actor.uid) {
-      setActionError('إعادة تعيين وصول مدير آخر يتم من حساب المالك.');
+      setActionError(
+        isEn
+          ? 'Resetting another manager’s invite requires the owner account.'
+          : 'إعادة تعيين وصول مدير آخر يتم من حساب المالك.'
+      );
       return;
     }
     setBusyUid(member.uid);
@@ -643,7 +842,13 @@ export function StaffManagementTab({
       setInviteCopied(false);
       setInviteModalData(result);
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'تعذر إنشاء رابط دعوة جديد.');
+      setActionError(
+        err instanceof Error
+          ? err.message
+          : isEn
+            ? 'Unable to generate a new invite link.'
+            : 'تعذر إنشاء رابط دعوة جديد.'
+      );
     } finally {
       setBusyUid(null);
     }
@@ -652,7 +857,9 @@ export function StaffManagementTab({
   const handleSendPasswordReset = async (member: StaffMember) => {
     if (!canResetStaffViaEmail(member)) {
       setActionError(
-        'هذا الحساب مفعّل بدعوة QR وبمعرّف داخلي (@staff.sufra.local). لإعادة تعيين كلمة المرور استخدم زر "دعوة QR جديدة / تصفير".'
+        isEn
+          ? 'This account was activated with a QR invite and internal ID. Use "New QR Invite / Reset" to reset its password.'
+          : 'هذا الحساب مفعّل بدعوة QR وبمعرّف داخلي. لإعادة تعيين كلمة المرور استخدم زر "دعوة QR جديدة / تصفير".'
       );
       return;
     }
@@ -661,9 +868,19 @@ export function StaffManagementTab({
     setActionMsg(null);
     try {
       await sendStaffPasswordResetByEmail(member.email || '', member.authEmail);
-      setActionMsg(`تم إرسال رابط إعادة تعيين كلمة المرور إلى ${member.email}.`);
+      setActionMsg(
+        isEn
+          ? `Password reset link sent to ${member.email}.`
+          : `تم إرسال رابط إعادة تعيين كلمة المرور إلى ${member.email}.`
+      );
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'تعذر إرسال رابط استعادة البريد.');
+      setActionError(
+        err instanceof Error
+          ? err.message
+          : isEn
+            ? 'Unable to send reset email.'
+            : 'تعذر إرسال رابط استعادة البريد.'
+      );
     } finally {
       setBusyUid(null);
     }
@@ -695,23 +912,31 @@ export function StaffManagementTab({
       : dynamicEmployeeAssignableScreens;
 
   return (
-    <div dir="rtl" className="space-y-5">
+    <div dir={dir} className="space-y-5">
       {/* Top Action Header */}
       <section className="bg-white border border-zinc-200 rounded-2xl p-4 sm:p-5 space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-base sm:text-lg font-extrabold text-zinc-950">
-                إدارة المدير والكادر والصلاحيات
+                {isEn
+                  ? 'Managers, Staff & Permissions Management'
+                  : 'إدارة المدير والكادر والصلاحيات'}
               </h2>
               <span className="text-xs font-bold text-zinc-500 font-mono-num">
-                ({staffList.length} إجمالي · {activeStaffCount} مفعّل)
+                {isEn
+                  ? `(${staffList.length} total · ${activeStaffCount} active)`
+                  : `(${staffList.length} إجمالي · ${activeStaffCount} مفعّل)`}
               </span>
             </div>
             <p className="text-xs text-zinc-500 leading-relaxed max-w-2xl">
               {mode === 'owner'
-                ? 'أنشئ حساب مدير المطعم (Manager) ليتولى إدارة الكادر والتشغيل، أو أضف الموظفين بدعوة QR آمنة لمرة واحدة دون صلاحيات حساسة للمالك.'
-                : 'أنشئ موظفي الصالة والمطبخ والبار والكاشير، وحدد الشاشات المسموح بها لكل موظف مع رابط دعوة QR لمرة واحدة.'}
+                ? isEn
+                  ? 'Create a Manager account to oversee operations and staff, or onboard employees via secure one-time QR invites without exposing sensitive owner privileges.'
+                  : 'أنشئ حساب مدير المطعم ليتولى إدارة الكادر والتشغيل، أو أضف الموظفين بدعوة QR آمنة لمرة واحدة دون صلاحيات حساسة للمالك.'
+                : isEn
+                  ? 'Create floor, kitchen, bar, and cashier staff accounts and assign allowed operational screens via one-time QR invites.'
+                  : 'أنشئ موظفي الصالة والمطبخ والبار والكاشير، وحدد الشاشات المسموح بها لكل موظف مع رابط دعوة QR لمرة واحدة.'}
             </p>
           </div>
 
@@ -723,7 +948,7 @@ export function StaffManagementTab({
                 className="min-h-[42px] px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer shadow-xs"
               >
                 <Crown className="w-4 h-4 shrink-0" />
-                <span>إنشاء حساب مدير (Manager)</span>
+                <span>{isEn ? 'Create Manager Account' : 'إنشاء حساب مدير'}</span>
               </button>
             )}
             <button
@@ -732,7 +957,7 @@ export function StaffManagementTab({
               className="min-h-[42px] px-4 py-2 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
             >
               <UserPlus className="w-4 h-4 shrink-0" />
-              <span>إضافة موظف + دعوة QR</span>
+              <span>{isEn ? 'Add Staff + QR Invite' : 'إضافة موظف + دعوة QR'}</span>
             </button>
           </div>
         </div>
@@ -750,7 +975,7 @@ export function StaffManagementTab({
               }`}
             >
               <Users className="w-3.5 h-3.5" />
-              <span>أعضاء الكادر والصلاحيات</span>
+              <span>{isEn ? 'Team Members & Access' : 'أعضاء الكادر والصلاحيات'}</span>
             </button>
             <button
               type="button"
@@ -762,7 +987,11 @@ export function StaffManagementTab({
               }`}
             >
               <Layers className="w-3.5 h-3.5" />
-              <span>الأقسام الرئيسية والمحطات ({effectiveStations.length})</span>
+              <span>
+                {isEn
+                  ? `Prep Stations (${effectiveStations.length})`
+                  : `الأقسام الرئيسية والمحطات (${effectiveStations.length})`}
+              </span>
             </button>
             <button
               type="button"
@@ -774,7 +1003,11 @@ export function StaffManagementTab({
               }`}
             >
               <Activity className="w-3.5 h-3.5" />
-              <span>سجل التتبع والأمان ({auditLogs.length})</span>
+              <span>
+                {isEn
+                  ? `Security & Audit Log (${auditLogs.length})`
+                  : `سجل التتبع والأمان (${auditLogs.length})`}
+              </span>
             </button>
           </div>
 
@@ -793,7 +1026,13 @@ export function StaffManagementTab({
                       : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
                   }`}
                 >
-                  {r === 'all' ? 'الكل' : STAFF_ROLE_META[r].labelAr}
+                  {r === 'all'
+                    ? isEn
+                      ? 'All'
+                      : 'الكل'
+                    : isEn
+                      ? STAFF_ROLE_META[r].labelEn
+                      : STAFF_ROLE_META[r].labelAr}
                 </button>
               ))}
             </div>
@@ -818,15 +1057,25 @@ export function StaffManagementTab({
               </span>
               <div>
                 <h3 className="text-xs sm:text-sm font-extrabold text-indigo-950">
-                  صلاحيات المدير المصرح بها (تخصيص اختصاصات المدير)
+                  {isEn
+                    ? 'Manager Permissions Matrix (Customize Operational Scope)'
+                    : 'صلاحيات المدير المصرح بها (تخصيص اختصاصات المدير)'}
                 </h3>
                 <p className="text-[11px] text-indigo-700">
-                  تحكّم في الصلاحيات الإدارية والتشغيلية الممنوحة للمدير مع إمكانية التعديل في أي وقت
+                  {isEn
+                    ? 'Control administrative and operational privileges granted to managers with instant effect'
+                    : 'تحكّم في الصلاحيات الإدارية والتشغيلية الممنوحة للمدير مع إمكانية التعديل في أي وقت'}
                 </p>
               </div>
             </div>
             <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-200 text-[11px] font-extrabold text-indigo-800 shrink-0">
-              {managerPermsOpen ? 'إخفاء' : 'تعديل الصلاحيات'}
+              {managerPermsOpen
+                ? isEn
+                  ? 'Hide'
+                  : 'إخفاء'
+                : isEn
+                  ? 'Edit Permissions'
+                  : 'تعديل الصلاحيات'}
             </span>
           </button>
 
@@ -856,8 +1105,12 @@ export function StaffManagementTab({
                         className="mt-0.5 w-4 h-4 accent-indigo-600 shrink-0"
                       />
                       <div className="min-w-0">
-                        <p className="text-xs font-extrabold">{item.label}</p>
-                        <p className="text-[11px] text-zinc-500 mt-0.5 leading-snug">{item.hint}</p>
+                        <p className="text-xs font-extrabold">
+                          {isEn ? item.labelEn : item.labelAr}
+                        </p>
+                        <p className="text-[11px] text-zinc-500 mt-0.5 leading-snug">
+                          {isEn ? item.hintEn : item.hintAr}
+                        </p>
                       </div>
                     </label>
                   );
@@ -866,7 +1119,9 @@ export function StaffManagementTab({
 
               <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-zinc-100">
                 <p className="text-[11px] text-zinc-500">
-                  تؤثر هذه الإعدادات فوراً على شاشة الإشراف والكاشير والمنيو الخاصة بالمدير.
+                  {isEn
+                    ? 'These permissions apply immediately to manager supervision, cashier, and menu screens.'
+                    : 'تؤثر هذه الإعدادات فوراً على شاشة الإشراف والكاشير والمنيو الخاصة بالمدير.'}
                 </p>
                 <button
                   type="button"
@@ -875,7 +1130,7 @@ export function StaffManagementTab({
                   className="min-h-[40px] px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                 >
                   {savingManagerPerms ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                  <span>حفظ صلاحيات المدير</span>
+                  <span>{isEn ? 'Save Manager Permissions' : 'حفظ صلاحيات المدير'}</span>
                 </button>
               </div>
             </div>
@@ -890,11 +1145,17 @@ export function StaffManagementTab({
         <div className="bg-indigo-50/70 border border-indigo-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="space-y-1">
             <p className="text-xs font-extrabold text-indigo-950 flex items-center gap-1.5">
-              <ShieldCheck className="w-4 h-4 text-indigo-600" />
-              <span>بطاقة صفحة الكادر (/staff/{restaurant.slug}) ستظهر هنا تلقائياً عند إنشاء أول مدير</span>
+              <ShieldCheck className="w-4 h-4 text-indigo-600 shrink-0" />
+              <span>
+                {isEn
+                  ? `Staff Portal Card (/staff/${restaurant.slug}) will appear here automatically once your first manager is created`
+                  : `بطاقة صفحة الكادر (/staff/${restaurant.slug}) ستظهر هنا تلقائياً عند إنشاء أول مدير`}
+              </span>
             </p>
             <p className="text-[11px] text-indigo-800">
-              يمنح حساب المدير صلاحيات إدارة الكادر والشاشات والصالات والطلبات فقط دون حذف المطعم أو الاشتراك أو بيانات العملاء.
+              {isEn
+                ? 'Manager accounts handle staff, screens, halls, and orders without access to restaurant deletion, subscription, or customer billing data.'
+                : 'يمنح حساب المدير صلاحيات إدارة الكادر والشاشات والصالات والطلبات فقط دون حذف المطعم أو الاشتراك أو بيانات العملاء.'}
             </p>
           </div>
           <button
@@ -902,7 +1163,7 @@ export function StaffManagementTab({
             onClick={openCreateManagerModal}
             className="min-h-[38px] px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold whitespace-nowrap shrink-0 cursor-pointer"
           >
-            أنشئ حساب مدير الآن
+            {isEn ? 'Create Manager Now' : 'أنشئ حساب مدير الآن'}
           </button>
         </div>
       ) : null}
@@ -910,7 +1171,12 @@ export function StaffManagementTab({
       {actionMsg && (
         <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-900 flex items-center justify-between gap-2">
           <span>{actionMsg}</span>
-          <button type="button" onClick={() => setActionMsg(null)} className="p-1 cursor-pointer">
+          <button
+            type="button"
+            onClick={() => setActionMsg(null)}
+            aria-label={isEn ? 'Close' : 'إغلاق'}
+            className="p-1 cursor-pointer"
+          >
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -919,7 +1185,12 @@ export function StaffManagementTab({
       {actionError && (
         <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-xs font-bold text-rose-900 flex items-center justify-between gap-2">
           <span>{actionError}</span>
-          <button type="button" onClick={() => setActionError(null)} className="p-1 cursor-pointer">
+          <button
+            type="button"
+            onClick={() => setActionError(null)}
+            aria-label={isEn ? 'Close' : 'إغلاق'}
+            className="p-1 cursor-pointer"
+          >
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -937,51 +1208,69 @@ export function StaffManagementTab({
       ) : loading ? (
         <div className="bg-white border border-zinc-200 rounded-2xl p-10 text-center space-y-2">
           <Loader2 className="w-7 h-7 animate-spin text-zinc-500 mx-auto" />
-          <p className="text-xs font-bold text-zinc-600">جاري تحميل بيانات الكادر...</p>
+          <p className="text-xs font-bold text-zinc-600">
+            {isEn ? 'Loading staff roster...' : 'جاري تحميل بيانات الكادر...'}
+          </p>
         </div>
       ) : subView === 'audit' ? (
         /* AUDIT LOGS VIEW */
         <section className="bg-white border border-zinc-200 rounded-2xl overflow-hidden">
           <div className="px-4 py-3 bg-zinc-50 border-b border-zinc-200 flex items-center justify-between">
             <h3 className="text-xs sm:text-sm font-extrabold text-zinc-900">
-              سجل العمليات والأمان (آخر 120 عملية)
+              {isEn ? 'Security & Operations Audit Log (Last 120 Events)' : 'سجل العمليات والأمان (آخر 120 عملية)'}
             </h3>
-            <span className="text-[11px] text-zinc-500">محمي ضد التعديل أو الحذف</span>
+            <span className="text-[11px] text-zinc-500">
+              {isEn ? 'Tamper-protected log' : 'محمي ضد التعديل أو الحذف'}
+            </span>
           </div>
 
           {auditLogs.length === 0 ? (
             <div className="p-10 text-center text-xs text-zinc-500">
-              لا توجد عمليات مسجلة حتى الآن.
+              {isEn ? 'No audit events recorded yet.' : 'لا توجد عمليات مسجلة حتى الآن.'}
             </div>
           ) : (
             <div className="divide-y divide-zinc-100">
-              {auditLogs.map((log) => (
-                <div
-                  key={log.id}
-                  className="px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs hover:bg-zinc-50/60"
-                >
-                  <div className="space-y-0.5 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="px-2 py-0.5 rounded bg-zinc-900 text-white text-[10px] font-bold">
-                        {AUDIT_LABELS[log.eventType] || log.eventType}
-                      </span>
-                      <span className="font-extrabold text-zinc-950">{log.actorName}</span>
-                      <span className="text-[11px] text-zinc-500">
-                        ({log.actorRole === 'owner' ? 'المالك' : STAFF_ROLE_META[log.actorRole as StaffRole]?.labelAr || log.actorRole})
-                      </span>
-                      {log.screen && (
-                        <span className="text-[11px] text-indigo-700 font-bold">
-                          · {getScreenMetaDynamic(log.screen, effectiveStations).shortAr}
+              {auditLogs.map((log) => {
+                const eventLabel = isEn
+                  ? AUDIT_LABELS_EN[log.eventType] || log.eventType
+                  : AUDIT_LABELS_AR[log.eventType] || log.eventType;
+                const roleLabel =
+                  log.actorRole === 'owner'
+                    ? isEn
+                      ? 'Owner'
+                      : 'المالك'
+                    : isEn
+                      ? STAFF_ROLE_META[log.actorRole as StaffRole]?.labelEn || log.actorRole
+                      : STAFF_ROLE_META[log.actorRole as StaffRole]?.labelAr || log.actorRole;
+                const scrMeta = log.screen
+                  ? getScreenMetaDynamic(log.screen, effectiveStations)
+                  : null;
+                return (
+                  <div
+                    key={log.id}
+                    className="px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs hover:bg-zinc-50/60"
+                  >
+                    <div className="space-y-0.5 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="px-2 py-0.5 rounded bg-zinc-900 text-white text-[10px] font-bold">
+                          {eventLabel}
                         </span>
-                      )}
+                        <span className="font-extrabold text-zinc-950">{log.actorName}</span>
+                        <span className="text-[11px] text-zinc-500">({roleLabel})</span>
+                        {scrMeta && (
+                          <span className="text-[11px] text-indigo-700 font-bold">
+                            · {isEn ? scrMeta.shortEn : scrMeta.shortAr}
+                          </span>
+                        )}
+                      </div>
+                      {log.details && <p className="text-zinc-600">{log.details}</p>}
                     </div>
-                    {log.details && <p className="text-zinc-600">{log.details}</p>}
+                    <span className="text-[11px] font-mono-num text-zinc-400 shrink-0">
+                      {formatAuditTime(log.createdAt, isEn)}
+                    </span>
                   </div>
-                  <span className="text-[11px] font-mono-num text-zinc-400 shrink-0">
-                    {formatAuditTime(log.createdAt)}
-                  </span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>
@@ -992,7 +1281,11 @@ export function StaffManagementTab({
             <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-extrabold">
                 <Clock className="w-3.5 h-3.5" />
-                <span>الورديات النشطة الآن: {activeShifts.length}</span>
+                <span>
+                  {isEn
+                    ? `Active Shifts Now: ${activeShifts.length}`
+                    : `الورديات النشطة الآن: ${activeShifts.length}`}
+                </span>
               </span>
               {activeShifts.length > 0 && (
                 <span className="text-xs text-zinc-600 font-semibold">
@@ -1008,20 +1301,24 @@ export function StaffManagementTab({
             {uncoveredStations.length > 0 ? (
               <div className="flex flex-wrap items-center gap-1.5 text-xs font-bold text-amber-900 bg-amber-50 border border-amber-200 rounded-xl px-3 py-1.5">
                 <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                <span>أقسام بدون وردية حالياً:</span>
+                <span>{isEn ? 'Stations without active shift:' : 'أقسام بدون وردية حالياً:'}</span>
                 {uncoveredStations.map((st) => (
                   <span
                     key={st.stationId}
                     className="px-2 py-0.5 rounded-md bg-white border border-amber-300 text-[11px] font-extrabold text-amber-950"
                   >
-                    {st.shortLabel}
+                    {loc(st.shortLabel, st.shortLabel_en)}
                   </span>
                 ))}
               </div>
             ) : (
               <span className="inline-flex items-center gap-1.5 text-xs font-extrabold text-emerald-700">
                 <Check className="w-4 h-4" />
-                <span>جميع أقسام التحضير مغطاة بوردية نشطة</span>
+                <span>
+                  {isEn
+                    ? 'All prep stations are covered by an active shift'
+                    : 'جميع أقسام التحضير مغطاة بوردية نشطة'}
+                </span>
               </span>
             )}
           </div>
@@ -1030,9 +1327,13 @@ export function StaffManagementTab({
             <div className="bg-white border border-zinc-200 rounded-2xl p-10 text-center space-y-3">
               <Users className="w-10 h-10 text-zinc-300 mx-auto" />
               <div className="space-y-1">
-                <h3 className="text-sm font-extrabold text-zinc-900">لا يوجد أعضاء في هذه الفئة بعد</h3>
+                <h3 className="text-sm font-extrabold text-zinc-900">
+                  {isEn ? 'No staff members in this category yet' : 'لا يوجد أعضاء في هذه الفئة بعد'}
+                </h3>
                 <p className="text-xs text-zinc-500 max-w-md mx-auto">
-                  ابدأ بإنشاء حساب المدير أو أضف أفراد الكادر بدعوة QR لمرة واحدة لتفعيل شاشات التشغيل المخصصة لهم.
+                  {isEn
+                    ? 'Start by creating a Manager account or add staff members with one-time QR invites to activate their screens.'
+                    : 'ابدأ بإنشاء حساب المدير أو أضف أفراد الكادر بدعوة QR لمرة واحدة لتفعيل شاشات التشغيل المخصصة لهم.'}
                 </p>
               </div>
               <div className="flex flex-wrap items-center justify-center gap-2">
@@ -1042,7 +1343,7 @@ export function StaffManagementTab({
                     onClick={openCreateManagerModal}
                     className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-extrabold cursor-pointer"
                   >
-                    إنشاء حساب مدير
+                    {isEn ? 'Create Manager Account' : 'إنشاء حساب مدير'}
                   </button>
                 )}
                 <button
@@ -1050,7 +1351,7 @@ export function StaffManagementTab({
                   onClick={openCreateEmployeeModal}
                   className="px-4 py-2 rounded-xl bg-zinc-950 text-white text-xs font-extrabold cursor-pointer"
                 >
-                  إضافة موظف جديد
+                  {isEn ? 'Add New Staff' : 'إضافة موظف جديد'}
                 </button>
               </div>
             </div>
@@ -1060,8 +1361,10 @@ export function StaffManagementTab({
               {filteredStaff.map((member) => {
                 const roleMeta = STAFF_ROLE_META[member.role] || STAFF_ROLE_META.cashier;
                 const isBusy = busyUid === member.uid;
-                const isManagerLocked = mode === 'manager' && member.role === 'manager' && member.uid !== actor.uid;
+                const isManagerLocked =
+                  mode === 'manager' && member.role === 'manager' && member.uid !== actor.uid;
                 const memberShifts = activeShiftByStaffUid.get(member.uid) || [];
+                const defaultMeta = getScreenMetaDynamic(member.defaultScreen, effectiveStations);
 
                 return (
                   <article
@@ -1080,12 +1383,16 @@ export function StaffManagementTab({
                             <span
                               className={`px-2 py-0.5 rounded-md border text-[11px] font-extrabold ${roleMeta.badgeClass}`}
                             >
-                              {roleMeta.labelAr}
+                              {isEn ? roleMeta.labelEn : roleMeta.labelAr}
                             </span>
                             {memberShifts.length > 0 && (
                               <span className="px-2 py-0.5 rounded-md bg-emerald-100 border border-emerald-300 text-emerald-900 text-[10px] font-extrabold inline-flex items-center gap-1">
                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
-                                <span>في الوردية الآن ({memberShifts[0].stationName})</span>
+                                <span>
+                                  {isEn
+                                    ? `On Shift (${memberShifts[0].stationName})`
+                                    : `في الوردية الآن (${memberShifts[0].stationName})`}
+                                </span>
                               </span>
                             )}
                           </div>
@@ -1104,7 +1411,11 @@ export function StaffManagementTab({
                             <p className="text-[11px] text-zinc-600 font-semibold">
                               {member.jobTitle ? member.jobTitle : ''}
                               {member.jobTitle && member.hallName ? ' · ' : ''}
-                              {member.hallName ? `الصالة: ${member.hallName}` : ''}
+                              {member.hallName
+                                ? isEn
+                                  ? `Hall: ${member.hallName}`
+                                  : `الصالة: ${member.hallName}`
+                                : ''}
                             </p>
                           )}
                         </div>
@@ -1119,12 +1430,20 @@ export function StaffManagementTab({
                           }`}
                         >
                           {member.mustChangePassword && !member.isActive
-                            ? 'بانتظار تفعيل QR'
+                            ? isEn
+                              ? 'Pending QR Activation'
+                              : 'بانتظار تفعيل QR'
                             : member.isActive
-                              ? 'نشط'
+                              ? isEn
+                                ? 'Active'
+                                : 'نشط'
                               : member.suspendedType === 'timed'
-                                ? 'موقوف مؤقتاً'
-                                : 'موقوف'}
+                                ? isEn
+                                  ? 'Timed Suspension'
+                                  : 'موقوف مؤقتاً'
+                                : isEn
+                                  ? 'Suspended'
+                                  : 'موقوف'}
                         </span>
                       </div>
 
@@ -1138,7 +1457,9 @@ export function StaffManagementTab({
                       {/* Assigned Screens */}
                       <div className="bg-zinc-50 border border-zinc-200/80 rounded-xl p-2.5 space-y-1.5">
                         <p className="text-[11px] font-bold text-zinc-500">
-                          الشاشات المصرّح بها (الافتراضية: {getScreenMetaDynamic(member.defaultScreen, effectiveStations).shortAr}):
+                          {isEn
+                            ? `Authorized Screens (Default: ${defaultMeta.shortEn}):`
+                            : `الشاشات المصرّح بها (الافتراضية: ${defaultMeta.shortAr}):`}
                         </p>
                         <div className="flex flex-wrap gap-1.5">
                           {(member.allowedScreens || []).map((scr) => {
@@ -1152,7 +1473,7 @@ export function StaffManagementTab({
                                     : 'bg-white text-zinc-700 border-zinc-200'
                                 }`}
                               >
-                                {meta.shortAr}
+                                {isEn ? meta.shortEn : meta.shortAr}
                               </span>
                             );
                           })}
@@ -1170,7 +1491,7 @@ export function StaffManagementTab({
                           className="min-h-[36px] px-3 py-1.5 rounded-xl border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-800 text-xs font-bold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-40"
                         >
                           <Edit3 className="w-3.5 h-3.5" />
-                          <span>تعديل / ترقية</span>
+                          <span>{isEn ? 'Edit / Promote' : 'تعديل / ترقية'}</span>
                         </button>
 
                         <button
@@ -1180,7 +1501,7 @@ export function StaffManagementTab({
                           className="min-h-[36px] px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-800 text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-40"
                         >
                           {isBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <QrCode className="w-3.5 h-3.5" />}
-                          <span>دعوة QR جديدة / تصفير</span>
+                          <span>{isEn ? 'New QR Invite / Reset' : 'دعوة QR جديدة / تصفير'}</span>
                         </button>
 
                         {canResetStaffViaEmail(member) && (
@@ -1191,7 +1512,7 @@ export function StaffManagementTab({
                             className="min-h-[36px] px-3 py-1.5 rounded-xl border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-zinc-700 text-xs font-bold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-40"
                           >
                             <Mail className="w-3.5 h-3.5" />
-                            <span>استعادة بالإيميل</span>
+                            <span>{isEn ? 'Email Reset' : 'استعادة بالإيميل'}</span>
                           </button>
                         )}
 
@@ -1205,7 +1526,7 @@ export function StaffManagementTab({
                                 className="min-h-[36px] px-3 py-1.5 rounded-xl border border-amber-300 bg-amber-50/70 text-amber-900 hover:bg-amber-100 text-xs font-bold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-40"
                               >
                                 <PauseCircle className="w-3.5 h-3.5" />
-                                <span>إيقاف مؤقت / دائم</span>
+                                <span>{isEn ? 'Suspend' : 'إيقاف مؤقت / دائم'}</span>
                               </button>
                             ) : (
                               <button
@@ -1215,7 +1536,7 @@ export function StaffManagementTab({
                                 className="min-h-[36px] px-3 py-1.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 text-xs font-bold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-40"
                               >
                                 <UserCheck className="w-3.5 h-3.5" />
-                                <span>رفع الإيقاف وتفعيل الشاشة</span>
+                                <span>{isEn ? 'Unsuspend & Restore' : 'رفع الإيقاف وتفعيل الشاشة'}</span>
                               </button>
                             )}
 
@@ -1226,10 +1547,10 @@ export function StaffManagementTab({
                                 setConfirmDeleteUid((prev) => (prev === member.uid ? null : member.uid))
                               }
                               className="min-h-[36px] px-2.5 py-1.5 rounded-xl border border-rose-200 text-rose-700 hover:bg-rose-50 text-xs font-bold inline-flex items-center gap-1 whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-40"
-                              title="حذف وفصل الموظف نهائياً"
+                              title={isEn ? 'Dismiss and permanently remove staff member' : 'حذف وفصل الموظف نهائياً'}
                             >
                               <Trash2 className="w-3.5 h-3.5" />
-                              <span>فصل وحذف</span>
+                              <span>{isEn ? 'Remove' : 'فصل وحذف'}</span>
                             </button>
                           </>
                         )}
@@ -1237,15 +1558,26 @@ export function StaffManagementTab({
 
                       {!canResetStaffViaEmail(member) && (
                         <p className="text-[11px] text-zinc-500">
-                          حساب مُدار بدعوة QR — لتغيير كلمة المرور أو استعادتها استخدم{' '}
-                          <span className="font-bold text-indigo-700">دعوة QR جديدة / تصفير</span>.
+                          {isEn ? (
+                            <>
+                              QR-invite managed account — to reset password use{' '}
+                              <span className="font-bold text-indigo-700">New QR Invite / Reset</span>.
+                            </>
+                          ) : (
+                            <>
+                              حساب مُدار بدعوة QR — لتغيير كلمة المرور أو استعادتها استخدم{' '}
+                              <span className="font-bold text-indigo-700">دعوة QR جديدة / تصفير</span>.
+                            </>
+                          )}
                         </p>
                       )}
 
                       {confirmDeleteUid === member.uid && (
                         <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 flex flex-wrap items-center justify-between gap-2 text-xs">
                           <span className="font-bold text-rose-900">
-                            تأكيد حذف "{member.name}" وإلغاء جميع صلاحياته؟
+                            {isEn
+                              ? `Confirm deleting "${member.name}" and revoking all access?`
+                              : `تأكيد حذف "${member.name}" وإلغاء جميع صلاحياته؟`}
                           </span>
                           <div className="flex items-center gap-1.5">
                             <button
@@ -1254,14 +1586,14 @@ export function StaffManagementTab({
                               onClick={() => handleDeleteStaffMember(member)}
                               className="px-3 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-extrabold cursor-pointer disabled:opacity-50"
                             >
-                              تأكيد الحذف
+                              {isEn ? 'Confirm Delete' : 'تأكيد الحذف'}
                             </button>
                             <button
                               type="button"
                               onClick={() => setConfirmDeleteUid(null)}
                               className="px-2.5 py-1 rounded-lg border border-zinc-300 bg-white text-zinc-700 font-bold cursor-pointer"
                             >
-                              تراجع
+                              {isEn ? 'Cancel' : 'تراجع'}
                             </button>
                           </div>
                         </div>
@@ -1280,6 +1612,7 @@ export function StaffManagementTab({
         <div
           className="fixed inset-0 z-50 bg-zinc-950/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
           onClick={() => !submitting && setFormOpen(false)}
+          dir={dir}
         >
           <div
             className="bg-white border border-zinc-200 rounded-3xl max-w-2xl w-full p-5 sm:p-6 shadow-2xl space-y-4 my-auto max-h-[92vh] overflow-y-auto"
@@ -1291,30 +1624,35 @@ export function StaffManagementTab({
                   {formKind === 'manager' ? (
                     <>
                       <Crown className="w-5 h-5 text-indigo-600" />
-                      <span>إنشاء حساب مدير المطعم (Manager)</span>
+                      <span>{isEn ? 'Create Restaurant Manager Account' : 'إنشاء حساب مدير المطعم'}</span>
                     </>
                   ) : formKind === 'edit' ? (
                     <>
                       <Edit3 className="w-5 h-5 text-zinc-800" />
-                      <span>تعديل بيانات وصلاحيات الكادر</span>
+                      <span>{isEn ? 'Edit Staff Details & Permissions' : 'تعديل بيانات وصلاحيات الكادر'}</span>
                     </>
                   ) : (
                     <>
                       <UserPlus className="w-5 h-5 text-zinc-900" />
-                      <span>إضافة موظف جديد وتحديد الصلاحيات</span>
+                      <span>{isEn ? 'Add New Staff & Assign Permissions' : 'إضافة موظف جديد وتحديد الصلاحيات'}</span>
                     </>
                   )}
                 </h3>
                 <p className="text-xs text-zinc-500 mt-0.5">
                   {formKind === 'manager'
-                    ? 'يحصل المدير على صلاحيات إدارة الكادر والشاشات دون صلاحيات المالك الحساسة — وتُدار صلاحية الصالات و QR من مصفوفة صلاحيات المدير.'
-                    : 'اختر الدور والشاشات المصرّح بها، ثم اختر طريقة التفعيل عبر QR لمرة واحدة أو كلمة مرور مباشرة.'}
+                    ? isEn
+                      ? 'Managers oversee staff and operational screens without sensitive owner controls — Hall & QR permissions are configured from the manager permissions matrix.'
+                      : 'يحصل المدير على صلاحيات إدارة الكادر والشاشات دون صلاحيات المالك الحساسة — وتُدار صلاحية الصالات و QR من مصفوفة صلاحيات المدير.'
+                    : isEn
+                      ? 'Choose role and permitted screens, then activate via one-time QR invite or a direct initial password.'
+                      : 'اختر الدور والشاشات المصرّح بها، ثم اختر طريقة التفعيل عبر QR لمرة واحدة أو كلمة مرور مباشرة.'}
                 </p>
               </div>
               <button
                 type="button"
                 disabled={submitting}
                 onClick={() => setFormOpen(false)}
+                aria-label={isEn ? 'Close' : 'إغلاق'}
                 className="p-1.5 rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-800 cursor-pointer"
               >
                 <X className="w-5 h-5" />
@@ -1330,19 +1668,19 @@ export function StaffManagementTab({
             <form onSubmit={handleFormSubmit} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <label className="space-y-1 text-xs font-bold text-zinc-800">
-                  <span>الاسم الكامل *</span>
+                  <span>{isEn ? 'Full Name *' : 'الاسم الكامل *'}</span>
                   <input
                     type="text"
                     required
                     value={nameInput}
                     onChange={(e) => setNameInput(e.target.value)}
-                    placeholder="مثال: أحمد محمود"
+                    placeholder={isEn ? 'e.g. Ahmed Mahmoud' : 'مثال: أحمد محمود'}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900"
                   />
                 </label>
 
                 <label className="space-y-1 text-xs font-bold text-zinc-800">
-                  <span>اسم المستخدم (Username) *</span>
+                  <span>{isEn ? 'Username *' : 'اسم المستخدم *'}</span>
                   <input
                     type="text"
                     required
@@ -1356,7 +1694,7 @@ export function StaffManagementTab({
                 </label>
 
                 <label className="space-y-1 text-xs font-bold text-zinc-800">
-                  <span>رقم الهاتف *</span>
+                  <span>{isEn ? 'Phone Number *' : 'رقم الهاتف *'}</span>
                   <input
                     type="tel"
                     required
@@ -1369,7 +1707,7 @@ export function StaffManagementTab({
                 </label>
 
                 <label className="space-y-1 text-xs font-bold text-zinc-800">
-                  <span>البريد الإلكتروني (اختياري)</span>
+                  <span>{isEn ? 'Email (Optional)' : 'البريد الإلكتروني (اختياري)'}</span>
                   <input
                     type="email"
                     dir="ltr"
@@ -1382,7 +1720,7 @@ export function StaffManagementTab({
 
                 {formKind !== 'manager' && (
                   <label className="space-y-1 text-xs font-bold text-zinc-800">
-                    <span>الدور الوظيفي *</span>
+                    <span>{isEn ? 'Job Role *' : 'الدور الوظيفي *'}</span>
                     <select
                       value={roleInput}
                       disabled={formKind === 'edit' && editingMember?.role === 'manager'}
@@ -1390,41 +1728,51 @@ export function StaffManagementTab({
                       className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-zinc-900 disabled:bg-zinc-100"
                     >
                       {mode === 'owner' && (
-                        <option value="manager">مدير المطعم (Manager)</option>
+                        <option value="manager">
+                          {isEn ? 'Restaurant Manager' : 'مدير المطعم'}
+                        </option>
                       )}
-                      <option value="cashier">كاشير</option>
-                      <option value="station_staff">شيف / مسؤول قسم تحضير</option>
-                      <option value="kitchen">شيف المطبخ</option>
-                      <option value="bar">باريستا / بار</option>
-                      <option value="pastry">باستري / حلويات</option>
-                      <option value="captain">كابتن صالة / ويتر</option>
-                      <option value="custom">صلاحيات مخصصة</option>
+                      <option value="cashier">{isEn ? 'Cashier' : 'كاشير'}</option>
+                      <option value="station_staff">
+                        {isEn ? 'Station Chef / Lead' : 'شيف / مسؤول قسم تحضير'}
+                      </option>
+                      <option value="kitchen">{isEn ? 'Kitchen Chef' : 'شيف المطبخ'}</option>
+                      <option value="bar">{isEn ? 'Barista / Bar' : 'باريستا / بار'}</option>
+                      <option value="pastry">{isEn ? 'Pastry / Desserts' : 'باستري / حلويات'}</option>
+                      <option value="captain">{isEn ? 'Floor Captain / Waiter' : 'كابتن صالة / ويتر'}</option>
+                      <option value="custom">{isEn ? 'Custom Permissions' : 'صلاحيات مخصصة'}</option>
                     </select>
                   </label>
                 )}
 
                 <label className="space-y-1 text-xs font-bold text-zinc-800">
-                  <span>المسمى الوظيفي (اختياري)</span>
+                  <span>{isEn ? 'Job Title (Optional)' : 'المسمى الوظيفي (اختياري)'}</span>
                   <input
                     type="text"
                     value={jobTitleInput}
                     onChange={(e) => setJobTitleInput(e.target.value)}
-                    placeholder="مثال: كاشير شيفت مسائي"
+                    placeholder={isEn ? 'e.g. Evening Shift Cashier' : 'مثال: كاشير شيفت مسائي'}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900"
                   />
                 </label>
 
                 <label className="space-y-1 text-xs font-bold text-zinc-800 sm:col-span-2">
-                  <span>الصالة المسندة (اختياري — خاصةً للكابتن والويتر)</span>
+                  <span>
+                    {isEn
+                      ? 'Assigned Hall (Optional — mainly for Captains & Waiters)'
+                      : 'الصالة المسندة (اختياري — خاصةً للكابتن والويتر)'}
+                  </span>
                   <select
                     value={hallIdInput}
                     onChange={(e) => setHallIdInput(e.target.value)}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-zinc-900"
                   >
-                    <option value="">كل الصالات / غير محدد</option>
+                    <option value="">
+                      {isEn ? 'All Halls / Unspecified' : 'كل الصالات / غير محدد'}
+                    </option>
                     {halls.map((h) => (
                       <option key={h.id} value={h.id}>
-                        {h.name} ({h.tableCount} طاولة)
+                        {loc(h.name, h.name_en)} ({isEn ? `${h.tableCount} tables` : `${h.tableCount} طاولة`})
                       </option>
                     ))}
                   </select>
@@ -1435,10 +1783,12 @@ export function StaffManagementTab({
               <div className="p-3.5 rounded-2xl bg-zinc-50 border border-zinc-200 space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-xs font-extrabold text-zinc-900">
-                    الشاشات والأقسام المسموح بها لهذا الحساب
+                    {isEn ? 'Allowed Screens & Prep Stations' : 'الشاشات والأقسام المسموح بها لهذا الحساب'}
                   </span>
                   <span className="text-[11px] text-zinc-500">
-                    يمكن اختيار أي مزيج من الشاشات وأقسام التحضير ({assignableScreens.length} متاح)
+                    {isEn
+                      ? `Select any combination (${assignableScreens.length} available)`
+                      : `يمكن اختيار أي مزيج من الشاشات وأقسام التحضير (${assignableScreens.length} متاح)`}
                   </span>
                 </div>
 
@@ -1470,26 +1820,33 @@ export function StaffManagementTab({
                             className="w-4 h-4 accent-zinc-950 shrink-0"
                           />
                           {StIcon && <StIcon className="w-3.5 h-3.5 text-zinc-600 shrink-0" />}
-                          <span className="truncate">{meta.labelAr}</span>
+                          <span className="truncate">{isEn ? meta.labelEn : meta.labelAr}</span>
                         </span>
-                        {locked && <span className="text-[10px] text-indigo-600 shrink-0">تلقائي</span>}
+                        {locked && (
+                          <span className="text-[10px] text-indigo-600 shrink-0">
+                            {isEn ? 'Auto' : 'تلقائي'}
+                          </span>
+                        )}
                       </label>
                     );
                   })}
                 </div>
 
                 <label className="block space-y-1 text-xs font-bold text-zinc-800 pt-1">
-                  <span>الشاشة الافتراضية عند تسجيل الدخول</span>
+                  <span>{isEn ? 'Default Screen After Sign-In' : 'الشاشة الافتراضية عند تسجيل الدخول'}</span>
                   <select
                     value={defaultScreenInput}
                     onChange={(e) => setDefaultScreenInput(e.target.value as StaffScreen)}
                     className="w-full px-3 py-2 rounded-xl border border-zinc-300 text-xs bg-white font-bold"
                   >
-                    {allowedScreensInput.map((scr) => (
-                      <option key={scr} value={scr}>
-                        {getScreenMetaDynamic(scr, effectiveStations).labelAr}
-                      </option>
-                    ))}
+                    {allowedScreensInput.map((scr) => {
+                      const meta = getScreenMetaDynamic(scr, effectiveStations);
+                      return (
+                        <option key={scr} value={scr}>
+                          {isEn ? meta.labelEn : meta.labelAr}
+                        </option>
+                      );
+                    })}
                   </select>
                 </label>
               </div>
@@ -1498,7 +1855,7 @@ export function StaffManagementTab({
               {formKind !== 'edit' && (
                 <div className="p-3.5 rounded-2xl bg-indigo-50/60 border border-indigo-200 space-y-3">
                   <span className="text-xs font-extrabold text-indigo-950 block">
-                    طريقة تفعيل الحساب وكلمة المرور
+                    {isEn ? 'Account Activation & Password Setup' : 'طريقة تفعيل الحساب وكلمة المرور'}
                   </span>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <button
@@ -1512,10 +1869,12 @@ export function StaffManagementTab({
                     >
                       <span className="text-xs font-extrabold text-zinc-950 flex items-center gap-1.5">
                         <QrCode className="w-4 h-4 text-indigo-600" />
-                        <span>دعوة QR لمرة واحدة (الأكثر أماناً)</span>
+                        <span>{isEn ? 'One-Time QR Invite (Most Secure)' : 'دعوة QR لمرة واحدة (الأكثر أماناً)'}</span>
                       </span>
                       <span className="text-[11px] text-zinc-500 block">
-                        يمسح الموظف الكود ويعيّن كلمة مروره القوية بنفسه خلال 24 ساعة.
+                        {isEn
+                          ? 'Staff member scans the QR code and sets their strong password within 24 hours.'
+                          : 'يمسح الموظف الكود ويعيّن كلمة مروره القوية بنفسه خلال 24 ساعة.'}
                       </span>
                     </button>
 
@@ -1530,24 +1889,30 @@ export function StaffManagementTab({
                     >
                       <span className="text-xs font-extrabold text-zinc-950 flex items-center gap-1.5">
                         <KeyRound className="w-4 h-4 text-zinc-800" />
-                        <span>كلمة مرور أولية مباشرة</span>
+                        <span>{isEn ? 'Direct Initial Password' : 'كلمة مرور أولية مباشرة'}</span>
                       </span>
                       <span className="text-[11px] text-zinc-500 block">
-                        تفعيل فوري للحساب والدخول المباشر عبر /staff/{restaurant.slug}.
+                        {isEn
+                          ? `Instant activation with direct sign-in at /staff/${restaurant.slug}.`
+                          : `تفعيل فوري للحساب والدخول المباشر عبر /staff/${restaurant.slug}.`}
                       </span>
                     </button>
                   </div>
 
                   {!useOneTimeInvite && (
                     <label className="block space-y-1 text-xs font-bold text-zinc-800">
-                      <span>كلمة المرور الأولية القوية * (لا تُحفظ نصياً في قاعدة البيانات)</span>
+                      <span>
+                        {isEn
+                          ? 'Strong Initial Password * (never stored in plain text)'
+                          : 'كلمة المرور الأولية القوية * (لا تُحفظ نصياً في قاعدة البيانات)'}
+                      </span>
                       <input
                         type="password"
                         required={!useOneTimeInvite}
                         dir="ltr"
                         value={directPasswordInput}
                         onChange={(e) => setDirectPasswordInput(e.target.value)}
-                        placeholder="مثال: Sufra@2026"
+                        placeholder={isEn ? 'e.g. Sufra@2026' : 'مثال: Sufra@2026'}
                         className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-600"
                       />
                     </label>
@@ -1564,17 +1929,17 @@ export function StaffManagementTab({
                   {submitting ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>جاري الحفظ...</span>
+                      <span>{isEn ? 'Saving...' : 'جاري الحفظ...'}</span>
                     </>
                   ) : formKind === 'edit' ? (
-                    <span>حفظ التعديلات والصلاحيات</span>
+                    <span>{isEn ? 'Save Changes & Permissions' : 'حفظ التعديلات والصلاحيات'}</span>
                   ) : useOneTimeInvite ? (
                     <>
                       <Plus className="w-4 h-4" />
-                      <span>إنشاء الحساب وإصدار دعوة QR</span>
+                      <span>{isEn ? 'Create Account & Issue QR Invite' : 'إنشاء الحساب وإصدار دعوة QR'}</span>
                     </>
                   ) : (
-                    <span>إنشاء الحساب وتفعيله الآن</span>
+                    <span>{isEn ? 'Create & Activate Now' : 'إنشاء الحساب وتفعيله الآن'}</span>
                   )}
                 </button>
                 <button
@@ -1583,7 +1948,7 @@ export function StaffManagementTab({
                   onClick={() => setFormOpen(false)}
                   className="min-h-[44px] px-4 py-2.5 rounded-xl border border-zinc-300 text-xs font-bold text-zinc-700 hover:bg-zinc-50 cursor-pointer"
                 >
-                  إلغاء
+                  {isEn ? 'Cancel' : 'إلغاء'}
                 </button>
               </div>
             </form>
@@ -1596,6 +1961,7 @@ export function StaffManagementTab({
         <div
           className="fixed inset-0 z-50 bg-zinc-950/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
           onClick={() => setInviteModalData(null)}
+          dir={dir}
         >
           <div
             className="bg-white border border-zinc-200 rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl space-y-4 my-auto"
@@ -1605,15 +1971,16 @@ export function StaffManagementTab({
               <div className="space-y-0.5">
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-extrabold">
                   <Check className="w-3.5 h-3.5" />
-                  <span>تم تجهيز دعوة الكادر الآمنة</span>
+                  <span>{isEn ? 'Secure Staff Invite Ready' : 'تم تجهيز دعوة الكادر الآمنة'}</span>
                 </span>
                 <h3 className="text-base sm:text-lg font-extrabold text-zinc-950 pt-1">
-                  بطاقة دعوة التفعيل لمرة واحدة (QR)
+                  {isEn ? 'One-Time Activation Card (QR)' : 'بطاقة دعوة التفعيل لمرة واحدة'}
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setInviteModalData(null)}
+                aria-label={isEn ? 'Close' : 'إغلاق'}
                 className="p-1.5 rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-800 cursor-pointer"
               >
                 <X className="w-5 h-5" />
@@ -1627,22 +1994,26 @@ export function StaffManagementTab({
               </div>
 
               <div className="space-y-2 text-center sm:text-start flex-1 min-w-0">
-                <p className="text-xs font-bold text-indigo-700">{restaurant.name}</p>
+                <p className="text-xs font-bold text-indigo-700">{restDisplayName}</p>
                 <h4 className="text-base font-extrabold text-zinc-950">
                   {inviteModalData.staff.name}
                 </h4>
                 <div className="space-y-1 text-xs text-zinc-700">
                   <p>
-                    <span className="text-zinc-500">اسم المستخدم:</span>{' '}
+                    <span className="text-zinc-500">{isEn ? 'Username:' : 'اسم المستخدم:'}</span>{' '}
                     <strong className="font-mono-num" dir="ltr">@{inviteModalData.staff.username}</strong>
                   </p>
                   <p>
-                    <span className="text-zinc-500">الوظيفة:</span>{' '}
-                    <strong>{STAFF_ROLE_META[inviteModalData.staff.role]?.labelAr}</strong>
+                    <span className="text-zinc-500">{isEn ? 'Role:' : 'الوظيفة:'}</span>{' '}
+                    <strong>
+                      {isEn
+                        ? STAFF_ROLE_META[inviteModalData.staff.role]?.labelEn
+                        : STAFF_ROLE_META[inviteModalData.staff.role]?.labelAr}
+                    </strong>
                   </p>
                   {inviteModalData.staff.hallName && (
                     <p>
-                      <span className="text-zinc-500">الصالة:</span>{' '}
+                      <span className="text-zinc-500">{isEn ? 'Hall:' : 'الصالة:'}</span>{' '}
                       <strong>{inviteModalData.staff.hallName}</strong>
                     </p>
                   )}
@@ -1652,12 +2023,24 @@ export function StaffManagementTab({
 
             <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-[11px] font-bold text-amber-950 leading-relaxed space-y-1 print:hidden">
               <p>
-                رابط الدعوة صالح لمرة واحدة فقط ولمدة 24 ساعة. لا يحتوي رمز QR على أي اسم مستخدم أو كلمة مرور — يضبط الموظف كلمة مروره القوية عند المسح.
+                {isEn
+                  ? 'This invite link is valid once only and expires in 24 hours. The QR contains no username or password — the employee sets their own strong password on scan.'
+                  : 'رابط الدعوة صالح لمرة واحدة فقط ولمدة 24 ساعة. لا يحتوي رمز الاستجابة على أي اسم مستخدم أو كلمة مرور — يضبط الموظف كلمة مروره القوية عند المسح.'}
               </p>
               <p className="text-indigo-900">
-                بعد التفعيل، يسجّل المدير أو الموظف دخوله من بوابة الكادر{' '}
-                <span dir="ltr" className="font-mono-num underline">/staff/{restaurant.slug}</span>{' '}
-                (وليس عبر تسجيل دخول جوجل في /admin).
+                {isEn ? (
+                  <>
+                    After activation, managers & staff sign in through the Staff Portal{' '}
+                    <span dir="ltr" className="font-mono-num underline">/staff/{restaurant.slug}</span>{' '}
+                    (not Google Sign-In on /admin).
+                  </>
+                ) : (
+                  <>
+                    بعد التفعيل، يسجّل المدير أو الموظف دخوله من بوابة الكادر{' '}
+                    <span dir="ltr" className="font-mono-num underline">/staff/{restaurant.slug}</span>{' '}
+                    (وليس عبر تسجيل دخول جوجل في لوحة المالك).
+                  </>
+                )}
               </p>
             </div>
 
@@ -1675,7 +2058,7 @@ export function StaffManagementTab({
                 className="min-h-[40px] px-3 py-2 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-extrabold inline-flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <Download className="w-4 h-4" />
-                <span>تحميل PNG</span>
+                <span>{isEn ? 'Download PNG' : 'تحميل PNG'}</span>
               </button>
 
               <button
@@ -1684,7 +2067,7 @@ export function StaffManagementTab({
                 className="min-h-[40px] px-3 py-2 rounded-xl border border-zinc-300 bg-white hover:bg-zinc-50 text-zinc-900 text-xs font-extrabold inline-flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <Printer className="w-4 h-4" />
-                <span>طباعة الكارت</span>
+                <span>{isEn ? 'Print Card' : 'طباعة الكارت'}</span>
               </button>
 
               <button
@@ -1693,19 +2076,29 @@ export function StaffManagementTab({
                 className="min-h-[40px] px-3 py-2 rounded-xl border border-zinc-300 bg-white hover:bg-zinc-50 text-zinc-900 text-xs font-extrabold inline-flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 {inviteCopied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
-                <span>{inviteCopied ? 'تم نسخ الرابط' : 'نسخ رابط الدعوة'}</span>
+                <span>
+                  {inviteCopied
+                    ? isEn
+                      ? 'Link Copied'
+                      : 'تم نسخ الرابط'
+                    : isEn
+                      ? 'Copy Invite Link'
+                      : 'نسخ رابط الدعوة'}
+                </span>
               </button>
 
               <a
                 href={`https://wa.me/${inviteModalData.staff.phone ? inviteModalData.staff.phone.replace(/^0/, '20') : ''}?text=${encodeURIComponent(
-                  `مرحباً ${inviteModalData.staff.name}،\nهذه دعوتك الخاصة لتفعيل حسابك في كادر مطعم "${restaurant.name}" (${STAFF_ROLE_META[inviteModalData.staff.role].labelAr}):\n${inviteModalData.inviteUrl}\n\n⚠️ الرابط صالح لمرة واحدة ولمدة 24 ساعة.`
+                  isEn
+                    ? `Hello ${inviteModalData.staff.name},\nHere is your personal one-time invite to activate your staff account at "${restDisplayName}" (${STAFF_ROLE_META[inviteModalData.staff.role].labelEn}):\n${inviteModalData.inviteUrl}\n\nNote: This link works once and expires in 24 hours.`
+                    : `مرحباً ${inviteModalData.staff.name}،\nهذه دعوتك الخاصة لتفعيل حسابك في كادر مطعم "${restDisplayName}" (${STAFF_ROLE_META[inviteModalData.staff.role].labelAr}):\n${inviteModalData.inviteUrl}\n\nتنبيه: الرابط صالح لمرة واحدة ولمدة 24 ساعة.`
                 )}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="min-h-[40px] px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold inline-flex items-center justify-center gap-1.5"
               >
                 <MessageCircle className="w-4 h-4" />
-                <span>إرسال عبر واتساب</span>
+                <span>{isEn ? 'Send via WhatsApp' : 'إرسال عبر واتساب'}</span>
               </a>
             </div>
           </div>
@@ -1717,6 +2110,7 @@ export function StaffManagementTab({
         <div
           className="fixed inset-0 z-50 bg-zinc-950/65 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
           onClick={() => !suspending && setSuspendTarget(null)}
+          dir={dir}
         >
           <form
             onSubmit={handleConfirmSuspend}
@@ -1727,16 +2121,17 @@ export function StaffManagementTab({
               <div className="space-y-0.5">
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-rose-50 border border-rose-200 text-rose-800 text-[11px] font-extrabold">
                   <Lock className="w-3.5 h-3.5" />
-                  <span>إيقاف شاشة الموظف</span>
+                  <span>{isEn ? 'Suspend Staff Access' : 'إيقاف شاشة الموظف'}</span>
                 </span>
                 <h3 className="text-base font-extrabold text-zinc-950 pt-1">
-                  إيقاف {suspendTarget.name}
+                  {isEn ? `Suspend ${suspendTarget.name}` : `إيقاف ${suspendTarget.name}`}
                 </h3>
               </div>
               <button
                 type="button"
                 disabled={suspending}
                 onClick={() => setSuspendTarget(null)}
+                aria-label={isEn ? 'Close' : 'إغلاق'}
                 className="p-1.5 rounded-lg text-zinc-400 hover:bg-zinc-100 cursor-pointer"
               >
                 <X className="w-5 h-5" />
@@ -1753,8 +2148,10 @@ export function StaffManagementTab({
                     : 'bg-white border-zinc-200 text-zinc-700'
                 }`}
               >
-                <p className="text-xs font-extrabold">إيقاف محدد المدة</p>
-                <p className="text-[11px] text-zinc-500">يُرفع تلقائياً بانتهاء الوقت</p>
+                <p className="text-xs font-extrabold">{isEn ? 'Timed Suspension' : 'إيقاف محدد المدة'}</p>
+                <p className="text-[11px] text-zinc-500">
+                  {isEn ? 'Automatically lifts when time ends' : 'يُرفع تلقائياً بانتهاء الوقت'}
+                </p>
               </button>
               <button
                 type="button"
@@ -1765,14 +2162,18 @@ export function StaffManagementTab({
                     : 'bg-white border-zinc-200 text-zinc-700'
                 }`}
               >
-                <p className="text-xs font-extrabold">إيقاف مفتوح</p>
-                <p className="text-[11px] text-zinc-500">حتى تفعيله يدوياً من الإدارة</p>
+                <p className="text-xs font-extrabold">{isEn ? 'Indefinite Suspension' : 'إيقاف مفتوح'}</p>
+                <p className="text-[11px] text-zinc-500">
+                  {isEn ? 'Until manually restored by management' : 'حتى تفعيله يدوياً من الإدارة'}
+                </p>
               </button>
             </div>
 
             {suspendType === 'timed' && (
               <div className="space-y-2.5 p-3 rounded-2xl bg-zinc-50 border border-zinc-200">
-                <span className="text-xs font-bold text-zinc-800 block">اختر مدة الإيقاف:</span>
+                <span className="text-xs font-bold text-zinc-800 block">
+                  {isEn ? 'Choose suspension duration:' : 'اختر مدة الإيقاف:'}
+                </span>
                 <div className="flex flex-wrap gap-1.5">
                   {[2, 6, 24, 72].map((hrs) => (
                     <button
@@ -1788,12 +2189,16 @@ export function StaffManagementTab({
                           : 'bg-white border border-zinc-200 text-zinc-700'
                       }`}
                     >
-                      {hrs} ساعة
+                      {isEn ? `${hrs}h` : `${hrs} ساعة`}
                     </button>
                   ))}
                 </div>
                 <label className="block space-y-1 text-[11px] font-bold text-zinc-700">
-                  <span>أو حدد تاريخ وساعة انتهاء الإيقاف:</span>
+                  <span>
+                    {isEn
+                      ? 'Or set exact end date & time:'
+                      : 'أو حدد تاريخ وساعة انتهاء الإيقاف:'}
+                  </span>
                   <input
                     type="datetime-local"
                     dir="ltr"
@@ -1806,13 +2211,21 @@ export function StaffManagementTab({
             )}
 
             <label className="block space-y-1 text-xs font-bold text-zinc-800">
-              <span>سبب الإيقاف (يظهر للموظف عند محاولة الدخول) *</span>
+              <span>
+                {isEn
+                  ? 'Suspension Reason (shown to staff if they attempt sign-in) *'
+                  : 'سبب الإيقاف (يظهر للموظف عند محاولة الدخول) *'}
+              </span>
               <textarea
                 required
                 rows={2}
                 value={suspendReason}
                 onChange={(e) => setSuspendReason(e.target.value)}
-                placeholder="مثال: إجازة / مراجعة إدارية / تأخير متكرر..."
+                placeholder={
+                  isEn
+                    ? 'e.g. Leave / Administrative review / Repeated tardiness...'
+                    : 'مثال: إجازة / مراجعة إدارية / تأخير متكرر...'
+                }
                 className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500"
               />
             </label>
@@ -1824,7 +2237,7 @@ export function StaffManagementTab({
                 className="flex-1 min-h-[42px] px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-extrabold inline-flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
                 {suspending ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserX className="w-4 h-4" />}
-                <span>تأكيد إيقاف الشاشة</span>
+                <span>{isEn ? 'Confirm Suspension' : 'تأكيد إيقاف الشاشة'}</span>
               </button>
               <button
                 type="button"
@@ -1832,7 +2245,7 @@ export function StaffManagementTab({
                 onClick={() => setSuspendTarget(null)}
                 className="min-h-[42px] px-4 py-2 rounded-xl border border-zinc-300 text-xs font-bold text-zinc-700 hover:bg-zinc-50 cursor-pointer"
               >
-                إلغاء
+                {isEn ? 'Cancel' : 'إلغاء'}
               </button>
             </div>
           </form>
