@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import {
   AlertTriangle,
   ArrowLeft,
+  ArrowRight,
   CheckCircle2,
   Eye,
   EyeOff,
@@ -11,7 +12,9 @@ import {
   Sparkles,
   UserCheck,
 } from 'lucide-react';
+import { LanguageToggleButton } from '../components/LanguageToggleButton';
 import { PWAInstallButton } from '../components/PWAInstallButton';
+import { useLanguage } from '../contexts/LanguageContext';
 import { fetchRestaurantHalls } from '../lib/firestoreService';
 import {
   getScreenMetaDynamic,
@@ -35,6 +38,9 @@ interface StaffOnboardingPageProps {
 }
 
 export function StaffOnboardingPage({ slug, onNavigate }: StaffOnboardingPageProps) {
+  const { lang, dir, isRtl, loc } = useLanguage();
+  const isEn = lang === 'en';
+
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [halls, setHalls] = useState<Hall[]>([]);
   const [dynamicStations, setDynamicStations] = useState<RestaurantStation[]>([]);
@@ -70,11 +76,9 @@ export function StaffOnboardingPage({ slug, onNavigate }: StaffOnboardingPagePro
         if (!mounted) return;
         setRestaurant(rest);
         if (!rest) {
-          document.title = 'دعوة غير موجودة — سُفرة QR';
           setInviteStatus('not_found');
           return;
         }
-        document.title = `${rest.name} — دخول الكادر`;
 
         const [preview, restHalls] = await Promise.all([
           fetchStaffInvitePreview(rest.id, token),
@@ -102,6 +106,15 @@ export function StaffOnboardingPage({ slug, onNavigate }: StaffOnboardingPagePro
   }, [slug]);
 
   useEffect(() => {
+    if (!restaurant) {
+      document.title = isEn ? 'Invite Not Found — Sufra QR' : 'دعوة غير موجودة — سُفرة QR';
+    } else {
+      const restName = loc(restaurant.name, restaurant.name_en);
+      document.title = isEn ? `${restName} — Staff Activation` : `${restName} — تفعيل حساب الكادر`;
+    }
+  }, [restaurant, isEn, loc]);
+
+  useEffect(() => {
     if (!restaurant?.id) return;
     return subscribeRestaurantStations(restaurant.id, setDynamicStations, () => {});
   }, [restaurant?.id]);
@@ -114,7 +127,7 @@ export function StaffOnboardingPage({ slug, onNavigate }: StaffOnboardingPagePro
 
   const formatOnboardingError = (err: unknown): string => {
     if (!(err instanceof Error)) {
-      return 'تعذر تفعيل الحساب. حاول مجدداً.';
+      return isEn ? 'Could not activate account. Please try again.' : 'تعذر تفعيل الحساب. حاول مجدداً.';
     }
     const raw = err.message || '';
     try {
@@ -135,17 +148,21 @@ export function StaffOnboardingPage({ slug, onNavigate }: StaffOnboardingPagePro
         ].filter(Boolean);
         const diagText = diagParts.length > 0 ? ` (${diagParts.join(' | ')})` : '';
         if (lower.includes('permission') || lower.includes('insufficient')) {
-          return `تم رفض الحفظ بسبب صلاحيات Firestore أو التحقق الأمني (App Check). تأكد من نشر قواعد الأمان وإعدادات النطاق، أو اطلب من صاحب المطعم إصدار دعوة QR جديدة.${diagText}`;
+          return isEn
+            ? `Save was rejected due to Firestore permissions or App Check verification. Confirm security rules and authorized domain, or ask the restaurant owner to issue a new QR invite.${diagText}`
+            : `تم رفض الحفظ بسبب صلاحيات قاعدة البيانات أو التحقق الأمني. تأكد من نشر قواعد الأمان وإعدادات النطاق، أو اطلب من صاحب المطعم إصدار دعوة QR جديدة.${diagText}`;
         }
-        return `تعذر حفظ التفعيل: ${parsed.error}${diagText}`;
+        return isEn ? `Activation failed: ${parsed.error}${diagText}` : `تعذر حفظ التفعيل: ${parsed.error}${diagText}`;
       }
     } catch {
       // plain error message
     }
     if (raw.includes('permission-denied') || raw.includes('Missing or insufficient permissions')) {
-      return `تم رفض الحفظ بسبب صلاحيات Firestore أو التحقق الأمني (App Check). (${raw})`;
+      return isEn
+        ? `Save rejected due to Firestore security permissions (${raw}).`
+        : `تم رفض الحفظ بسبب صلاحيات قاعدة البيانات أو التحقق الأمني. (${raw})`;
     }
-    return raw || 'تعذر تفعيل الحساب. حاول مجدداً.';
+    return raw || (isEn ? 'Could not activate account. Please try again.' : 'تعذر تفعيل الحساب. حاول مجدداً.');
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -154,17 +171,24 @@ export function StaffOnboardingPage({ slug, onNavigate }: StaffOnboardingPagePro
     setSubmitError(null);
 
     if (name.trim().length < 2) {
-      setSubmitError('يرجى إدخال الاسم الكامل (حرفين على الأقل).');
+      setSubmitError(
+        isEn ? 'Please enter your full name (at least 2 characters).' : 'يرجى إدخال الاسم الكامل (حرفين على الأقل).'
+      );
       return;
     }
     if (normalizeStaffPhone(phone).length < 6) {
-      setSubmitError('يرجى إدخال رقم هاتف صحيح (6 أرقام على الأقل).');
+      setSubmitError(
+        isEn ? 'Please enter a valid phone number (at least 6 digits).' : 'يرجى إدخال رقم هاتف صحيح (6 أرقام على الأقل).'
+      );
       return;
     }
 
     const check = validateStaffPassword(newPassword, confirmPassword);
     if (!check.valid) {
-      setSubmitError(check.error || 'يرجى اختيار كلمة مرور قوية ومتطابقة.');
+      setSubmitError(
+        check.error ||
+          (isEn ? 'Please choose a strong, matching password.' : 'يرجى اختيار كلمة مرور قوية ومتطابقة.')
+      );
       return;
     }
 
@@ -195,10 +219,12 @@ export function StaffOnboardingPage({ slug, onNavigate }: StaffOnboardingPagePro
 
   if (inviteStatus === 'loading') {
     return (
-      <div dir="rtl" className="min-h-screen bg-zinc-50 flex items-center justify-center p-6">
+      <div dir={dir} className="min-h-screen bg-zinc-50 flex items-center justify-center p-6">
         <div className="text-center space-y-3">
           <Loader2 className="w-8 h-8 animate-spin text-zinc-900 mx-auto" />
-          <p className="text-sm font-bold text-zinc-700">جاري التحقق من رابط دعوة الكادر...</p>
+          <p className="text-sm font-bold text-zinc-700">
+            {isEn ? 'Verifying staff invite link...' : 'جاري التحقق من رابط دعوة الكادر...'}
+          </p>
         </div>
       </div>
     );
@@ -206,9 +232,22 @@ export function StaffOnboardingPage({ slug, onNavigate }: StaffOnboardingPagePro
 
   if (activatedStaff && restaurant) {
     const defaultMeta = getScreenMetaDynamic(activatedStaff.defaultScreen, effectiveStations);
+    const roleMetaActivated = STAFF_ROLE_META[activatedStaff.role];
+    const displayRestName = loc(restaurant.name, restaurant.name_en);
+    const defaultScreenFull = isEn
+      ? defaultMeta?.labelEn || activatedStaff.defaultScreen
+      : defaultMeta?.labelAr || activatedStaff.defaultScreen;
+    const defaultScreenShort = isEn
+      ? defaultMeta?.shortEn || 'Screen'
+      : defaultMeta?.shortAr || 'الشاشة';
+
     return (
-      <div dir="rtl" className="min-h-screen bg-[#F5F6F8] flex items-center justify-center p-4">
+      <div dir={dir} className="min-h-screen bg-[#F5F6F8] flex items-center justify-center p-4">
         <div className="max-w-lg w-full bg-white border border-zinc-200 rounded-3xl p-6 sm:p-8 shadow-xl space-y-6 text-center">
+          <div className="flex justify-end">
+            <LanguageToggleButton compact />
+          </div>
+
           <div className="w-14 h-14 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center mx-auto">
             <CheckCircle2 className="w-8 h-8" />
           </div>
@@ -216,28 +255,52 @@ export function StaffOnboardingPage({ slug, onNavigate }: StaffOnboardingPagePro
           <div className="space-y-2">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-100 text-emerald-900 text-xs font-extrabold">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>تم تفعيل حسابك وحفظ كلمة المرور بنجاح</span>
+              <span>
+                {isEn
+                  ? 'Account Activated & Password Saved'
+                  : 'تم تفعيل حسابك وحفظ كلمة المرور بنجاح'}
+              </span>
             </span>
             <h1 className="text-xl sm:text-2xl font-extrabold text-zinc-950">
-              أهلاً بك، {activatedStaff.name}
+              {isEn ? `Welcome, ${activatedStaff.name}` : `أهلاً بك، ${activatedStaff.name}`}
             </h1>
             <p className="text-xs sm:text-sm text-zinc-600 leading-relaxed">
-              حسابك في <strong>{restaurant.name}</strong> أصبح جاهزاً ({STAFF_ROLE_META[activatedStaff.role]?.labelAr}). يمكنك الآن تثبيت التطبيق على جهازك أو البدء مباشرة.
+              {isEn ? (
+                <>
+                  Your staff account at <strong>{displayRestName}</strong> is ready (
+                  {roleMetaActivated?.labelEn || activatedStaff.role}). You can install the app on your device or start right away.
+                </>
+              ) : (
+                <>
+                  حسابك في <strong>{displayRestName}</strong> أصبح جاهزاً (
+                  {roleMetaActivated?.labelAr}). يمكنك الآن تثبيت التطبيق على جهازك أو البدء مباشرة.
+                </>
+              )}
             </p>
           </div>
 
           <div className="bg-zinc-50 border border-zinc-200 rounded-2xl p-4 text-start space-y-2 text-xs">
-            <div className="flex justify-between">
-              <span className="text-zinc-500">اسم المستخدم للدخول لاحقاً:</span>
-              <strong className="font-mono-num text-zinc-950" dir="ltr">@{activatedStaff.username}</strong>
+            <div className="flex justify-between gap-2">
+              <span className="text-zinc-500">
+                {isEn ? 'Sign-in Username:' : 'اسم المستخدم للدخول لاحقاً:'}
+              </span>
+              <strong className="font-mono-num text-zinc-950" dir="ltr">
+                @{activatedStaff.username}
+              </strong>
             </div>
-            <div className="flex justify-between">
-              <span className="text-zinc-500">رقم الهاتف المسجل:</span>
-              <strong className="font-mono-num text-zinc-950" dir="ltr">{activatedStaff.phone}</strong>
+            <div className="flex justify-between gap-2">
+              <span className="text-zinc-500">
+                {isEn ? 'Registered Phone:' : 'رقم الهاتف المسجل:'}
+              </span>
+              <strong className="font-mono-num text-zinc-950" dir="ltr">
+                {activatedStaff.phone}
+              </strong>
             </div>
-            <div className="flex justify-between">
-              <span className="text-zinc-500">الشاشة الافتراضية:</span>
-              <strong className="text-indigo-700">{defaultMeta?.labelAr || activatedStaff.defaultScreen}</strong>
+            <div className="flex justify-between gap-2">
+              <span className="text-zinc-500">
+                {isEn ? 'Default Screen:' : 'الشاشة الافتراضية:'}
+              </span>
+              <strong className="text-indigo-700">{defaultScreenFull}</strong>
             </div>
           </div>
 
@@ -249,8 +312,12 @@ export function StaffOnboardingPage({ slug, onNavigate }: StaffOnboardingPagePro
               onClick={() => onNavigate(`/staff/${restaurant.slug}`)}
               className="w-full min-h-[48px] px-5 py-3 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white text-sm font-extrabold inline-flex items-center justify-center gap-2 cursor-pointer"
             >
-              <span>بدء العمل وفتح {defaultMeta?.shortAr || 'الشاشة'}</span>
-              <ArrowLeft className="w-4 h-4" />
+              <span>
+                {isEn
+                  ? `Start Shift & Open ${defaultScreenShort}`
+                  : `بدء العمل وفتح ${defaultScreenShort}`}
+              </span>
+              {isRtl ? <ArrowLeft className="w-4 h-4" /> : <ArrowRight className="w-4 h-4" />}
             </button>
           </div>
         </div>
@@ -261,20 +328,35 @@ export function StaffOnboardingPage({ slug, onNavigate }: StaffOnboardingPagePro
   if (inviteStatus !== 'valid' || !invite || !restaurant) {
     const errorTitle =
       inviteStatus === 'used'
-        ? 'تم استخدام رابط الدعوة هذا مسبقاً'
+        ? isEn
+          ? 'This invite link has already been used'
+          : 'تم استخدام رابط الدعوة هذا مسبقاً'
         : inviteStatus === 'expired'
-          ? 'انتهت صلاحية رابط الدعوة (24 ساعة)'
+          ? isEn
+            ? 'Invite link expired (24h limit)'
+            : 'انتهت صلاحية رابط الدعوة (24 ساعة)'
           : inviteStatus === 'revoked'
-            ? 'تم إلغاء رابط الدعوة من قِبل الإدارة'
-            : 'رابط الدعوة غير صالح أو غير موجود';
+            ? isEn
+              ? 'Invite link was revoked by management'
+              : 'تم إلغاء رابط الدعوة من قِبل الإدارة'
+            : isEn
+              ? 'Invalid or missing invite link'
+              : 'رابط الدعوة غير صالح أو غير موجود';
     const errorDesc =
       inviteStatus === 'used'
-        ? 'هذا الرابط صالح للاستخدام مرة واحدة فقط وقد تم تفعيله بالفعل. يمكنك تسجيل الدخول مباشرة بكلمة المرور التي قمت بتعيينها.'
-        : 'لأسباب أمنية، تواصل مع مدير المطعم أو المالك لإصدار بطاقة دعوة QR جديدة.';
+        ? isEn
+          ? 'This one-time invite link was already activated. Sign in directly using the password you created.'
+          : 'هذا الرابط صالح للاستخدام مرة واحدة فقط وقد تم تفعيله بالفعل. يمكنك تسجيل الدخول مباشرة بكلمة المرور التي قمت بتعيينها.'
+        : isEn
+          ? 'For security, ask your restaurant manager or owner to issue a new QR invite card.'
+          : 'لأسباب أمنية، تواصل مع مدير المطعم أو المالك لإصدار بطاقة دعوة QR جديدة.';
 
     return (
-      <div dir="rtl" className="min-h-screen bg-[#F5F6F8] flex items-center justify-center p-4">
+      <div dir={dir} className="min-h-screen bg-[#F5F6F8] flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-white border border-zinc-200 rounded-3xl p-6 sm:p-8 shadow-lg text-center space-y-5">
+          <div className="flex justify-end">
+            <LanguageToggleButton compact />
+          </div>
           <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto">
             <AlertTriangle className="w-6 h-6" />
           </div>
@@ -288,7 +370,15 @@ export function StaffOnboardingPage({ slug, onNavigate }: StaffOnboardingPagePro
               onClick={() => onNavigate(`/staff/${restaurant.slug}`)}
               className="w-full min-h-[44px] px-4 py-2.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-extrabold cursor-pointer"
             >
-              الانتقال إلى صفحة دخول الكادر (/staff/{restaurant.slug})
+              {isEn ? (
+                <>
+                  Go to Staff Login (<span dir="ltr">/staff/{restaurant.slug}</span>)
+                </>
+              ) : (
+                <>
+                  الانتقال إلى صفحة دخول الكادر (<span dir="ltr">/staff/{restaurant.slug}</span>)
+                </>
+              )}
             </button>
           )}
         </div>
@@ -297,9 +387,10 @@ export function StaffOnboardingPage({ slug, onNavigate }: StaffOnboardingPagePro
   }
 
   const roleMeta = STAFF_ROLE_META[invite.staffRole] || STAFF_ROLE_META.cashier;
+  const displayRestName = loc(restaurant.name, restaurant.name_en);
 
   return (
-    <div dir="rtl" className="min-h-screen bg-[#F5F6F8] py-6 px-4 flex flex-col items-center justify-center">
+    <div dir={dir} className="min-h-screen bg-[#F5F6F8] py-6 px-4 flex flex-col items-center justify-center">
       <div className="max-w-xl w-full space-y-4">
         <div className="bg-white border border-zinc-200 rounded-3xl p-5 sm:p-7 shadow-sm space-y-6">
           {/* Header */}
@@ -307,42 +398,56 @@ export function StaffOnboardingPage({ slug, onNavigate }: StaffOnboardingPagePro
             <div className="space-y-1">
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-800 text-[11px] font-extrabold">
                 <ShieldCheck className="w-3.5 h-3.5" />
-                <span>تفعيل حساب كادر لمرة واحدة</span>
+                <span>{isEn ? 'One-Time Staff Account Activation' : 'تفعيل حساب كادر لمرة واحدة'}</span>
               </span>
               <h1 className="text-lg sm:text-xl font-extrabold text-zinc-950 pt-1">
-                {restaurant.name}
+                {displayRestName}
               </h1>
             </div>
-            <PWAInstallButton variant="compact" />
+            <div className="flex items-center gap-2 shrink-0">
+              <LanguageToggleButton compact />
+              <PWAInstallButton variant="compact" />
+            </div>
           </div>
 
           {/* Assigned Role & Screens Preview */}
           <div className="bg-zinc-50 border border-zinc-200 rounded-2xl p-4 space-y-2.5 text-xs">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="font-bold text-zinc-500">الوظيفة المخصّصة:</span>
+              <span className="font-bold text-zinc-500">
+                {isEn ? 'Assigned Role:' : 'الوظيفة المخصّصة:'}
+              </span>
               <span className={`px-2.5 py-0.5 rounded-md border font-extrabold ${roleMeta.badgeClass}`}>
-                {roleMeta.labelAr}
+                {isEn ? roleMeta.labelEn : roleMeta.labelAr}
               </span>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="font-bold text-zinc-500">اسم المستخدم:</span>
-              <strong className="font-mono-num text-zinc-950" dir="ltr">@{invite.staffUsername}</strong>
+              <span className="font-bold text-zinc-500">
+                {isEn ? 'Username:' : 'اسم المستخدم:'}
+              </span>
+              <strong className="font-mono-num text-zinc-950" dir="ltr">
+                @{invite.staffUsername}
+              </strong>
             </div>
             <div className="space-y-1 pt-1">
-              <span className="font-bold text-zinc-500 block">الشاشات المصرح بها:</span>
+              <span className="font-bold text-zinc-500 block">
+                {isEn ? 'Authorized Screens:' : 'الشاشات المصرح بها:'}
+              </span>
               <div className="flex flex-wrap gap-1.5">
-                {invite.allowedScreens.map((scr) => (
-                  <span
-                    key={scr}
-                    className={`px-2 py-0.5 rounded-md border text-[11px] font-bold ${
-                      scr === invite.defaultScreen
-                        ? 'bg-zinc-950 text-white border-zinc-950'
-                        : 'bg-white text-zinc-700 border-zinc-200'
-                    }`}
-                  >
-                    {getScreenMetaDynamic(scr, effectiveStations).shortAr}
-                  </span>
-                ))}
+                {invite.allowedScreens.map((scr) => {
+                  const meta = getScreenMetaDynamic(scr, effectiveStations);
+                  return (
+                    <span
+                      key={scr}
+                      className={`px-2 py-0.5 rounded-md border text-[11px] font-bold ${
+                        scr === invite.defaultScreen
+                          ? 'bg-zinc-950 text-white border-zinc-950'
+                          : 'bg-white text-zinc-700 border-zinc-200'
+                      }`}
+                    >
+                      {isEn ? meta.shortEn : meta.shortAr}
+                    </span>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -359,7 +464,7 @@ export function StaffOnboardingPage({ slug, onNavigate }: StaffOnboardingPagePro
               <div className="flex items-center justify-between gap-2">
                 <h2 className="text-xs sm:text-sm font-extrabold text-zinc-950 flex items-center gap-1.5">
                   <KeyRound className="w-4 h-4 text-amber-700" />
-                  <span>تعيين كلمة المرور الخاصة بك *</span>
+                  <span>{isEn ? 'Set Your Personal Password *' : 'تعيين كلمة المرور الخاصة بك *'}</span>
                 </h2>
                 <button
                   type="button"
@@ -367,33 +472,33 @@ export function StaffOnboardingPage({ slug, onNavigate }: StaffOnboardingPagePro
                   className="text-[11px] font-bold text-zinc-600 hover:text-zinc-950 inline-flex items-center gap-1 cursor-pointer"
                 >
                   {showPw ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                  <span>{showPw ? 'إخفاء' : 'إظهار'}</span>
+                  <span>{showPw ? (isEn ? 'Hide' : 'إخفاء') : isEn ? 'Show' : 'إظهار'}</span>
                 </button>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label className="space-y-1 text-xs font-bold text-zinc-800">
-                  <span>كلمة المرور الجديدة *</span>
+                  <span>{isEn ? 'New Password *' : 'كلمة المرور الجديدة *'}</span>
                   <input
                     type={showPw ? 'text' : 'password'}
                     required
                     dir="ltr"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="8+ أحرف وأرقام"
+                    placeholder={isEn ? '8+ letters & numbers' : '8+ أحرف وأرقام'}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900"
                   />
                 </label>
 
                 <label className="space-y-1 text-xs font-bold text-zinc-800">
-                  <span>تأكيد كلمة المرور *</span>
+                  <span>{isEn ? 'Confirm Password *' : 'تأكيد كلمة المرور *'}</span>
                   <input
                     type={showPw ? 'text' : 'password'}
                     required
                     dir="ltr"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="أعد كتابة كلمة المرور"
+                    placeholder={isEn ? 'Re-enter password' : 'أعد كتابة كلمة المرور'}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900"
                   />
                 </label>
@@ -404,7 +509,9 @@ export function StaffOnboardingPage({ slug, onNavigate }: StaffOnboardingPagePro
               )}
               {passwordCheck && passwordCheck.valid && confirmPassword && (
                 <p className="text-[11px] font-bold text-emerald-700">
-                  ✓ كلمة المرور قوية ومتطابقة وجاهزة للحفظ.
+                  {isEn
+                    ? 'Password is strong, matching, and ready to save.'
+                    : 'كلمة المرور قوية ومتطابقة وجاهزة للحفظ.'}
                 </p>
               )}
             </div>
@@ -412,7 +519,7 @@ export function StaffOnboardingPage({ slug, onNavigate }: StaffOnboardingPagePro
             {/* Profile Completion Fields */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label className="space-y-1 text-xs font-bold text-zinc-800">
-                <span>الاسم الكامل *</span>
+                <span>{isEn ? 'Full Name *' : 'الاسم الكامل *'}</span>
                 <input
                   type="text"
                   required
@@ -423,7 +530,7 @@ export function StaffOnboardingPage({ slug, onNavigate }: StaffOnboardingPagePro
               </label>
 
               <label className="space-y-1 text-xs font-bold text-zinc-800">
-                <span>رقم الهاتف *</span>
+                <span>{isEn ? 'Phone Number *' : 'رقم الهاتف *'}</span>
                 <input
                   type="tel"
                   required
@@ -435,7 +542,9 @@ export function StaffOnboardingPage({ slug, onNavigate }: StaffOnboardingPagePro
               </label>
 
               <label className="space-y-1 text-xs font-bold text-zinc-800">
-                <span>البريد الإلكتروني (اختياري للاستعادة)</span>
+                <span>
+                  {isEn ? 'Email (Optional for Recovery)' : 'البريد الإلكتروني (اختياري للاستعادة)'}
+                </span>
                 <input
                   type="email"
                   dir="ltr"
@@ -447,25 +556,25 @@ export function StaffOnboardingPage({ slug, onNavigate }: StaffOnboardingPagePro
               </label>
 
               <label className="space-y-1 text-xs font-bold text-zinc-800">
-                <span>المسمى الوظيفي</span>
+                <span>{isEn ? 'Job Title' : 'المسمى الوظيفي'}</span>
                 <input
                   type="text"
                   value={jobTitle}
                   onChange={(e) => setJobTitle(e.target.value)}
-                  placeholder="مثال: كاشير شيفت صباحي"
+                  placeholder={isEn ? 'e.g. Morning Cashier' : 'مثال: كاشير شيفت صباحي'}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900"
                 />
               </label>
 
               {halls.length > 0 && (
                 <label className="space-y-1 text-xs font-bold text-zinc-800 sm:col-span-2">
-                  <span>الصالة المسندة</span>
+                  <span>{isEn ? 'Assigned Hall' : 'الصالة المسندة'}</span>
                   <select
                     value={hallId}
                     onChange={(e) => setHallId(e.target.value)}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-zinc-900"
                   >
-                    <option value="">كل الصالات / غير محدد</option>
+                    <option value="">{isEn ? 'All Halls / Unassigned' : 'كل الصالات / غير محدد'}</option>
                     {halls.map((h) => (
                       <option key={h.id} value={h.id}>
                         {h.name}
@@ -484,12 +593,12 @@ export function StaffOnboardingPage({ slug, onNavigate }: StaffOnboardingPagePro
               {submitting ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>جاري تفعيل الحساب...</span>
+                  <span>{isEn ? 'Activating Account...' : 'جاري تفعيل الحساب...'}</span>
                 </>
               ) : (
                 <>
                   <UserCheck className="w-4 h-4 text-emerald-400" />
-                  <span>حفظ وبدء العمل</span>
+                  <span>{isEn ? 'Save & Start Working' : 'حفظ وبدء العمل'}</span>
                 </>
               )}
             </button>

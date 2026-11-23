@@ -158,7 +158,13 @@ export function PlatformPromosTab() {
         prev.map((p) => (p.id === promo.id ? { ...p, isActive: !promo.isActive } : p))
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to toggle status');
+      setError(
+        err instanceof Error
+          ? err.message
+          : isEn
+            ? 'Failed to toggle status'
+            : 'تعذر تغيير حالة الكود'
+      );
     } finally {
       setBusyId(null);
     }
@@ -174,7 +180,13 @@ export function PlatformPromosTab() {
         resetForm();
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete code');
+      setError(
+        err instanceof Error
+          ? err.message
+          : isEn
+            ? 'Failed to delete code'
+            : 'تعذر حذف الكود'
+      );
     } finally {
       setBusyId(null);
     }
@@ -201,8 +213,8 @@ export function PlatformPromosTab() {
           <div>
             <h2 className="text-lg font-extrabold text-zinc-950">
               {isEn
-                ? 'Platform SaaS Promo Codes & Owner Gifts'
-                : 'إدارة أكواد الخصم والهدايا لأصحاب المطاعم (SaaS Promos)'}
+                ? 'Platform Subscription Promo Codes & Owner Gifts'
+                : 'إدارة أكواد الخصم والهدايا لأصحاب المطاعم'}
             </h2>
             <p className="text-xs text-zinc-500 mt-0.5">
               {isEn
@@ -251,8 +263,8 @@ export function PlatformPromosTab() {
                     code: 'BDAY50',
                     discountType: 'percent',
                     discountValue: 50,
-                    description: 'خصم 50% هدية عيد ميلاد صاحب المطعم 🎂',
-                    description_en: '50% Birthday Gift Discount on Sufra Subscription 🎂',
+                    description: 'خصم 50% هدية عيد ميلاد صاحب المطعم',
+                    description_en: '50% Birthday Gift Discount on Sufra Subscription',
                   })
                 }
                 className="px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-[11px] font-extrabold hover:bg-amber-100 flex items-center gap-1.5 cursor-pointer"
@@ -267,8 +279,8 @@ export function PlatformPromosTab() {
                     code: 'FREEMONTH',
                     discountType: 'free_month',
                     discountValue: 1,
-                    description: 'شهر اشتراك مجاني هدية من منصة سُفرة 🎁',
-                    description_en: '1 Free Subscription Month Gift from Sufra 🎁',
+                    description: 'شهر اشتراك مجاني هدية من منصة سُفرة',
+                    description_en: '1 Free Subscription Month Gift from Sufra',
                   })
                 }
                 className="px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-[11px] font-extrabold hover:bg-emerald-100 flex items-center gap-1.5 cursor-pointer"
@@ -283,7 +295,7 @@ export function PlatformPromosTab() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <label className="block text-xs font-bold text-zinc-700 mb-1.5">
-              {isEn ? 'Promo Code *' : 'كود الخصم (حروف وأرقام إنجليزية) *'}
+              {isEn ? 'Promo Code *' : 'كود الخصم (حروف وأرقام لاتينية) *'}
             </label>
             <input
               type="text"
@@ -358,7 +370,11 @@ export function PlatformPromosTab() {
               maxLength={200}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="مثال: خصم 50% هدية عيد ميلادك على باقة الاشتراك"
+              placeholder={
+                isEn
+                  ? 'e.g. 50% birthday gift discount (Arabic)'
+                  : 'مثال: خصم 50% هدية عيد ميلادك على باقة الاشتراك'
+              }
               className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm focus:outline-none focus:border-zinc-900"
             />
           </div>
@@ -373,7 +389,11 @@ export function PlatformPromosTab() {
               maxLength={200}
               value={descriptionEn}
               onChange={(e) => setDescriptionEn(e.target.value)}
-              placeholder="e.g. 50% Birthday Gift Discount on Subscription"
+              placeholder={
+                isEn
+                  ? 'e.g. 50% Birthday Gift Discount on Subscription'
+                  : 'مثال بالإنجليزية: 50% Birthday Gift Discount on Subscription'
+              }
               className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-200 text-sm text-left focus:outline-none focus:border-zinc-900"
             />
           </div>

@@ -1,3 +1,4 @@
+import { AppLang, formatCurrency, getActiveLang, loc } from '../data/translations';
 import { Order, OrderItemPayload, Restaurant } from '../types/menu';
 import { StationMeta } from './stationUtils';
 
@@ -174,7 +175,12 @@ export function getActivePrinterConnection(): {
 }
 
 async function connectBluetoothDevice(device: BluetoothDeviceLike): Promise<void> {
-  if (!device.gatt) throw new Error('الجهاز المختار لا يدعم GATT Bluetooth.');
+  const isEn = getActiveLang() === 'en';
+  if (!device.gatt) {
+    throw new Error(
+      isEn ? 'Selected device does not support GATT Bluetooth.' : 'الجهاز المختار لا يدعم GATT Bluetooth.'
+    );
+  }
   const server = device.gatt.connected ? device.gatt : await device.gatt.connect();
   const gattServer = await (server as { connect(): Promise<unknown> }).connect?.().catch(() => server);
   const srv = (gattServer || server) as NonNullable<BluetoothDeviceLike['gatt']> extends {
@@ -195,13 +201,22 @@ async function connectBluetoothDevice(device: BluetoothDeviceLike): Promise<void
       }
     }
   }
-  throw new Error('لم يتم العثور على منفذ كتابة (Writable Characteristic) في طابعة البلوتوث.');
+  throw new Error(
+    isEn
+      ? 'No writable characteristic found on the Bluetooth printer.'
+      : 'لم يتم العثور على منفذ كتابة في طابعة البلوتوث.'
+  );
 }
 
 export async function pairBluetoothPrinter(paperWidth: ThermalPaperWidth = 80): Promise<SavedPrinterProfile> {
+  const isEn = getActiveLang() === 'en';
   const nav = navigator as unknown as { bluetooth?: NavBluetooth };
   if (!nav.bluetooth) {
-    throw new Error('المتصفح الحالي لا يدعم Web Bluetooth. استخدم Chrome/Edge على أندرويد أو سطح المكتب، أو استخدم Web Serial / WebUSB.');
+    throw new Error(
+      isEn
+        ? 'This browser does not support Web Bluetooth. Use Chrome/Edge on Android or Desktop, or switch to Web Serial / WebUSB.'
+        : 'المتصفح الحالي لا يدعم البلوتوث المباشر. استخدم Chrome أو Edge أو اختر الطباعة عبر المتصفح / المنفذ التسلسلي / USB.'
+    );
   }
   const device = await nav.bluetooth.requestDevice({
     acceptAllDevices: true,
@@ -223,6 +238,7 @@ export async function pairSerialPrinter(
   paperWidth: ThermalPaperWidth = 80,
   baudRate = 9600
 ): Promise<SavedPrinterProfile> {
+  const isEn = getActiveLang() === 'en';
   const nav = navigator as unknown as {
     serial?: {
       requestPort(): Promise<SerialPortLike>;
@@ -230,7 +246,11 @@ export async function pairSerialPrinter(
     };
   };
   if (!nav.serial) {
-    throw new Error('المتصفح الحالي لا يدعم Web Serial. استخدم Chrome أو Edge على الكمبيوتر أو متصفح يدعم Serial API.');
+    throw new Error(
+      isEn
+        ? 'This browser does not support Web Serial. Use Chrome or Edge on Desktop.'
+        : 'المتصفح الحالي لا يدعم المنفذ التسلسلي. استخدم Chrome أو Edge على الكمبيوتر.'
+    );
   }
   const port = await nav.serial.requestPort();
   if (!port.writable) {
@@ -276,10 +296,16 @@ async function openUsbPrinter(device: UsbDeviceLike): Promise<void> {
       }
     }
   }
-  throw new Error('لم يتم العثور على Endpoint للطباعة في جهاز USB المختار.');
+  const isEn = getActiveLang() === 'en';
+  throw new Error(
+    isEn
+      ? 'No printable USB endpoint found on the selected device.'
+      : 'لم يتم العثور على منفذ للطباعة في جهاز USB المختار.'
+  );
 }
 
 export async function pairUsbPrinter(paperWidth: ThermalPaperWidth = 80): Promise<SavedPrinterProfile> {
+  const isEn = getActiveLang() === 'en';
   const nav = navigator as unknown as {
     usb?: {
       requestDevice(opts: { filters: Array<Record<string, number>> }): Promise<UsbDeviceLike>;
@@ -287,7 +313,11 @@ export async function pairUsbPrinter(paperWidth: ThermalPaperWidth = 80): Promis
     };
   };
   if (!nav.usb) {
-    throw new Error('المتصفح الحالي لا يدعم WebUSB. استخدم Chrome/Edge أو اختر الطباعة عبر المتصفح / Serial.');
+    throw new Error(
+      isEn
+        ? 'This browser does not support WebUSB. Use Chrome/Edge or print via Browser / Serial.'
+        : 'المتصفح الحالي لا يدعم طباعة USB المباشرة. استخدم Chrome أو Edge أو اختر الطباعة عبر المتصفح.'
+    );
   }
   const device = await nav.usb.requestDevice({ filters: [{ classCode: 7 }] }).catch(() =>
     nav.usb!.requestDevice({ filters: [] })
@@ -370,8 +400,11 @@ export async function tryAutoReconnectSavedPrinter(): Promise<{
  */
 function encodeTicketToEscPosBytes(
   job: PrintableTicketJob,
-  paperWidthMm: ThermalPaperWidth = 80
+  paperWidthMm: ThermalPaperWidth = 80,
+  lang: AppLang = getActiveLang()
 ): Uint8Array {
+  const isEn = lang === 'en';
+  const fontStack = isEn ? 'Inter, Arial, sans-serif' : 'Tajawal, Cairo, Arial, sans-serif';
   const pixelWidth = paperWidthMm === 58 ? 384 : 576;
   const widthBytes = pixelWidth / 8;
 
@@ -394,15 +427,15 @@ function encodeTicketToEscPosBytes(
   const titleFont = paperWidthMm === 58 ? 26 : 32;
   const subFont = paperWidthMm === 58 ? 20 : 24;
 
-  const drawWrappedRtl = (
+  const drawWrappedText = (
     text: string,
     fontSize: number,
     bold = false,
     center = false
   ) => {
-    ctx.font = `${bold ? '800' : '600'} ${fontSize}px Tajawal, Cairo, Arial, sans-serif`;
-    ctx.direction = 'rtl';
-    ctx.textAlign = center ? 'center' : 'right';
+    ctx.font = `${bold ? '800' : '600'} ${fontSize}px ${fontStack}`;
+    ctx.direction = isEn ? 'ltr' : 'rtl';
+    ctx.textAlign = center ? 'center' : isEn ? 'left' : 'right';
 
     const maxW = pixelWidth - pad * 2;
     const words = (text || '').split(/\s+/).filter(Boolean);
@@ -421,7 +454,7 @@ function encodeTicketToEscPosBytes(
     if (lines.length === 0) lines.push('');
 
     for (const ln of lines) {
-      const x = center ? pixelWidth / 2 : pixelWidth - pad;
+      const x = center ? pixelWidth / 2 : isEn ? pad : pixelWidth - pad;
       ctx.fillText(ln, x, y);
       y += Math.round(fontSize * 1.38);
     }
@@ -431,8 +464,8 @@ function encodeTicketToEscPosBytes(
     ctx.fillStyle = '#000000';
     ctx.fillRect(pad, y, pixelWidth - pad * 2, titleFont + 16);
     ctx.fillStyle = '#FFFFFF';
-    ctx.font = `800 ${subFont}px Tajawal, Cairo, Arial, sans-serif`;
-    ctx.direction = 'rtl';
+    ctx.font = `800 ${subFont}px ${fontStack}`;
+    ctx.direction = isEn ? 'ltr' : 'rtl';
     ctx.textAlign = 'center';
     ctx.fillText(job.headerBadge, pixelWidth / 2, y + 8);
     ctx.fillStyle = '#000000';
@@ -454,34 +487,34 @@ function encodeTicketToEscPosBytes(
     } else if (sec.type === 'space') {
       y += 12;
     } else if (sec.type === 'title') {
-      drawWrappedRtl(sec.text, titleFont, true, true);
+      drawWrappedText(sec.text, titleFont, true, true);
     } else if (sec.type === 'subtitle') {
-      drawWrappedRtl(sec.text, subFont, true, true);
+      drawWrappedText(sec.text, subFont, true, true);
     } else if (sec.type === 'total') {
-      ctx.font = `800 ${subFont}px Tajawal, Cairo, Arial, sans-serif`;
+      ctx.font = `800 ${subFont}px ${fontStack}`;
       if (sec.rightText) {
         ctx.direction = 'ltr';
-        ctx.textAlign = 'left';
-        ctx.fillText(sec.rightText, pad, y);
+        ctx.textAlign = isEn ? 'right' : 'left';
+        ctx.fillText(sec.rightText, isEn ? pixelWidth - pad : pad, y);
       }
-      ctx.direction = 'rtl';
-      ctx.textAlign = 'right';
-      ctx.fillText(sec.text, pixelWidth - pad, y);
+      ctx.direction = isEn ? 'ltr' : 'rtl';
+      ctx.textAlign = isEn ? 'left' : 'right';
+      ctx.fillText(sec.text, isEn ? pad : pixelWidth - pad, y);
       y += Math.round(subFont * 1.45);
     } else if (sec.type === 'item') {
-      ctx.font = `800 ${lineFont}px Tajawal, Cairo, Arial, sans-serif`;
+      ctx.font = `800 ${lineFont}px ${fontStack}`;
       if (sec.rightText) {
         ctx.direction = 'ltr';
-        ctx.textAlign = 'left';
-        ctx.fillText(sec.rightText, pad, y);
+        ctx.textAlign = isEn ? 'right' : 'left';
+        ctx.fillText(sec.rightText, isEn ? pixelWidth - pad : pad, y);
       }
-      drawWrappedRtl(sec.text, lineFont, true, false);
+      drawWrappedText(sec.text, lineFont, true, false);
       if (sec.subText) {
-        drawWrappedRtl(sec.subText, Math.max(16, lineFont - 3), false, false);
+        drawWrappedText(sec.subText, Math.max(16, lineFont - 3), false, false);
       }
       y += 4;
     } else {
-      drawWrappedRtl(sec.text, lineFont, Boolean(sec.bold), false);
+      drawWrappedText(sec.text, lineFont, Boolean(sec.bold), false);
     }
   }
 
@@ -574,17 +607,19 @@ function escapeHtml(raw: string): string {
 
 function printJobsViaBrowserThermalSheet(
   jobs: PrintableTicketJob[],
-  paperWidth: ThermalPaperWidth
+  paperWidth: ThermalPaperWidth,
+  lang: AppLang = getActiveLang()
 ): void {
   if (typeof document === 'undefined') return;
 
+  const isEn = lang === 'en';
   const existing = document.getElementById('sufra-thermal-print-root');
   if (existing) existing.remove();
 
   const widthCss = paperWidth === 58 ? '58mm' : '80mm';
   const root = document.createElement('div');
   root.id = 'sufra-thermal-print-root';
-  root.dir = 'rtl';
+  root.dir = isEn ? 'ltr' : 'rtl';
 
   const style = document.createElement('style');
   style.textContent = `
@@ -596,7 +631,7 @@ function printJobsViaBrowserThermalSheet(
         width: ${widthCss};
         margin: 0 auto;
         color: #000;
-        font-family: Tajawal, Cairo, Arial, sans-serif;
+        font-family: ${isEn ? 'Inter, Arial, sans-serif' : 'Tajawal, Cairo, Arial, sans-serif'};
         font-size: ${paperWidth === 58 ? '11px' : '12px'};
       }
       .sufra-ticket-block {
@@ -637,7 +672,7 @@ function printJobsViaBrowserThermalSheet(
           if (sec.type === 'item') {
             return `<div style="margin:3px 0;"><div style="display:flex;justify-content:space-between;font-weight:800;"><span>${escapeHtml(sec.text)}</span><span dir="ltr">${escapeHtml(sec.rightText || '')}</span></div>${
               sec.subText
-                ? `<div style="font-size:11px;color:#333;padding-right:8px;">${escapeHtml(sec.subText)}</div>`
+                ? `<div style="font-size:11px;color:#333;${isEn ? 'padding-left:8px;' : 'padding-right:8px;'}">${escapeHtml(sec.subText)}</div>`
                 : ''
             }</div>`;
           }
@@ -671,10 +706,12 @@ function printJobsViaBrowserThermalSheet(
 
 export async function printThermalJobsSequentially(
   jobs: PrintableTicketJob[],
-  opts?: { paperWidth?: ThermalPaperWidth }
+  opts?: { paperWidth?: ThermalPaperWidth; lang?: AppLang }
 ): Promise<{ mode: 'hardware' | 'browser'; count: number }> {
+  const activeLang = opts?.lang || getActiveLang();
+  const isEn = activeLang === 'en';
   if (jobs.length === 0) {
-    throw new Error('لا توجد تذاكر للطباعة.');
+    throw new Error(isEn ? 'No tickets queued for printing.' : 'لا توجد تذاكر للطباعة.');
   }
 
   const profile = getSavedPrinterProfile();
@@ -690,7 +727,7 @@ export async function printThermalJobsSequentially(
     if (getActivePrinterConnection().connected) {
       for (let i = 0; i < jobs.length; i += 1) {
         const job = jobs[i];
-        const bytes = encodeTicketToEscPosBytes(job, paperWidth);
+        const bytes = encodeTicketToEscPosBytes(job, paperWidth, activeLang);
         await writeRawEscPosBytes(bytes);
         if (i < jobs.length - 1) {
           await new Promise((r) => setTimeout(r, 300));
@@ -698,7 +735,7 @@ export async function printThermalJobsSequentially(
       }
       resultMode = 'hardware';
     } else {
-      printJobsViaBrowserThermalSheet(jobs, paperWidth);
+      printJobsViaBrowserThermalSheet(jobs, paperWidth, activeLang);
       resultMode = 'browser';
     }
   });
@@ -709,9 +746,10 @@ export async function printThermalJobsSequentially(
   return { mode: resultMode, count: jobs.length };
 }
 
-function formatOrderTime(ts: unknown): string {
+function formatOrderTime(ts: unknown, lang: AppLang = getActiveLang()): string {
+  const locale = lang === 'en' ? 'en-US' : 'ar-EG';
   if (!ts) {
-    return new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+    return new Date().toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
   }
   let ms = 0;
   if (typeof ts === 'object' && ts !== null && 'seconds' in ts) {
@@ -719,7 +757,7 @@ function formatOrderTime(ts: unknown): string {
   } else if (ts instanceof Date) {
     ms = ts.getTime();
   }
-  return new Date(ms || Date.now()).toLocaleTimeString('ar-EG', {
+  return new Date(ms || Date.now()).toLocaleTimeString(locale, {
     hour: '2-digit',
     minute: '2-digit',
   });
@@ -730,8 +768,14 @@ export function buildStationTicketJob(params: {
   order: Order;
   station: StationMeta;
   stationItems: OrderItemPayload[];
+  lang?: AppLang;
 }): PrintableTicketJob {
   const { restaurant, order, station, stationItems } = params;
+  const activeLang = params.lang || getActiveLang();
+  const isEn = activeLang === 'en';
+  const restName = loc(restaurant.name, restaurant.name_en, activeLang);
+  const stationLabel = isEn ? station.shortLabel_en || station.shortLabel : station.shortLabel;
+
   const guestsSet = new Set<string>();
   if (order.customerName?.trim()) guestsSet.add(order.customerName.trim());
   stationItems.forEach((it) => {
@@ -740,30 +784,57 @@ export function buildStationTicketJob(params: {
   const totalQty = stationItems.reduce((sum, it) => sum + (it.quantity || 1), 0);
 
   const sections: PrintTicketSection[] = [
-    { type: 'title', text: restaurant.name },
-    { type: 'subtitle', text: `تذكرة تحضير: ${station.shortLabel}` },
+    { type: 'title', text: restName },
+    {
+      type: 'subtitle',
+      text: isEn ? `Prep Ticket: ${stationLabel}` : `تذكرة تحضير: ${stationLabel}`,
+    },
     { type: 'divider', text: '' },
-    { type: 'meta', text: `رقم الطلب: #${order.orderNumber}`, bold: true },
+    {
+      type: 'meta',
+      text: isEn ? `Order #: #${order.orderNumber}` : `رقم الطلب: #${order.orderNumber}`,
+      bold: true,
+    },
     {
       type: 'meta',
       text:
         order.orderType === 'dine_in'
-          ? `الصالة: ${order.hallName || 'الصالة'} | الترابيزة: ${order.tableNumber || '-'}`
+          ? isEn
+            ? `Hall: ${order.hallName || 'Dine-in'} | Table: ${order.tableNumber || '-'}`
+            : `الصالة: ${order.hallName || 'الصالة'} | الترابيزة: ${order.tableNumber || '-'}`
           : order.orderType === 'delivery'
-            ? 'نوع الطلب: توصيل (Delivery)'
-            : 'نوع الطلب: استلام (Pickup)',
+            ? isEn
+              ? 'Order Type: Delivery'
+              : 'نوع الطلب: توصيل'
+            : isEn
+              ? 'Order Type: Takeaway'
+              : 'نوع الطلب: استلام',
       bold: true,
     },
-    { type: 'meta', text: `الوقت: ${formatOrderTime(order.createdAt)}` },
-    { type: 'meta', text: `العميل / الضيوف: ${Array.from(guestsSet).join('، ') || '-'}` },
+    {
+      type: 'meta',
+      text: isEn
+        ? `Time: ${formatOrderTime(order.createdAt, activeLang)}`
+        : `الوقت: ${formatOrderTime(order.createdAt, activeLang)}`,
+    },
+    {
+      type: 'meta',
+      text: isEn
+        ? `Guest(s): ${Array.from(guestsSet).join(', ') || '-'}`
+        : `العميل / الضيوف: ${Array.from(guestsSet).join('، ') || '-'}`,
+    },
     { type: 'divider', text: '' },
   ];
 
   stationItems.forEach((it) => {
     const details: string[] = [];
-    if (it.guestName) details.push(`للضيف: ${it.guestName}`);
-    if (it.addonNames?.length) details.push(`إضافات: ${it.addonNames.join('، ')}`);
-    if (it.notes) details.push(`ملاحظة: ${it.notes}`);
+    if (it.guestName) details.push(isEn ? `Guest: ${it.guestName}` : `للضيف: ${it.guestName}`);
+    if (it.addonNames?.length) {
+      details.push(
+        isEn ? `Add-ons: ${it.addonNames.join(', ')}` : `إضافات: ${it.addonNames.join('، ')}`
+      );
+    }
+    if (it.notes) details.push(isEn ? `Note: ${it.notes}` : `ملاحظة: ${it.notes}`);
     sections.push({
       type: 'item',
       text: `${it.quantity}× ${it.name}${it.sizeName ? ` (${it.sizeName})` : ''}`,
@@ -773,19 +844,23 @@ export function buildStationTicketJob(params: {
 
   if (order.notes) {
     sections.push({ type: 'divider', text: '' });
-    sections.push({ type: 'note', text: `ملاحظات عامة: ${order.notes}`, bold: true });
+    sections.push({
+      type: 'note',
+      text: isEn ? `Order Notes: ${order.notes}` : `ملاحظات عامة: ${order.notes}`,
+      bold: true,
+    });
   }
 
   sections.push({ type: 'divider', text: '' });
   sections.push({
     type: 'total',
-    text: `إجمالي عدد الأصناف في ${station.shortLabel}:`,
+    text: isEn ? `Total items for ${stationLabel}:` : `إجمالي عدد الأصناف في ${stationLabel}:`,
     rightText: String(totalQty),
   });
 
   return {
-    jobTitle: `${station.shortLabel} #${order.orderNumber}`,
-    headerBadge: `*** ${station.shortLabel} ***`,
+    jobTitle: `${stationLabel} #${order.orderNumber}`,
+    headerBadge: `*** ${stationLabel} ***`,
     sections,
     cutAfter: true,
   };
@@ -797,6 +872,7 @@ export function buildCombinedOrderReceiptJob(params: {
   currencyLabel: string;
   includePrices?: boolean;
   includeSeparateChecks?: boolean;
+  lang?: AppLang;
 }): PrintableTicketJob {
   const {
     restaurant,
@@ -805,42 +881,69 @@ export function buildCombinedOrderReceiptJob(params: {
     includePrices = true,
     includeSeparateChecks = true,
   } = params;
+  const activeLang = params.lang || getActiveLang();
+  const isEn = activeLang === 'en';
+  const restName = loc(restaurant.name, restaurant.name_en, activeLang);
+  const displayCurr = formatCurrency(currencyLabel, activeLang);
 
-  const fmt = (n: number) => `${n.toFixed(2).replace(/\.00$/, '')} ${currencyLabel}`;
+  const fmt = (n: number) => `${n.toFixed(2).replace(/\.00$/, '')} ${displayCurr}`;
   const totalQty = order.items.reduce((s, it) => s + (it.quantity || 1), 0);
 
   const sections: PrintTicketSection[] = [
-    { type: 'title', text: restaurant.name },
+    { type: 'title', text: restName },
     {
       type: 'subtitle',
-      text: includePrices ? 'الأوردر الأساسي المجمع / الريسيت' : 'الأوردر الأساسي المجمع (تشغيل)',
+      text: includePrices
+        ? isEn
+          ? 'Consolidated Check / Receipt'
+          : 'الطلب الأساسي المجمع / الريسيت'
+        : isEn
+          ? 'Consolidated Operations Ticket'
+          : 'الطلب الأساسي المجمع (تشغيل)',
     },
     { type: 'divider', text: '' },
-    { type: 'meta', text: `رقم الطلب: #${order.orderNumber}`, bold: true },
     {
       type: 'meta',
-      text:
-        order.orderType === 'dine_in'
-          ? `الصالة: ${order.hallName || 'الصالة'} | الترابيزة: ${order.tableNumber || '-'}`
-          : order.orderType === 'delivery'
-            ? `توصيل · ${order.deliveryAddress || ''}`
-            : 'استلام من المطعم',
+      text: isEn ? `Order #: #${order.orderNumber}` : `رقم الطلب: #${order.orderNumber}`,
       bold: true,
     },
     {
       type: 'meta',
-      text: `العميل: ${order.customerName}${order.customerPhone ? ` · ${order.customerPhone}` : ''}`,
+      text:
+        order.orderType === 'dine_in'
+          ? isEn
+            ? `Hall: ${order.hallName || 'Dine-in'} | Table: ${order.tableNumber || '-'}`
+            : `الصالة: ${order.hallName || 'الصالة'} | الترابيزة: ${order.tableNumber || '-'}`
+          : order.orderType === 'delivery'
+            ? isEn
+              ? `Delivery · ${order.deliveryAddress || ''}`
+              : `توصيل · ${order.deliveryAddress || ''}`
+            : isEn
+              ? 'Takeaway'
+              : 'استلام من المطعم',
+      bold: true,
     },
-    { type: 'meta', text: `الوقت: ${formatOrderTime(order.createdAt)}` },
+    {
+      type: 'meta',
+      text: `${isEn ? 'Customer' : 'العميل'}: ${order.customerName}${order.customerPhone ? ` · ${order.customerPhone}` : ''}`,
+    },
+    {
+      type: 'meta',
+      text: isEn
+        ? `Time: ${formatOrderTime(order.createdAt, activeLang)}`
+        : `الوقت: ${formatOrderTime(order.createdAt, activeLang)}`,
+    },
     { type: 'divider', text: '' },
   ];
 
   order.items.forEach((it) => {
     const details: string[] = [];
-    if (it.stationName) details.push(`القسم: ${it.stationName}`);
-    if (it.guestName) details.push(`الضيف: ${it.guestName}`);
-    if (it.addonNames?.length) details.push(`+ ${it.addonNames.join('، ')}`);
-    if (it.notes) details.push(`ملاحظة: ${it.notes}`);
+    if (it.stationName) details.push(isEn ? `Station: ${it.stationName}` : `القسم: ${it.stationName}`);
+    if (it.guestName) details.push(isEn ? `Guest: ${it.guestName}` : `الضيف: ${it.guestName}`);
+    if (it.addonNames?.length) {
+      details.push(`+ ${it.addonNames.join(isEn ? ', ' : '، ')}`);
+    }
+    if (it.notes) details.push(isEn ? `Note: ${it.notes}` : `ملاحظة: ${it.notes}`);
     sections.push({
       type: 'item',
       text: `${it.quantity}× ${it.name}${it.sizeName ? ` (${it.sizeName})` : ''}`,
@@ -851,12 +954,20 @@ export function buildCombinedOrderReceiptJob(params: {
 
   if (order.notes) {
     sections.push({ type: 'divider', text: '' });
-    sections.push({ type: 'note', text: `ملاحظات: ${order.notes}`, bold: true });
+    sections.push({
+      type: 'note',
+      text: isEn ? `Notes: ${order.notes}` : `ملاحظات: ${order.notes}`,
+      bold: true,
+    });
   }
 
   if (includeSeparateChecks && order.guestChecks && order.guestChecks.length > 0) {
     sections.push({ type: 'divider', text: '' });
-    sections.push({ type: 'meta', text: 'تقسيم الفاتورة بالاسم (Separate Check):', bold: true });
+    sections.push({
+      type: 'meta',
+      text: isEn ? 'Split Check by Guest:' : 'تقسيم الشيك بالاسم:',
+      bold: true,
+    });
     order.guestChecks.forEach((gc) => {
       sections.push({
         type: 'item',
@@ -868,27 +979,55 @@ export function buildCombinedOrderReceiptJob(params: {
 
   sections.push({ type: 'divider', text: '' });
   if (includePrices) {
-    sections.push({ type: 'item', text: 'المجموع الفرعي:', rightText: fmt(order.subtotal) });
+    sections.push({
+      type: 'item',
+      text: isEn ? 'Subtotal:' : 'المجموع الفرعي:',
+      rightText: fmt(order.subtotal),
+    });
     if (order.serviceCharge > 0) {
-      sections.push({ type: 'item', text: 'رسوم الخدمة:', rightText: fmt(order.serviceCharge) });
+      sections.push({
+        type: 'item',
+        text: isEn ? 'Service Charge:' : 'رسوم الخدمة:',
+        rightText: fmt(order.serviceCharge),
+      });
     }
     if (order.taxAmount > 0) {
-      sections.push({ type: 'item', text: 'الضريبة:', rightText: fmt(order.taxAmount) });
+      sections.push({
+        type: 'item',
+        text: isEn ? 'Tax:' : 'الضريبة:',
+        rightText: fmt(order.taxAmount),
+      });
     }
     if (typeof order.deliveryFee === 'number' && order.deliveryFee > 0) {
-      sections.push({ type: 'item', text: 'التوصيل:', rightText: fmt(order.deliveryFee) });
+      sections.push({
+        type: 'item',
+        text: isEn ? 'Delivery Fee:' : 'التوصيل:',
+        rightText: fmt(order.deliveryFee),
+      });
     }
     if (typeof order.discountAmount === 'number' && order.discountAmount > 0) {
-      sections.push({ type: 'item', text: 'الخصم:', rightText: `-${fmt(order.discountAmount)}` });
+      sections.push({
+        type: 'item',
+        text: isEn ? 'Discount:' : 'الخصم:',
+        rightText: `-${fmt(order.discountAmount)}`,
+      });
     }
-    sections.push({ type: 'total', text: 'الإجمالي المطلوب:', rightText: fmt(order.total) });
+    sections.push({
+      type: 'total',
+      text: isEn ? 'Total Due:' : 'الإجمالي المطلوب:',
+      rightText: fmt(order.total),
+    });
   } else {
-    sections.push({ type: 'total', text: 'إجمالي الأصناف:', rightText: String(totalQty) });
+    sections.push({
+      type: 'total',
+      text: isEn ? 'Total Items:' : 'إجمالي الأصناف:',
+      rightText: String(totalQty),
+    });
   }
 
   return {
-    jobTitle: `الأوردر المجمع #${order.orderNumber}`,
-    headerBadge: 'الأوردر الأساسي المجمع',
+    jobTitle: isEn ? `Consolidated Check #${order.orderNumber}` : `الطلب المجمع #${order.orderNumber}`,
+    headerBadge: isEn ? 'Consolidated Check' : 'الطلب الأساسي المجمع',
     sections,
     cutAfter: true,
   };

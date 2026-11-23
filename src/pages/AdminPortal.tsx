@@ -156,7 +156,7 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
           await ensureUserProfile(
             u.uid,
             u.email || '',
-            u.displayName || 'صاحب مطعم'
+            u.displayName || (lang === 'en' ? 'Restaurant Owner' : 'صاحب مطعم')
           );
           const rest = await fetchOwnerRestaurant(u.uid);
           setRestaurant(rest);
@@ -595,8 +595,8 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
     },
     customers: {
       id: 'customers',
-      label: ui.getButtonLabel('customers', lang, isEn ? 'Customers (Smart CRM)' : 'عملائي (CRM والتسويق الذكي)'),
-      shortLabel: ui.getButtonLabel('customers', lang, isEn ? 'Customers CRM' : 'عملائي CRM'),
+      label: ui.getButtonLabel('customers', lang, isEn ? 'Customer CRM' : 'عملائي والتسويق الذكي'),
+      shortLabel: ui.getButtonLabel('customers', lang, isEn ? 'Customer CRM' : 'عملائي'),
       icon: Users,
       badge: upcomingBirthdays.length > 0 ? upcomingBirthdays.length : undefined,
     },
@@ -758,7 +758,7 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
                       : 'تغيير'
                     : isEn
                       ? 'Redeem'
-                      : 'تفعيل 🎁'}
+                      : 'تفعيل'}
                 </button>
               </div>
             </div>
@@ -1085,7 +1085,7 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
                 <button
                   type="button"
                   onClick={() => setNewOrderToast(null)}
-                  aria-label="Close alert"
+                  aria-label={isEn ? 'Close alert' : 'إغلاق التنبيه'}
                   className="p-1 rounded-lg hover:bg-amber-200/60 cursor-pointer"
                 >
                   <X className="w-4 h-4" />
@@ -1114,7 +1114,7 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
                 <button
                   type="button"
                   onClick={() => setNewCallToast(null)}
-                  aria-label="Close alert"
+                  aria-label={isEn ? 'Close alert' : 'إغلاق التنبيه'}
                   className="p-1 rounded-lg hover:bg-rose-200/60 cursor-pointer"
                 >
                   <X className="w-4 h-4" />
@@ -1144,12 +1144,12 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
                   ? `Today is ${nearest.customer.fullName}'s birthday!`
                   : `${nearest.daysUntil} day${nearest.daysUntil === 1 ? '' : 's'} until ${nearest.customer.fullName}'s birthday`
                 : nearest.daysUntil === 0
-                  ? `اليوم عيد ميلاد أستاذ ${nearest.customer.fullName}! 🎈`
+                  ? `اليوم عيد ميلاد أستاذ ${nearest.customer.fullName}!`
                   : nearest.daysUntil === 1
-                    ? `باقي يوم واحد على عيد ميلاد أستاذ ${nearest.customer.fullName} 🎈`
+                    ? `باقي يوم واحد على عيد ميلاد أستاذ ${nearest.customer.fullName}`
                     : nearest.daysUntil === 2
-                      ? `باقي يومين على عيد ميلاد أستاذ ${nearest.customer.fullName} 🎈`
-                      : `باقي ${nearest.daysUntil} أيام على عيد ميلاد أستاذ ${nearest.customer.fullName} 🎈`;
+                      ? `باقي يومان على عيد ميلاد أستاذ ${nearest.customer.fullName}`
+                      : `باقي ${nearest.daysUntil} أيام على عيد ميلاد أستاذ ${nearest.customer.fullName}`;
 
               return (
                 <div className="p-3.5 sm:p-4 rounded-2xl bg-amber-50 border border-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-950">
@@ -1160,8 +1160,8 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
                     <div className="min-w-0">
                       <p className="font-extrabold">
                         {isEn
-                          ? `🎂 Customer Birthdays in the Next 3 Days (${upcomingBirthdays.length})`
-                          : `🎂 أعياد ميلاد عملائك خلال الـ 3 أيام القادمة (${upcomingBirthdays.length})`}
+                          ? `Customer Birthdays in the Next 3 Days (${upcomingBirthdays.length})`
+                          : `أعياد ميلاد عملائك خلال الـ 3 أيام القادمة (${upcomingBirthdays.length})`}
                       </p>
                       <p className="text-[11px] text-amber-900 font-semibold truncate">
                         {countdownText}{' '}
@@ -1182,7 +1182,7 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
                       <span>
                         {isEn
                           ? 'Send Birthday Offer'
-                          : 'أرسل عرض عيد الميلاد عبر واتساب 🎁'}
+                          : 'أرسل عرض عيد الميلاد عبر واتساب'}
                       </span>
                     </a>
                     <button

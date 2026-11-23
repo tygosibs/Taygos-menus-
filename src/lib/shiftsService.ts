@@ -12,6 +12,7 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
+import { getActiveLang } from '../data/translations';
 import {
   StaffActorInfo,
   StaffAuditEventType,
@@ -119,7 +120,12 @@ export async function startStaffShift(params: {
     (d) => (d.data() as StaffShift).stationId === stationId
   );
   if (duplicate) {
-    throw new Error(`لديك وردية نشطة بالفعل في شاشة "${stationName}".`);
+    const isEn = getActiveLang() === 'en';
+    throw new Error(
+      isEn
+        ? `You already have an active shift on "${stationName}".`
+        : `لديك وردية نشطة بالفعل في شاشة "${stationName}".`
+    );
   }
 
   const shiftId = makeShiftId(staffId, stationId);
@@ -193,7 +199,8 @@ export async function endStaffShift(params: {
 }): Promise<{ stationNowUncovered: boolean; uncoveredWarning?: string }> {
   const { restaurantId, ownerId, shift, staffRole } = params;
   if (!shift || shift.status !== 'active') {
-    throw new Error('لا توجد وردية نشطة لإنهائها.');
+    const isEn = getActiveLang() === 'en';
+    throw new Error(isEn ? 'No active shift found to end.' : 'لا توجد وردية نشطة لإنهائها.');
   }
 
   try {
@@ -234,7 +241,10 @@ export async function endStaffShift(params: {
     }
 
     if (remainingCount === 0) {
-      const alertText = `لا يوجد موظف نشط في قسم ${shift.stationName} حاليًا.`;
+      const isEn = getActiveLang() === 'en';
+      const alertText = isEn
+        ? `No active staff member is currently on ${shift.stationName}.`
+        : `لا يوجد موظف نشط في قسم ${shift.stationName} حاليًا.`;
       const alertLogId = makeAuditId();
       await setDoc(doc(db, 'restaurants', restaurantId, 'staff_audit_logs', alertLogId), {
         id: alertLogId,

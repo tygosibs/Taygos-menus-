@@ -68,7 +68,7 @@ const ALL_THEME_IDS: ScreenThemeId[] = [
 ];
 
 export function UiStudioTab({ adminEmail }: UiStudioTabProps) {
-  const { lang } = useLanguage();
+  const { lang, dir } = useLanguage();
   const isEn = lang === 'en';
   const { uiConfig, publishPlatformUiConfig, triggerSimulatedRefreshTest } = usePlatformUi();
 
@@ -413,7 +413,7 @@ export function UiStudioTab({ adminEmail }: UiStudioTabProps) {
   };
 
   return (
-    <div className="space-y-6">
+    <div dir={dir} className="space-y-6">
       {/* Studio Command Header */}
       <div className="bg-white border border-zinc-200 rounded-2xl p-5 shadow-2xs space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -440,7 +440,7 @@ export function UiStudioTab({ adminEmail }: UiStudioTabProps) {
             <p className="text-xs text-zinc-500 max-w-3xl leading-relaxed">
               {isEn
                 ? 'Drag and drop buttons across cards, double-click any card or button title to rename it, choose curated themes, and publish instantly across all active screens without disrupting any live order or shift.'
-                : 'اسحب وأفلت الأزرار بين البطاقات، أو اضغط مرتين (Double-Click) لتغيير اسم أي زر أو بطاقة، أنشئ بطاقات جديدة، واختر من الثيمات العالمية الفاخرة وانشر التحديث فوراً للجميع بدون أي خروج أو ضياع لأي شغل مفتوح.'}
+                : 'اسحب وأفلت الأزرار بين البطاقات، أو اضغط مرتين لتغيير اسم أي زر أو بطاقة، أنشئ بطاقات جديدة، واختر من الثيمات العالمية الفاخرة وانشر التحديث فوراً للجميع بدون أي خروج أو ضياع لأي شغل مفتوح.'}
             </p>
           </div>
 
@@ -820,6 +820,7 @@ export function UiStudioTab({ adminEmail }: UiStudioTabProps) {
                           <div className="flex flex-wrap items-center gap-1.5 flex-1">
                             <input
                               type="text"
+                              dir="rtl"
                               autoFocus
                               value={cardTitleArDraft}
                               onChange={(e) => setCardTitleArDraft(e.target.value)}
@@ -827,7 +828,7 @@ export function UiStudioTab({ adminEmail }: UiStudioTabProps) {
                                 if (e.key === 'Enter') commitCardRename();
                                 if (e.key === 'Escape') setEditingCardId(null);
                               }}
-                              placeholder="اسم البطاقة بالعربي"
+                              placeholder={isEn ? 'Arabic Card Title' : 'اسم البطاقة بالعربي'}
                               className="px-2.5 py-1 rounded-lg border border-zinc-300 bg-white text-xs font-bold text-zinc-950 min-w-[140px]"
                             />
                             <input
@@ -839,7 +840,7 @@ export function UiStudioTab({ adminEmail }: UiStudioTabProps) {
                                 if (e.key === 'Enter') commitCardRename();
                                 if (e.key === 'Escape') setEditingCardId(null);
                               }}
-                              placeholder="English Card Title"
+                              placeholder={isEn ? 'English Card Title' : 'اسم البطاقة بالإنجليزي'}
                               className="px-2.5 py-1 rounded-lg border border-zinc-300 bg-white text-xs font-semibold text-zinc-800 min-w-[130px]"
                             />
                             <button
@@ -968,6 +969,7 @@ export function UiStudioTab({ adminEmail }: UiStudioTabProps) {
                                   <div className="flex flex-wrap items-center gap-1.5 flex-1">
                                     <input
                                       type="text"
+                                      dir="rtl"
                                       autoFocus
                                       value={btnLabelArDraft}
                                       onChange={(e) => setBtnLabelArDraft(e.target.value)}
@@ -975,7 +977,7 @@ export function UiStudioTab({ adminEmail }: UiStudioTabProps) {
                                         if (e.key === 'Enter') commitButtonRename();
                                         if (e.key === 'Escape') setEditingButtonId(null);
                                       }}
-                                      placeholder="الاسم بالعربي"
+                                      placeholder={isEn ? 'Arabic Label' : 'الاسم بالعربي'}
                                       className="px-2 py-1 rounded-lg border border-zinc-300 text-xs font-bold text-zinc-950 min-w-[130px]"
                                     />
                                     <input
@@ -987,7 +989,7 @@ export function UiStudioTab({ adminEmail }: UiStudioTabProps) {
                                         if (e.key === 'Enter') commitButtonRename();
                                         if (e.key === 'Escape') setEditingButtonId(null);
                                       }}
-                                      placeholder="English Label"
+                                      placeholder={isEn ? 'English Label' : 'الاسم بالإنجليزي'}
                                       className="px-2 py-1 rounded-lg border border-zinc-300 text-xs font-semibold text-zinc-800 min-w-[120px]"
                                     />
                                     <button
@@ -1129,9 +1131,10 @@ export function UiStudioTab({ adminEmail }: UiStudioTabProps) {
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label className="space-y-1 text-xs font-bold text-zinc-700">
-                <span>النص بالعربية</span>
+                <span>{isEn ? 'Arabic Message' : 'النص بالعربية'}</span>
                 <textarea
                   rows={2}
+                  dir="rtl"
                   value={draft.refreshNoticeAr}
                   onChange={(e) => {
                     setDraft((p) => ({ ...p, refreshNoticeAr: e.target.value }));
@@ -1141,7 +1144,7 @@ export function UiStudioTab({ adminEmail }: UiStudioTabProps) {
                 />
               </label>
               <label className="space-y-1 text-xs font-bold text-zinc-700">
-                <span>English Message</span>
+                <span>{isEn ? 'English Message' : 'النص بالإنجليزية'}</span>
                 <textarea
                   rows={2}
                   dir="ltr"
@@ -1176,7 +1179,7 @@ export function UiStudioTab({ adminEmail }: UiStudioTabProps) {
                   className={`p-1.5 rounded-lg cursor-pointer ${
                     previewDevice === 'desktop' ? 'bg-white text-zinc-950 shadow-2xs' : 'text-zinc-500'
                   }`}
-                  aria-label="Desktop Preview"
+                  aria-label={isEn ? 'Desktop Preview' : 'معاينة سطح المكتب'}
                 >
                   <Monitor className="w-3.5 h-3.5" />
                 </button>
@@ -1186,7 +1189,7 @@ export function UiStudioTab({ adminEmail }: UiStudioTabProps) {
                   className={`p-1.5 rounded-lg cursor-pointer ${
                     previewDevice === 'mobile' ? 'bg-white text-zinc-950 shadow-2xs' : 'text-zinc-500'
                   }`}
-                  aria-label="Mobile Preview"
+                  aria-label={isEn ? 'Mobile Preview' : 'معاينة الجوال'}
                 >
                   <Smartphone className="w-3.5 h-3.5" />
                 </button>

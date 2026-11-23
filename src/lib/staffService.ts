@@ -47,6 +47,7 @@ import {
   sha256Hex,
   validateStaffPassword,
 } from './staffAuthUtils';
+import { getActiveLang } from '../data/translations';
 import { cleanStationId, screenToStationId } from './stationUtils';
 
 function makeStaffDocId(prefix: string): string {
@@ -103,9 +104,14 @@ export async function resolveStaffAuthEmail(
   restaurantId: string,
   rawIdentifier: string
 ): Promise<{ authEmail: string; staffUid?: string; isActive?: boolean; identifierType: 'email' | 'phone' | 'username' }> {
+  const isEn = getActiveLang() === 'en';
   const classified = classifyLoginIdentifier(rawIdentifier);
   if (!classified.normalized) {
-    throw new Error('يرجى إدخال اسم المستخدم أو رقم الهاتف أو البريد الإلكتروني.');
+    throw new Error(
+      isEn
+        ? 'Please enter your username, phone number, or email address.'
+        : 'يرجى إدخال اسم المستخدم أو رقم الهاتف أو البريد الإلكتروني.'
+    );
   }
 
   if (classified.type === 'email') {
@@ -138,8 +144,12 @@ export async function resolveStaffAuthEmail(
   if (!lookupSnap.exists()) {
     throw new Error(
       classified.type === 'phone'
-        ? 'بيانات الدخول غير صحيحة أو رقم الهاتف غير مسجل في هذا المطعم.'
-        : 'بيانات الدخول غير صحيحة أو اسم المستخدم غير مسجل في هذا المطعم.'
+        ? isEn
+          ? 'Invalid credentials or phone number is not registered at this restaurant.'
+          : 'بيانات الدخول غير صحيحة أو رقم الهاتف غير مسجل في هذا المطعم.'
+        : isEn
+          ? 'Invalid credentials or username is not registered at this restaurant.'
+          : 'بيانات الدخول غير صحيحة أو اسم المستخدم غير مسجل في هذا المطعم.'
     );
   }
   const data = lookupSnap.data() as { authEmail: string; staffUid: string; isActive: boolean };
@@ -186,23 +196,34 @@ export async function createManagerOrStaffAccount(
   const cleanEmail = (input.email || '').trim().toLowerCase().slice(0, 254);
   const cleanJobTitle = (input.jobTitle || '').trim().slice(0, 80);
 
+  const isEn = getActiveLang() === 'en';
   if (cleanName.length < 2) {
-    throw new Error('يرجى إدخال اسم الموظف (حرفين على الأقل).');
+    throw new Error(
+      isEn ? 'Please enter the staff member name (at least 2 characters).' : 'يرجى إدخال اسم الموظف (حرفين على الأقل).'
+    );
   }
   if (cleanUsername.length < 3) {
-    throw new Error('اسم المستخدم يجب أن يكون بالإنجليزية والأرقام (3 أحرف على الأقل).');
+    throw new Error(
+      isEn
+        ? 'Username must use English letters and numbers (at least 3 characters).'
+        : 'اسم المستخدم يجب أن يكون بالإنجليزية والأرقام (3 أحرف على الأقل).'
+    );
   }
   if (cleanPhone.length < 6) {
-    throw new Error('يرجى إدخال رقم هاتف صحيح (6 أرقام على الأقل).');
+    throw new Error(
+      isEn ? 'Please enter a valid phone number (at least 6 digits).' : 'يرجى إدخال رقم هاتف صحيح (6 أرقام على الأقل).'
+    );
   }
   if (cleanEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-    throw new Error('صيغة البريد الإلكتروني غير صحيحة.');
+    throw new Error(isEn ? 'Invalid email address format.' : 'صيغة البريد الإلكتروني غير صحيحة.');
   }
 
   if (!input.useOneTimeInvite) {
     const pwCheck = validateStaffPassword(input.directPassword || '');
     if (!pwCheck.valid) {
-      throw new Error(pwCheck.error || 'كلمة المرور غير مطابقة لشروط الأمان.');
+      throw new Error(
+        pwCheck.error || (isEn ? 'Password does not meet security requirements.' : 'كلمة المرور غير مطابقة لشروط الأمان.')
+      );
     }
   }
 
@@ -217,7 +238,9 @@ export async function createManagerOrStaffAccount(
   ).slice(0, 30);
 
   if (allowedScreens.length === 0) {
-    throw new Error('يرجى اختيار شاشة واحدة على الأقل للموظف.');
+    throw new Error(
+      isEn ? 'Please select at least one screen for this staff member.' : 'يرجى اختيار شاشة واحدة على الأقل للموظف.'
+    );
   }
   const defaultScreen: StaffScreen = allowedScreens.includes(input.defaultScreen)
     ? input.defaultScreen
@@ -254,13 +277,25 @@ export async function createManagerOrStaffAccount(
   ]);
 
   if (uSnap.exists()) {
-    throw new Error('اسم المستخدم مسجل بالفعل لموظف آخر في هذا المطعم. اختر اسماً مختلفاً.');
+    throw new Error(
+      isEn
+        ? 'Username is already taken by another staff member in this restaurant.'
+        : 'اسم المستخدم مسجل بالفعل لموظف آخر في هذا المطعم. اختر اسماً مختلفاً.'
+    );
   }
   if (pSnap.exists()) {
-    throw new Error('رقم الهاتف مسجل بالفعل لموظف آخر في هذا المطعم.');
+    throw new Error(
+      isEn
+        ? 'Phone number is already registered for another staff member.'
+        : 'رقم الهاتف مسجل بالفعل لموظف آخر في هذا المطعم.'
+    );
   }
   if (eSnap && eSnap.exists()) {
-    throw new Error('البريد الإلكتروني مسجل بالفعل لموظف آخر في هذا المطعم.');
+    throw new Error(
+      isEn
+        ? 'Email address is already registered for another staff member.'
+        : 'البريد الإلكتروني مسجل بالفعل لموظف آخر في هذا المطعم.'
+    );
   }
 
   const inviteToken = input.useOneTimeInvite ? generateSecureInviteToken() : undefined;
@@ -288,7 +323,9 @@ export async function createManagerOrStaffAccount(
     const msg = err instanceof Error ? err.message : '';
     if (msg.includes('email-already-in-use')) {
       throw new Error(
-        'هذا البريد الإلكتروني مستخدم بالفعل في Firebase Auth. اترك البريد اختيارياً أو استخدم دعوة QR لمرة واحدة.'
+        isEn
+          ? 'This email is already used in Authentication. Leave email optional or use a one-time QR invite.'
+          : 'هذا البريد الإلكتروني مستخدم بالفعل. اترك البريد اختيارياً أو استخدم دعوة رمز الاستجابة لمرة واحدة.'
       );
     }
     throw err;
@@ -759,15 +796,20 @@ export async function sendStaffPasswordResetByEmail(
   email: string,
   authEmail?: string
 ): Promise<void> {
+  const isEn = getActiveLang() === 'en';
   const cleanEmail = (email || '').trim().toLowerCase();
   if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-    throw new Error('لا يوجد بريد إلكتروني صالح مسجل لهذا الموظف.');
+    throw new Error(
+      isEn ? 'No valid email address is registered for this staff member.' : 'لا يوجد بريد إلكتروني صالح مسجل لهذا الموظف.'
+    );
   }
   if (authEmail !== undefined) {
     const cleanAuth = authEmail.trim().toLowerCase();
     if (!cleanAuth || cleanAuth.endsWith('@staff.sufra.local') || cleanAuth !== cleanEmail) {
       throw new Error(
-        'هذا الحساب مفعّل بدعوة QR برقم/اسم مستخدم داخلي (@staff.sufra.local). لإعادة تعيين كلمة المرور استخدم زر "دعوة QR جديد / تصفير".'
+        isEn
+          ? 'This account was activated via an internal QR invite (@staff.sufra.local). Use "New QR Invite / Reset" to issue a new password setup link.'
+          : 'هذا الحساب مفعّل بدعوة رمز استجابة برقم/اسم مستخدم داخلي (@staff.sufra.local). لإعادة تعيين كلمة المرور استخدم زر "دعوة جديدة / تصفير".'
       );
     }
   }
@@ -810,8 +852,11 @@ export async function updateStaffPermissionsAndProfile(params: {
     )
   ).slice(0, 30);
 
+  const isEn = getActiveLang() === 'en';
   if (nextScreens.length === 0) {
-    throw new Error('يجب تحديد شاشة واحدة على الأقل للموظف.');
+    throw new Error(
+      isEn ? 'At least one screen must be selected for this staff member.' : 'يجب تحديد شاشة واحدة على الأقل للموظف.'
+    );
   }
   const candidateDefault = updates.defaultScreen ?? staff.defaultScreen;
   const nextDefault = nextScreens.includes(candidateDefault) ? candidateDefault : nextScreens[0];
@@ -837,7 +882,7 @@ export async function updateStaffPermissionsAndProfile(params: {
   const nextActive = updates.isActive ?? staff.isActive;
 
   if (nextPhone.length < 6) {
-    throw new Error('يرجى إدخال رقم هاتف صحيح.');
+    throw new Error(isEn ? 'Please enter a valid phone number.' : 'يرجى إدخال رقم هاتف صحيح.');
   }
 
   let newPhoneLookupId = '';
@@ -849,7 +894,9 @@ export async function updateStaffPermissionsAndProfile(params: {
       doc(db, 'restaurants', restaurantId, 'staff_login_index', newPhoneLookupId)
     );
     if (existingPhoneSnap.exists() && existingPhoneSnap.data()?.staffUid !== staff.uid) {
-      throw new Error('رقم الهاتف الجديد مسجل لموظف آخر بالفعل.');
+      throw new Error(
+        isEn ? 'The new phone number is already used by another staff member.' : 'رقم الهاتف الجديد مسجل لموظف آخر بالفعل.'
+      );
     }
   } else {
     oldPhoneLookupId = await buildLoginIndexId('p', restaurantId, staff.phone);
@@ -928,7 +975,9 @@ export async function updateStaffPermissionsAndProfile(params: {
     const newEmailRef = doc(db, 'restaurants', restaurantId, 'staff_login_index', newEmailLookup);
     const existingEmailSnap = await getDoc(newEmailRef);
     if (existingEmailSnap.exists() && existingEmailSnap.data()?.staffUid !== staff.uid) {
-      throw new Error('البريد الإلكتروني مسجل لموظف آخر في نفس المطعم بالفعل.');
+      throw new Error(
+        isEn ? 'Email address is already registered for another staff member.' : 'البريد الإلكتروني مسجل لموظف آخر في نفس المطعم بالفعل.'
+      );
     }
     if (existingEmailSnap.exists()) {
       batch.update(newEmailRef, {
@@ -984,36 +1033,49 @@ export function resolveStaffSuspensionState(staff: StaffMember): {
   isExpiredTimed: boolean;
   message: string;
 } {
+  const isEn = getActiveLang() === 'en';
   const actorLabel =
     staff.suspendedByRole === 'owner'
-      ? 'صاحب المطعم'
+      ? isEn
+        ? 'the restaurant owner'
+        : 'صاحب المطعم'
       : staff.suspendedByRole === 'manager'
-      ? 'المدير'
+      ? isEn
+        ? 'the manager'
+        : 'المدير'
+      : isEn
+      ? 'restaurant management'
       : 'إدارة المطعم';
   const actorNamePart = staff.suspendedByName ? ` (${staff.suspendedByName})` : '';
   const reasonPart = staff.suspendedReason?.trim()
-    ? ` — السبب: ${staff.suspendedReason.trim()}`
+    ? isEn
+      ? ` — Reason: ${staff.suspendedReason.trim()}`
+      : ` — السبب: ${staff.suspendedReason.trim()}`
     : '';
 
   if (staff.suspendedType === 'indefinite' && !staff.isActive) {
     return {
       isSuspended: true,
       isExpiredTimed: false,
-      message: `تم إيقاف شاشتك بواسطة ${actorLabel}${actorNamePart} لأجل غير مسمى${reasonPart} — برجاء مراجعته.`,
+      message: isEn
+        ? `Your screen was suspended indefinitely by ${actorLabel}${actorNamePart}${reasonPart}. Please contact management.`
+        : `تم إيقاف شاشتك بواسطة ${actorLabel}${actorNamePart} لأجل غير مسمى${reasonPart} — برجاء مراجعته.`,
     };
   }
 
   if (staff.suspendedType === 'timed') {
     const untilMs = getTsMillis(staff.suspendedUntil);
     if (untilMs > Date.now() && !staff.isActive) {
-      const formatted = new Date(untilMs).toLocaleString('ar-EG', {
+      const formatted = new Date(untilMs).toLocaleString(isEn ? 'en-US' : 'ar-EG', {
         dateStyle: 'medium',
         timeStyle: 'short',
       });
       return {
         isSuspended: true,
         isExpiredTimed: false,
-        message: `تم إيقاف شاشتك بواسطة ${actorLabel}${actorNamePart} حتى ${formatted}${reasonPart} — برجاء مراجعته.`,
+        message: isEn
+          ? `Your screen is suspended by ${actorLabel}${actorNamePart} until ${formatted}${reasonPart}. Please contact management.`
+          : `تم إيقاف شاشتك بواسطة ${actorLabel}${actorNamePart} حتى ${formatted}${reasonPart} — برجاء مراجعته.`,
       };
     }
     if (!staff.isActive && untilMs > 0 && untilMs <= Date.now()) {
@@ -1030,8 +1092,12 @@ export function resolveStaffSuspensionState(staff: StaffMember): {
       isSuspended: true,
       isExpiredTimed: false,
       message: staff.mustChangePassword
-        ? 'هذا الحساب بانتظار التفعيل عبر رابط الدعوة QR.'
-        : `تم إيقاف شاشتك بواسطة ${actorLabel}${actorNamePart}${reasonPart} — برجاء مراجعته.`,
+        ? isEn
+          ? 'This account is waiting for activation via the QR invite link.'
+          : 'هذا الحساب بانتظار التفعيل عبر رابط الدعوة.'
+        : isEn
+          ? `Your screen was suspended by ${actorLabel}${actorNamePart}${reasonPart}. Please contact management.`
+          : `تم إيقاف شاشتك بواسطة ${actorLabel}${actorNamePart}${reasonPart} — برجاء مراجعته.`,
     };
   }
 
@@ -1052,23 +1118,27 @@ export async function suspendStaffMember(params: {
   reason: string;
 }): Promise<void> {
   const { restaurantId, staff, actor, suspendedType, reason } = params;
+  const isEn = getActiveLang() === 'en';
   const cleanReason = reason.trim().slice(0, 300);
   if (!cleanReason) {
-    throw new Error('يرجى كتابة سبب إيقاف الموظف.');
+    throw new Error(isEn ? 'Please provide a suspension reason.' : 'يرجى كتابة سبب إيقاف الموظف.');
   }
 
   let untilTs: Timestamp | null = null;
-  let durationLabel = 'لأجل غير مسمى';
+  let durationLabel = isEn ? 'Indefinite' : 'لأجل غير مسمى';
   if (suspendedType === 'timed') {
     const targetMs =
       typeof params.suspendedUntilMs === 'number' && params.suspendedUntilMs > Date.now()
         ? params.suspendedUntilMs
         : Date.now() + Math.max(1, Number(params.durationHours) || 24) * 60 * 60 * 1000;
     untilTs = Timestamp.fromMillis(targetMs);
-    durationLabel = `حتى ${new Date(targetMs).toLocaleString('ar-EG', {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    })}`;
+    durationLabel = `${isEn ? 'Until' : 'حتى'} ${new Date(targetMs).toLocaleString(
+      isEn ? 'en-US' : 'ar-EG',
+      {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      }
+    )}`;
   }
 
   const byRole: 'owner' | 'manager' = actor.role === 'owner' ? 'owner' : 'manager';
@@ -1203,9 +1273,10 @@ export async function completeStaffOnboarding(params: {
   hallId?: string;
   hallName?: string;
 }): Promise<StaffMember> {
+  const isEn = getActiveLang() === 'en';
   const pwCheck = validateStaffPassword(params.newPassword, params.confirmPassword);
   if (!pwCheck.valid) {
-    throw new Error(pwCheck.error || 'كلمة المرور غير صالحة.');
+    throw new Error(pwCheck.error || (isEn ? 'Invalid password.' : 'كلمة المرور غير صالحة.'));
   }
 
   const cleanName = params.name.trim().slice(0, 100);
@@ -1216,13 +1287,17 @@ export async function completeStaffOnboarding(params: {
   const cleanHallName = (params.hallName ?? params.invite.staffHallName ?? '').trim().slice(0, 80);
 
   if (cleanName.length < 2) {
-    throw new Error('يرجى إدخال الاسم الكامل (حرفين على الأقل).');
+    throw new Error(
+      isEn ? 'Please enter your full name (at least 2 characters).' : 'يرجى إدخال الاسم الكامل (حرفين على الأقل).'
+    );
   }
   if (cleanPhone.length < 6) {
-    throw new Error('يرجى إدخال رقم هاتف صحيح (6 أرقام على الأقل).');
+    throw new Error(
+      isEn ? 'Please enter a valid phone number (at least 6 digits).' : 'يرجى إدخال رقم هاتف صحيح (6 أرقام على الأقل).'
+    );
   }
   if (cleanEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-    throw new Error('صيغة البريد الإلكتروني غير صحيحة.');
+    throw new Error(isEn ? 'Invalid email address format.' : 'صيغة البريد الإلكتروني غير صحيحة.');
   }
 
   // Re-verify invite state right before auth & update
@@ -1231,17 +1306,29 @@ export async function completeStaffOnboarding(params: {
     doc(db, 'restaurants', params.restaurant.id, 'staff_invites', tokenHash)
   );
   if (!latestInviteSnap.exists()) {
-    throw new Error('رابط الدعوة غير موجود أو تم حذفه.');
+    throw new Error(isEn ? 'Invite link not found or deleted.' : 'رابط الدعوة غير موجود أو تم حذفه.');
   }
   const latestInvite = latestInviteSnap.data() as StaffInvite;
   if (latestInvite.revokedAt) {
-    throw new Error('تم إلغاء رابط الدعوة هذا. اطلب من المدير رابط دعوة جديداً.');
+    throw new Error(
+      isEn
+        ? 'This invite link was revoked. Request a new invite from the manager.'
+        : 'تم إلغاء رابط الدعوة هذا. اطلب من المدير رابط دعوة جديداً.'
+    );
   }
   if (latestInvite.usedAt) {
-    throw new Error('تم استخدام رابط الدعوة هذا مسبقاً. يمكنك تسجيل الدخول بكلمة مرورك.');
+    throw new Error(
+      isEn
+        ? 'This invite link has already been used. You can sign in with your password.'
+        : 'تم استخدام رابط الدعوة هذا مسبقاً. يمكنك تسجيل الدخول بكلمة مرورك.'
+    );
   }
   if (getTsMillis(latestInvite.expiresAt) < Date.now()) {
-    throw new Error('انتهت صلاحية رابط الدعوة (24 ساعة). اطلب من المدير إنشاء دعوة جديدة.');
+    throw new Error(
+      isEn
+        ? 'This invite link expired (24 hours). Ask the manager for a new invite.'
+        : 'انتهت صلاحية رابط الدعوة (24 ساعة). اطلب من المدير إنشاء دعوة جديدة.'
+    );
   }
 
   // Pre-compute and verify login index uniqueness BEFORE mutating Firebase Auth credentials
@@ -1273,7 +1360,11 @@ export async function completeStaffOnboarding(params: {
       doc(db, 'restaurants', params.restaurant.id, 'staff_login_index', newPhoneLookupId)
     );
     if (checkSnap.exists() && checkSnap.data()?.staffUid !== latestInvite.staffId) {
-      throw new Error('رقم الهاتف المدخل مسجل لموظف آخر في نفس المطعم.');
+      throw new Error(
+        isEn
+          ? 'The entered phone number is already registered for another staff member.'
+          : 'رقم الهاتف المدخل مسجل لموظف آخر في نفس المطعم.'
+      );
     }
   }
 
@@ -1284,7 +1375,11 @@ export async function completeStaffOnboarding(params: {
     );
     if (emailCheckSnap.exists()) {
       if (emailCheckSnap.data()?.staffUid !== latestInvite.staffId) {
-        throw new Error('البريد الإلكتروني المدخل مسجل لموظف آخر في نفس المطعم.');
+        throw new Error(
+          isEn
+            ? 'The entered email is already registered for another staff member.'
+            : 'البريد الإلكتروني المدخل مسجل لموظف آخر في نفس المطعم.'
+        );
       }
       emailLookupExistsForSelf = true;
     }
@@ -1312,7 +1407,9 @@ export async function completeStaffOnboarding(params: {
         usedBootstrapPassword = false;
       } catch {
         throw new Error(
-          'تعذّر التحقق من بيانات اعتماد رابط الدعوة (قد يكون الحساب حُذف من المصادقة أو انتهت صلاحية بياناته المؤقتة). اطلب من صاحب المطعم أو المدير إصدار رابط دعوة QR جديد.'
+          isEn
+            ? 'Could not verify invite credentials (account may have been deleted or temporary link expired). Ask the owner or manager to issue a new QR invite.'
+            : 'تعذّر التحقق من بيانات اعتماد رابط الدعوة (قد يكون الحساب حُذف أو انتهت صلاحية بياناته المؤقتة). اطلب من صاحب المطعم أو المدير إصدار رابط دعوة جديد.'
         );
       }
     } else {
@@ -1322,7 +1419,11 @@ export async function completeStaffOnboarding(params: {
 
   if (cred.user.uid !== latestInvite.staffId) {
     await signOut(auth);
-    throw new Error('حدث تعارض في هوية الحساب. اطلب من المدير إعادة إنشاء الدعوة.');
+    throw new Error(
+      isEn
+        ? 'Account identity mismatch. Ask the manager to reissue the invite.'
+        : 'حدث تعارض في هوية الحساب. اطلب من المدير إعادة إنشاء الدعوة.'
+    );
   }
 
   if (usedBootstrapPassword) {
@@ -1519,16 +1620,21 @@ export async function loginStaffMember(params: {
   password: string;
 }): Promise<StaffMember> {
   const { restaurant, rawIdentifier, password } = params;
+  const isEn = getActiveLang() === 'en';
   const classified = classifyLoginIdentifier(rawIdentifier);
   if (!classified.normalized || !password) {
-    throw new Error('يرجى إدخال بيانات الدخول وكلمة المرور.');
+    throw new Error(
+      isEn ? 'Please enter your login credentials and password.' : 'يرجى إدخال بيانات الدخول وكلمة المرور.'
+    );
   }
 
   const lockKey = (await sha256Hex(classified.normalized)).slice(0, 16);
   const lockout = getLoginLockoutState(restaurant.slug, lockKey);
   if (lockout.isLocked) {
     throw new Error(
-      `تم إيقاف المحاولات مؤقتاً لحماية الحساب. انتظر ${lockout.remainingSeconds} ثانية ثم حاول مجدداً.`
+      isEn
+        ? `Login temporarily locked for security. Wait ${lockout.remainingSeconds} seconds before trying again.`
+        : `تم إيقاف المحاولات مؤقتاً لحماية الحساب. انتظر ${lockout.remainingSeconds} ثانية ثم حاول مجدداً.`
     );
   }
 
@@ -1548,13 +1654,21 @@ export async function loginStaffMember(params: {
     if (!staffSnap.exists()) {
       await signOut(auth);
       recordLoginFailure(restaurant.slug, lockKey);
-      throw new Error('هذا الحساب لا ينتمي إلى كادر هذا المطعم.');
+      throw new Error(
+        isEn
+          ? 'This account does not belong to this restaurant staff.'
+          : 'هذا الحساب لا ينتمي إلى كادر هذا المطعم.'
+      );
     }
 
     let staff = { ...(staffSnap.data() as StaffMember), uid: staffSnap.id };
     if (staff.restaurantId !== restaurant.id) {
       await signOut(auth);
-      throw new Error('عزل المطاعم: لا يمكن فتح مطعم آخر بهذا الحساب.');
+      throw new Error(
+        isEn
+          ? 'Tenant isolation: cannot open another restaurant with this account.'
+          : 'عزل المطاعم: لا يمكن فتح مطعم آخر بهذا الحساب.'
+      );
     }
 
     const suspState = resolveStaffSuspensionState(staff);
@@ -1632,10 +1746,14 @@ export async function loginStaffMember(params: {
       const nextLock = recordLoginFailure(restaurant.slug, lockKey);
       if (nextLock.isLocked) {
         throw new Error(
-          `كلمة المرور غير صحيحة. تم تفعيل حماية مؤقتة لمدة ${nextLock.remainingSeconds} ثانية.`
+          isEn
+            ? `Incorrect password. Temporary protection enabled for ${nextLock.remainingSeconds} seconds.`
+            : `كلمة المرور غير صحيحة. تم تفعيل حماية مؤقتة لمدة ${nextLock.remainingSeconds} ثانية.`
         );
       }
-      throw new Error('بيانات الدخول أو كلمة المرور غير صحيحة.');
+      throw new Error(
+        isEn ? 'Invalid login credentials or password.' : 'بيانات الدخول أو كلمة المرور غير صحيحة.'
+      );
     }
     throw err;
   }
@@ -1697,7 +1815,11 @@ export function subscribeRestaurantStaff(
     },
     (error) => {
       if (onError) {
-        onError(error instanceof Error ? error : new Error('تعذر تحميل قائمة الكادر'));
+        onError(
+          error instanceof Error
+            ? error
+            : new Error(getActiveLang() === 'en' ? 'Failed to load staff directory' : 'تعذر تحميل قائمة الكادر')
+        );
       } else {
         handleFirestoreError(error, OperationType.LIST, path);
       }
@@ -1723,7 +1845,11 @@ export function subscribeStaffAuditLogs(
     },
     (error) => {
       if (onError) {
-        onError(error instanceof Error ? error : new Error('تعذر تحميل سجل التتبع'));
+        onError(
+          error instanceof Error
+            ? error
+            : new Error(getActiveLang() === 'en' ? 'Failed to load audit log' : 'تعذر تحميل سجل التتبع')
+        );
       } else {
         handleFirestoreError(error, OperationType.LIST, path);
       }
@@ -1737,13 +1863,14 @@ export async function completeForcedPasswordChange(params: {
   newPassword: string;
   confirmPassword: string;
 }): Promise<void> {
+  const isEn = getActiveLang() === 'en';
   const pwCheck = validateStaffPassword(params.newPassword, params.confirmPassword);
   if (!pwCheck.valid) {
-    throw new Error(pwCheck.error || 'كلمة المرور غير صالحة.');
+    throw new Error(pwCheck.error || (isEn ? 'Invalid password.' : 'كلمة المرور غير صالحة.'));
   }
   const currentUser = auth.currentUser;
   if (!currentUser || currentUser.uid !== params.staff.uid) {
-    throw new Error('انتهت جلسة الدخول. أعد تسجيل الدخول أولاً.');
+    throw new Error(isEn ? 'Session expired. Please sign in again.' : 'انتهت جلسة الدخول. أعد تسجيل الدخول أولاً.');
   }
   await updatePassword(currentUser, params.newPassword);
 

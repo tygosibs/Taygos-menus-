@@ -359,8 +359,8 @@ export function TenantsManagerTab({ onOpenPublicMenu }: TenantsManagerTabProps) 
               <div>
                 <h2 className="text-sm sm:text-base font-extrabold text-zinc-950">
                   {isEn
-                    ? `🎂 Upcoming Restaurant Owner Birthdays (Next 3 Days · ${upcomingOwnerBirthdays.length})`
-                    : `🎂 أعياد ميلاد أصحاب المطاعم خلال الـ 3 أيام القادمة (${upcomingOwnerBirthdays.length})`}
+                    ? `Upcoming Restaurant Owner Birthdays (Next 3 Days · ${upcomingOwnerBirthdays.length})`
+                    : `أعياد ميلاد أصحاب المطاعم خلال الـ 3 أيام القادمة (${upcomingOwnerBirthdays.length})`}
                 </h2>
                 <p className="text-xs text-zinc-600 mt-0.5">
                   {isEn
@@ -415,17 +415,17 @@ export function TenantsManagerTab({ onOpenPublicMenu }: TenantsManagerTabProps) 
                 });
                 const countdownBadge = isEn
                   ? daysUntil === 0
-                    ? 'Today 🎂'
+                    ? 'Today'
                     : daysUntil === 1
                       ? 'Tomorrow'
                       : `In ${daysUntil} days`
                   : daysUntil === 0
-                    ? 'اليوم عيد ميلاده! 🎂'
+                    ? 'اليوم عيد ميلاده!'
                     : daysUntil === 1
-                      ? 'باقي يوم واحد 🎈'
+                      ? 'باقي يوم واحد'
                       : daysUntil === 2
-                        ? 'باقي يومين 🎈'
-                        : `باقي ${daysUntil} أيام 🎈`;
+                        ? 'باقي يومان'
+                        : `باقي ${daysUntil} أيام`;
 
                 return (
                   <div
@@ -458,10 +458,10 @@ export function TenantsManagerTab({ onOpenPublicMenu }: TenantsManagerTabProps) 
                           {selectedGiftPromoCode
                             ? isEn
                               ? `Send Birthday + ${selectedGiftPromoCode}`
-                              : `أرسل تهنئة وكود ${selectedGiftPromoCode} 🎁`
+                              : `أرسل تهنئة وكود ${selectedGiftPromoCode}`
                             : isEn
                               ? 'Send Birthday Greeting'
-                              : 'أرسل تهنئة عيد الميلاد 💬'}
+                              : 'أرسل تهنئة عيد الميلاد'}
                         </span>
                       </a>
                       <a
@@ -689,7 +689,7 @@ export function TenantsManagerTab({ onOpenPublicMenu }: TenantsManagerTabProps) 
                                   : `واتساب هدية (${selectedGiftPromoCode})`
                                 : isEn
                                   ? 'WhatsApp Discounts & Offers'
-                                  : 'واتساب الهدايا والخصومات 🎁'}
+                                  : 'واتساب الهدايا والخصومات'}
                             </span>
                           </a>
                         </>
@@ -811,7 +811,7 @@ export function TenantsManagerTab({ onOpenPublicMenu }: TenantsManagerTabProps) 
                   }`}
                 >
                   <Languages className="w-3.5 h-3.5" />
-                  <span>{lang === 'en' ? 'Store AR / EN' : 'بيانات المطعم AR / EN'}</span>
+                  <span>{lang === 'en' ? 'Store Name & Bio (AR / EN)' : 'بيانات المطعم (عربي / إنجليزي)'}</span>
                 </button>
                 <button
                   type="button"
@@ -1064,8 +1064,12 @@ export function TenantsManagerTab({ onOpenPublicMenu }: TenantsManagerTabProps) 
                             </div>
                             <p className="text-[11px] text-zinc-500 mt-1">
                               {sh.handedOverToName
-                                ? `تم التسليم إلى: ${sh.handedOverToName}`
-                                : 'الوردية مفتوحة أو بدون تسليم مسجل'}
+                                ? isEn
+                                  ? `Handed over to: ${sh.handedOverToName}`
+                                  : `تم التسليم إلى: ${sh.handedOverToName}`
+                                : isEn
+                                  ? 'Shift open or no handover recorded'
+                                  : 'الوردية مفتوحة أو بدون تسليم مسجل'}
                             </p>
                           </div>
 
@@ -1079,12 +1083,20 @@ export function TenantsManagerTab({ onOpenPublicMenu }: TenantsManagerTabProps) 
                             {isCompleted ? (
                               <>
                                 <Lock className="w-3 h-3" />
-                                <span>مغلقة 🔒</span>
+                                <span>{isEn ? 'Closed' : 'مغلقة'}</span>
                               </>
                             ) : (
                               <>
                                 <Unlock className="w-3 h-3" />
-                                <span>{sh.superAdminUnlocked ? 'مفتوحة استثنائياً 🔓' : 'نشطة'}</span>
+                                <span>
+                                  {sh.superAdminUnlocked
+                                    ? isEn
+                                      ? 'Audit Unlocked'
+                                      : 'مفتوحة استثنائياً'
+                                    : isEn
+                                      ? 'Active'
+                                      : 'نشطة'}
+                                </span>
                               </>
                             )}
                           </span>
@@ -1092,32 +1104,42 @@ export function TenantsManagerTab({ onOpenPublicMenu }: TenantsManagerTabProps) 
 
                         <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
                           <div className="p-2 rounded-xl bg-zinc-50 border border-zinc-200">
-                            <span className="text-[10px] text-zinc-500 block">مبيعات الكاش</span>
-                            <strong className="font-mono-num text-emerald-800">
+                            <span className="text-[10px] text-zinc-500 block">
+                              {isEn ? 'Cash Sales' : 'مبيعات الكاش'}
+                            </span>
+                            <strong className="font-mono-num text-emerald-800" dir="ltr">
                               {(sh.cashSales || 0).toFixed(2)}
                             </strong>
                           </div>
                           <div className="p-2 rounded-xl bg-zinc-50 border border-zinc-200">
-                            <span className="text-[10px] text-zinc-500 block">مبيعات الفيزا</span>
-                            <strong className="font-mono-num text-blue-800">
+                            <span className="text-[10px] text-zinc-500 block">
+                              {isEn ? 'Visa / Card Sales' : 'مبيعات الفيزا'}
+                            </span>
+                            <strong className="font-mono-num text-blue-800" dir="ltr">
                               {(sh.visaSales || 0).toFixed(2)}
                             </strong>
                           </div>
                           <div className="p-2 rounded-xl bg-zinc-50 border border-zinc-200">
-                            <span className="text-[10px] text-zinc-500 block">مصروفات الدرج</span>
-                            <strong className="font-mono-num text-rose-700">
+                            <span className="text-[10px] text-zinc-500 block">
+                              {isEn ? 'Drawer Expenses' : 'مصروفات الدرج'}
+                            </span>
+                            <strong className="font-mono-num text-rose-700" dir="ltr">
                               -{(sh.drawerExpensesTotal || 0).toFixed(2)}
                             </strong>
                           </div>
                           <div className="p-2 rounded-xl bg-zinc-50 border border-zinc-200">
-                            <span className="text-[10px] text-zinc-500 block">فرق الدرج</span>
-                            <strong className="font-mono-num">
+                            <span className="text-[10px] text-zinc-500 block">
+                              {isEn ? 'Drawer Variance' : 'فرق الدرج'}
+                            </span>
+                            <strong className="font-mono-num" dir="ltr">
                               {(sh.drawerVarianceTotal || 0).toFixed(2)}
                             </strong>
                           </div>
                           <div className="p-2 rounded-xl bg-zinc-950 text-white">
-                            <span className="text-[10px] text-zinc-400 block">صافي التسليم</span>
-                            <strong className="font-mono-num text-amber-400">
+                            <span className="text-[10px] text-zinc-400 block">
+                              {isEn ? 'Net Handover' : 'صافي التسليم'}
+                            </span>
+                            <strong className="font-mono-num text-amber-400" dir="ltr">
                               {(sh.expectedCashHandover || 0).toFixed(2)}
                             </strong>
                           </div>
@@ -1136,7 +1158,9 @@ export function TenantsManagerTab({ onOpenPublicMenu }: TenantsManagerTabProps) 
                               ) : (
                                 <Unlock className="w-3.5 h-3.5" />
                               )}
-                              <span>فك قفل الوردية للتعديل 🔓</span>
+                              <span>
+                                {isEn ? 'Unlock Shift for Audit Edit' : 'فك قفل الوردية للتعديل'}
+                              </span>
                             </button>
                           </div>
                         )}

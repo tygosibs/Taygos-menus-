@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   AlertTriangle,
   ArrowLeft,
+  ArrowRight,
   ArrowUpRight,
   Banknote,
   Cake,
@@ -18,73 +19,155 @@ import {
   Receipt,
   Search,
   ShieldAlert,
-  ShieldCheck,
   Sliders,
   Tag,
   UserCheck,
-  Users,
   Vault,
   Wallet,
 } from 'lucide-react';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 interface LandingOperationsShowcasesProps {
   onScrollToContact: () => void;
 }
 
 const MANAGER_PERMISSION_ITEMS = [
-  { key: 'canEditMenu', label: 'تعديل المنيو والأسعار' },
-  { key: 'canPauseItems', label: 'إيقاف الأصناف مؤقتاً' },
-  { key: 'canEditOpenOrders', label: 'تعديل الطلبات المفتوحة' },
-  { key: 'canCancelOpenOrders', label: 'إلغاء الطلبات بسبب إلزامي' },
-  { key: 'canApplyInstantDiscount', label: 'تطبيق خصم فوري' },
-  { key: 'canViewShiftReports', label: 'عرض تقارير الورديات' },
-  { key: 'canManageStaff', label: 'إدارة حسابات الكادر' },
-  { key: 'canManageHalls', label: 'إدارة الصالات وكروت QR' },
-  { key: 'canConfigureOperations', label: 'إعدادات الورديات والتشغيل' },
-  { key: 'canToggleScreenPrices', label: 'إظهار وإخفاء الأسعار بالشاشات' },
+  { key: 'canEditMenu', ar: 'تعديل المنيو والأسعار', en: 'Edit menu & prices' },
+  { key: 'canPauseItems', ar: 'إيقاف الأصناف مؤقتاً', en: 'Pause or unpause items' },
+  { key: 'canEditOpenOrders', ar: 'تعديل الطلبات المفتوحة', en: 'Edit Open orders' },
+  { key: 'canCancelOpenOrders', ar: 'إلغاء الطلبات بسبب إلزامي', en: 'Cancel orders with reason' },
+  { key: 'canApplyInstantDiscount', ar: 'تطبيق خصم فوري', en: 'Apply Instant Discount' },
+  { key: 'canViewShiftReports', ar: 'عرض تقارير الورديات', en: 'View Shift reports' },
+  { key: 'canManageStaff', ar: 'إدارة حسابات الكادر', en: 'Manage staff accounts' },
+  { key: 'canManageHalls', ar: 'إدارة الصالات وكروت الطاولات', en: 'Manage halls & Table QR Code' },
+  { key: 'canConfigureOperations', ar: 'إعدادات الورديات والتشغيل', en: 'Shift & operations setup' },
+  { key: 'canToggleScreenPrices', ar: 'إظهار وإخفاء الأسعار بالشاشات', en: 'Toggle prices on screens' },
 ] as const;
 
-const MATRIX_DAYS_EXAMPLE = [
+type MatrixCheckCategory = 'dine_in' | 'pickup' | 'delivery';
+type HandoverTargetKey = 'next_cashier' | 'manager' | 'owner_vault';
+
+const MATRIX_DAYS_EXAMPLE: Array<{
+  key: string;
+  dayAr: string;
+  dayEn: string;
+  dateAr: string;
+  dateEn: string;
+  cashierAr: string;
+  cashierEn: string;
+  net: string;
+  checks: Array<{
+    id: string;
+    category: MatrixCheckCategory;
+    typeAr: string;
+    typeEn: string;
+    methodAr: string;
+    methodEn: string;
+    total: string;
+    byAr: string;
+    byEn: string;
+  }>;
+}> = [
   {
     key: 'thu',
-    dayName: 'الخميس',
-    date: '١٩ نوفمبر',
-    cashier: 'كريم عادل',
-    cash: '٤,٢٠٠',
-    visa: '٢,١٠٠',
-    expenses: '١٥٠',
-    net: '٦,١٥٠',
+    dayAr: 'الخميس',
+    dayEn: 'Thursday',
+    dateAr: '19 نوفمبر',
+    dateEn: 'Nov 19',
+    cashierAr: 'كريم عادل',
+    cashierEn: 'Karim Adel',
+    net: '6,150',
     checks: [
-      { id: '#٤٠١', type: 'صالة · طاولة ٣', method: 'فيزا', total: '٤٦٠ ج.م', by: 'كريم عادل' },
-      { id: '#٤٠٢', type: 'تيك أواي', method: 'كاش', total: '١٩٥ ج.م', by: 'كريم عادل' },
+      {
+        id: '#401',
+        category: 'dine_in',
+        typeAr: 'صالة · طاولة 3',
+        typeEn: 'Dine-in · Table 3',
+        methodAr: 'فيزا',
+        methodEn: 'Card',
+        total: '460',
+        byAr: 'كريم عادل',
+        byEn: 'Karim Adel',
+      },
+      {
+        id: '#402',
+        category: 'pickup',
+        typeAr: 'تيك أواي',
+        typeEn: 'Takeaway',
+        methodAr: 'كاش',
+        methodEn: 'Cash',
+        total: '195',
+        byAr: 'كريم عادل',
+        byEn: 'Karim Adel',
+      },
     ],
   },
   {
     key: 'fri',
-    dayName: 'الجمعة',
-    date: '٢٠ نوفمبر',
-    cashier: 'سيف الدين',
-    cash: '٥,٨٥٠',
-    visa: '٣,٤٠٠',
-    expenses: '٢٥٠',
-    net: '٩,٠٠٠',
+    dayAr: 'الجمعة',
+    dayEn: 'Friday',
+    dateAr: '20 نوفمبر',
+    dateEn: 'Nov 20',
+    cashierAr: 'سيف الدين',
+    cashierEn: 'Seif El-Din',
+    net: '9,000',
     checks: [
-      { id: '#٥١٢', type: 'صالة · طاولة ٨', method: 'مختلط', total: '٧٤٠ ج.م', by: 'سيف الدين' },
-      { id: '#٥١٣', type: 'دليفري', method: 'فيزا', total: '٣٨٠ ج.م', by: 'سيف الدين' },
+      {
+        id: '#512',
+        category: 'dine_in',
+        typeAr: 'صالة · طاولة 8',
+        typeEn: 'Dine-in · Table 8',
+        methodAr: 'مختلط',
+        methodEn: 'Split',
+        total: '740',
+        byAr: 'سيف الدين',
+        byEn: 'Seif El-Din',
+      },
+      {
+        id: '#513',
+        category: 'delivery',
+        typeAr: 'دليفري',
+        typeEn: 'Delivery',
+        methodAr: 'فيزا',
+        methodEn: 'Card',
+        total: '380',
+        byAr: 'سيف الدين',
+        byEn: 'Seif El-Din',
+      },
     ],
   },
   {
     key: 'sat',
-    dayName: 'السبت',
-    date: '٢١ نوفمبر',
-    cashier: 'كريم عادل',
-    cash: '٤,٩٠٠',
-    visa: '٢,٧٥٠',
-    expenses: '١٨٠',
-    net: '٧,٤٧٠',
+    dayAr: 'السبت',
+    dayEn: 'Saturday',
+    dateAr: '21 نوفمبر',
+    dateEn: 'Nov 21',
+    cashierAr: 'كريم عادل',
+    cashierEn: 'Karim Adel',
+    net: '7,470',
     checks: [
-      { id: '#٦٠٤', type: 'صالة · طاولة ١', method: 'كاش', total: '٥١٠ ج.م', by: 'كريم عادل' },
-      { id: '#٦٠٥', type: 'تيك أواي', method: 'كاش', total: '٢٤٠ ج.م', by: 'كريم عادل' },
+      {
+        id: '#604',
+        category: 'dine_in',
+        typeAr: 'صالة · طاولة 1',
+        typeEn: 'Dine-in · Table 1',
+        methodAr: 'كاش',
+        methodEn: 'Cash',
+        total: '510',
+        byAr: 'كريم عادل',
+        byEn: 'Karim Adel',
+      },
+      {
+        id: '#605',
+        category: 'pickup',
+        typeAr: 'تيك أواي',
+        typeEn: 'Takeaway',
+        methodAr: 'كاش',
+        methodEn: 'Cash',
+        total: '240',
+        byAr: 'كريم عادل',
+        byEn: 'Karim Adel',
+      },
     ],
   },
 ];
@@ -92,42 +175,62 @@ const MATRIX_DAYS_EXAMPLE = [
 const CRM_CUSTOMERS_EXAMPLE = [
   {
     id: 'c1',
-    name: 'أ. كريم منصور (مثال)',
+    nameAr: 'أ. كريم منصور (مثال)',
+    nameEn: 'Karim Mansour (Example)',
     phone: '01012345678',
     orderType: 'delivery' as const,
-    orderTypeLabel: 'دليفري',
+    orderTypeAr: 'دليفري',
+    orderTypeEn: 'Delivery',
     visits: 8,
-    birthday: '١٥ نوفمبر',
-    lastOrder: '٢× سماش برجر + موهيتو',
-    favorites: 'ترافل برجر · بطاطس ترافل',
+    birthdayAr: '15 نوفمبر',
+    birthdayEn: 'Nov 15',
+    lastOrderAr: '2× سماش برجر + موهيتو',
+    lastOrderEn: '2x Smash Burger + Mojito',
+    favoritesAr: 'ترافل برجر · بطاطس ترافل',
+    favoritesEn: 'Truffle Burger · Truffle Fries',
   },
   {
     id: 'c2',
-    name: 'أ. منى محمود (مثال)',
+    nameAr: 'أ. منى محمود (مثال)',
+    nameEn: 'Mona Mahmoud (Example)',
     phone: '01198765432',
     orderType: 'dine_in' as const,
-    orderTypeLabel: 'صالة',
+    orderTypeAr: 'صالة',
+    orderTypeEn: 'Dine-in',
     visits: 12,
-    birthday: '٢٤ نوفمبر (بعد يومين)',
-    lastOrder: 'قهوة لاتيه + مولتن كيك',
-    favorites: 'لاتيه كراميل · مولتن كيك',
+    birthdayAr: '24 نوفمبر (بعد يومين)',
+    birthdayEn: 'Nov 24 (In 2 days)',
+    lastOrderAr: 'قهوة لاتيه + مولتن كيك',
+    lastOrderEn: 'Cafe Latte + Molten Cake',
+    favoritesAr: 'لاتيه كراميل · مولتن كيك',
+    favoritesEn: 'Caramel Latte · Molten Cake',
   },
   {
     id: 'c3',
-    name: 'م. طارق حسن (مثال)',
+    nameAr: 'م. طارق حسن (مثال)',
+    nameEn: 'Tarek Hassan (Example)',
     phone: '01244556677',
     orderType: 'pickup' as const,
-    orderTypeLabel: 'تيك أواي',
+    orderTypeAr: 'تيك أواي',
+    orderTypeEn: 'Takeaway',
     visits: 5,
-    birthday: '٣ مارس',
-    lastOrder: 'شيش طاووق + عصير ليمون',
-    favorites: 'شيش طاووق مشوي',
+    birthdayAr: '3 مارس',
+    birthdayEn: 'Mar 3',
+    lastOrderAr: 'شيش طاووق + عصير ليمون',
+    lastOrderEn: 'Shish Tawook + Fresh Lemon',
+    favoritesAr: 'شيش طاووق مشوي',
+    favoritesEn: 'Chargrilled Shish Tawook',
   },
 ];
 
 export function LandingOperationsShowcases({
   onScrollToContact,
 }: LandingOperationsShowcasesProps) {
+  const { lang, dir } = useLanguage();
+  const isAr = lang === 'ar';
+  const DirectionalArrow = dir === 'rtl' ? ArrowLeft : ArrowRight;
+  const currencyLabel = isAr ? 'ج.م' : 'EGP';
+
   // 1) Supervision interactive state
   const [moltenPaused, setMoltenPaused] = useState(true);
   const [supervisionStep, setSupervisionStep] = useState<'covered' | 'action'>('covered');
@@ -149,9 +252,7 @@ export function LandingOperationsShowcases({
 
   // 3) Treasury & Shifts animated step state
   const [treasuryStep, setTreasuryStep] = useState<0 | 1 | 2>(2);
-  const [handoverTarget, setHandoverTarget] = useState<'كاشير تالٍ' | 'المدير' | 'خزنة المالك'>(
-    'خزنة المالك'
-  );
+  const [handoverTarget, setHandoverTarget] = useState<HandoverTargetKey>('owner_vault');
 
   // 4) Reports & Audit interactive state
   const [selectedDayIdx, setSelectedDayIdx] = useState(1);
@@ -165,7 +266,7 @@ export function LandingOperationsShowcases({
   const [stampsFilled, setStampsFilled] = useState(4);
   const [bdaySent, setBdaySent] = useState(false);
 
-  // Gentle auto-progression for animated "مثال" cards (strictly honors prefers-reduced-motion)
+  // Gentle auto-progression for animated example cards (respects prefers-reduced-motion)
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -182,21 +283,31 @@ export function LandingOperationsShowcases({
 
   const matchedCrmCustomers = CRM_CUSTOMERS_EXAMPLE.filter((c) => {
     if (crmTypeFilter !== 'all' && c.orderType !== crmTypeFilter) return false;
-    const q = crmPhoneQuery.trim();
+    const q = crmPhoneQuery.trim().toLowerCase();
     if (!q) return true;
-    return c.phone.includes(q) || c.name.includes(q);
+    return (
+      c.phone.includes(q) ||
+      c.nameAr.toLowerCase().includes(q) ||
+      c.nameEn.toLowerCase().includes(q)
+    );
   });
 
   const filteredChecks = activeDay.checks.filter((ch) => {
-    if (archiveFilter === 'dine_in') return ch.type.includes('صالة');
-    if (archiveFilter === 'delivery') return ch.type.includes('دليفري');
+    if (archiveFilter === 'dine_in') return ch.category === 'dine_in';
+    if (archiveFilter === 'delivery') return ch.category === 'delivery';
     return true;
   });
+
+  const handoverTargetLabel = (key: HandoverTargetKey) => {
+    if (key === 'next_cashier') return isAr ? 'كاشير تالٍ' : 'Next Cashier';
+    if (key === 'manager') return isAr ? 'المدير الإشرافي' : 'Supervisory Manager';
+    return isAr ? 'خزنة المالك' : "Owner's Safe";
+  };
 
   return (
     <>
       {/* ═══════════════════════════════════════════════════════════════════════ */}
-      {/* 1) المدير والإشراف                                                      */}
+      {/* 1) Supervisory Manager                                                  */}
       {/* ═══════════════════════════════════════════════════════════════════════ */}
       <section
         id="showcase-supervision"
@@ -205,10 +316,14 @@ export function LandingOperationsShowcases({
         <div className="max-w-5xl mx-auto px-4 sm:px-6 space-y-8">
           <div className="space-y-2.5 max-w-2xl">
             <h2 className="landing-cairo-heading text-2xl sm:text-4xl text-[#14285A] text-balance">
-              ١. المدير والإشراف الكامل على الشاشات والطلبات
+              {isAr
+                ? '1. المدير الإشرافي والرقابة الكاملة على الشاشات والطلبات'
+                : '1. Supervisory Manager & Full Floor Oversight'}
             </h2>
             <p className="text-sm sm:text-base text-[#0E1B3D]/85">
-              يتابع المدير كل كادر باسم الموظف المناوب، ويعدّل أو يلغي أو يخصم بسبب إلزامي ويدير عهدته والأصناف الموقوفة.
+              {isAr
+                ? 'يتابع المدير كل كادر باسم الموظف المناوب، ويعدّل أو يلغي أو يخصم بسبب إلزامي ويدير عهدته والأصناف الموقوفة.'
+                : 'Supervises each screen by the on-duty employee, applies reason-locked edits or Instant Discounts, manages Float, and controls any Paused Item.'}
             </p>
           </div>
 
@@ -216,7 +331,9 @@ export function LandingOperationsShowcases({
           <div className="bg-[#FBF7EF] border border-[#E6D9C3] rounded-3xl p-5 sm:p-8 space-y-5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="px-3 py-1 rounded-xl bg-[#F3EBDD] border border-[#E6D9C3] text-xs font-bold text-[#14285A]">
-                مثال · شاشة إشراف المدير وعهدته
+                {isAr
+                  ? 'مثال · شاشة إشراف المدير وعهدته'
+                  : 'Example · Manager Supervision & Float'}
               </span>
               <div className="flex items-center gap-2">
                 <button
@@ -228,7 +345,7 @@ export function LandingOperationsShowcases({
                       : 'bg-[#F3EBDD] border-[#E6D9C3] text-[#14285A]'
                   }`}
                 >
-                  حالة الكوادر
+                  {isAr ? 'حالة الكوادر' : 'Staff Coverage'}
                 </button>
                 <button
                   type="button"
@@ -239,7 +356,7 @@ export function LandingOperationsShowcases({
                       : 'bg-[#F3EBDD] border-[#E6D9C3] text-[#14285A]'
                   }`}
                 >
-                  تعديل بسبب وخصم
+                  {isAr ? 'تعديل بسبب وخصم' : 'Reason Edit & Discount'}
                 </button>
               </div>
             </div>
@@ -257,22 +374,34 @@ export function LandingOperationsShowcases({
                   <div className="flex items-center justify-between text-xs font-bold text-[#14285A]">
                     <span className="flex items-center gap-1.5">
                       <Crown className="w-4 h-4 text-[#E8833A]" />
-                      <span>شاشة الكاشير · المناوب: كريم عادل (مثال)</span>
+                      <span>
+                        {isAr
+                          ? 'شاشة الكاشير · المناوب: كريم عادل (مثال)'
+                          : 'Cashier Screen · On Duty: Karim Adel (Example)'}
+                      </span>
                     </span>
-                    <span className="text-[#2F8F5B]">دخول إشرافي</span>
+                    <span className="text-[#2F8F5B]">
+                      {isAr ? 'دخول إشرافي' : 'Supervisory Mode'}
+                    </span>
                   </div>
                   <p className="text-xs text-[#0E1B3D]/80">
-                    يفتح المدير الشاشة للمراجعة باسم الموظف المناوب، أو يبدأ وردية مؤقتة عند غياب الكادر.
+                    {isAr
+                      ? 'يفتح المدير الشاشة للمراجعة باسم الموظف المناوب، أو يبدأ وردية مؤقتة عند غياب الكادر.'
+                      : 'Opens the screen for review under the active staff member, or starts a relief shift only when uncovered.'}
                   </p>
                 </div>
 
                 <div className="bg-[#14285A] text-[#FBF7EF] rounded-2xl p-4 flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-[11px] text-[#FBF7EF]/75 font-bold">عهدة المدير الحالية (مثال)</p>
-                    <p className="landing-cairo-heading text-xl font-mono-num">١,٢٠٠ ج.م</p>
+                    <p className="text-[11px] text-[#FBF7EF]/75 font-bold">
+                      {isAr ? 'عهدة المدير الحالية (مثال)' : 'Current Manager Float (Example)'}
+                    </p>
+                    <p className="landing-cairo-heading text-xl font-mono-num">
+                      1,200 {currencyLabel}
+                    </p>
                   </div>
                   <span className="px-3 py-1.5 rounded-xl bg-[#E8833A] text-[#0E1B3D] text-xs font-bold">
-                    جاهز للترحيل لخزنة المالك
+                    {isAr ? 'جاهز للترحيل لخزنة المالك' : "Ready for Owner's Safe"}
                   </span>
                 </div>
               </div>
@@ -289,12 +418,18 @@ export function LandingOperationsShowcases({
                   <div className="flex items-center justify-between text-xs font-bold text-[#14285A]">
                     <span className="flex items-center gap-1.5">
                       <UserCheck className="w-4 h-4 text-[#E8833A]" />
-                      <span>تعديل وإلغاء وخصم فوري (مثال)</span>
+                      <span>
+                        {isAr ? 'تعديل وإلغاء وخصم فوري (مثال)' : 'Edit, Cancel & Instant Discount (Example)'}
+                      </span>
                     </span>
-                    <span className="text-[#E8833A]">السبب إلزامي</span>
+                    <span className="text-[#E8833A]">
+                      {isAr ? 'السبب إلزامي' : 'Reason Mandatory'}
+                    </span>
                   </div>
                   <p className="text-xs text-[#0E1B3D]/85">
-                    طاولة ٥ (#١٠٨): خصم فوري ١٠٪ / حذف صنف · السبب المسجل: «تبديل بناءً على طلب الضيف».
+                    {isAr
+                      ? 'طاولة 5 (#108): خصم فوري 10% / حذف صنف · السبب المسجل: «تبديل بناءً على طلب الضيف».'
+                      : 'Table 5 (#108): 10% Instant Discount / item removed · Logged reason: "Swapped per guest request."'}
                   </p>
                 </div>
 
@@ -302,10 +437,14 @@ export function LandingOperationsShowcases({
                   <div className="min-w-0">
                     <p className="text-xs font-bold text-[#14285A] flex items-center gap-1.5">
                       <PauseCircle className="w-4 h-4 text-[#E8833A] shrink-0" />
-                      <span>لوحة الأصناف الموقوفة مؤقتاً (مثال)</span>
+                      <span>
+                        {isAr ? 'لوحة الأصناف الموقوفة مؤقتاً (مثال)' : 'Paused Items Panel (Example)'}
+                      </span>
                     </p>
                     <p className="text-xs text-[#0E1B3D]/75 mt-0.5 truncate">
-                      مولتن كيك شوكولاتة — {moltenPaused ? 'موقوف مؤقتاً من المنيو' : 'متاح للطلب الآن'}
+                      {isAr
+                        ? `مولتن كيك شوكولاتة — ${moltenPaused ? 'صنف موقوف مؤقتاً من المنيو' : 'متاح للطلب الآن'}`
+                        : `Chocolate Molten Cake — ${moltenPaused ? 'Paused Item on Digital Menu' : 'Available to order now'}`}
                     </p>
                   </div>
                   <button
@@ -317,7 +456,13 @@ export function LandingOperationsShowcases({
                         : 'bg-[#E8833A] text-[#0E1B3D]'
                     }`}
                   >
-                    {moltenPaused ? 'إعادة التفعيل' : 'إيقاف مؤقت'}
+                    {moltenPaused
+                      ? isAr
+                        ? 'إعادة التفعيل'
+                        : 'Resume Item'
+                      : isAr
+                        ? 'إيقاف مؤقت'
+                        : 'Pause Item'}
                   </button>
                 </div>
               </div>
@@ -328,22 +473,34 @@ export function LandingOperationsShowcases({
           <ul className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm font-medium text-[#0E1B3D]">
             <li className="bg-[#FBF7EF] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
               <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-              <span>دخول بوضع الإشراف باسم الموظف المناوب، وبدء مناوبة عند غياب الكادر فقط.</span>
+              <span>
+                {isAr
+                  ? 'دخول بوضع الإشراف باسم الموظف المناوب، وبدء مناوبة عند غياب الكادر فقط.'
+                  : 'Supervises live screens by the on-duty employee and fills shifts only when unassigned.'}
+              </span>
             </li>
             <li className="bg-[#FBF7EF] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
               <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-              <span>تعديل وإلغاء الطلبات وتطبيق الخصومات الفورية بكتابة سبب إلزامي بسجل الرقابة.</span>
+              <span>
+                {isAr
+                  ? 'تعديل وإلغاء الطلبات وتطبيق الخصومات الفورية بكتابة سبب إلزامي بسجل الرقابة.'
+                  : 'Edits, cancels orders, or applies an Instant Discount with mandatory Audit Log reasons.'}
+              </span>
             </li>
             <li className="bg-[#FBF7EF] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
               <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-              <span>لوحة لإيقاف أو تفعيل الأصناف مؤقتاً مع متابعة عهدة المدير النقدية.</span>
+              <span>
+                {isAr
+                  ? 'لوحة لإيقاف أو تفعيل الأصناف مؤقتاً مع متابعة عهدة المدير النقدية.'
+                  : 'Instant Paused Item controls alongside live tracking of Manager Float cash.'}
+              </span>
             </li>
           </ul>
         </div>
       </section>
 
       {/* ═══════════════════════════════════════════════════════════════════════ */}
-      {/* 2) الأدوار والحسابات                                                    */}
+      {/* 2) Roles & Accounts                                                     */}
       {/* ═══════════════════════════════════════════════════════════════════════ */}
       <section
         id="showcase-roles-access"
@@ -352,17 +509,23 @@ export function LandingOperationsShowcases({
         <div className="max-w-5xl mx-auto px-4 sm:px-6 space-y-8">
           <div className="space-y-2.5 max-w-2xl">
             <h2 className="landing-cairo-heading text-2xl sm:text-4xl text-[#14285A] text-balance">
-              ٢. الأدوار والحسابات ومفاتيح صلاحيات المدير
+              {isAr
+                ? '2. الأدوار والحسابات ومفاتيح صلاحيات المدير'
+                : '2. Roles, Staff Accounts & Manager Permissions'}
             </h2>
             <p className="text-sm sm:text-base text-[#0E1B3D]/85">
-              يتحكم المالك بدقة في صلاحيات المدير وحسابات الموظفين، مع تفعيل برابط أو كود QR وإيقاف مؤقت بالسبب.
+              {isAr
+                ? 'يتحكم المالك بدقة في صلاحيات المدير وحسابات الموظفين، مع تفعيل برابط أو كود دعوة وإيقاف مؤقت بالسبب.'
+                : 'Owners toggle granular Permissions for managers, onboard staff via link or QR invite, and suspend accounts with documented reasons.'}
             </p>
           </div>
 
           {/* Animated / Interactive Example Card */}
           <div className="bg-[#F3EBDD] border border-[#E6D9C3] rounded-3xl p-5 sm:p-8 space-y-5">
             <span className="inline-block px-3 py-1 rounded-xl bg-[#FBF7EF] border border-[#E6D9C3] text-xs font-bold text-[#14285A]">
-              مثال · مفاتيح تشغيل وإيقاف لصلاحيات المدير وحسابات الكادر
+              {isAr
+                ? 'مثال · مفاتيح تشغيل وإيقاف لصلاحيات المدير وحسابات الكادر'
+                : 'Example · Manager Permissions Toggles & Staff Access'}
             </span>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
@@ -371,10 +534,15 @@ export function LandingOperationsShowcases({
                 <div className="flex items-center justify-between text-xs font-bold text-[#14285A]">
                   <span className="flex items-center gap-1.5">
                     <Sliders className="w-4 h-4 text-[#E8833A]" />
-                    <span>مفاتيح صلاحيات المدير (اضغط للتبديل · مثال)</span>
+                    <span>
+                      {isAr
+                        ? 'مفاتيح صلاحيات المدير (اضغط للتبديل · مثال)'
+                        : 'Manager Permissions (Tap to toggle · Example)'}
+                    </span>
                   </span>
-                  <span className="text-[#2F8F5B]">
-                    {Object.values(permState).filter(Boolean).length} / {MANAGER_PERMISSION_ITEMS.length} مفعّلة
+                  <span className="text-[#2F8F5B] font-mono-num">
+                    {Object.values(permState).filter(Boolean).length} / {MANAGER_PERMISSION_ITEMS.length}{' '}
+                    {isAr ? 'مفعّلة' : 'Enabled'}
                   </span>
                 </div>
 
@@ -388,12 +556,15 @@ export function LandingOperationsShowcases({
                         onClick={() =>
                           setPermState((prev) => ({ ...prev, [item.key]: !prev[item.key] }))
                         }
-                        className="px-3 py-2 rounded-xl border border-[#E6D9C3] bg-[#F3EBDD] flex items-center justify-between gap-2 text-xs cursor-pointer text-right"
+                        className="px-3 py-2 rounded-xl border border-[#E6D9C3] bg-[#F3EBDD] flex items-center justify-between gap-2 text-xs cursor-pointer text-start"
                       >
-                        <span className="font-semibold text-[#0E1B3D] truncate">{item.label}</span>
+                        <span className="font-semibold text-[#0E1B3D] truncate">
+                          {isAr ? item.ar : item.en}
+                        </span>
                         <span
+                          dir="ltr"
                           className={`w-10 h-5 rounded-full p-0.5 flex items-center transition-colors motion-reduce:transition-none shrink-0 ${
-                            enabled ? 'bg-[#2F8F5B] justify-start' : 'bg-[#0E1B3D]/25 justify-end'
+                            enabled ? 'bg-[#2F8F5B] justify-end' : 'bg-[#0E1B3D]/25 justify-start'
                           }`}
                         >
                           <span className="w-4 h-4 rounded-full bg-[#FBF7EF] shadow-2xs" />
@@ -410,18 +581,28 @@ export function LandingOperationsShowcases({
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-[#14285A] flex items-center gap-1.5">
                       <QrCode className="w-4 h-4 text-[#E8833A]" />
-                      <span>دعوة تفعيل موظف جديد (مثال)</span>
+                      <span>
+                        {isAr ? 'دعوة تفعيل موظف جديد (مثال)' : 'New Staff Activation Invite (Example)'}
+                      </span>
                     </span>
-                    <span className="text-[11px] font-bold text-[#2F8F5B]">رابط + QR</span>
+                    <span className="text-[11px] font-bold text-[#2F8F5B]">
+                      {isAr ? 'رابط + كود دعوة' : 'Link + QR'}
+                    </span>
                   </div>
                   <p className="text-xs text-[#0E1B3D]/80 leading-relaxed">
-                    ينشئ المالك أو المدير رابط دعوة أو كود QR لمرة واحدة يفعّل به الموظف كلمة مروره لدخول شاشته فقط.
+                    {isAr
+                      ? 'ينشئ المالك أو المدير رابط دعوة أو كود مسح لمرة واحدة يفعّل به الموظف كلمة مروره لدخول شاشته فقط.'
+                      : 'The owner or manager generates a one-time invite link or QR so the employee activates credentials strictly for their role.'}
                   </p>
                 </div>
 
                 <div className="bg-[#FBF7EF] border border-[#E6D9C3] rounded-2xl p-4 space-y-3">
                   <div className="flex items-center justify-between text-xs font-bold">
-                    <span className="text-[#14285A]">حساب كابتن صالة · أحمد علي (مثال)</span>
+                    <span className="text-[#14285A]">
+                      {isAr
+                        ? 'حساب كابتن صالة · أحمد علي (مثال)'
+                        : 'Captain / Waiter · Ahmed Ali (Example)'}
+                    </span>
                     <span
                       className={`px-2 py-0.5 rounded-md ${
                         staffSuspendedDemo
@@ -429,12 +610,20 @@ export function LandingOperationsShowcases({
                           : 'bg-[#2F8F5B]/15 text-[#2F8F5B]'
                       }`}
                     >
-                      {staffSuspendedDemo ? 'موقوف مؤقتاً' : 'حساب نشط'}
+                      {staffSuspendedDemo
+                        ? isAr
+                          ? 'موقوف مؤقتاً'
+                          : 'Suspended'
+                        : isAr
+                          ? 'حساب نشط'
+                          : 'Active'}
                     </span>
                   </div>
                   {staffSuspendedDemo && (
                     <p className="text-[11px] text-[#0E1B3D]/80 bg-[#F3EBDD] border border-[#E6D9C3] rounded-lg px-2.5 py-1.5">
-                      السبب المسجل: إجازة ٢٤ ساعة (يُمنع تسجيل الدخول حتى انتهاء المدة).
+                      {isAr
+                        ? 'السبب المسجل: إجازة 24 ساعة (يُمنع تسجيل الدخول حتى انتهاء المدة).'
+                        : 'Logged Reason: 24-hour leave (login blocked until expiry).'}
                     </p>
                   )}
                   <button
@@ -446,7 +635,13 @@ export function LandingOperationsShowcases({
                         : 'bg-[#14285A] text-[#FBF7EF]'
                     }`}
                   >
-                    {staffSuspendedDemo ? 'إلغاء الإيقاف المؤقت (مثال)' : 'تجربة إيقاف موظف مؤقتاً بسبب'}
+                    {staffSuspendedDemo
+                      ? isAr
+                        ? 'إلغاء الإيقاف المؤقت (مثال)'
+                        : 'Lift Temporary Suspension (Example)'
+                      : isAr
+                        ? 'تجربة إيقاف موظف مؤقتاً بسبب'
+                        : 'Test Temporary Suspension with Reason'}
                   </button>
                 </div>
               </div>
@@ -456,22 +651,34 @@ export function LandingOperationsShowcases({
           <ul className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm font-medium text-[#0E1B3D]">
             <li className="bg-[#F3EBDD] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
               <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-              <span>مفاتيح صلاحيات دقيقة للمدير يحددها المالك مثل تعديل المنيو، الإلغاء، التقارير، الصالات وQR، وإظهار الأسعار.</span>
+              <span>
+                {isAr
+                  ? 'مفاتيح صلاحيات دقيقة للمدير يحددها المالك مثل تعديل المنيو، الإلغاء، التقارير، الصالات، وإظهار الأسعار.'
+                  : 'Granular Permissions per manager for menu edits, cancellations, reports, Table QR Code setup, and price visibility.'}
+              </span>
             </li>
             <li className="bg-[#F3EBDD] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
               <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-              <span>بوابة كادر خاصة بحساب مستقل لكل موظف وتفعيل فوري برابط أو كود QR دعوة لمرة واحدة.</span>
+              <span>
+                {isAr
+                  ? 'بوابة كادر خاصة بحساب مستقل لكل موظف وتفعيل فوري برابط أو كود دعوة لمرة واحدة.'
+                  : 'Dedicated Staff Portal with individual accounts activated immediately via one-time QR or link.'}
+              </span>
             </li>
             <li className="bg-[#F3EBDD] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
               <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-              <span>إمكانية إيقاف أي موظف مؤقتاً أو دائماً مع إلزامية توثيق سبب الإيقاف في السجل.</span>
+              <span>
+                {isAr
+                  ? 'إمكانية إيقاف أي موظف مؤقتاً أو دائماً مع إلزامية توثيق سبب الإيقاف في السجل.'
+                  : 'Temporarily or permanently suspend any staff account with a mandatory reason recorded in the Audit Log.'}
+              </span>
             </li>
           </ul>
         </div>
       </section>
 
       {/* ═══════════════════════════════════════════════════════════════════════ */}
-      {/* 3) الخزنة والورديات (مهم، أبرزه)                                         */}
+      {/* 3) Treasury & Shifts (Flagship Highlight)                               */}
       {/* ═══════════════════════════════════════════════════════════════════════ */}
       <section
         id="showcase-treasury-shifts"
@@ -482,18 +689,26 @@ export function LandingOperationsShowcases({
             <div className="space-y-2.5 max-w-2xl">
               <p className="text-xs font-bold text-[#14285A] flex items-center gap-2">
                 <Vault className="w-4 h-4 text-[#E8833A]" />
-                <span>الرقابة المالية الأساسية للمطعم</span>
+                <span>
+                  {isAr ? 'الرقابة المالية الأساسية للمطعم' : 'Core Financial & Cash Control'}
+                </span>
               </p>
               <h2 className="landing-cairo-heading text-2xl sm:text-4xl text-[#14285A] text-balance">
-                ٣. الخزنة والورديات من العهدة حتى خزنة المالك
+                {isAr
+                  ? '3. الخزنة والورديات من العهدة حتى خزنة المالك'
+                  : "3. Treasury & Shifts: From Float to Owner's Safe"}
               </h2>
               <p className="text-sm sm:text-base text-[#0E1B3D]/85">
-                اربط فتح وردية الكاشير والدرج ومصروفاته بالتسليم وخزنة المالك الرئيسية مع حماية الورديات المغلقة من أي تعديل.
+                {isAr
+                  ? 'اربط فتح وردية الكاشير والدرج ومصروفاته بالتسليم وخزنة المالك الرئيسية مع حماية الورديات المغلقة من أي تعديل.'
+                  : "Connect Cashier / POS shift opening, Cash Drawer expenses, and Shift Handover directly to the Owner's Safe with locked closed shifts."}
               </p>
             </div>
             <span className="px-4 py-2 rounded-xl bg-[#14285A] text-[#FBF7EF] text-xs font-bold self-start lg:self-auto flex items-center gap-2">
               <Lock className="w-4 h-4 text-[#E8833A]" />
-              <span>الوردية المغلقة محمية من التعديل</span>
+              <span>
+                {isAr ? 'الوردية المغلقة محمية من التعديل' : 'Closed shifts are tamper-locked'}
+              </span>
             </span>
           </div>
 
@@ -501,14 +716,16 @@ export function LandingOperationsShowcases({
           <div className="bg-[#14285A] text-[#FBF7EF] rounded-3xl p-5 sm:p-8 space-y-6 shadow-md">
             <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-[#FBF7EF]/15">
               <span className="px-3 py-1 rounded-xl bg-[#FBF7EF]/10 border border-[#FBF7EF]/20 text-xs font-bold">
-                مثال · دورة تجميع الوردية وإقفالها وظهورها عند المالك
+                {isAr
+                  ? 'مثال · دورة تجميع الوردية وإقفالها وظهورها عند المالك'
+                  : "Example · Full Shift Settlement Cycle to Owner's Safe"}
               </span>
 
               <div className="flex flex-wrap items-center gap-2">
                 {[
-                  { idx: 0 as const, label: '١. فتح الوردية' },
-                  { idx: 1 as const, label: '٢. حساب الدرج' },
-                  { idx: 2 as const, label: '٣. التسليم وخزنة المالك' },
+                  { idx: 0 as const, ar: '1. فتح الوردية', en: '1. Open Shift' },
+                  { idx: 1 as const, ar: '2. حساب الدرج', en: '2. Cash Drawer' },
+                  { idx: 2 as const, ar: '3. التسليم وخزنة المالك', en: "3. Handover & Owner's Safe" },
                 ].map((step) => (
                   <button
                     key={step.idx}
@@ -520,7 +737,7 @@ export function LandingOperationsShowcases({
                         : 'bg-[#FBF7EF]/10 text-[#FBF7EF] hover:bg-[#FBF7EF]/20'
                     }`}
                   >
-                    {step.label}
+                    {isAr ? step.ar : step.en}
                   </button>
                 ))}
               </div>
@@ -538,19 +755,23 @@ export function LandingOperationsShowcases({
                 <div className="flex items-center justify-between text-xs font-bold">
                   <span className="flex items-center gap-1.5">
                     <Wallet className="w-4 h-4 text-[#E8833A]" />
-                    <span>١. فتح الوردية بالعهدة</span>
+                    <span>{isAr ? '1. فتح الوردية بالعهدة' : '1. Open Shift with Float'}</span>
                   </span>
-                  <span className="opacity-75">الصباحية</span>
+                  <span className="opacity-75">{isAr ? 'الصباحية' : 'Morning Shift'}</span>
                 </div>
 
                 <div className="space-y-1.5 text-xs">
                   <div className="flex items-center justify-between">
-                    <span className="opacity-80">الرصيد الافتتاحي</span>
-                    <span className="font-mono-num font-bold">١,٠٠٠ ج.م</span>
+                    <span className="opacity-80">
+                      {isAr ? 'الرصيد الافتتاحي' : 'Opening Float'}
+                    </span>
+                    <span className="font-mono-num font-bold">1,000 {currencyLabel}</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="opacity-80">الرصيد المرحّل (من سابقة/عهدة)</span>
-                    <span className="font-mono-num font-bold">+ ٥٠٠ ج.م</span>
+                    <span className="opacity-80">
+                      {isAr ? 'الرصيد المرحّل (من سابقة/عهدة)' : 'Carried-over Balance'}
+                    </span>
+                    <span className="font-mono-num font-bold">+ 500 {currencyLabel}</span>
                   </div>
                 </div>
 
@@ -562,7 +783,11 @@ export function LandingOperationsShowcases({
                   }`}
                 >
                   <AlertTriangle className="w-4 h-4 text-[#E8833A] shrink-0 mt-0.5" />
-                  <span>شريط تنبيه عند موعد نهاية الوردية للتمديد أو التسليم.</span>
+                  <span>
+                    {isAr
+                      ? 'شريط تنبيه عند موعد نهاية الوردية للتمديد أو التسليم.'
+                      : 'Alert banner triggers at scheduled shift end to extend or hand over.'}
+                  </span>
                 </div>
               </div>
 
@@ -577,35 +802,41 @@ export function LandingOperationsShowcases({
                 <div className="flex items-center justify-between text-xs font-bold pb-1.5 border-b border-current/15">
                   <span className="flex items-center gap-1.5">
                     <Banknote className="w-4 h-4 text-[#E8833A]" />
-                    <span>٢. مجاميع الدرج (مثال)</span>
+                    <span>{isAr ? '2. مجاميع الدرج (مثال)' : '2. Cash Drawer Ledger (Example)'}</span>
                   </span>
-                  <span>قيد العمل</span>
+                  <span>{isAr ? 'قيد العمل' : 'Active'}</span>
                 </div>
 
                 <div className="space-y-1.5 text-xs">
                   <div className="flex items-center justify-between">
-                    <span className="opacity-80">افتتاحي + مرحّل</span>
-                    <span className="font-mono-num font-bold">١,٥٠٠ ج.م</span>
+                    <span className="opacity-80">
+                      {isAr ? 'افتتاحي + مرحّل' : 'Opening + Carried Over'}
+                    </span>
+                    <span className="font-mono-num font-bold">1,500 {currencyLabel}</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="opacity-80">مبيعات الكاش</span>
-                    <span className="font-mono-num font-bold text-[#2F8F5B]">+ ٣,٢٠٠ ج.م</span>
+                    <span className="opacity-80">{isAr ? 'مبيعات الكاش' : 'Cash Sales'}</span>
+                    <span className="font-mono-num font-bold text-[#2F8F5B]">
+                      + 3,200 {currencyLabel}
+                    </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="opacity-80">مبيعات الفيزا</span>
-                    <span className="font-mono-num font-bold">١,٨٠٠ ج.م</span>
+                    <span className="opacity-80">{isAr ? 'مبيعات الفيزا' : 'Card Sales'}</span>
+                    <span className="font-mono-num font-bold">1,800 {currencyLabel}</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="opacity-80">مصروفات الدرج</span>
-                    <span className="font-mono-num font-bold text-[#E8833A]">− ٢٥٠ ج.م</span>
+                    <span className="opacity-80">{isAr ? 'مصروفات الدرج' : 'Drawer Expenses'}</span>
+                    <span className="font-mono-num font-bold text-[#E8833A]">
+                      - 250 {currencyLabel}
+                    </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="opacity-80">فرق الدرج</span>
-                    <span className="font-mono-num font-bold">+ ٥ ج.م</span>
+                    <span className="opacity-80">{isAr ? 'فرق الدرج' : 'Drawer Variance'}</span>
+                    <span className="font-mono-num font-bold">+ 5 {currencyLabel}</span>
                   </div>
                   <div className="pt-2 border-t border-current/15 flex items-center justify-between font-extrabold text-sm">
-                    <span>صافي الكاش المتوقع</span>
-                    <span className="font-mono-num">٤,٤٥٥ ج.م</span>
+                    <span>{isAr ? 'صافي الكاش المتوقع' : 'Expected Net Cash'}</span>
+                    <span className="font-mono-num">4,455 {currencyLabel}</span>
                   </div>
                 </div>
               </div>
@@ -621,17 +852,19 @@ export function LandingOperationsShowcases({
                 <div className="flex items-center justify-between text-xs font-bold">
                   <span className="flex items-center gap-1.5">
                     <Lock className="w-4 h-4 text-[#2F8F5B]" />
-                    <span>٣. تسليم وإقفال الوردية</span>
+                    <span>{isAr ? '3. تسليم وإقفال الوردية' : '3. Shift Handover & Lock'}</span>
                   </span>
                   <span className="px-2 py-0.5 rounded bg-[#2F8F5B]/15 text-[#2F8F5B]">
-                    محمية من التعديل
+                    {isAr ? 'محمية من التعديل' : 'Locked'}
                   </span>
                 </div>
 
                 <div className="space-y-1.5">
-                  <p className="text-[11px] font-bold opacity-80">جهة التسليم (اضغط للمعاينة):</p>
+                  <p className="text-[11px] font-bold opacity-80">
+                    {isAr ? 'جهة التسليم (اضغط للمعاينة):' : 'Handover Target (Tap to preview):'}
+                  </p>
                   <div className="grid grid-cols-3 gap-1.5 text-[11px] font-bold">
-                    {(['كاشير تالٍ', 'المدير', 'خزنة المالك'] as const).map((target) => (
+                    {(['next_cashier', 'manager', 'owner_vault'] as const).map((target) => (
                       <button
                         key={target}
                         type="button"
@@ -642,18 +875,26 @@ export function LandingOperationsShowcases({
                             : 'border-current/25 opacity-80'
                         }`}
                       >
-                        {target}
+                        {handoverTargetLabel(target)}
                       </button>
                     ))}
                   </div>
                 </div>
 
                 <div className="rounded-xl p-3 bg-[#2F8F5B]/12 border border-[#2F8F5B]/30 space-y-1 text-xs">
-                  <p className="font-bold">خزنة المالك الرئيسية (مثال)</p>
-                  <p className="font-mono-num font-extrabold">
-                    نقدي محصّل: ٤,٤٥٥ ج.م · فيزا: ١,٨٠٠ ج.م
+                  <p className="font-bold">
+                    {isAr ? 'خزنة المالك الرئيسية (مثال)' : "Owner's Safe Summary (Example)"}
                   </p>
-                  <p className="text-[11px] opacity-80">المُرحّل إلى: {handoverTarget}</p>
+                  <p className="font-mono-num font-extrabold">
+                    {isAr
+                      ? `نقدي محصّل: 4,455 ${currencyLabel} · فيزا: 1,800 ${currencyLabel}`
+                      : `Cash: 4,455 ${currencyLabel} · Card: 1,800 ${currencyLabel}`}
+                  </p>
+                  <p className="text-[11px] opacity-80">
+                    {isAr
+                      ? `المُرحّل إلى: ${handoverTargetLabel(handoverTarget)}`
+                      : `Transferred to: ${handoverTargetLabel(handoverTarget)}`}
+                  </p>
                 </div>
               </div>
             </div>
@@ -662,22 +903,34 @@ export function LandingOperationsShowcases({
           <ul className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm font-medium text-[#0E1B3D]">
             <li className="bg-[#FBF7EF] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
               <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-              <span>فتح وردية الكاشير بالعهدة الافتتاحية والرصيد المرحّل مع شريط تنبيه عند موعد انتهائها.</span>
+              <span>
+                {isAr
+                  ? 'فتح وردية الكاشير بالعهدة الافتتاحية والرصيد المرحّل مع شريط تنبيه عند موعد انتهائها.'
+                  : 'Open shifts with a verified Float and carried-over balance plus automatic shift-end alert bars.'}
+              </span>
             </li>
             <li className="bg-[#FBF7EF] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
               <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-              <span>حساب فوري للدرج: مبيعات الكاش والفيزا، المصروفات، صافي الكاش المتوقع، وفرق الدرج.</span>
+              <span>
+                {isAr
+                  ? 'حساب فوري للدرج: مبيعات الكاش والفيزا، المصروفات، صافي الكاش المتوقع، وفرق الدرج.'
+                  : 'Live Cash Drawer tally of cash/card sales, expenses, expected cash, and Drawer Variance.'}
+              </span>
             </li>
             <li className="bg-[#FBF7EF] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
               <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-              <span>تسليم الوردية لكاشير تالٍ أو للمدير أو خزنة المالك الرئيسية مع قفل الورديات المغلقة من التعديل.</span>
+              <span>
+                {isAr
+                  ? 'تسليم الوردية لكاشير تالٍ أو للمدير أو خزنة المالك الرئيسية مع قفل الورديات المغلقة من التعديل.'
+                  : "Flexible Shift Handover to the next cashier, Manager Float, or Owner's Safe with locked audit history."}
+              </span>
             </li>
           </ul>
         </div>
       </section>
 
       {/* ═══════════════════════════════════════════════════════════════════════ */}
-      {/* 4) التقارير والتدقيق                                                    */}
+      {/* 4) Daily Reports & Audit Archive                                        */}
       {/* ═══════════════════════════════════════════════════════════════════════ */}
       <section
         id="showcase-reports-audit"
@@ -686,20 +939,31 @@ export function LandingOperationsShowcases({
         <div className="max-w-5xl mx-auto px-4 sm:px-6 space-y-8">
           <div className="space-y-2.5 max-w-2xl">
             <h2 className="landing-cairo-heading text-2xl sm:text-4xl text-[#14285A] text-balance">
-              ٤. التقارير اليومية ومصفوفة الورديات وأرشيف الشيكات
+              {isAr
+                ? '4. التقارير اليومية ومصفوفة الورديات وأرشيف الشيكات'
+                : '4. Daily Reports, Multi-Day Shifts & Check Archive'}
             </h2>
             <p className="text-sm sm:text-base text-[#0E1B3D]/85">
-              الشيك المقفول يختفي من شاشات التشغيل لمنع الازدحام، ويُحفظ كاملاً في أرشيف المالك وسجل الرقابة.
+              {isAr
+                ? 'الشيك المقفول يختفي من شاشات التشغيل لمنع الازدحام، ويُحفظ كاملاً في أرشيف المالك وسجل الرقابة.'
+                : 'Paid checks clear immediately from operational POS queues and remain archived for owner inspection and the Audit Log.'}
             </p>
           </div>
 
           <div className="bg-[#F3EBDD] border border-[#E6D9C3] rounded-3xl p-5 sm:p-8 space-y-5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="px-3 py-1 rounded-xl bg-[#FBF7EF] border border-[#E6D9C3] text-xs font-bold text-[#14285A]">
-                مثال · اضغط على أي يوم في المصفوفة لفتح شيكاته وسجل الرقابة
+                {isAr
+                  ? 'مثال · اضغط على أي يوم في المصفوفة لفتح شيكاته وسجل الرقابة'
+                  : 'Example · Click any day in the matrix to inspect checks & Audit Log'}
               </span>
-              <span className="text-xs font-bold text-[#2F8F5B]">
-                الشيكات المقفولة محفوظة بالأرشيف ومخفية عن التشغيل ✓
+              <span className="text-xs font-bold text-[#2F8F5B] inline-flex items-center gap-1">
+                <Check className="w-3.5 h-3.5" />
+                <span>
+                  {isAr
+                    ? 'الشيكات المقفولة محفوظة بالأرشيف ومخفية عن التشغيل'
+                    : 'Paid checks archived & cleared from floor'}
+                </span>
               </span>
             </div>
 
@@ -708,7 +972,11 @@ export function LandingOperationsShowcases({
               <div className="lg:col-span-6 bg-[#FBF7EF] border border-[#E6D9C3] rounded-2xl p-4 sm:p-5 space-y-3">
                 <div className="flex items-center gap-2 text-xs font-bold text-[#14285A]">
                   <Calendar className="w-4 h-4 text-[#E8833A]" />
-                  <span>مصفوفة الورديات لعدة أيام (مثال)</span>
+                  <span>
+                    {isAr
+                      ? 'مصفوفة الورديات لعدة أيام (مثال)'
+                      : 'Multi-Day Shift Matrix (Example)'}
+                  </span>
                 </div>
 
                 <div className="space-y-2">
@@ -719,7 +987,7 @@ export function LandingOperationsShowcases({
                         key={day.key}
                         type="button"
                         onClick={() => setSelectedDayIdx(idx)}
-                        className={`w-full p-3 rounded-xl border text-right flex items-center justify-between gap-2 cursor-pointer transition-colors motion-reduce:transition-none ${
+                        className={`w-full p-3 rounded-xl border text-start flex items-center justify-between gap-2 cursor-pointer transition-colors motion-reduce:transition-none ${
                           selected
                             ? 'bg-[#14285A] border-[#14285A] text-[#FBF7EF]'
                             : 'bg-[#F3EBDD] border-[#E6D9C3] text-[#14285A]'
@@ -728,14 +996,16 @@ export function LandingOperationsShowcases({
                         <div>
                           <p className="text-xs font-bold flex items-center gap-1.5">
                             <span>
-                              {day.dayName} · {day.date}
+                              {isAr ? `${day.dayAr} · ${day.dateAr}` : `${day.dayEn} · ${day.dateEn}`}
                             </span>
                             <ArrowUpRight className="w-3.5 h-3.5 text-[#E8833A]" />
                           </p>
-                          <p className="text-[11px] opacity-80">الكاشير: {day.cashier}</p>
+                          <p className="text-[11px] opacity-80">
+                            {isAr ? `الكاشير: ${day.cashierAr}` : `Cashier: ${day.cashierEn}`}
+                          </p>
                         </div>
-                        <div className="text-left font-mono-num text-xs font-extrabold">
-                          {day.net} ج.م
+                        <div className="text-end font-mono-num text-xs font-extrabold">
+                          {day.net} {currencyLabel}
                         </div>
                       </button>
                     );
@@ -749,14 +1019,18 @@ export function LandingOperationsShowcases({
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-xs font-bold text-[#14285A] flex items-center gap-1.5">
                       <Receipt className="w-4 h-4 text-[#E8833A]" />
-                      <span>أرشيف شيكات {activeDay.dayName} (مثال)</span>
+                      <span>
+                        {isAr
+                          ? `أرشيف شيكات ${activeDay.dayAr} (مثال)`
+                          : `${activeDay.dayEn} Check Archive (Example)`}
+                      </span>
                     </span>
                     <div className="flex items-center gap-1.5 text-[11px] font-bold">
                       {(
                         [
-                          { id: 'all', label: 'الكل' },
-                          { id: 'dine_in', label: 'صالة' },
-                          { id: 'delivery', label: 'دليفري' },
+                          { id: 'all', ar: 'الكل', en: 'All' },
+                          { id: 'dine_in', ar: 'صالة', en: 'Dine-in' },
+                          { id: 'delivery', ar: 'دليفري', en: 'Delivery' },
                         ] as const
                       ).map((flt) => (
                         <button
@@ -769,7 +1043,7 @@ export function LandingOperationsShowcases({
                               : 'bg-[#F3EBDD] border-[#E6D9C3] text-[#14285A]'
                           }`}
                         >
-                          {flt.label}
+                          {isAr ? flt.ar : flt.en}
                         </button>
                       ))}
                     </div>
@@ -778,7 +1052,9 @@ export function LandingOperationsShowcases({
                   <div className="space-y-2">
                     {filteredChecks.length === 0 ? (
                       <p className="text-xs text-[#0E1B3D]/65 py-2 text-center">
-                        لا توجد شيكات بهذا الفلتر في {activeDay.dayName} (مثال).
+                        {isAr
+                          ? `لا توجد شيكات بهذا الفلتر في ${activeDay.dayAr} (مثال).`
+                          : `No checks match this filter on ${activeDay.dayEn} (Example).`}
                       </p>
                     ) : (
                       filteredChecks.map((chk) => (
@@ -788,15 +1064,17 @@ export function LandingOperationsShowcases({
                         >
                           <div>
                             <span className="font-bold text-[#14285A]">
-                              {chk.id} · {chk.type}
+                              {chk.id} · {isAr ? chk.typeAr : chk.typeEn}
                             </span>
                             <span className="block text-[11px] text-[#0E1B3D]/70">
-                              {chk.method} · أغلقه: {chk.by}
+                              {isAr
+                                ? `${chk.methodAr} · أغلقه: ${chk.byAr}`
+                                : `${chk.methodEn} · Closed by: ${chk.byEn}`}
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="font-mono-num font-bold text-[#14285A]">
-                              {chk.total}
+                              {chk.total} {currencyLabel}
                             </span>
                             <Printer className="w-3.5 h-3.5 text-[#E8833A]" aria-hidden="true" />
                           </div>
@@ -811,12 +1089,16 @@ export function LandingOperationsShowcases({
                   <div className="flex items-center justify-between text-xs font-bold text-[#14285A]">
                     <span className="flex items-center gap-1.5">
                       <ShieldAlert className="w-4 h-4 text-[#E8833A]" />
-                      <span>سجل الرقابة اليومي (مثال)</span>
+                      <span>{isAr ? 'سجل الرقابة اليومي (مثال)' : 'Daily Audit Log (Example)'}</span>
                     </span>
-                    <span className="text-[#E8833A]">موثّق بالتاريخ والساعة</span>
+                    <span className="text-[#E8833A]">
+                      {isAr ? 'موثّق بالتاريخ والساعة' : 'Timestamped'}
+                    </span>
                   </div>
                   <p className="text-xs text-[#0E1B3D]/85">
-                    «محمد صلاح (مدير) طبّق خصماً فورياً ١٠٪ على شيك #٤٠١ — السبب: تأخر تجهيز الطلب».
+                    {isAr
+                      ? '«محمد صلاح (مدير) طبّق خصماً فورياً 10% على شيك #401 — السبب: تأخر تجهيز الطلب».'
+                      : '"Mohamed Salah (Manager) applied a 10% Instant Discount on check #401 — Reason: Kitchen prep delay."'}
                   </p>
                 </div>
               </div>
@@ -826,22 +1108,34 @@ export function LandingOperationsShowcases({
           <ul className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm font-medium text-[#0E1B3D]">
             <li className="bg-[#F3EBDD] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
               <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-              <span>تقرير يومي ومصفوفة ورديات لعدة أيام؛ الضغط على أي يوم يفتح كل شيكاته فوراً.</span>
+              <span>
+                {isAr
+                  ? 'تقرير يومي ومصفوفة ورديات لعدة أيام؛ الضغط على أي يوم يفتح كل شيكاته فوراً.'
+                  : 'Daily sales summary & multi-day shift matrix; click any day to open every check immediately.'}
+              </span>
             </li>
             <li className="bg-[#F3EBDD] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
               <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-              <span>أرشيف شيكات بالبحث والفلترة والطباعة، بينما يختفي الشيك المقفول من شاشات التشغيل.</span>
+              <span>
+                {isAr
+                  ? 'أرشيف شيكات بالبحث والفلترة والطباعة، بينما يختفي الشيك المقفول من شاشات التشغيل.'
+                  : 'Searchable, filterable & printable check archive while Paid checks remain cleared from POS screens.'}
+              </span>
             </li>
             <li className="bg-[#F3EBDD] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
               <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-              <span>سجل رقابة يوضح من عدّل أو ألغى أو خصم ولماذا لضبط الرقابة المالية والإدارية.</span>
+              <span>
+                {isAr
+                  ? 'سجل رقابة يوضح من عدّل أو ألغى أو خصم ولماذا لضبط الرقابة المالية والإدارية.'
+                  : 'Complete Audit Log detailing every edit, cancellation, and discount with actor & reason.'}
+              </span>
             </li>
           </ul>
         </div>
       </section>
 
       {/* ═══════════════════════════════════════════════════════════════════════ */}
-      {/* 5) إدارة العملاء (CRM)                                                  */}
+      {/* 5) Customer CRM & Quick POS Phone Lookup                                */}
       {/* ═══════════════════════════════════════════════════════════════════════ */}
       <section
         id="showcase-crm"
@@ -850,25 +1144,31 @@ export function LandingOperationsShowcases({
         <div className="max-w-5xl mx-auto px-4 sm:px-6 space-y-8">
           <div className="space-y-2.5 max-w-2xl">
             <h2 className="landing-cairo-heading text-2xl sm:text-4xl text-[#14285A] text-balance">
-              ٥. إدارة العملاء (CRM) والبحث السريع من الكاشير
+              {isAr
+                ? '5. إدارة العملاء والبحث السريع برقم الهاتف من الكاشير'
+                : '5. Customer CRM & Quick POS Phone Lookup'}
             </h2>
             <p className="text-sm sm:text-base text-[#0E1B3D]/85">
-              ملف كامل لكل ضيف يتضمن طلباته المفضلة وتاريخ ميلاده مع بحث فوري برقم الهاتف من شاشة الكاشير.
+              {isAr
+                ? 'ملف كامل لكل ضيف يتضمن طلباته المفضلة وتاريخ ميلاده مع بحث فوري برقم الهاتف من شاشة الكاشير.'
+                : 'Full guest profiles with favorite dishes, visit history, and birthdays—plus instant phone lookup inside Cashier / POS.'}
             </p>
           </div>
 
           <div className="bg-[#FBF7EF] border border-[#E6D9C3] rounded-3xl p-5 sm:p-8 space-y-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <span className="px-3 py-1 rounded-xl bg-[#F3EBDD] border border-[#E6D9C3] text-xs font-bold text-[#14285A]">
-                مثال · البحث بالهاتف في الكاشير وملف العميل
+                {isAr
+                  ? 'مثال · البحث بالهاتف في الكاشير وملف العميل'
+                  : 'Example · Cashier Phone Lookup & Customer Profile'}
               </span>
               <div className="flex flex-wrap items-center gap-1.5 text-xs font-bold">
                 {(
                   [
-                    { id: 'all', label: 'الكل' },
-                    { id: 'dine_in', label: 'صالة' },
-                    { id: 'pickup', label: 'تيك أواي' },
-                    { id: 'delivery', label: 'دليفري' },
+                    { id: 'all', ar: 'الكل', en: 'All' },
+                    { id: 'dine_in', ar: 'صالة', en: 'Dine-in' },
+                    { id: 'pickup', ar: 'تيك أواي', en: 'Takeaway' },
+                    { id: 'delivery', ar: 'دليفري', en: 'Delivery' },
                   ] as const
                 ).map((tab) => (
                   <button
@@ -881,7 +1181,7 @@ export function LandingOperationsShowcases({
                         : 'bg-[#F3EBDD] border-[#E6D9C3] text-[#14285A]'
                     }`}
                   >
-                    {tab.label}
+                    {isAr ? tab.ar : tab.en}
                   </button>
                 ))}
               </div>
@@ -891,7 +1191,11 @@ export function LandingOperationsShowcases({
             <div className="bg-[#F3EBDD] border border-[#E6D9C3] rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center gap-3">
               <div className="flex items-center gap-2 text-xs font-bold text-[#14285A] shrink-0">
                 <Search className="w-4 h-4 text-[#E8833A]" />
-                <span>بحث سريع بالهاتف (الكاشير · مثال):</span>
+                <span>
+                  {isAr
+                    ? 'بحث سريع بالهاتف (الكاشير · مثال):'
+                    : 'Quick Phone Lookup (Cashier / POS · Example):'}
+                </span>
               </div>
               <input
                 type="text"
@@ -899,7 +1203,7 @@ export function LandingOperationsShowcases({
                 value={crmPhoneQuery}
                 onChange={(e) => setCrmPhoneQuery(e.target.value)}
                 placeholder="0101..."
-                aria-label="بحث سريع برقم الهاتف في الكاشير مثال"
+                aria-label={isAr ? 'بحث سريع برقم الهاتف في الكاشير مثال' : 'Quick phone lookup example'}
                 className="flex-1 px-3 py-2 rounded-xl border border-[#E6D9C3] bg-[#FBF7EF] text-xs font-mono-num text-[#14285A] text-left"
               />
               <button
@@ -907,14 +1211,16 @@ export function LandingOperationsShowcases({
                 onClick={() => setCrmPhoneQuery('')}
                 className="min-h-[38px] px-3 py-1.5 rounded-xl bg-[#14285A] text-[#FBF7EF] text-xs font-bold cursor-pointer shrink-0"
               >
-                عرض كل الأمثلة
+                {isAr ? 'عرض كل الأمثلة' : 'Show All Examples'}
               </button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {matchedCrmCustomers.length === 0 ? (
                 <div className="md:col-span-3 bg-[#F3EBDD] border border-[#E6D9C3] rounded-2xl p-6 text-center text-xs font-semibold text-[#0E1B3D]/70">
-                  لا يوجد عميل مطابق للبحث في المثال الحالي — اضغط «عرض كل الأمثلة».
+                  {isAr
+                    ? 'لا يوجد عميل مطابق للبحث في المثال الحالي — اضغط «عرض كل الأمثلة».'
+                    : 'No matching guest in this example — click "Show All Examples".'}
                 </div>
               ) : (
                 matchedCrmCustomers.map((cust) => (
@@ -925,10 +1231,10 @@ export function LandingOperationsShowcases({
                     <div className="space-y-1">
                       <div className="flex items-center justify-between gap-2">
                         <span className="landing-cairo-heading text-sm text-[#14285A]">
-                          {cust.name}
+                          {isAr ? cust.nameAr : cust.nameEn}
                         </span>
                         <span className="text-[11px] font-bold text-[#E8833A]">
-                          {cust.orderTypeLabel}
+                          {isAr ? cust.orderTypeAr : cust.orderTypeEn}
                         </span>
                       </div>
                       <p className="text-xs font-mono-num text-[#0E1B3D]/80 flex items-center gap-1.5" dir="ltr">
@@ -939,14 +1245,24 @@ export function LandingOperationsShowcases({
 
                     <div className="space-y-1 text-xs border-t border-[#E6D9C3] pt-2.5 text-[#0E1B3D]/85">
                       <p>
-                        <strong className="text-[#14285A]">آخر طلب:</strong> {cust.lastOrder}
+                        <strong className="text-[#14285A]">
+                          {isAr ? 'آخر طلب:' : 'Last Order:'}
+                        </strong>{' '}
+                        {isAr ? cust.lastOrderAr : cust.lastOrderEn}
                       </p>
                       <p>
-                        <strong className="text-[#14285A]">المفضلات:</strong> {cust.favorites}
+                        <strong className="text-[#14285A]">
+                          {isAr ? 'المفضلات:' : 'Favorites:'}
+                        </strong>{' '}
+                        {isAr ? cust.favoritesAr : cust.favoritesEn}
                       </p>
                       <p className="flex items-center justify-between pt-1 text-[11px] font-bold">
-                        <span>الميلاد: {cust.birthday}</span>
-                        <span className="text-[#2F8F5B] font-mono-num">{cust.visits} زيارات</span>
+                        <span>
+                          {isAr ? `الميلاد: ${cust.birthdayAr}` : `Birthday: ${cust.birthdayEn}`}
+                        </span>
+                        <span className="text-[#2F8F5B] font-mono-num">
+                          {isAr ? `${cust.visits} زيارات` : `${cust.visits} visits`}
+                        </span>
                       </p>
                     </div>
                   </div>
@@ -958,22 +1274,34 @@ export function LandingOperationsShowcases({
           <ul className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm font-medium text-[#0E1B3D]">
             <li className="bg-[#FBF7EF] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
               <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-              <span>ملف متكامل لكل عميل يشمل اسمه وهاتفه وآخر طلب ومفضلاته وتاريخ ميلاده.</span>
+              <span>
+                {isAr
+                  ? 'ملف متكامل لكل عميل يشمل اسمه وهاتفه وآخر طلب ومفضلاته وتاريخ ميلاده.'
+                  : 'Complete Customer CRM card showing phone, last order, favorite dishes, and birthday.'}
+              </span>
             </li>
             <li className="bg-[#FBF7EF] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
               <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-              <span>تصنيف طلبات العميل بين الصالة والتيك أواي والدليفري مع احتساب عدد زياراته.</span>
+              <span>
+                {isAr
+                  ? 'تصنيف طلبات العميل بين الصالة والتيك أواي والدليفري مع احتساب عدد زياراته.'
+                  : 'Segment guests across Dine-in, Takeaway, and Delivery with automatic visit counting.'}
+              </span>
             </li>
             <li className="bg-[#FBF7EF] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
               <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-              <span>بحث سريع برقم الهاتف مباشرة من شاشة الكاشير لتسريع طلبات التيك أواي والدليفري.</span>
+              <span>
+                {isAr
+                  ? 'بحث سريع برقم الهاتف مباشرة من شاشة الكاشير لتسريع طلبات التيك أواي والدليفري.'
+                  : 'Instant phone lookup right from Cashier / POS to speed up Takeaway and Delivery orders.'}
+              </span>
             </li>
           </ul>
         </div>
       </section>
 
       {/* ═══════════════════════════════════════════════════════════════════════ */}
-      {/* 6) الولاء والتسويق                                                      */}
+      {/* 6) Loyalty, Marketing & Birthday Radar                                  */}
       {/* ═══════════════════════════════════════════════════════════════════════ */}
       <section
         id="showcase-loyalty-marketing"
@@ -982,20 +1310,26 @@ export function LandingOperationsShowcases({
         <div className="max-w-5xl mx-auto px-4 sm:px-6 space-y-8">
           <div className="space-y-2.5 max-w-2xl">
             <h2 className="landing-cairo-heading text-2xl sm:text-4xl text-[#14285A] text-balance">
-              ٦. الولاء والتسويق ورادار أعياد الميلاد
+              {isAr
+                ? '6. الولاء والتسويق ورادار أعياد الميلاد'
+                : '6. Loyalty, Marketing & Birthday Radar'}
             </h2>
             <p className="text-sm sm:text-base text-[#0E1B3D]/85">
-              حفّز الضيوف على العودة بخصم أول طلب وبطاقة الأختام وتنبيهات أعياد الميلاد وعروض المنيو وأكواد الخصم.
+              {isAr
+                ? 'حفّز الضيوف على العودة بخصم أول طلب وبطاقة الأختام وتنبيهات أعياد الميلاد وعروض المنيو وأكواد الخصم.'
+                : 'Drive repeat visits with first-order perks, Punch Card rewards, birthday WhatsApp outreach, banners, and promo codes.'}
             </p>
           </div>
 
           <div className="bg-[#F3EBDD] border border-[#E6D9C3] rounded-3xl p-5 sm:p-8 space-y-5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="px-3 py-1 rounded-xl bg-[#FBF7EF] border border-[#E6D9C3] text-xs font-bold text-[#14285A]">
-                مثال · أدوات الولاء والتسويق الفعليّة
+                {isAr
+                  ? 'مثال · أدوات الولاء والتسويق الفعليّة'
+                  : 'Example · Active Loyalty & Promo Tools'}
               </span>
               <span className="text-xs font-bold text-[#2F8F5B]">
-                خصم أول طلب مفعّل (٥٪ مثال)
+                {isAr ? 'خصم أول طلب مفعّل (5% مثال)' : 'First-Order Discount Active (5% Example)'}
               </span>
             </div>
 
@@ -1005,9 +1339,9 @@ export function LandingOperationsShowcases({
                 <div className="flex items-center justify-between text-xs font-bold text-[#14285A]">
                   <span className="flex items-center gap-1.5">
                     <Gift className="w-4 h-4 text-[#E8833A]" />
-                    <span>بطاقة الأختام (مثال)</span>
+                    <span>{isAr ? 'بطاقة الأختام (مثال)' : 'Punch Card (Example)'}</span>
                   </span>
-                  <span className="font-mono-num">{stampsFilled} / ٥</span>
+                  <span className="font-mono-num">{stampsFilled} / 5</span>
                 </div>
 
                 <div className="grid grid-cols-5 gap-1.5">
@@ -1033,7 +1367,13 @@ export function LandingOperationsShowcases({
                   onClick={() => setStampsFilled((c) => (c >= 5 ? 1 : c + 1))}
                   className="w-full min-h-[38px] px-3 py-1.5 rounded-xl bg-[#14285A] text-[#FBF7EF] text-xs font-bold cursor-pointer"
                 >
-                  {stampsFilled >= 5 ? 'اكتملت المكافأة (إعادة مثال)' : 'تسجيل ختم زيارة'}
+                  {stampsFilled >= 5
+                    ? isAr
+                      ? 'اكتملت المكافأة (إعادة مثال)'
+                      : 'Reward Unlocked (Reset Example)'
+                    : isAr
+                      ? 'تسجيل ختم زيارة'
+                      : 'Stamp Next Visit'}
                 </button>
               </div>
 
@@ -1043,17 +1383,19 @@ export function LandingOperationsShowcases({
                   <div className="flex items-center justify-between text-xs font-bold">
                     <span className="flex items-center gap-1.5 text-[#14285A]">
                       <Cake className="w-4 h-4 text-[#E8833A]" />
-                      <span>رادار أعياد الميلاد</span>
+                      <span>{isAr ? 'رادار أعياد الميلاد' : 'Birthday Radar'}</span>
                     </span>
                     <span className="px-2 py-0.5 rounded bg-[#E8833A]/15 text-[#E8833A]">
-                      تنبيه قبلها بـ ٣ أيام
+                      {isAr ? 'تنبيه قبلها بـ 3 أيام' : '3-Day Alert'}
                     </span>
                   </div>
                   <p className="landing-cairo-heading text-sm text-[#14285A]">
-                    أ. منى محمود · باقي يومان (مثال)
+                    {isAr ? 'أ. منى محمود · باقي يومان (مثال)' : 'Mona Mahmoud · In 2 Days (Example)'}
                   </p>
                   <p className="text-xs text-[#0E1B3D]/75">
-                    هدية عيد ميلاد جاهزة: خصم ١٥٪ على الزيارة القادمة.
+                    {isAr
+                      ? 'هدية عيد ميلاد جاهزة: خصم 15% على الزيارة القادمة.'
+                      : 'Birthday gift ready: 15% off on next dine-in visit.'}
                   </p>
                 </div>
 
@@ -1067,7 +1409,15 @@ export function LandingOperationsShowcases({
                   }`}
                 >
                   <MessageCircle className="w-4 h-4 text-[#E8833A]" />
-                  <span>{bdaySent ? 'تم تجهيز رسالة واتساب ✓' : 'تهنئة عبر واتساب'}</span>
+                  <span>
+                    {bdaySent
+                      ? isAr
+                        ? 'تم تجهيز رسالة واتساب'
+                        : 'WhatsApp Greeting Ready'
+                      : isAr
+                        ? 'تهنئة عبر واتساب'
+                        : 'Send WhatsApp Greeting'}
+                  </span>
                 </button>
               </div>
 
@@ -1077,17 +1427,21 @@ export function LandingOperationsShowcases({
                   <div className="flex items-center justify-between text-xs font-bold text-[#14285A]">
                     <span className="flex items-center gap-1.5">
                       <Tag className="w-4 h-4 text-[#E8833A]" />
-                      <span>عروض المنيو وأكواد الخصم</span>
+                      <span>{isAr ? 'عروض المنيو وأكواد الخصم' : 'Offers & Promo Codes'}</span>
                     </span>
                   </div>
                   <div className="bg-[#14285A] text-[#FBF7EF] rounded-xl px-3 py-2 text-xs font-bold overflow-hidden">
                     <span className="inline-block offer-anim-marquee">
-                      عرض خاص: خصم ١٥٪ باستخدام كود SUFRA15 (مثال)
+                      {isAr
+                        ? 'عرض خاص: خصم 15% باستخدام كود SUFRA15 (مثال)'
+                        : 'Special Offer: 15% Off with code SUFRA15 (Example)'}
                     </span>
                   </div>
                 </div>
                 <p className="text-[11px] text-[#0E1B3D]/75">
-                  أكواد مرنة: نسبة مئوية، مبلغ ثابت، توصيل مجاني، أو إعفاء من رسوم الخدمة.
+                  {isAr
+                    ? 'أكواد مرنة: نسبة مئوية، مبلغ ثابت، توصيل مجاني، أو إعفاء من رسوم الخدمة.'
+                    : 'Flexible promo codes: percentage, fixed amount, free delivery, or waived service fee.'}
                 </p>
               </div>
             </div>
@@ -1096,15 +1450,27 @@ export function LandingOperationsShowcases({
           <ul className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm font-medium text-[#0E1B3D]">
             <li className="bg-[#F3EBDD] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
               <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-              <span>خصم تلقائي لأول طلب للعميل المسجل وبطاقة أختام تكافئ الزيارات المتكررة.</span>
+              <span>
+                {isAr
+                  ? 'خصم تلقائي لأول طلب للعميل المسجل وبطاقة أختام تكافئ الزيارات المتكررة.'
+                  : 'Automatic first-order welcome perk plus a digital Punch Card rewarding repeat visits.'}
+              </span>
             </li>
             <li className="bg-[#F3EBDD] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
               <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-              <span>رادار أعياد الميلاد ينبّه الإدارة قبل الموعد بـ ٣ أيام مع زر تهنئة مباشر عبر واتساب.</span>
+              <span>
+                {isAr
+                  ? 'رادار أعياد الميلاد ينبّه الإدارة قبل الموعد بـ 3 أيام مع زر تهنئة مباشر عبر واتساب.'
+                  : 'Birthday radar flags upcoming guest birthdays 3 days ahead with 1-click WhatsApp wishes.'}
+              </span>
             </li>
             <li className="bg-[#F3EBDD] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
               <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-              <span>شرائط عروض متحركة داخل المنيو وأكواد خصم (نسبة، مبلغ ثابت، توصيل مجاني، أو إعفاء خدمة).</span>
+              <span>
+                {isAr
+                  ? 'شرائط عروض متحركة داخل المنيو وأكواد خصم (نسبة، مبلغ ثابت، توصيل مجاني، أو إعفاء خدمة).'
+                  : 'Animated menu offer banners and promo codes (% off, fixed value, free delivery, or service waiver).'}
+              </span>
             </li>
           </ul>
 
@@ -1114,8 +1480,12 @@ export function LandingOperationsShowcases({
               onClick={onScrollToContact}
               className="min-h-[44px] px-6 py-3 rounded-2xl bg-[#14285A] text-[#FBF7EF] text-sm font-bold hover:opacity-95 transition-opacity inline-flex items-center gap-2 cursor-pointer"
             >
-              <span>تواصل لتجهيز منظومة مطعمك الكاملة</span>
-              <ArrowLeft className="w-4 h-4 text-[#E8833A]" />
+              <span>
+                {isAr
+                  ? 'تواصل لتجهيز منظومة مطعمك الكاملة'
+                  : 'Contact Us to Launch Your Full Restaurant Suite'}
+              </span>
+              <DirectionalArrow className="w-4 h-4 text-[#E8833A]" />
             </button>
           </div>
         </div>

@@ -15,6 +15,7 @@ import {
   where,
   writeBatch,
 } from 'firebase/firestore';
+import { getActiveLang } from '../data/translations';
 import { DEFAULT_LANDING_SECTIONS, DEFAULT_PLATFORM_LANDING } from '../data/defaultLandingSettings';
 import { getStarterSeedData } from '../data/demoRestaurants';
 import {
@@ -104,7 +105,7 @@ export async function ensureUserProfile(
       await setDoc(userRef, {
         uid,
         email: (email || 'owner@sufra.app').slice(0, 254),
-        displayName: (displayName || 'صاحب مطعم').slice(0, 120),
+        displayName: (displayName || (getActiveLang() === 'en' ? 'Restaurant Owner' : 'صاحب مطعم')).slice(0, 120),
         createdAt: serverTimestamp(),
       });
     }
@@ -187,7 +188,7 @@ export async function createRestaurant(input: CreateRestaurantInput): Promise<Re
       deliveryFee: 0,
       colorMode: 'auto',
       menuColumns: 2,
-      currency: input.currency.trim().slice(0, 16) || 'ج.م',
+      currency: input.currency.trim().slice(0, 16) || (getActiveLang() === 'en' ? 'EGP' : 'ج.م'),
       isOpen: input.isOpen ?? true,
       offers: [],
       promoCodes: [],
@@ -516,7 +517,7 @@ export async function updateRestaurantSettings(
       shareTitle_en: cleanShareTitleEn,
       shareDescription: cleanShareDesc,
       shareDescription_en: cleanShareDescEn,
-      currency: updates.currency.trim().slice(0, 16) || 'ج.م',
+      currency: updates.currency.trim().slice(0, 16) || (getActiveLang() === 'en' ? 'EGP' : 'ج.م'),
       isOpen: Boolean(updates.isOpen),
       taxRate: Number(updates.taxRate) || 0,
       serviceCharge: Number(updates.serviceCharge) || 0,
@@ -937,7 +938,7 @@ export async function writeStaffAuditLog(input: {
       ownerId: input.ownerId,
       eventType: input.eventType,
       actorUid: input.actor.uid,
-      actorName: (input.actor.name || 'كادر').trim().slice(0, 100),
+      actorName: (input.actor.name || (getActiveLang() === 'en' ? 'Staff' : 'كادر')).trim().slice(0, 100),
       actorRole: input.actor.role,
       createdAt: serverTimestamp(),
     };
@@ -1007,7 +1008,7 @@ export async function submitPublicOrder(input: SubmitOrderInput): Promise<{ id: 
     restaurantId: input.restaurantId,
     ownerId: input.ownerId,
     orderNumber,
-    customerName: input.customerName.trim().slice(0, 100) || 'ضيف',
+    customerName: input.customerName.trim().slice(0, 100) || (getActiveLang() === 'en' ? 'Guest' : 'ضيف'),
     customerPhone: input.customerPhone.trim().slice(0, 24),
     orderType: input.orderType,
     items: cleanItems,
@@ -1345,7 +1346,13 @@ export async function closeTableOrdersAndSession(params: {
         eventType: 'table_closed',
         actor: params.actor,
         targetUid: params.sessionId || '',
-        targetName: params.tableNumber ? `طاولة ${params.tableNumber}` : 'طاولة',
+        targetName: params.tableNumber
+          ? getActiveLang() === 'en'
+            ? `Table ${params.tableNumber}`
+            : `طاولة ${params.tableNumber}`
+          : getActiveLang() === 'en'
+            ? 'Table'
+            : 'طاولة',
         screen: 'cashier',
         details: `إقفال حساب ${params.hallName ? `${params.hallName} - ` : ''}طاولة ${params.tableNumber || ''}`,
       });
@@ -1896,7 +1903,11 @@ export async function savePlatformPromoCode(input: {
 }): Promise<PlatformPromoCode> {
   const cleanCode = sanitizePlatformPromoCode(input.code);
   if (cleanCode.length < 2) {
-    throw new Error('يجب أن يتكون كود الخصم من حرفين أو أرقام إنجليزية على الأقل (مثال: BDAY50)');
+    throw new Error(
+      getActiveLang() === 'en'
+        ? 'Promo code must be at least 2 English letters or numbers (e.g., BDAY50).'
+        : 'يجب أن يتكون كود الخصم من حرفين أو أرقام إنجليزية على الأقل (مثال: BDAY50).'
+    );
   }
   const safeType: PlatformPromoDiscountType =
     input.discountType === 'fixed' || input.discountType === 'free_month'
@@ -2234,7 +2245,7 @@ export async function mutateTableSessionCart(params: {
   mutator: (currentItems: TableSessionItem[]) => TableSessionItem[];
 }): Promise<void> {
   const path = `restaurants/${params.restaurantId}/table_sessions/${params.sessionId}`;
-  const cleanGuest = params.guestName.trim().slice(0, 60) || 'ضيف';
+  const cleanGuest = params.guestName.trim().slice(0, 60) || (getActiveLang() === 'en' ? 'Guest' : 'ضيف');
   const cleanHall = params.hallName.trim().slice(0, 60);
   const cleanTable = params.tableNumber.trim().slice(0, 20);
   if (!cleanTable) return;
@@ -2323,7 +2334,7 @@ export async function sendServiceCall(input: {
 }): Promise<ServiceCall> {
   const callId = makeId('call');
   const path = `service_calls/${callId}`;
-  const cleanGuest = input.guestName.trim().slice(0, 60) || 'ضيف';
+  const cleanGuest = input.guestName.trim().slice(0, 60) || (getActiveLang() === 'en' ? 'Guest' : 'ضيف');
   const cleanHall = input.hallName.trim().slice(0, 60);
   const cleanTable = input.tableNumber.trim().slice(0, 20);
 
@@ -2424,7 +2435,7 @@ export async function updateServiceCallStatus(
         eventType: 'service_call_handled',
         actor: meta.actor,
         targetUid: callId,
-        targetName: meta.tableLabel || 'طاولة',
+        targetName: meta.tableLabel || (getActiveLang() === 'en' ? 'Table' : 'طاولة'),
         screen: 'captain',
         details: `استجابة لطلب خدمة (${status}) — ${meta.tableLabel || ''}`,
       });
@@ -2606,13 +2617,16 @@ export async function registerOrUpdateCustomerProfile(input: {
   preferredOrderType: OrderType;
   address?: string;
 }): Promise<CustomerProfile> {
+  const isEn = getActiveLang() === 'en';
   const cleanPhone = normalizeCustomerPhone(input.phone);
   if (cleanPhone.length < 6 || cleanPhone.length > 24) {
-    throw new Error('يرجى إدخال رقم هاتف صحيح (6 إلى 24 رقم)');
+    throw new Error(
+      isEn ? 'Please enter a valid phone number (6 to 24 digits).' : 'يرجى إدخال رقم هاتف صحيح (6 إلى 24 رقم)'
+    );
   }
   const cleanName = input.fullName.trim().slice(0, 100);
   if (!cleanName) {
-    throw new Error('يرجى إدخال الاسم الكامل');
+    throw new Error(isEn ? 'Please enter your full name.' : 'يرجى إدخال الاسم الكامل');
   }
   const safeDay = Math.max(1, Math.min(31, Math.round(Number(input.birthDay) || 1)));
   const safeMonth = Math.max(1, Math.min(12, Math.round(Number(input.birthMonth) || 1)));

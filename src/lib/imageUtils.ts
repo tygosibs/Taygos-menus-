@@ -1,41 +1,51 @@
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import { getActiveLang } from '../data/translations';
 import { storage } from './firebase';
 
 export interface CuratedImageOption {
   label: string;
+  label_en: string;
   url: string;
 }
 
 export const CURATED_FOOD_IMAGES: CuratedImageOption[] = [
   {
     label: 'برجر سماش كلاسيك',
+    label_en: 'Classic Smash Burger',
     url: '/src/assets/images/burger_smash_signature_1794967836686.jpg',
   },
   {
     label: 'ستيك واغيو مشوي',
+    label_en: 'Grilled Wagyu Steak',
     url: '/src/assets/images/steak_wagyu_luxury_1794967837741.jpg',
   },
   {
     label: 'باستا ترافل بالبارميزان',
+    label_en: 'Truffle Parmesan Pasta',
     url: '/src/assets/images/pasta_truffle_modern_1794967837266.jpg',
   },
   {
     label: 'سبانش لاتيه وكروسان',
+    label_en: 'Spanish Latte & Croissant',
     url: '/src/assets/images/coffee_latte_croissant_1794967837713.jpg',
   },
   {
     label: 'بيتزا نابولي على الحطب',
+    label_en: 'Woodfire Neapolitan Pizza',
     url: '/src/assets/images/pizza_neapolitan_story_1794967838282.jpg',
   },
 ];
 
 async function compressImageToDataUrl(file: File, maxDimension = 720, quality = 0.78): Promise<string> {
+  const isEn = getActiveLang() === 'en';
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onerror = () => reject(new Error('تعذر قراءة ملف الصورة'));
+    reader.onerror = () =>
+      reject(new Error(isEn ? 'Failed to read image file' : 'تعذر قراءة ملف الصورة'));
     reader.onload = () => {
       const img = new Image();
-      img.onerror = () => reject(new Error('ملف الصورة غير صالح'));
+      img.onerror = () =>
+        reject(new Error(isEn ? 'Invalid image file' : 'ملف الصورة غير صالح'));
       img.onload = () => {
         const canvas = document.createElement('canvas');
         let { width, height } = img;
@@ -52,7 +62,7 @@ async function compressImageToDataUrl(file: File, maxDimension = 720, quality = 
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         if (!ctx) {
-          reject(new Error('تعذر معالجة الصورة'));
+          reject(new Error(isEn ? 'Failed to process image' : 'تعذر معالجة الصورة'));
           return;
         }
         ctx.drawImage(img, 0, 0, width, height);

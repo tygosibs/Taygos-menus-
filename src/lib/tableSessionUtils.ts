@@ -5,6 +5,7 @@ import {
   Restaurant,
   TableSessionItem,
 } from '../types/menu';
+import { getActiveLang } from '../data/translations';
 
 const GUEST_ID_STORAGE_KEY = 'sufra_guest_id_v1';
 const GUEST_NAME_STORAGE_KEY = 'sufra_guest_name_v1';
@@ -85,7 +86,7 @@ export function cartItemToTableSessionItem(
   guestId: string,
   guestName: string
 ): TableSessionItem {
-  const safeGuestName = guestName.trim().slice(0, 60) || 'ضيف';
+  const safeGuestName = guestName.trim().slice(0, 60) || (getActiveLang() === 'en' ? 'Guest' : 'ضيف');
   const entryId =
     item.entryId || `${guestId}__${item.cartKey}`.replace(/[^a-zA-Z0-9_\-:.|]/g, '_').slice(0, 180);
   const payload: TableSessionItem = {
@@ -190,7 +191,7 @@ export function computeSeparateChecks(
   combinedTotal: number;
 } {
   const groupedMap = new Map<string, { guestName: string; guestId?: string; items: CartItem[] }>();
-  const defaultName = fallbackGuestName.trim() || 'ضيف';
+  const defaultName = fallbackGuestName.trim() || (getActiveLang() === 'en' ? 'Guest' : 'ضيف');
 
   cart.forEach((item) => {
     const gName = (item.guestName || defaultName).trim();

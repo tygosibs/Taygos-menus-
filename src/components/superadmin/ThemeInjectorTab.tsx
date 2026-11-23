@@ -40,7 +40,8 @@ type CodeLangTab = 'html' | 'css' | 'js';
 type PreviewDevice = 'mobile' | 'desktop';
 
 export function ThemeInjectorTab() {
-  const { t, lang, loc } = useLanguage();
+  const { t, lang, dir, loc } = useLanguage();
+  const isEn = lang === 'en';
   const [themes, setThemes] = useState<CustomTheme[]>([]);
   const [loadingList, setLoadingList] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -101,12 +102,20 @@ export function ThemeInjectorTab() {
       if (!data || typeof data !== 'object' || !data.type) return;
       const type = String(data.type);
       const itemId = typeof data.itemId === 'string' ? data.itemId : '';
-      setLastSandboxEvent(itemId ? `Event ${type} (${itemId})` : `Event ${type}`);
+      setLastSandboxEvent(
+        itemId
+          ? isEn
+            ? `Event ${type} (${itemId})`
+            : `حدث ${type} (${itemId})`
+          : isEn
+            ? `Event ${type}`
+            : `حدث ${type}`
+      );
       setTimeout(() => setLastSandboxEvent(null), 3500);
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, []);
+  }, [isEn]);
 
   const sandboxSrcDoc = useMemo(
     () =>
@@ -225,7 +234,7 @@ export function ThemeInjectorTab() {
   };
 
   return (
-    <div className="space-y-6">
+    <div dir={dir} className="space-y-6">
       {/* Saved Custom Themes Library */}
       <div className="bg-white border border-zinc-200 rounded-2xl p-5 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -553,9 +562,9 @@ export function ThemeInjectorTab() {
               <div className="flex items-center gap-1.5">
                 {(
                   [
-                    { id: 'html', label: 'HTML Template', icon: FileCode2 },
-                    { id: 'css', label: 'Custom CSS', icon: Palette },
-                    { id: 'js', label: 'Custom JavaScript', icon: Code2 },
+                    { id: 'html', label: isEn ? 'HTML Template' : 'قالب HTML', icon: FileCode2 },
+                    { id: 'css', label: isEn ? 'Custom CSS' : 'تنسيقات CSS', icon: Palette },
+                    { id: 'js', label: isEn ? 'Custom JavaScript' : 'برمجة JS', icon: Code2 },
                   ] as { id: CodeLangTab; label: string; icon: typeof Code2 }[]
                 ).map((tab) => {
                   const Icon = tab.icon;
@@ -572,7 +581,7 @@ export function ThemeInjectorTab() {
                       }`}
                     >
                       <Icon className="w-3.5 h-3.5" />
-                      <span dir="ltr">{tab.label}</span>
+                      <span>{tab.label}</span>
                     </button>
                   );
                 })}

@@ -13,6 +13,7 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
+import { getActiveLang } from '../data/translations';
 import {
   cleanStationId,
   DEFAULT_SEED_STATIONS,
@@ -144,7 +145,12 @@ export async function saveRestaurantStation(params: {
   const { restaurantId, ownerId, actor, station } = params;
   const cleanName = station.name.trim().slice(0, 80);
   if (cleanName.length < 2) {
-    throw new Error('اسم القسم الرئيسي يجب أن لا يقل عن حرفين.');
+    const isEn = getActiveLang() === 'en';
+    throw new Error(
+      isEn
+        ? 'Station name must be at least 2 characters.'
+        : 'اسم القسم الرئيسي يجب أن لا يقل عن حرفين.'
+    );
   }
   const cleanNameEn = (station.nameEn || '').trim().slice(0, 80);
   const cleanColor = /^#[0-9a-fA-F]{6}$/.test(station.color) ? station.color : '#EA580C';
@@ -267,12 +273,20 @@ export async function deleteRestaurantStationChecked(params: {
     .map((d) => d.data() as Category)
     .filter((c) => cleanStationId(c.stationId || c.station) === targetId);
 
+  const isEn = getActiveLang() === 'en';
+  const stationLabel = isEn ? station.nameEn || station.name : station.name;
+
   if (linkedCategories.length > 0) {
     throw new Error(
-      `لا يمكن حذف قسم "${station.name}" لأنه مرتبط بـ ${linkedCategories.length} قسم في المنيو (${linkedCategories
-        .slice(0, 2)
-        .map((c) => c.name)
-        .join('، ')}). انقل تلك الأقسام لمحطة أخرى أولاً.`
+      isEn
+        ? `Cannot delete station "${stationLabel}" because it is linked to ${linkedCategories.length} menu categories (${linkedCategories
+            .slice(0, 2)
+            .map((c) => c.name_en || c.name)
+            .join(', ')}). Reassign those categories first.`
+        : `لا يمكن حذف قسم "${station.name}" لأنه مرتبط بـ ${linkedCategories.length} قسم في المنيو (${linkedCategories
+            .slice(0, 2)
+            .map((c) => c.name)
+            .join('، ')}). انقل تلك الأقسام لمحطة أخرى أولاً.`
     );
   }
 
@@ -282,7 +296,9 @@ export async function deleteRestaurantStationChecked(params: {
 
   if (linkedItems.length > 0) {
     throw new Error(
-      `لا يمكن حذف قسم "${station.name}" لوجود ${linkedItems.length} صنف من المنيو مرتبط به حالياً. عدّل تصنيف الأصناف أولاً.`
+      isEn
+        ? `Cannot delete station "${stationLabel}" because ${linkedItems.length} menu items are currently routed to it. Reassign those items first.`
+        : `لا يمكن حذف قسم "${station.name}" لوجود ${linkedItems.length} صنف من المنيو مرتبط به حالياً. عدّل تصنيف الأصناف أولاً.`
     );
   }
 
@@ -299,10 +315,15 @@ export async function deleteRestaurantStationChecked(params: {
 
   if (linkedStaff.length > 0) {
     throw new Error(
-      `لا يمكن حذف قسم "${station.name}" لوجود ${linkedStaff.length} موظف مرتبط به (${linkedStaff
-        .slice(0, 2)
-        .map((s) => s.name)
-        .join('، ')}). أزل الصلاحية عنهم أولاً.`
+      isEn
+        ? `Cannot delete station "${stationLabel}" because ${linkedStaff.length} staff members are assigned to it (${linkedStaff
+            .slice(0, 2)
+            .map((s) => s.name)
+            .join(', ')}). Remove their access first.`
+        : `لا يمكن حذف قسم "${station.name}" لوجود ${linkedStaff.length} موظف مرتبط به (${linkedStaff
+            .slice(0, 2)
+            .map((s) => s.name)
+            .join('، ')}). أزل الصلاحية عنهم أولاً.`
     );
   }
 

@@ -33,6 +33,7 @@ import {
   TreasuryState,
   TreasuryTransfer,
 } from '../types/menu';
+import { getActiveLang } from '../data/translations';
 import { db, handleFirestoreError, OperationType } from './firebase';
 import { startStaffShift } from './shiftsService';
 
@@ -288,7 +289,13 @@ export function subscribeAllRestaurantShifts(
       onData(list);
     },
     (err) => {
-      if (onError) onError(err instanceof Error ? err : new Error('تعذر تحميل الورديات'));
+      if (onError) {
+        onError(
+          err instanceof Error
+            ? err
+            : new Error(getActiveLang() === 'en' ? 'Failed to load shifts' : 'تعذر تحميل الورديات')
+        );
+      }
     }
   );
 }
@@ -312,7 +319,15 @@ export function subscribeDrawerExpenses(
       onData(list);
     },
     (err) => {
-      if (onError) onError(err instanceof Error ? err : new Error('تعذر تحميل مصروفات الدرج'));
+      if (onError) {
+        onError(
+          err instanceof Error
+            ? err
+            : new Error(
+                getActiveLang() === 'en' ? 'Failed to load drawer expenses' : 'تعذر تحميل مصروفات الدرج'
+              )
+        );
+      }
     }
   );
 }
@@ -336,7 +351,15 @@ export function subscribeTreasuryTransfers(
       onData(list);
     },
     (err) => {
-      if (onError) onError(err instanceof Error ? err : new Error('تعذر تحميل حركة الخزنة'));
+      if (onError) {
+        onError(
+          err instanceof Error
+            ? err
+            : new Error(
+                getActiveLang() === 'en' ? 'Failed to load treasury transfers' : 'تعذر تحميل حركة الخزنة'
+              )
+        );
+      }
     }
   );
 }
@@ -355,9 +378,20 @@ export async function addDrawerExpense(params: {
   const description = params.description.trim().slice(0, 200);
   const note = (params.note || '').trim().slice(0, 300);
 
-  if (amount <= 0) throw new Error('يرجى إدخال مبلغ مصروف صحيح أكبر من صفر.');
-  if (!description) throw new Error('يرجى كتابة بيان/سبب المصروف.');
-  if (shift.status !== 'active') throw new Error('لا يمكن إضافة مصروفات على وردية مغلقة.');
+  const isEn = getActiveLang() === 'en';
+  if (amount <= 0) {
+    throw new Error(
+      isEn ? 'Please enter a valid expense amount greater than zero.' : 'يرجى إدخال مبلغ مصروف صحيح أكبر من صفر.'
+    );
+  }
+  if (!description) {
+    throw new Error(isEn ? 'Please enter an expense description.' : 'يرجى كتابة بيان/سبب المصروف.');
+  }
+  if (shift.status !== 'active') {
+    throw new Error(
+      isEn ? 'Cannot record expenses on a closed shift.' : 'لا يمكن إضافة مصروفات على وردية مغلقة.'
+    );
+  }
 
   const expenseId = makeOpId('exp');
   const nextExpensesTotal = Number(((shift.drawerExpensesTotal || 0) + amount).toFixed(2));
@@ -586,14 +620,19 @@ export async function modifyOrderWithAudit(params: {
   actor: StaffActorInfo;
 }): Promise<void> {
   const { order, restaurant, updates, reason, actor } = params;
+  const isEn = getActiveLang() === 'en';
   const cleanReason = reason.trim().slice(0, 300);
   if (!cleanReason) {
-    throw new Error('يجب كتابة سبب التعديل أو الإلغاء.');
+    throw new Error(isEn ? 'An adjustment or cancellation reason is required.' : 'يجب كتابة سبب التعديل أو الإلغاء.');
   }
 
   const nextItems = (updates.items ?? order.items).filter((it) => it.quantity > 0);
   if (!updates.cancelOrder && nextItems.length === 0) {
-    throw new Error('لا يمكن إفراغ الطلب بالكامل بدون إلغاء الطلب.');
+    throw new Error(
+      isEn
+        ? 'Cannot clear all items without cancelling the order.'
+        : 'لا يمكن إفراغ الطلب بالكامل بدون إلغاء الطلب.'
+    );
   }
 
   const nextSubtotal = Number(
@@ -709,10 +748,17 @@ export async function closeCashierShiftWithHandover(params: {
   nextSlot?: ShiftSlotConfig;
 }): Promise<{ newShift?: StaffShift; expectedCashHandover: number }> {
   const { restaurant, shift, recipientType, recipientUid, recipientName, openTables, note, actor, nextSlot } = params;
-  if (shift.status !== 'active') throw new Error('الوردية مغلقة بالفعل.');
+  const isEn = getActiveLang() === 'en';
+  if (shift.status !== 'active') {
+    throw new Error(isEn ? 'This shift is already closed.' : 'الوردية مغلقة بالفعل.');
+  }
 
   const cleanRecipientName = recipientName.trim().slice(0, 100);
-  if (!cleanRecipientName) throw new Error('يرجى تحديد اسم مستلم العهدة والكاش.');
+  if (!cleanRecipientName) {
+    throw new Error(
+      isEn ? 'Please specify the cash & handover recipient name.' : 'يرجى تحديد اسم مستلم العهدة والكاش.'
+    );
+  }
 
   const expectedCashHandover = Number(
     (
@@ -833,9 +879,9 @@ export async function closeCashierShiftWithHandover(params: {
         staffName: actor.name,
         staffRole: actor.role,
         stationId: 'cashier',
-        stationName: 'الكاشير',
+        stationName: isEn ? 'Cashier / POS' : 'الكاشير',
         shiftSlotId: targetSlot.id,
-        shiftSlotName: targetSlot.name,
+        shiftSlotName: isEn ? targetSlot.nameEn || targetSlot.name : targetSlot.name,
         openingFloat: 0,
         carriedOverCash: expectedCashHandover,
         carriedFromShiftId: shift.id,
@@ -858,6 +904,7 @@ export async function startCashierShiftWithCarryover(params: {
   takeFromManagerCustody?: number;
 }): Promise<StaffShift> {
   const { restaurant, actor, shiftSlot, openingFloat, carriedOverCash, carriedFromShiftId, takeFromManagerCustody = 0 } = params;
+  const isEn = getActiveLang() === 'en';
   const shift = await startStaffShift({
     restaurantId: restaurant.id,
     ownerId: restaurant.ownerId,
@@ -865,9 +912,9 @@ export async function startCashierShiftWithCarryover(params: {
     staffName: actor.name,
     staffRole: actor.role,
     stationId: 'cashier',
-    stationName: 'الكاشير',
+    stationName: isEn ? 'Cashier / POS' : 'الكاشير',
     shiftSlotId: shiftSlot.id,
-    shiftSlotName: shiftSlot.name,
+    shiftSlotName: isEn ? shiftSlot.nameEn || shiftSlot.name : shiftSlot.name,
     openingFloat,
     carriedOverCash,
     carriedFromShiftId,
@@ -896,12 +943,14 @@ export async function startCashierShiftWithCarryover(params: {
         fromType: 'manager_custody',
         toType: 'cashier_shift',
         fromUid: actor.uid,
-        fromName: 'عهدة المدير',
+        fromName: isEn ? 'Manager Float' : 'عهدة المدير',
         toUid: actor.uid,
         toName: actor.name.slice(0, 100),
         shiftId: shift.id,
         amountCash: Number(takeFromManagerCustody.toFixed(2)),
-        note: `تسليم رصيد مرحّل لبداية وردية ${shiftSlot.name}`,
+        note: isEn
+          ? `Carried-over float handover for ${shiftSlot.nameEn || shiftSlot.name} shift`
+          : `تسليم رصيد مرحّل لبداية وردية ${shiftSlot.name}`,
         createdAt: serverTimestamp(),
       });
       await batch.commit();
@@ -920,10 +969,15 @@ export async function transferManagerCustodyToOwnerVault(params: {
   actor: StaffActorInfo;
 }): Promise<void> {
   const { restaurant, note, actor } = params;
+  const isEn = getActiveLang() === 'en';
   const amountCash = Number(Number(params.amountCash || 0).toFixed(2));
   const current = getResolvedTreasuryState(restaurant);
   if (amountCash <= 0 || amountCash > current.managerCustodyBalance + 0.01) {
-    throw new Error('المبلغ غير صالح أو يتجاوز رصيد عهدة المدير الحالي.');
+    throw new Error(
+      isEn
+        ? 'Invalid amount or exceeds current manager custody balance.'
+        : 'المبلغ غير صالح أو يتجاوز رصيد عهدة المدير الحالي.'
+    );
   }
 
   const nextTreasury: TreasuryState = {
@@ -951,7 +1005,7 @@ export async function transferManagerCustodyToOwnerVault(params: {
       fromUid: actor.uid,
       fromName: actor.name.slice(0, 100),
       toUid: restaurant.ownerId,
-      toName: 'الخزنة الرئيسية لصاحب المطعم',
+      toName: isEn ? "Owner's Safe" : 'الخزنة الرئيسية لصاحب المطعم',
       amountCash,
       ...(note?.trim() ? { note: note.trim().slice(0, 300) } : {}),
       createdAt: serverTimestamp(),
@@ -983,7 +1037,13 @@ export async function adjustActiveCashierFloat(params: {
   actor: StaffActorInfo;
 }): Promise<void> {
   const { restaurant, shift, newOpeningFloat, actor } = params;
-  if (shift.status !== 'active') throw new Error('الوردية مغلقة ولا يمكن تعديل العهدة عليها.');
+  if (shift.status !== 'active') {
+    throw new Error(
+      getActiveLang() === 'en'
+        ? 'Shift is closed and its opening float cannot be edited.'
+        : 'الوردية مغلقة ولا يمكن تعديل العهدة عليها.'
+    );
+  }
   const safeFloat = Math.max(0, Number(Number(newOpeningFloat).toFixed(2)));
   try {
     await updateDoc(doc(db, 'restaurants', restaurant.id, 'staff_shifts', shift.id), {
@@ -1125,9 +1185,11 @@ export async function adjustOwnerVaultBalance(params: {
     fromUid: actor.uid,
     fromName: actor.name.slice(0, 100),
     toUid: restaurant.ownerId,
-    toName: 'الخزنة الرئيسية لصاحب المطعم',
+    toName: getActiveLang() === 'en' ? "Owner's Safe" : 'الخزنة الرئيسية لصاحب المطعم',
     amountCash: Number(deltaCash.toFixed(2)),
-    note: note.trim().slice(0, 300) || 'تعديل رصيد الخزنة الرئيسية',
+    note:
+      note.trim().slice(0, 300) ||
+      (getActiveLang() === 'en' ? "Adjust Owner's Safe balance" : 'تعديل رصيد الخزنة الرئيسية'),
     createdAt: serverTimestamp(),
   });
   await batch.commit();

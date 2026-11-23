@@ -1,6 +1,7 @@
 import { doc, getDoc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { getMessaging, getToken, isSupported, onMessage, type MessagePayload } from 'firebase/messaging';
 import { db } from './firebase';
+import { getActiveLang } from '../data/translations';
 import { getStationTopicName } from './stationUtils';
 
 const DEVICE_ID_STORAGE_KEY = 'sufra_staff_device_id_v1';
@@ -151,7 +152,10 @@ export async function registerStaffDeviceAndFcm(params: {
         if (!foregroundListenerBound) {
           foregroundListenerBound = true;
           onMessage(messaging, (payload: MessagePayload) => {
-            const title = payload.notification?.title || payload.data?.title || 'سُفرة QR';
+            const title =
+              payload.notification?.title ||
+              payload.data?.title ||
+              (getActiveLang() === 'en' ? 'Sufra QR' : 'سُفرة QR');
             const body = payload.notification?.body || payload.data?.body || '';
             const url = payload.data?.url || '/';
             void showOperationalNotification({ title, body, url, tag: payload.data?.tag });
@@ -255,6 +259,8 @@ export async function showOperationalNotification(params: {
   if (Notification.permission !== 'granted') return;
 
   const { title, body, url = '/', tag = 'sufra-ops-alert' } = params;
+  const activeLang = getActiveLang();
+  const notifDir = activeLang === 'en' ? 'ltr' : 'rtl';
   const reg = await ensureFcmServiceWorkerRegistered();
   if (reg) {
     try {
@@ -262,8 +268,8 @@ export async function showOperationalNotification(params: {
         body,
         icon: '/pwa-192x192.png',
         badge: '/favicon-32x32.png',
-        dir: 'rtl',
-        lang: 'ar',
+        dir: notifDir,
+        lang: activeLang,
         tag,
         data: { url },
       });
@@ -277,8 +283,8 @@ export async function showOperationalNotification(params: {
     const n = new Notification(title, {
       body,
       icon: '/pwa-192x192.png',
-      dir: 'rtl',
-      lang: 'ar',
+      dir: notifDir,
+      lang: activeLang,
       tag,
     });
     n.onclick = () => {

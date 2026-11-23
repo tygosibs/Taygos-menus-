@@ -1,4 +1,5 @@
 import { StaffRole, StaffScreen } from '../types/menu';
+import { getActiveLang } from '../data/translations';
 import { screenToStationId, stationIdToScreen, StationMeta } from './stationUtils';
 
 export const STAFF_ROLE_META: Record<
@@ -8,6 +9,7 @@ export const STAFF_ROLE_META: Record<
     labelEn: string;
     badgeClass: string;
     defaultTitleAr: string;
+    defaultTitleEn: string;
   }
 > = {
   manager: {
@@ -15,48 +17,56 @@ export const STAFF_ROLE_META: Record<
     labelEn: 'Restaurant Manager',
     badgeClass: 'bg-indigo-50 text-indigo-800 border-indigo-200',
     defaultTitleAr: 'مدير تشغيل المطعم',
+    defaultTitleEn: 'Restaurant Operations Manager',
   },
   cashier: {
     labelAr: 'كاشير',
     labelEn: 'Cashier',
     badgeClass: 'bg-amber-50 text-amber-800 border-amber-200',
     defaultTitleAr: 'كاشير الصالة والطلبات',
+    defaultTitleEn: 'Floor & Orders Cashier',
   },
   kitchen: {
     labelAr: 'شيف المطبخ',
     labelEn: 'Kitchen Chef',
     badgeClass: 'bg-red-50 text-red-800 border-red-200',
-    defaultTitleAr: 'مسؤول شاشة المطبخ (KDS)',
+    defaultTitleAr: 'مسؤول شاشة المطبخ',
+    defaultTitleEn: 'Kitchen KDS Operator',
   },
   bar: {
     labelAr: 'باريستا / بار',
     labelEn: 'Bar / Barista',
     badgeClass: 'bg-sky-50 text-sky-800 border-sky-200',
     defaultTitleAr: 'مسؤول البار والمشروبات',
+    defaultTitleEn: 'Bar & Beverages Operator',
   },
   pastry: {
     labelAr: 'باستري / حلويات',
     labelEn: 'Pastry',
     badgeClass: 'bg-fuchsia-50 text-fuchsia-800 border-fuchsia-200',
     defaultTitleAr: 'مسؤول الحلويات والباستري',
+    defaultTitleEn: 'Pastry & Desserts Operator',
   },
   captain: {
     labelAr: 'كابتن صالة / ويتر',
     labelEn: 'Captain / Waiter',
     badgeClass: 'bg-emerald-50 text-emerald-800 border-emerald-200',
     defaultTitleAr: 'كابتن خدمة الصالة',
+    defaultTitleEn: 'Floor Service Captain / Waiter',
   },
   station_staff: {
     labelAr: 'موظف محطة تحضير',
     labelEn: 'Station Staff',
     badgeClass: 'bg-orange-50 text-orange-800 border-orange-200',
-    defaultTitleAr: 'مسؤول محطة تحضير (KDS)',
+    defaultTitleAr: 'مسؤول محطة تحضير',
+    defaultTitleEn: 'Prep Station Operator (KDS)',
   },
   custom: {
     labelAr: 'مسمى وظيفي مخصص',
     labelEn: 'Custom Role',
     badgeClass: 'bg-zinc-100 text-zinc-800 border-zinc-300',
     defaultTitleAr: 'كادر تشغيل مخصص',
+    defaultTitleEn: 'Custom Operations Role',
   },
 };
 
@@ -64,6 +74,7 @@ export interface StaffScreenMeta {
   labelAr: string;
   labelEn: string;
   shortAr: string;
+  shortEn: string;
   color?: string;
   managerOnly?: boolean;
   stationId?: string;
@@ -74,43 +85,50 @@ export const STAFF_SCREEN_META: Record<string, StaffScreenMeta> = {
     labelAr: 'إدارة الكادر والصلاحيات',
     labelEn: 'Staff & Permissions',
     shortAr: 'الكادر',
+    shortEn: 'Staff',
     managerOnly: true,
   },
   cashier: {
     labelAr: 'شاشة الكاشير والطلبات الحية',
-    labelEn: 'Cashier & Live Orders',
+    labelEn: 'Cashier / POS & Live Orders',
     shortAr: 'الكاشير',
+    shortEn: 'Cashier',
   },
   kitchen: {
-    labelAr: 'شاشة المطبخ (KDS)',
+    labelAr: 'شاشة المطبخ',
     labelEn: 'Kitchen KDS',
     shortAr: 'المطبخ',
+    shortEn: 'Kitchen',
     color: '#EA580C',
     stationId: 'kitchen',
   },
   bar: {
-    labelAr: 'شاشة البار والمشروبات (KDS)',
+    labelAr: 'شاشة البار والمشروبات',
     labelEn: 'Bar KDS',
     shortAr: 'البار',
+    shortEn: 'Bar',
     color: '#0284C7',
     stationId: 'bar',
   },
   pastry: {
-    labelAr: 'شاشة الباستري والحلويات (KDS)',
+    labelAr: 'شاشة الباستري والحلويات',
     labelEn: 'Pastry KDS',
     shortAr: 'الباستري',
+    shortEn: 'Pastry',
     color: '#DB2777',
     stationId: 'pastry',
   },
   captain: {
     labelAr: 'شاشة الكابتن والويتر',
-    labelEn: 'Captain & Waiter',
+    labelEn: 'Captain / Waiter',
     shortAr: 'الكابتن',
+    shortEn: 'Captain',
   },
   halls: {
-    labelAr: 'إدارة الصالات وباركود الطاولات',
-    labelEn: 'Halls & Table QR',
+    labelAr: 'إدارة الصالات وأكواد الطاولات',
+    labelEn: 'Halls & Table QR Codes',
     shortAr: 'الصالات',
+    shortEn: 'Halls',
     managerOnly: true,
   },
 };
@@ -124,9 +142,10 @@ export function getScreenMetaDynamic(
     const matched = dynamicStations?.find((s) => s.stationId === stationId);
     if (matched) {
       return {
-        labelAr: `شاشة ${matched.shortLabel} (KDS)`,
+        labelAr: `شاشة ${matched.shortLabel}`,
         labelEn: `${matched.shortLabel_en} KDS`,
         shortAr: matched.shortLabel,
+        shortEn: matched.shortLabel_en,
         color: matched.color,
         stationId: matched.stationId,
       };
@@ -135,9 +154,10 @@ export function getScreenMetaDynamic(
       return STAFF_SCREEN_META[stationId];
     }
     return {
-      labelAr: `شاشة ${stationId} (KDS)`,
+      labelAr: `شاشة ${stationId}`,
       labelEn: `${stationId} KDS`,
       shortAr: stationId,
+      shortEn: stationId,
       color: '#EA580C',
       stationId,
     };
@@ -147,6 +167,7 @@ export function getScreenMetaDynamic(
       labelAr: screen,
       labelEn: screen,
       shortAr: screen,
+      shortEn: screen,
     }
   );
 }
@@ -324,12 +345,23 @@ export function validateStaffPassword(
   password: string,
   confirmPassword?: string
 ): { valid: boolean; error?: string } {
+  const isEn = getActiveLang() === 'en';
   const pw = password || '';
   if (pw.length < 8) {
-    return { valid: false, error: 'كلمة المرور يجب أن لا تقل عن 8 أحرف أو أرقام' };
+    return {
+      valid: false,
+      error: isEn
+        ? 'Password must be at least 8 characters long'
+        : 'كلمة المرور يجب أن لا تقل عن 8 أحرف أو أرقام',
+    };
   }
   if (pw.length > 72) {
-    return { valid: false, error: 'كلمة المرور طويلة جداً (الحد الأقصى 72 حرفاً)' };
+    return {
+      valid: false,
+      error: isEn
+        ? 'Password is too long (maximum 72 characters)'
+        : 'كلمة المرور طويلة جداً (الحد الأقصى 72 حرفاً)',
+    };
   }
 
   const lower = pw.toLowerCase();
@@ -349,11 +381,21 @@ export function validateStaffPassword(
     '00000000',
   ]);
   if (weakList.has(lower)) {
-    return { valid: false, error: 'كلمة المرور ضعيفة وشائعة جداً. اختر كلمة مرور أقوى.' };
+    return {
+      valid: false,
+      error: isEn
+        ? 'This password is too weak or common. Please choose a stronger password.'
+        : 'كلمة المرور ضعيفة وشائعة جداً. اختر كلمة مرور أقوى.',
+    };
   }
 
   if (/^(.)\1+$/.test(pw)) {
-    return { valid: false, error: 'لا يمكن استخدام حرف أو رقم واحد مكرر ككلمة مرور.' };
+    return {
+      valid: false,
+      error: isEn
+        ? 'Cannot use a single repeated character or digit as a password.'
+        : 'لا يمكن استخدام حرف أو رقم واحد مكرر ككلمة مرور.',
+    };
   }
 
   const hasLetter = /[a-zA-Z\u0600-\u06FF]/.test(pw);
@@ -361,12 +403,19 @@ export function validateStaffPassword(
   if (!hasLetter || !hasDigitOrSymbol) {
     return {
       valid: false,
-      error: 'يجب أن تحتوي كلمة المرور على حروف مع أرقام أو رموز لزيادة الأمان.',
+      error: isEn
+        ? 'Password must include letters combined with numbers or symbols for security.'
+        : 'يجب أن تحتوي كلمة المرور على حروف مع أرقام أو رموز لزيادة الأمان.',
     };
   }
 
   if (confirmPassword !== undefined && pw !== confirmPassword) {
-    return { valid: false, error: 'كلمتا المرور غير متطابقتين. تأكد من كتابتهما بنفس الشكل.' };
+    return {
+      valid: false,
+      error: isEn
+        ? 'Passwords do not match. Please confirm they are identical.'
+        : 'كلمتا المرور غير متطابقتين. تأكد من كتابتهما بنفس الشكل.',
+    };
   }
 
   return { valid: true };

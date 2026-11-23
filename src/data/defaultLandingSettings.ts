@@ -15,21 +15,21 @@ export const DEFAULT_PLATFORM_LANDING: PlatformLandingSettings = {
   heroBadge: 'منظومة الضيافة الرقمية الأحدث في مصر والوطن العربي',
   heroBadge_en: 'Next-Generation Restaurant Hospitality SaaS',
   heroTitle: 'منيو مطعمك الإلكتروني.. أذكى، أسرع، وبيبيع عنك في كل ترابيزة',
-  heroTitle_en: 'A Smarter Interactive QR Menu That Sells Better on Every Table',
+  heroTitle_en: 'A Smarter Digital Menu That Sells Better on Every Table',
   heroSubtitle:
-    'ارتقِ بتجربة ضيوفك بـ 11 ثيماً عالمياً منها كتاب المنيو ثلاثي الأبعاد وشات واتساب التفاعلي VIP، مع إدارة كاملة للصالات والترابيزات وفصل الحساب بالاسم (Separate Check)، وشاشات المطبخ والكابتن اللحظية، ومنظومة ولاء العملاء وأعياد الميلاد.',
+    'ارتقِ بتجربة ضيوفك بـ 10 ثيمات احترافية منها كتاب المنيو ثلاثي الأبعاد وشات واتساب التفاعلي، مع إدارة كاملة للصالات والترابيزات وتقسيم الشيك بالاسم، وشاشات المطبخ والكابتن اللحظية، ومنظومة ولاء العملاء وأعياد الميلاد.',
   heroSubtitle_en:
-    'Elevate every guest visit with 11 flagship interactive themes including our 3D Flipbook and VIP WhatsApp Chat, collaborative group tables with Separate Check split billing, multi-station KDS & waiter screens, and automated loyalty + birthday marketing.',
+    'Elevate every guest visit with 10 built-in interactive themes including our 3D Flipbook and WhatsApp Ordering Chat, collaborative group tables with Split Check billing, multi-station KDS & Captain / Waiter screens, and automated Loyalty & Birthday CRM.',
   ctaButtonText: 'ابدأ الآن وأطلق منيو مطعمك',
-  ctaButtonText_en: 'Launch Your Restaurant Menu',
+  ctaButtonText_en: 'Launch Your Digital Menu',
   heroSecondaryBtnText: 'جرّب المنيو التفاعلي مباشرة',
   heroSecondaryBtnText_en: 'Explore Live Demo Menu',
-  themesTitle: '11 ثيماً عالمياً يليق بهوية مطعمك ويجذب العميل للطلب',
-  themesTitle_en: '11 Global Interactive Themes Crafted for Every Dining Concept',
+  themesTitle: '10 ثيمات عالمية تليق بهوية مطعمك وتجذب العميل للطلب',
+  themesTitle_en: '10 Built-in Interactive Themes Crafted for Every Dining Concept',
   themesSubtitle:
-    'من كتاب المنيو الفاخر ثلاثي الأبعاد (الأكثر طلباً 🔥) إلى تجربة شات واتساب التفاعلي (VIP 👑) — بدّل تصميم المنيو بالكامل بضغطة زر مع ثبات نفس كود الـ QR على الطاولات.',
+    'من كتاب المنيو الفاخر ثلاثي الأبعاد (الأكثر طلباً 🔥) إلى تجربة شات واتساب التفاعلي — بدّل تصميم المنيو بالكامل بضغطة زر مع ثبات نفس كود الطاولة المطبوع.',
   themesSubtitle_en:
-    'From our flagship 3D Flipbook (Most Popular 🔥) to conversational WhatsApp Chat Ordering (VIP 👑) — switch your look anytime without reprinting a single table QR.',
+    'From our flagship 3D Flipbook (Most Popular 🔥) to conversational WhatsApp Ordering Chat — switch your look anytime without reprinting a single Table QR Code.',
   featuresTitle: 'كل ما تحتاجه لإدارة منيو ذكي يرفع متوسط الفاتورة',
   featuresTitle_en: 'Everything Needed to Turn Every Scan Into Higher Sales',
   featuresSubtitle:
@@ -38,30 +38,30 @@ export const DEFAULT_PLATFORM_LANDING: PlatformLandingSettings = {
     'Purpose-built hospitality tools that boost average ticket size and eliminate manual ordering errors in Arabic & English.',
   features: [
     {
-      title: '11 ثيماً تفاعلياً + حقن ثيمات VIP',
-      title_en: '11 Interactive Themes & VIP Styles',
+      title: '10 ثيمات تفاعلية + حقن ثيمات مخصصة',
+      title_en: '10 Interactive Themes & Custom Styles',
       description:
-        'استعرض قائمة طعامك في كتاب 3D مقلّب، أو ستوري ريلز، أو شات واتساب التفاعلي VIP مع تحكم كامل في الألوان والوضع الليلي والنهاري.',
+        'استعرض قائمة طعامك في كتاب ثلاثي الأبعاد، أو عرض قصصي، أو شات واتساب التفاعلي مع تحكم كامل في الألوان والوضع الليلي والنهاري.',
       description_en:
-        'Showcase dishes as a 3D Flipbook, interactive Reels story, or VIP WhatsApp Chat with custom brand colors and light/dark contrast modes.',
+        'Showcase dishes as a 3D Flipbook, interactive Reels story, or WhatsApp Chat with custom brand colors and light/dark contrast modes.',
       isVisible: true,
     },
     {
       title: 'أحجام، إضافات، ومقترحات زيادة البيع',
       title_en: 'Sizes, Add-ons & Smart Upsell Pairings',
       description:
-        'سعرات حرارية، أحجام متعددة، إضافات مدفوعة، وعروض 1+1 مجاناً، مع اقتراح الأصناف المكملة داخل السلة لزيادة قيمة كل أوردر.',
+        'سعرات حرارية، أحجام متعددة، إضافات مدفوعة، وعروض 1+1 مجاناً، مع اقتراح الأصناف المكملة داخل السلة لزيادة قيمة كل طلب.',
       description_en:
         'Manage calories, multiple sizes, paid add-ons, 1+1 BOGO promos, and automated cart pairings that naturally increase order value.',
       isVisible: true,
     },
     {
-      title: 'دفع مزدوج: إرسال للمطبخ أو واتساب',
+      title: 'استلام مزدوج: شاشات المطبخ أو واتساب',
       title_en: 'Dual Checkout: Kitchen Board & WhatsApp',
       description:
-        'يختار الضيف بين إرسال الأوردر مباشرة لشاشة المطبخ والكاشير بالرنين التنبيهي، أو كفاتورة أنيقة ومفصّلة عبر واتساب المطعم.',
+        'يختار الضيف بين إرسال الطلب مباشرة لشاشة المطبخ والكاشير بالرنين التنبيهي، أو كفاتورة أنيقة ومفصّلة عبر واتساب المطعم.',
       description_en:
-        'Guests send orders directly to your live kitchen screen with instant audio chimes or as formatted bilingual WhatsApp receipts.',
+        'Guests send orders directly to your live Kitchen Display System (KDS) with instant chimes or as formatted bilingual WhatsApp orders.',
       isVisible: true,
     },
     {
@@ -79,20 +79,20 @@ export const DEFAULT_PLATFORM_LANDING: PlatformLandingSettings = {
   operationsTitle: 'من الترابيزة للمطبخ والكابتن.. في أقل من ثانية',
   operationsTitle_en: 'Seamless Table-to-Kitchen & Waiter Synchronization',
   operationsSubtitle:
-    'نظام صالة متكامل يمنح ضيوفك حرية الطلب الجماعي وفصل الفاتورة، ويمنح فريقك شاشات تشغيل واضحة لكل محطة تحضير.',
+    'نظام صالة متكامل يمنح ضيوفك حرية الطلب الجماعي وتقسيم الشيك، ويمنح فريقك شاشات تشغيل واضحة لكل محطة تحضير.',
   operationsSubtitle_en:
-    'Empower groups to collaborate on one live table cart with Separate Check splits while routing items cleanly to Kitchen, Bar, and Pastry screens.',
+    'Empower groups to collaborate on one live table cart with Split Check billing while routing items cleanly to Kitchen, Bar, and Pastry screens.',
   operationsBullets: [
-    'تقسيم المطعم لصالات ومناطق متعددة وتوليد أكواد QR لكل الترابيزات بضغطة واحدة (من 1 إلى 200 ترابيزة).',
-    'الترابيزة الجماعية وفصل الفاتورة بالاسم (Separate Check): كل فرد على الترابيزة يطلب من موبايله ويراجع حسابه الخاص أو الإجمالي.',
-    'شاشات التشغيل المقسمة (Multi-Station KDS): فصل تلقائي لأصناف المطبخ الساخن والبار والمشروبات والحلواني مع متابعة لحظية.',
-    'شاشة الكابتن والويتر الفورية: استقبال نداء الكابتن وطلبات الشيك (كاش أو فيزا) وطلبات المياه والأدوات بتنبيه صوتي واضح.',
+    'تقسيم المطعم لصالات ومناطق متعددة وتوليد أكواد الطاولات بضغطة واحدة (من 1 إلى 200 طاولة).',
+    'الطلب الجماعي على الطاولة وتقسيم الشيك بالاسم: كل ضيف يطلب من هاتفه ويراجع حسابه الخاص أو الإجمالي.',
+    'شاشات التحضير المقسمة: فصل تلقائي لأصناف المطبخ الساخن والبار والمشروبات والباستري مع متابعة لحظية.',
+    'شاشة الكابتن والويتر الفورية: استقبال نداء الكابتن وطلبات الفاتورة (كاش أو فيزا) وطلبات المياه والأدوات بتنبيه صوتي واضح.',
   ],
   operationsBullets_en: [
-    'Multi-hall zoning with 1-click Bulk Table QR generation for any table count (1 to 200 tables per hall).',
-    'Collaborative Group Table Cart & Separate Check split billing by guest name right from each phone.',
-    'Multi-Station KDS screens routing dishes automatically to Kitchen, Bar, and Pastry prep stations.',
-    'Instant Captain / Waiter console for table calls, Cash/Card bill requests, and water/cutlery alerts.',
+    'Multi-hall zoning with 1-click Bulk Table QR Code generation for any table count (1 to 200 tables per hall).',
+    'Collaborative Group Table Cart & Split Check billing by guest name right from each phone.',
+    'Kitchen Display System (KDS) screens routing dishes automatically to Kitchen, Bar, and Pastry prep stations.',
+    'Instant Captain / Waiter console for table calls, Cash/Card check requests, and water/cutlery alerts.',
   ],
   loyaltyBadge: 'ولاء ذكي يضاعف عودة العملاء',
   loyaltyBadge_en: 'Smart Retention, Loyalty & Birthday Radar',
@@ -101,18 +101,18 @@ export const DEFAULT_PLATFORM_LANDING: PlatformLandingSettings = {
   loyaltySubtitle:
     'منظومة ولاء متكاملة تبني لك قاعدة بيانات عملاء حقيقية برقم الموبايل وتذكّرك بمناسباتهم قبلها بـ 3 أيام.',
   loyaltySubtitle_en:
-    'Capture customer preferences in one tap, reward repeat visits with digital punch cards, and trigger proactive WhatsApp birthday offers.',
+    'Capture customer preferences in one tap, reward repeat visits with digital Punch Cards, and trigger proactive WhatsApp birthday offers.',
   loyaltyBullets: [
     'تسجيل سريع بضغطة واحدة برقم الهاتف والاسم وتاريخ الميلاد مع خصم ترحيبي فوري على أول طلب.',
-    'بطاقة أختام الولاء الرقمية (Punch Card) تحفّز العميل على إكمال زياراته للحصول على مكافأته الخاصة.',
+    'بطاقة الأختام الرقمية تحفّز العميل على إكمال زياراته للحصول على مكافأته الخاصة.',
     'الترشيح الذكي: إعادة طلب آخر وجبة بضغطة واحدة مع إبراز أطباقه المفضلة تلقائياً فور دخوله للمنيو.',
-    'رادار أعياد الميلاد الاستباقي (3 أيام) + لوحة "عملائي CRM" لإرسال معايدات وهدايا واتساب مخصصة وتصدير البيانات Excel/CSV.',
+    'رادار أعياد الميلاد الاستباقي (3 أيام) + لوحة إدارة العملاء لإرسال معايدات وهدايا واتساب مخصصة وتصدير البيانات.',
   ],
   loyaltyBullets_en: [
     '1-tap phone registration with automatic first-order welcome discount.',
     'Digital Loyalty Punch Card that rewards repeat visits automatically.',
     'Personalized dish highlights and 1-tap reorder of each guest’s favorite meals.',
-    'Proactive 3-day Birthday Radar & CRM dashboard with 1-click WhatsApp gift messaging and CSV export.',
+    'Proactive 3-day Birthday Radar & Customer CRM dashboard with 1-click WhatsApp gift messaging and CSV export.',
   ],
   pricingTitle: 'باقات اشتراك مرنة تناسب طموح مطعمك',
   pricingTitle_en: 'Flexible Plans Built for Every Stage of Growth',
@@ -133,16 +133,16 @@ export const DEFAULT_PLATFORM_LANDING: PlatformLandingSettings = {
       description: 'مثالية للكافيهات والمطاعم الناشئة لانطلاقة رقمية سريعة وراقية.',
       description_en: 'Ideal for boutique cafes and emerging restaurants launching digitally.',
       features: [
-        'منيو QR غير محدود الأقسام والأصناف',
-        'الوصول إلى الـ 11 ثيماً التفاعلية',
+        'منيو رقمي غير محدود الأقسام والأصناف',
+        'الوصول إلى الـ 10 ثيمات التفاعلية',
         'استقبال طلبات واتساب منسقة ومفصلة',
-        'تقسيم الصالات ومولد QR جماعي للطباعة',
+        'تقسيم الصالات ومولد أكواد الطاولات للطباعة',
       ],
       features_en: [
-        'Unlimited categories & menu items',
-        'Access to all 11 built-in interactive themes',
+        'Unlimited categories & Digital Menu items',
+        'Access to all 10 built-in interactive themes',
         'Formatted bilingual WhatsApp orders',
-        'Halls & Bulk printable QR code generator',
+        'Halls & Bulk printable Table QR Code generator',
       ],
       highlighted: false,
       isVisible: true,
@@ -155,25 +155,25 @@ export const DEFAULT_PLATFORM_LANDING: PlatformLandingSettings = {
       period: 'ج.م / شهرياً',
       period_en: 'EGP / month',
       description: 'الحل المتكامل للمطاعم النشطة لتشغيل الصالة والمطبخ وولاء العملاء.',
-      description_en: 'Full dining room operations, multi-station KDS, waiter console, and smart CRM.',
+      description_en: 'Full dining room operations, KDS, Captain / Waiter console, and Customer CRM.',
       features: [
-        'شاشات الكاشير والمطبخ المقسمة KDS + شاشة الكابتن',
-        'الترابيزة الجماعية وفصل الحساب بالاسم (Separate Check)',
+        'شاشات الكاشير والمطبخ المقسمة + شاشة الكابتن',
+        'الطلب الجماعي وتقسيم الشيك بالاسم',
         'منظومة ولاء العملاء + بطاقة الأختام + رادار أعياد الميلاد',
-        'ثيم كتاب 3D وثيم شات واتساب التفاعلي VIP',
+        'ثيم كتاب ثلاثي الأبعاد وشات واتساب التفاعلي',
       ],
       features_en: [
-        'Multi-station KDS, Cashier & Captain/Waiter screens',
-        'Group Table Cart & Separate Check split billing',
-        'Smart Customer Loyalty, Punch Cards & 3-Day Birthday Radar',
-        'Flagship 3D Flipbook & VIP WhatsApp Chat themes',
+        'Cashier / POS, Multi-Station KDS & Captain / Waiter screens',
+        'Group Table Cart & Split Check billing',
+        'Customer CRM, Punch Cards & 3-Day Birthday Radar',
+        'Flagship 3D Flipbook & WhatsApp Chat themes',
       ],
       highlighted: true,
       isVisible: true,
     },
     {
       id: 'vip',
-      name: 'التجهيز الفندقي المتكامل (Concierge)',
+      name: 'التجهيز الفندقي المتكامل',
       name_en: 'VIP Concierge Setup',
       price: '1200',
       period: 'ج.م / تجهيز كامل',
@@ -181,15 +181,15 @@ export const DEFAULT_PLATFORM_LANDING: PlatformLandingSettings = {
       description: 'فريقنا يجهز مطعمك بالكامل من إدخال المنيو والصور وحتى أكواد الطاولات.',
       description_en: 'Our onboarding specialists upload your entire bilingual menu, photos, and floor QRs.',
       features: [
-        'إدخال المنيو والأحجام والإضافات بالكامل AR/EN',
+        'إدخال المنيو والأحجام والإضافات بالكامل بالعربية والإنجليزية',
         'ضبط الهوية البصرية وبطاقة المشاركة على واتساب',
-        'تجهيز ملفات QR جاهزة للطباعة لكل الصالات',
+        'تجهيز ملفات أكواد الطاولات جاهزة للطباعة لكل الصالات',
         'دعم فني وتدريب مباشر لفريق الصالة والمطبخ',
       ],
       features_en: [
-        'Full AR/EN menu & photo setup by Sufra specialists',
+        'Full AR/EN menu & photo setup by Sufra QR specialists',
         'Custom brand palette & WhatsApp link preview styling',
-        'Ready-to-print QR tent files for every hall & table',
+        'Ready-to-print Table QR Code files for every hall & table',
         'Dedicated onboarding & staff training support',
       ],
       highlighted: false,
@@ -198,13 +198,13 @@ export const DEFAULT_PLATFORM_LANDING: PlatformLandingSettings = {
   ],
   tygosBadge: 'مسار الترقية للمطاعم الكبرى والسلاسل',
   tygosBadge_en: 'Enterprise Upgrade Path',
-  tygosTitle: 'مستعد لإدارة المخازن والتكاليف والحسابات؟ اربط سُفرة بمنظومة تايجوس (Tygos Cloud ERP)',
+  tygosTitle: 'مستعد لإدارة المخازن والتكاليف والحسابات؟ اربط سُفرة بمنظومة تايجوس السحابية (Tygos)',
   tygosTitle_en: 'Ready for Full Inventory, Recipe Costing & Accounting? Connect Tygos Cloud ERP',
   tygosSubtitle:
-    'عندما ينمو مطعمك وتحتاج لربط طلبات الطاولات والمنيو مباشرة بالمخازن، خصم خامات الريسبي، نقاط البيع المتكاملة (POS)، وقوائم الأرباح والحسابات العامة — تنتقل بسلاسة تامة إلى منظومة تايجوس السحابية.',
+    'عندما ينمو مطعمك وتحتاج لربط طلبات الطاولات والمنيو مباشرة بالمخازن، وخصم خامات الوصفات، ونقاط البيع المتكاملة، وقوائم الأرباح والحسابات العامة — تنتقل بسلاسة تامة إلى منظومة Tygos السحابية.',
   tygosSubtitle_en:
-    'Seamlessly connect your Sufra table orders and KDS with automated ingredient deduction, food-cost analytics, full cloud POS shifts, supplier ledgers, and multi-branch financial reporting inside Tygos Cloud ERP.',
-  tygosCtaText: 'اطلب عرضاً لربط منظومة تايجوس',
+    'Seamlessly connect your Sufra QR table orders and KDS with automated ingredient deduction, food-cost analytics, full cloud POS shifts, supplier ledgers, and multi-branch financial reporting inside Tygos Cloud ERP.',
+  tygosCtaText: 'اطلب عرضاً لربط منظومة Tygos',
   tygosCtaText_en: 'Request Tygos Cloud ERP Demo',
   supportWhatsapp: '201000000000',
   footerText: 'منصة سُفرة QR · شريك النجاح الرقمي للمطاعم والكافيهات',
@@ -213,7 +213,7 @@ export const DEFAULT_PLATFORM_LANDING: PlatformLandingSettings = {
   shareTitle: 'سُفرة QR ترحب بكم — منصة المنيو الإلكتروني وتشغيل المطاعم الذكي',
   shareTitle_en: 'Sufra QR Welcomes You — Smart Digital Menu & Table Operations SaaS',
   shareDescription:
-    '11 ثيماً عالمياً، إدارة الصالات وفصل الفاتورة، شاشات المطبخ والكابتن، ومنظومة ولاء وأعياد ميلاد العملاء في منصة واحدة.',
+    '10 ثيمات عالمية، إدارة الصالات وتقسيم الشيك، شاشات المطبخ والكابتن، ومنظومة ولاء وأعياد ميلاد العملاء في منصة واحدة.',
   shareDescription_en:
-    '11 interactive themes, group table Separate Check billing, multi-station KDS, waiter console, and smart loyalty CRM.',
+    '10 interactive themes, group table Split Check billing, KDS, Captain / Waiter console, and smart Customer CRM.',
 };

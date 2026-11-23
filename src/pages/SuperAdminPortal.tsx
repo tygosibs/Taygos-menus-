@@ -335,7 +335,7 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
               }}
             >
               <p className="text-[11px] font-bold" style={{ color: theme.accentHex }}>
-                Super Admin
+                {isEn ? 'Super Admin' : 'المدير العام للمنصة'}
               </p>
               <p className="text-xs font-mono-num truncate" dir="ltr" style={{ color: theme.sidebarText }}>
                 {user.email}
@@ -666,7 +666,9 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
                       className="p-3 rounded-xl border flex items-center justify-between gap-2"
                       style={{ backgroundColor: theme.surfaceSubtleBg, borderColor: theme.surfaceBorder }}
                     >
-                      <span className="font-semibold" style={{ color: theme.mutedText }}>Project ID</span>
+                      <span className="font-semibold" style={{ color: theme.mutedText }}>
+                        {isEn ? 'Project ID' : 'معرّف المشروع'}
+                      </span>
                       <span className="font-mono-num font-bold" style={{ color: theme.surfaceText }} dir="ltr">
                         {firebaseConfig.projectId}
                       </span>
@@ -675,7 +677,9 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
                       className="p-3 rounded-xl border flex items-center justify-between gap-2"
                       style={{ backgroundColor: theme.surfaceSubtleBg, borderColor: theme.surfaceBorder }}
                     >
-                      <span className="font-semibold" style={{ color: theme.mutedText }}>Auth Domain</span>
+                      <span className="font-semibold" style={{ color: theme.mutedText }}>
+                        {isEn ? 'Auth Domain' : 'نطاق المصادقة'}
+                      </span>
                       <span className="font-mono-num font-bold" style={{ color: theme.surfaceText }} dir="ltr">
                         {firebaseConfig.authDomain}
                       </span>
@@ -684,7 +688,9 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
                       className="p-3 rounded-xl border flex items-center justify-between gap-2"
                       style={{ backgroundColor: theme.surfaceSubtleBg, borderColor: theme.surfaceBorder }}
                     >
-                      <span className="font-semibold" style={{ color: theme.mutedText }}>Firestore DB ID</span>
+                      <span className="font-semibold" style={{ color: theme.mutedText }}>
+                        {isEn ? 'Firestore DB ID' : 'معرّف قاعدة البيانات'}
+                      </span>
                       <span className="font-mono-num font-bold truncate" style={{ color: theme.surfaceText }} dir="ltr">
                         {firebaseConfig.firestoreDatabaseId}
                       </span>
@@ -693,7 +699,9 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
                       className="p-3 rounded-xl border flex items-center justify-between gap-2"
                       style={{ backgroundColor: theme.surfaceSubtleBg, borderColor: theme.surfaceBorder }}
                     >
-                      <span className="font-semibold" style={{ color: theme.mutedText }}>Current Origin</span>
+                      <span className="font-semibold" style={{ color: theme.mutedText }}>
+                        {isEn ? 'Current Origin' : 'النطاق الحالي'}
+                      </span>
                       <span className="font-mono-num font-bold truncate" style={{ color: theme.surfaceText }} dir="ltr">
                         {currentOrigin}
                       </span>

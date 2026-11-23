@@ -344,9 +344,9 @@ export function OnboardingForm({ ownerId, ownerDisplayName, onCreated }: Onboard
           </span>
           <div className="min-w-0">
             <p className="text-[11px] sm:text-xs font-extrabold truncate">
-              <span className="sm:hidden">{isEn ? '1. Details' : '١. البيانات'}</span>
+              <span className="sm:hidden">{isEn ? '1. Details' : '1. البيانات'}</span>
               <span className="hidden sm:inline">
-                {isEn ? 'Step 1: Basic Info' : 'الخطوة ١: بيانات المطعم'}
+                {isEn ? 'Step 1: Basic Info' : 'الخطوة 1: بيانات المطعم'}
               </span>
             </p>
             <p className={`hidden sm:block text-[11px] truncate ${step === 1 ? 'text-zinc-300' : 'text-emerald-700'}`}>
@@ -378,9 +378,9 @@ export function OnboardingForm({ ownerId, ownerDisplayName, onCreated }: Onboard
           </span>
           <div className="min-w-0">
             <p className="text-[11px] sm:text-xs font-extrabold truncate">
-              <span className="sm:hidden">{isEn ? '2. Theme' : '٢. الثيم'}</span>
+              <span className="sm:hidden">{isEn ? '2. Theme' : '2. الثيم'}</span>
               <span className="hidden sm:inline">
-                {isEn ? 'Step 2: Preview & Pick Theme' : 'الخطوة ٢: المعاينة واختيار الثيم'}
+                {isEn ? 'Step 2: Preview & Pick Theme' : 'الخطوة 2: المعاينة واختيار الثيم'}
               </span>
             </p>
             <p className={`hidden sm:block text-[11px] truncate ${step === 2 ? 'text-zinc-300' : 'text-zinc-400'}`}>
@@ -496,8 +496,8 @@ export function OnboardingForm({ ownerId, ownerDisplayName, onCreated }: Onboard
                 <Cake className="w-4 h-4 text-amber-600 shrink-0" />
                 <span>
                   {isEn
-                    ? 'Your Birthday (for exclusive platform gifts & discounts 🎂)'
-                    : 'تاريخ ميلادك (للحصول على هدايا وخصومات حصرية من المنصة 🎂)'}
+                    ? 'Your Birthday (for exclusive platform gifts & discounts)'
+                    : 'تاريخ ميلادك (للحصول على هدايا وخصومات حصرية من المنصة)'}
                 </span>
               </label>
               <input
@@ -590,7 +590,7 @@ export function OnboardingForm({ ownerId, ownerDisplayName, onCreated }: Onboard
               <div className="flex flex-wrap items-center gap-4">
                 <SafeImage
                   src={logoUrl}
-                  alt="Restaurant Logo"
+                  alt={isEn ? 'Restaurant Logo' : 'شعار المطعم'}
                   className="w-16 h-16 rounded-2xl object-cover border border-zinc-200"
                 />
                 <label className="px-4 py-2.5 rounded-xl border border-zinc-300 text-xs font-bold text-zinc-700 hover:bg-zinc-50 cursor-pointer flex items-center gap-2">

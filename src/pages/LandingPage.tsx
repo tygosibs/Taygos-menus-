@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import {
   ArrowLeft,
+  ArrowRight,
   Cake,
   Calendar,
   Check,
@@ -23,8 +24,11 @@ import {
   UtensilsCrossed,
   X,
 } from 'lucide-react';
+import { LanguageToggleButton } from '../components/LanguageToggleButton';
 import { PWAInstallButton } from '../components/PWAInstallButton';
 import { OwnerAuthCard } from '../components/auth/OwnerAuthCard';
+import { LandingOperationsShowcases } from '../components/landing/LandingOperationsShowcases';
+import { LandingVisualShowcases } from '../components/landing/LandingVisualShowcases';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useScreenUi } from '../contexts/PlatformUiContext';
 import { DEFAULT_PLATFORM_LANDING } from '../data/defaultLandingSettings';
@@ -36,8 +40,6 @@ import {
 } from '../lib/firestoreService';
 import { applySeoMetadata, getPlatformShareMetadata } from '../lib/seoHead';
 import { CustomTheme, PlatformLandingSettings } from '../types/menu';
-import { LandingVisualShowcases } from '../components/landing/LandingVisualShowcases';
-import { LandingOperationsShowcases } from '../components/landing/LandingOperationsShowcases';
 
 interface LandingPageProps {
   onNavigate: (path: string) => void;
@@ -66,42 +68,85 @@ type DrawerNavId =
 
 interface DrawerNavItem {
   id: DrawerNavId;
-  label: string;
+  ar: string;
+  en: string;
   sectionId: string;
 }
 
 const DRAWER_ITEMS: DrawerNavItem[] = [
-  { id: 'hero', label: 'الرئيسية', sectionId: 'hero' },
-  { id: 'showcase_menu_qr', label: 'المنيو الرقمي وQR', sectionId: 'showcase-menu-qr' },
-  { id: 'showcase_themes', label: 'معرض الثيمات', sectionId: 'showcase-themes' },
-  { id: 'showcase_roles', label: 'شاشة لكل دور', sectionId: 'showcase-roles' },
-  { id: 'showcase_supervision', label: 'المدير والإشراف', sectionId: 'showcase-supervision' },
-  { id: 'showcase_roles_access', label: 'الأدوار والحسابات', sectionId: 'showcase-roles-access' },
-  { id: 'showcase_treasury_shifts', label: 'الخزنة والورديات', sectionId: 'showcase-treasury-shifts' },
-  { id: 'showcase_reports_audit', label: 'التقارير والتدقيق', sectionId: 'showcase-reports-audit' },
-  { id: 'showcase_crm', label: 'إدارة العملاء (CRM)', sectionId: 'showcase-crm' },
-  { id: 'showcase_loyalty_marketing', label: 'الولاء والتسويق', sectionId: 'showcase-loyalty-marketing' },
-  { id: 'digital_menu', label: 'تحديث المنيو والأسعار', sectionId: 'digital-menu' },
-  { id: 'hall_captain', label: 'الصالة والكابتن', sectionId: 'hall-captain' },
-  { id: 'cashier', label: 'الكاشير', sectionId: 'cashier' },
-  { id: 'kds', label: 'شاشات المطبخ', sectionId: 'kds' },
-  { id: 'management', label: 'الإدارة والتقارير', sectionId: 'management' },
-  { id: 'loyalty', label: 'العملاء والولاء', sectionId: 'loyalty' },
-  { id: 'tygos', label: 'التكامل مع تايجوس', sectionId: 'tygos' },
-  { id: 'pricing', label: 'الأسعار', sectionId: 'pricing' },
-  { id: 'contact', label: 'تواصل معنا', sectionId: 'contact' },
+  { id: 'hero', ar: 'الرئيسية', en: 'Home', sectionId: 'hero' },
+  {
+    id: 'showcase_menu_qr',
+    ar: 'المنيو الرقمي وكود الطاولة',
+    en: 'Digital Menu & Table QR Code',
+    sectionId: 'showcase-menu-qr',
+  },
+  { id: 'showcase_themes', ar: 'معرض الثيمات', en: 'Themes Gallery', sectionId: 'showcase-themes' },
+  { id: 'showcase_roles', ar: 'شاشة لكل دور', en: 'Screen per Role', sectionId: 'showcase-roles' },
+  {
+    id: 'showcase_supervision',
+    ar: 'المدير الإشرافي',
+    en: 'Supervisory Manager',
+    sectionId: 'showcase-supervision',
+  },
+  {
+    id: 'showcase_roles_access',
+    ar: 'الأدوار والصلاحيات والحسابات',
+    en: 'Roles, Permissions & Accounts',
+    sectionId: 'showcase-roles-access',
+  },
+  {
+    id: 'showcase_treasury_shifts',
+    ar: 'الخزنة والورديات',
+    en: 'Treasury & Shifts',
+    sectionId: 'showcase-treasury-shifts',
+  },
+  {
+    id: 'showcase_reports_audit',
+    ar: 'التقارير وسجل الرقابة',
+    en: 'Reports & Audit Log',
+    sectionId: 'showcase-reports-audit',
+  },
+  { id: 'showcase_crm', ar: 'إدارة العملاء', en: 'Customer CRM', sectionId: 'showcase-crm' },
+  {
+    id: 'showcase_loyalty_marketing',
+    ar: 'الولاء والتسويق',
+    en: 'Loyalty & Marketing',
+    sectionId: 'showcase-loyalty-marketing',
+  },
+  {
+    id: 'digital_menu',
+    ar: 'تحديث المنيو والأسعار',
+    en: 'Live Menu Updates',
+    sectionId: 'digital-menu',
+  },
+  { id: 'hall_captain', ar: 'الصالة والكابتن', en: 'Dine-in & Captain', sectionId: 'hall-captain' },
+  { id: 'cashier', ar: 'الكاشير', en: 'Cashier / POS', sectionId: 'cashier' },
+  { id: 'kds', ar: 'شاشات المطبخ', en: 'Kitchen Display System', sectionId: 'kds' },
+  {
+    id: 'management',
+    ar: 'الإدارة والتقارير',
+    en: 'Management & Reports',
+    sectionId: 'management',
+  },
+  { id: 'loyalty', ar: 'العملاء والولاء', en: 'Customers & Loyalty', sectionId: 'loyalty' },
+  { id: 'tygos', ar: 'التكامل مع تايجوس', en: 'Tygos ERP Sync', sectionId: 'tygos' },
+  { id: 'pricing', ar: 'الأسعار', en: 'Pricing', sectionId: 'pricing' },
+  { id: 'contact', ar: 'تواصل معنا', en: 'Contact Us', sectionId: 'contact' },
 ];
 
 type TableStatusKey = 'available' | 'occupied' | 'bill' | 'delayed';
+type PaymentMethodKey = 'cash' | 'visa' | 'split';
 
 const TABLE_STATUS_ORDER: TableStatusKey[] = ['available', 'occupied', 'bill', 'delayed'];
 
 const TABLE_STATUS_META: Record<
   TableStatusKey,
-  { label: string; bg: string; border: string; text: string; badgeBg: string; badgeText: string }
+  { ar: string; en: string; bg: string; border: string; text: string; badgeBg: string; badgeText: string }
 > = {
   available: {
-    label: 'متاحة',
+    ar: 'متاحة',
+    en: 'Available',
     bg: '#FBF7EF',
     border: '#2F8F5B',
     text: '#14285A',
@@ -109,7 +154,8 @@ const TABLE_STATUS_META: Record<
     badgeText: '#2F8F5B',
   },
   occupied: {
-    label: 'مشغولة',
+    ar: 'مشغولة',
+    en: 'Occupied',
     bg: '#14285A',
     border: '#14285A',
     text: '#FBF7EF',
@@ -117,7 +163,8 @@ const TABLE_STATUS_META: Record<
     badgeText: '#FBF7EF',
   },
   bill: {
-    label: 'طلب فاتورة',
+    ar: 'طلب فاتورة',
+    en: 'Bill Requested',
     bg: '#F3EBDD',
     border: '#E8833A',
     text: '#14285A',
@@ -125,7 +172,8 @@ const TABLE_STATUS_META: Record<
     badgeText: '#E8833A',
   },
   delayed: {
-    label: 'متأخرة',
+    ar: 'متأخرة',
+    en: 'Overdue',
     bg: '#FFF3E8',
     border: '#E8833A',
     text: '#0E1B3D',
@@ -138,42 +186,92 @@ type KdsStage = 0 | 1 | 2;
 
 const KDS_STAGE_META: Record<
   KdsStage,
-  { label: string; badgeBg: string; badgeText: string }
+  { ar: string; en: string; badgeBg: string; badgeText: string }
 > = {
-  0: { label: 'قيد التحضير', badgeBg: 'rgba(232, 131, 58, 0.16)', badgeText: '#E8833A' },
-  1: { label: 'جاهز', badgeBg: '#14285A', badgeText: '#FBF7EF' },
-  2: { label: 'تم التقديم', badgeBg: 'rgba(47, 143, 91, 0.15)', badgeText: '#2F8F5B' },
+  0: {
+    ar: 'قيد التحضير',
+    en: 'Preparing',
+    badgeBg: 'rgba(232, 131, 58, 0.16)',
+    badgeText: '#E8833A',
+  },
+  1: { ar: 'جاهز', en: 'Ready', badgeBg: '#14285A', badgeText: '#FBF7EF' },
+  2: { ar: 'تم التقديم', en: 'Served', badgeBg: 'rgba(47, 143, 91, 0.15)', badgeText: '#2F8F5B' },
 };
 
 const SHIFT_ARCHIVE_EXAMPLE = [
   {
     dayKey: 'thu',
-    dayLabel: 'الخميس',
-    totalSales: '١٤,٢٠٠ ج.م',
-    checksCount: '٣٨ شيك',
+    dayAr: 'الخميس',
+    dayEn: 'Thursday',
+    totalSales: '14,200',
+    checksCount: 38,
     checks: [
-      { id: '#٤٠١', table: 'طاولة ٣', method: 'فيزا', amount: '٤٦٠ ج.م' },
-      { id: '#٤٠٢', table: 'تيك أواي', method: 'كاش', amount: '١٩٥ ج.م' },
+      {
+        id: '#401',
+        tableAr: 'طاولة 3',
+        tableEn: 'Table 3',
+        methodAr: 'فيزا',
+        methodEn: 'Card',
+        amount: '460',
+      },
+      {
+        id: '#402',
+        tableAr: 'تيك أواي',
+        tableEn: 'Takeaway',
+        methodAr: 'كاش',
+        methodEn: 'Cash',
+        amount: '195',
+      },
     ],
   },
   {
     dayKey: 'fri',
-    dayLabel: 'الجمعة',
-    totalSales: '١٨,٩٥٠ ج.م',
-    checksCount: '٥١ شيك',
+    dayAr: 'الجمعة',
+    dayEn: 'Friday',
+    totalSales: '18,950',
+    checksCount: 51,
     checks: [
-      { id: '#٥١٢', table: 'طاولة ٨', method: 'مختلط', amount: '٧٤٠ ج.م' },
-      { id: '#٥١٣', table: 'طاولة ٢', method: 'فيزا', amount: '٣٨٠ ج.م' },
+      {
+        id: '#512',
+        tableAr: 'طاولة 8',
+        tableEn: 'Table 8',
+        methodAr: 'مختلط',
+        methodEn: 'Split',
+        amount: '740',
+      },
+      {
+        id: '#513',
+        tableAr: 'طاولة 2',
+        tableEn: 'Table 2',
+        methodAr: 'فيزا',
+        methodEn: 'Card',
+        amount: '380',
+      },
     ],
   },
   {
     dayKey: 'sat',
-    dayLabel: 'السبت',
-    totalSales: '١٦,٤٠٠ ج.م',
-    checksCount: '٤٤ شيك',
+    dayAr: 'السبت',
+    dayEn: 'Saturday',
+    totalSales: '16,400',
+    checksCount: 44,
     checks: [
-      { id: '#٦٠٤', table: 'طاولة ١', method: 'كاش', amount: '٥١٠ ج.م' },
-      { id: '#٦٠٥', table: 'دليفري', method: 'فيزا', amount: '٢٩٠ ج.م' },
+      {
+        id: '#604',
+        tableAr: 'طاولة 1',
+        tableEn: 'Table 1',
+        methodAr: 'كاش',
+        methodEn: 'Cash',
+        amount: '510',
+      },
+      {
+        id: '#605',
+        tableAr: 'دليفري',
+        tableEn: 'Delivery',
+        methodAr: 'فيزا',
+        methodEn: 'Card',
+        amount: '290',
+      },
     ],
   },
 ];
@@ -181,26 +279,35 @@ const SHIFT_ARCHIVE_EXAMPLE = [
 const TYGOS_MEAL_EXAMPLES = [
   {
     id: 'burger',
-    name: 'وجبة سماش برجر (مثال)',
+    shortAr: 'برجر (مثال)',
+    shortEn: 'Burger (Example)',
+    nameAr: 'وجبة سماش برجر (مثال)',
+    nameEn: 'Smash Burger Meal (Example)',
     sellPrice: 200,
     cost: 76,
     marginPercent: 62,
-    ingredients: 'لحم صافي + خبز بريوش + جبن + صوص خاص',
+    ingredientsAr: 'لحم صافي + خبز بريوش + جبن + صوص خاص',
+    ingredientsEn: 'Beef patty + brioche bun + cheddar + house sauce',
   },
   {
     id: 'pasta',
-    name: 'باستا دجاج ألفريدو (مثال)',
+    shortAr: 'باستا (مثال)',
+    shortEn: 'Pasta (Example)',
+    nameAr: 'باستا دجاج ألفريدو (مثال)',
+    nameEn: 'Chicken Alfredo Pasta (Example)',
     sellPrice: 180,
     cost: 63,
     marginPercent: 65,
-    ingredients: 'مكرونة + صدور دجاج + كريمة طهي + بارميزان',
+    ingredientsAr: 'مكرونة + صدور دجاج + كريمة طهي + بارميزان',
+    ingredientsEn: 'Fettuccine + chicken breast + cooking cream + parmesan',
   },
 ];
 
 const PREVIEW_THEMES = [
   {
     id: 'sand-royal',
-    label: 'كلاسيك رملي',
+    labelAr: 'كلاسيك رملي',
+    labelEn: 'Sand & Royal',
     bg: '#F3EBDD',
     surface: '#FBF7EF',
     border: '#E6D9C3',
@@ -211,7 +318,8 @@ const PREVIEW_THEMES = [
   },
   {
     id: 'obsidian-gold',
-    label: 'داكن فاخر',
+    labelAr: 'داكن فاخر',
+    labelEn: 'Midnight Dark',
     bg: '#0E1B3D',
     surface: '#14285A',
     border: '#263F80',
@@ -222,7 +330,8 @@ const PREVIEW_THEMES = [
   },
   {
     id: 'crisp-bistro',
-    label: 'أبيض هادئ',
+    labelAr: 'أبيض هادئ',
+    labelEn: 'Crisp Bistro',
     bg: '#FBF7EF',
     surface: '#FFFFFF',
     border: '#E6D9C3',
@@ -233,7 +342,8 @@ const PREVIEW_THEMES = [
   },
   {
     id: 'warm-editorial',
-    label: 'تراثي دافئ',
+    labelAr: 'تراثي دافئ',
+    labelEn: 'Warm Editorial',
     bg: '#EFE4D1',
     surface: '#FBF7EF',
     border: '#DAC7A7',
@@ -247,38 +357,60 @@ const PREVIEW_THEMES = [
 const PLACEHOLDER_PRICING_CARDS = [
   {
     id: 'plan-1',
-    badge: 'الباقة الأساسية',
-    name: '[اسم الباقة الأولى — قابل للتعديل]',
-    price: '[السعر يُحدد لاحقاً]',
-    period: '[دورة الاشتراك]',
-    description: '[وصف مختصر يوضح الفئة المناسبة للمقاهي والمطاعم الناشئة]',
-    bullets: ['[ميزة أولى قابلة للتعديل]', '[ميزة ثانية قابلة للتعديل]', '[ميزة ثالثة قابلة للتعديل]'],
+    badgeAr: 'الباقة الأساسية',
+    badgeEn: 'Starter Plan',
+    nameAr: '[اسم الباقة الأولى — قابل للتعديل]',
+    nameEn: '[Starter Plan Name — Editable]',
+    priceAr: '[السعر يُحدد لاحقاً]',
+    priceEn: '[Price Configured Later]',
+    periodAr: '[دورة الاشتراك]',
+    periodEn: '[Billing Cycle]',
+    descriptionAr: '[وصف مختصر يوضح الفئة المناسبة للمقاهي والمطاعم الناشئة]',
+    descriptionEn: '[Short summary tailored for cafes and growing single-branch venues]',
+    bulletsAr: ['[ميزة أولى قابلة للتعديل]', '[ميزة ثانية قابلة للتعديل]', '[ميزة ثالثة قابلة للتعديل]'],
+    bulletsEn: ['[Editable Feature One]', '[Editable Feature Two]', '[Editable Feature Three]'],
     featured: false,
   },
   {
     id: 'plan-2',
-    badge: 'الأكثر طلباً',
-    name: '[اسم الباقة المتكاملة — قابل للتعديل]',
-    price: '[السعر يُحدد لاحقاً]',
-    period: '[دورة الاشتراك]',
-    description: '[وصف مختصر يوضح التشغيل الكامل للصالة والكاشير والمطبخ والولاء]',
-    bullets: ['[ميزة أولى قابلة للتعديل]', '[ميزة ثانية قابلة للتعديل]', '[ميزة ثالثة قابلة للتعديل]'],
+    badgeAr: 'الأكثر طلباً',
+    badgeEn: 'Most Popular',
+    nameAr: '[اسم الباقة المتكاملة — قابل للتعديل]',
+    nameEn: '[Complete Operations Plan — Editable]',
+    priceAr: '[السعر يُحدد لاحقاً]',
+    priceEn: '[Price Configured Later]',
+    periodAr: '[دورة الاشتراك]',
+    periodEn: '[Billing Cycle]',
+    descriptionAr: '[وصف مختصر يوضح التشغيل الكامل للصالة والكاشير والمطبخ والولاء]',
+    descriptionEn: '[Short summary covering full Dine-in, Cashier / POS, Kitchen Display System, and Loyalty]',
+    bulletsAr: ['[ميزة أولى قابلة للتعديل]', '[ميزة ثانية قابلة للتعديل]', '[ميزة ثالثة قابلة للتعديل]'],
+    bulletsEn: ['[Editable Feature One]', '[Editable Feature Two]', '[Editable Feature Three]'],
     featured: true,
   },
   {
     id: 'plan-3',
-    badge: 'الباقة المتقدمة',
-    name: '[اسم باقة التجهيز والربط — قابل للتعديل]',
-    price: '[السعر يُحدد لاحقاً]',
-    period: '[دورة الاشتراك]',
-    description: '[وصف مختصر للفروع المتعددة والتجهيز الكامل والتكامل السحابي]',
-    bullets: ['[ميزة أولى قابلة للتعديل]', '[ميزة ثانية قابلة للتعديل]', '[ميزة ثالثة قابلة للتعديل]'],
+    badgeAr: 'الباقة المتقدمة',
+    badgeEn: 'Enterprise Plan',
+    nameAr: '[اسم باقة التجهيز والربط — قابل للتعديل]',
+    nameEn: '[Multi-Branch & Sync Plan — Editable]',
+    priceAr: '[السعر يُحدد لاحقاً]',
+    priceEn: '[Price Configured Later]',
+    periodAr: '[دورة الاشتراك]',
+    periodEn: '[Billing Cycle]',
+    descriptionAr: '[وصف مختصر للفروع المتعددة والتجهيز الكامل والتكامل السحابي]',
+    descriptionEn: '[Short summary for multi-branch onboarding, hardware setup, and cloud sync]',
+    bulletsAr: ['[ميزة أولى قابلة للتعديل]', '[ميزة ثانية قابلة للتعديل]', '[ميزة ثالثة قابلة للتعديل]'],
+    bulletsEn: ['[Editable Feature One]', '[Editable Feature Two]', '[Editable Feature Three]'],
     featured: false,
   },
 ];
 
 export function LandingPage({ onNavigate }: LandingPageProps) {
-  const { lang } = useLanguage();
+  const { lang, dir } = useLanguage();
+  const isAr = lang === 'ar';
+  const DirectionalArrow = dir === 'rtl' ? ArrowLeft : ArrowRight;
+  const currencyLabel = isAr ? 'ج.م' : 'EGP';
+
   useScreenUi('landing_page');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [cms, setCms] = useState<PlatformLandingSettings>(DEFAULT_PLATFORM_LANDING);
@@ -294,7 +426,11 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
 
   // Page 1: Digital Menu Simulation
   const [menuPriceUpdated, setMenuPriceUpdated] = useState(true);
-  const [menuExampleLang, setMenuExampleLang] = useState<'ar' | 'en'>('ar');
+  const [menuExampleLang, setMenuExampleLang] = useState<'ar' | 'en'>(lang);
+
+  useEffect(() => {
+    setMenuExampleLang(lang);
+  }, [lang]);
 
   // Page 2: Hall & Captain Simulation
   const [tableStatuses, setTableStatuses] = useState<TableStatusKey[]>([
@@ -306,7 +442,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
   const [selectedTableIndex, setSelectedTableIndex] = useState(1);
 
   // Page 3: Cashier Simulation
-  const [paymentMethod, setPaymentMethod] = useState<'كاش' | 'فيزا' | 'مختلط'>('كاش');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodKey>('cash');
   const [checkClosed, setCheckClosed] = useState(false);
 
   // Page 4: KDS Simulation
@@ -386,7 +522,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Gentle auto-simulation for Digital Menu price toggle & KDS progression (respects reduced motion)
+  // Gentle auto-simulation for Digital Menu price toggle (respects reduced motion)
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const prefersReduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -405,7 +541,9 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
   ).replace(/[^\d]/g, '');
   const whatsappNumber = cleanWhatsappDigits || '201000000000';
   const whatsappDirectHref = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(
-    'أهلاً فريق سُفرة QR، أرغب في معرفة التفاصيل وتجهيز مطعمي.'
+    isAr
+      ? 'أهلاً فريق سُفرة QR، أرغب في معرفة التفاصيل وتجهيز مطعمي.'
+      : 'Hello Sufra QR team, I would like to learn more and set up my restaurant.'
   )}`;
 
   const totalThemesCount = MENU_THEMES.length + customThemes.length;
@@ -452,24 +590,36 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
   };
 
   const contactPreFilledWhatsapp = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(
-    `مرحباً فريق سُفرة QR، الاسم/المطعم: ${contactName || 'غير محدد'} | الموبايل: ${
-      contactPhone || 'غير محدد'
-    }${contactNotes ? ` | ملاحظات: ${contactNotes}` : ''}`
+    isAr
+      ? `مرحباً فريق سُفرة QR، الاسم/المطعم: ${contactName || 'غير محدد'} | الموبايل: ${
+          contactPhone || 'غير محدد'
+        }${contactNotes ? ` | ملاحظات: ${contactNotes}` : ''}`
+      : `Hello Sufra QR team, Name/Restaurant: ${contactName || 'Unspecified'} | Phone: ${
+          contactPhone || 'Unspecified'
+        }${contactNotes ? ` | Notes: ${contactNotes}` : ''}`
   )}`;
+
+  const paymentMethodLabel = (m: PaymentMethodKey) => {
+    if (m === 'cash') return isAr ? 'كاش' : 'Cash';
+    if (m === 'visa') return isAr ? 'فيزا' : 'Card';
+    return isAr ? 'مختلط' : 'Split';
+  };
+
+  const activeDrawerItem = DRAWER_ITEMS.find((d) => d.id === activeNavId);
 
   return (
     <div
-      dir="rtl"
+      dir={dir}
       className="landing-plex-body min-h-screen bg-[#F3EBDD] text-[#0E1B3D] flex flex-col selection:bg-[#14285A]/15 selection:text-[#14285A]"
     >
       {/* Sticky Header + Scroll Progress Bar */}
       <header className="sticky top-0 z-40 bg-[#F3EBDD]/95 backdrop-blur-sm border-b border-[#E6D9C3]">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             <button
               type="button"
               onClick={() => setDrawerOpen(true)}
-              aria-label="فتح القائمة الجانبية"
+              aria-label={isAr ? 'فتح القائمة الجانبية' : 'Open navigation menu'}
               aria-expanded={drawerOpen}
               className="w-11 h-11 rounded-2xl border border-[#E6D9C3] bg-[#FBF7EF] text-[#14285A] flex items-center justify-center hover:border-[#14285A]/40 transition-colors cursor-pointer shrink-0"
             >
@@ -493,17 +643,20 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                 </svg>
               </span>
               <span className="landing-cairo-heading text-lg sm:text-xl text-[#14285A]">
-                سُفرة QR
+                {isAr ? 'سُفرة QR' : 'Sufra QR'}
               </span>
             </a>
 
-            <span className="hidden md:inline-flex items-center gap-1.5 text-xs font-semibold text-[#0E1B3D]/70 pr-3 border-r border-[#E6D9C3]">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#E8833A]" />
-              <span>{DRAWER_ITEMS.find((d) => d.id === activeNavId)?.label || 'الرئيسية'}</span>
+            <span className="hidden md:inline-flex items-center gap-1.5 text-xs font-semibold text-[#0E1B3D]/70 ps-3 border-s border-[#E6D9C3] truncate">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#E8833A] shrink-0" />
+              <span className="truncate">
+                {activeDrawerItem ? (isAr ? activeDrawerItem.ar : activeDrawerItem.en) : isAr ? 'الرئيسية' : 'Home'}
+              </span>
             </span>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+            <LanguageToggleButton variant="light" compact />
             {currentUser ? (
               <button
                 type="button"
@@ -511,7 +664,15 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                 className="px-4 py-2.5 rounded-xl bg-[#14285A] text-[#FBF7EF] text-xs sm:text-sm font-bold hover:opacity-95 transition-opacity cursor-pointer flex items-center gap-2 whitespace-nowrap"
               >
                 {isSuperAdmin && <ShieldCheck className="w-4 h-4 text-[#E8833A]" />}
-                <span>{isSuperAdmin ? 'لوحة السوبر أدمن' : 'لوحة التحكم'}</span>
+                <span>
+                  {isSuperAdmin
+                    ? isAr
+                      ? 'لوحة السوبر أدمن'
+                      : 'Super Admin'
+                    : isAr
+                      ? 'لوحة التحكم'
+                      : 'Dashboard'}
+                </span>
               </button>
             ) : (
               <>
@@ -520,14 +681,14 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                   onClick={() => setAuthModalOpen(true)}
                   className="hidden sm:inline-flex px-4 py-2.5 rounded-xl border border-[#E6D9C3] bg-[#FBF7EF] text-[#14285A] text-xs sm:text-sm font-bold hover:border-[#14285A]/40 transition-colors cursor-pointer whitespace-nowrap"
                 >
-                  دخول الحساب
+                  {isAr ? 'دخول الحساب' : 'Sign In'}
                 </button>
                 <button
                   type="button"
                   onClick={handlePrimaryStart}
                   className="px-4 py-2.5 rounded-xl bg-[#14285A] text-[#FBF7EF] text-xs sm:text-sm font-bold hover:opacity-95 transition-opacity cursor-pointer whitespace-nowrap"
                 >
-                  ابدأ الآن
+                  {isAr ? 'ابدأ الآن' : 'Get Started'}
                 </button>
               </>
             )}
@@ -543,33 +704,44 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
         </div>
       </header>
 
-      {/* Slide-Over RTL Drawer */}
+      {/* Slide-Over Directional Drawer */}
       {drawerOpen && (
-        <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="القائمة الجانبية">
+        <div
+          className="fixed inset-0 z-50"
+          role="dialog"
+          aria-modal="true"
+          aria-label={isAr ? 'القائمة الجانبية' : 'Navigation drawer'}
+        >
           <div
             onClick={() => setDrawerOpen(false)}
             className="fixed inset-0 bg-[#0E1B3D]/45 backdrop-blur-[2px] transition-opacity"
           />
-          <aside className="fixed inset-y-0 right-0 w-80 max-w-[85vw] bg-[#FBF7EF] border-l border-[#E6D9C3] shadow-2xl flex flex-col justify-between p-6 overflow-y-auto">
+          <aside
+            className={`fixed inset-y-0 ${
+              dir === 'rtl' ? 'right-0 border-l' : 'left-0 border-r'
+            } w-80 max-w-[85vw] bg-[#FBF7EF] border-[#E6D9C3] shadow-2xl flex flex-col justify-between p-6 overflow-y-auto`}
+          >
             <div className="space-y-6">
               <div className="flex items-center justify-between pb-4 border-b border-[#E6D9C3]">
                 <div className="flex items-center gap-2.5">
                   <span className="w-8 h-8 rounded-xl bg-[#14285A] text-[#FBF7EF] flex items-center justify-center">
                     <QrCode className="w-4 h-4" />
                   </span>
-                  <span className="landing-cairo-heading text-lg text-[#14285A]">سُفرة QR</span>
+                  <span className="landing-cairo-heading text-lg text-[#14285A]">
+                    {isAr ? 'سُفرة QR' : 'Sufra QR'}
+                  </span>
                 </div>
                 <button
                   type="button"
                   onClick={() => setDrawerOpen(false)}
-                  aria-label="إغلاق القائمة"
+                  aria-label={isAr ? 'إغلاق القائمة' : 'Close menu'}
                   className="w-10 h-10 rounded-xl border border-[#E6D9C3] bg-[#F3EBDD] text-[#14285A] flex items-center justify-center hover:border-[#14285A]/40 transition-colors cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
-              <nav className="space-y-1.5" aria-label="أقسام المنصة">
+              <nav className="space-y-1.5" aria-label={isAr ? 'أقسام المنصة' : 'Platform sections'}>
                 {DRAWER_ITEMS.map((item) => {
                   const isActive = activeNavId === item.id;
                   return (
@@ -577,17 +749,17 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                       key={item.id}
                       type="button"
                       onClick={() => scrollToSection(item.sectionId, item.id)}
-                      className={`w-full text-right px-4 py-3 rounded-xl text-sm font-semibold transition-colors flex items-center justify-between cursor-pointer ${
+                      className={`w-full text-start px-4 py-3 rounded-xl text-sm font-semibold transition-colors flex items-center justify-between cursor-pointer ${
                         isActive
                           ? 'bg-[#14285A] text-[#FBF7EF]'
                           : 'text-[#0E1B3D] hover:bg-[#F3EBDD]'
                       }`}
                     >
-                      <span>{item.label}</span>
+                      <span>{isAr ? item.ar : item.en}</span>
                       {isActive ? (
                         <span className="w-2 h-2 rounded-full bg-[#E8833A]" />
                       ) : (
-                        <ArrowLeft className="w-4 h-4 opacity-40" />
+                        <DirectionalArrow className="w-4 h-4 opacity-40 shrink-0" />
                       )}
                     </button>
                   );
@@ -609,8 +781,19 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                 className="w-full py-3 px-4 rounded-xl bg-[#14285A] text-[#FBF7EF] text-sm font-bold flex items-center justify-center gap-2 cursor-pointer"
               >
                 <Lock className="w-4 h-4 text-[#E8833A]" />
-                <span>{currentUser ? 'فتح لوحة التحكم' : 'تسجيل دخول الإدارة'}</span>
+                <span>
+                  {currentUser
+                    ? isAr
+                      ? 'فتح لوحة التحكم'
+                      : 'Open Dashboard'
+                    : isAr
+                      ? 'تسجيل دخول الإدارة'
+                      : 'Owner & Admin Sign In'}
+                </span>
               </button>
+              <div className="flex items-center justify-center gap-2">
+                <LanguageToggleButton variant="light" />
+              </div>
               <div className="flex justify-center">
                 <PWAInstallButton variant="compact" />
               </div>
@@ -620,22 +803,30 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
       )}
 
       <main className="flex-1">
-        {/* 0. الرئيسية (الغلاف + تبديل ثيمات الواجهة) */}
+        {/* 0. Hero Section + Interactive Theme Preview Strip */}
         <section id="hero" className="scroll-mt-20 py-14 sm:py-20 lg:py-24">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 space-y-16">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center">
               <div className="lg:col-span-6 space-y-6">
                 <p className="text-xs sm:text-sm font-bold text-[#14285A] flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-[#E8833A]" />
-                  <span>منظومة الضيافة الرقمية للمطاعم والكافيهات</span>
+                  <span>
+                    {isAr
+                      ? 'منظومة الضيافة الرقمية للمطاعم والكافيهات'
+                      : 'Complete Hospitality Operating System for Restaurants & Cafes'}
+                  </span>
                 </p>
 
                 <h1 className="landing-cairo-heading text-3xl sm:text-5xl lg:text-[3.35rem] text-[#14285A] leading-[1.18]">
-                  مطعمك شغّال أسرع.. من أول مسحة QR
+                  {isAr
+                    ? 'مطعمك شغّال أسرع.. من أول مسحة QR'
+                    : 'Your restaurant runs faster—from the very first QR scan'}
                 </h1>
 
                 <p className="text-base sm:text-lg text-[#0E1B3D]/85 leading-relaxed max-w-xl">
-                  منيو تفاعلي يربط الضيف بالصالة والمطبخ والكاشير في خط واحد دون طباعة ورق أو ضياع طلبات.
+                  {isAr
+                    ? 'منيو تفاعلي يربط الضيف بالصالة والمطبخ والكاشير في خط واحد دون طباعة ورق أو ضياع طلبات.'
+                    : 'An interactive Digital Menu uniting your guests, Dine-in floor, Kitchen Display System, and Cashier / POS in one synchronized flow.'}
                 </p>
 
                 <div className="flex flex-wrap items-center gap-3 pt-2">
@@ -644,15 +835,15 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                     onClick={handlePrimaryStart}
                     className="px-7 py-4 rounded-2xl bg-[#14285A] text-[#FBF7EF] text-sm sm:text-base font-bold hover:opacity-95 transition-opacity flex items-center gap-2.5 cursor-pointer"
                   >
-                    <span>ابدأ الآن</span>
-                    <ArrowLeft className="w-4 h-4 text-[#E8833A]" />
+                    <span>{isAr ? 'ابدأ الآن' : 'Get Started'}</span>
+                    <DirectionalArrow className="w-4 h-4 text-[#E8833A]" />
                   </button>
                   <button
                     type="button"
                     onClick={() => scrollToSection('digital-menu', 'digital_menu')}
                     className="px-7 py-4 rounded-2xl border border-[#E6D9C3] bg-[#FBF7EF] text-[#14285A] text-sm sm:text-base font-bold hover:border-[#14285A]/40 transition-colors cursor-pointer"
                   >
-                    استعرض الأقسام
+                    {isAr ? 'استعرض الأقسام' : 'Explore Modules'}
                   </button>
                 </div>
               </div>
@@ -661,9 +852,11 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
               <div className="lg:col-span-6">
                 <div className="bg-[#FBF7EF] border border-[#E6D9C3] rounded-3xl p-5 sm:p-8">
                   <div className="flex items-center justify-between mb-4">
-                    <span className="text-xs font-bold text-[#14285A]">مسار الطلب اللحظي</span>
+                    <span className="text-xs font-bold text-[#14285A]">
+                      {isAr ? 'مسار الطلب اللحظي' : 'Real-Time Order Routing'}
+                    </span>
                     <span className="px-2.5 py-1 rounded-lg bg-[#F3EBDD] border border-[#E6D9C3] text-[11px] font-bold text-[#0E1B3D]">
-                      مثال توضيحي
+                      {isAr ? 'مثال توضيحي' : 'Live Example'}
                     </span>
                   </div>
 
@@ -691,30 +884,40 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                           aria-hidden="true"
                         />
                       </div>
-                      <span className="mt-2.5 text-[11px] font-bold text-[#14285A]">طاولة رقم ٤</span>
+                      <span className="mt-2.5 text-[11px] font-bold text-[#14285A] font-mono-num">
+                        {isAr ? 'طاولة رقم 4' : 'Table #4'}
+                      </span>
                     </div>
 
                     <div className="sm:col-span-1 flex items-center justify-center">
-                      <span className="w-8 h-8 rounded-full bg-[#F3EBDD] border border-[#E6D9C3] flex items-center justify-center text-[#E8833A] rotate-90 sm:rotate-0">
-                        <ArrowLeft className="w-4 h-4" />
+                      <span
+                        className={`w-8 h-8 rounded-full bg-[#F3EBDD] border border-[#E6D9C3] flex items-center justify-center text-[#E8833A] ${
+                          dir === 'rtl' ? '-rotate-90 sm:rotate-0' : 'rotate-90 sm:rotate-0'
+                        }`}
+                      >
+                        <DirectionalArrow className="w-4 h-4" />
                       </span>
                     </div>
 
                     <div className="sm:col-span-6 bg-[#F3EBDD] border border-[#E6D9C3] rounded-2xl p-4 space-y-2.5">
                       <div className="flex items-center justify-between text-xs font-bold text-[#14285A] pb-2 border-b border-[#E6D9C3]">
-                        <span>إشعار التشغيل</span>
+                        <span>{isAr ? 'إشعار التشغيل' : 'Station Dispatch'}</span>
                         <span className="w-2 h-2 rounded-full bg-[#E8833A] landing-stage-dot" />
                       </div>
                       <div className="bg-[#FBF7EF] border border-[#E6D9C3] rounded-xl px-3 py-2 flex items-center justify-between text-xs">
-                        <span className="font-semibold">طلب ساخن · المطبخ</span>
+                        <span className="font-semibold">
+                          {isAr ? 'طلب ساخن · المطبخ' : 'Hot Kitchen · Grill'}
+                        </span>
                         <span className="px-2 py-0.5 rounded-md bg-[#E8833A]/15 text-[#E8833A] font-bold">
-                          انتظار
+                          {isAr ? 'انتظار' : 'Pending'}
                         </span>
                       </div>
                       <div className="bg-[#FBF7EF] border border-[#E6D9C3] rounded-xl px-3 py-2 flex items-center justify-between text-xs">
-                        <span className="font-semibold">مشروب بارد · البار</span>
+                        <span className="font-semibold">
+                          {isAr ? 'مشروب بارد · البار' : 'Cold Drink · Bar'}
+                        </span>
                         <span className="px-2 py-0.5 rounded-md bg-[#2F8F5B]/15 text-[#2F8F5B] font-bold">
-                          تم
+                          {isAr ? 'تم' : 'Ready'}
                         </span>
                       </div>
                     </div>
@@ -730,12 +933,18 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                   <Sparkles className="w-4 h-4 text-[#E8833A]" />
                   <span>
                     {customThemes.length > 0
-                      ? `${totalThemesCount} ثيماً حياً لهوية مطعمك`
-                      : `${MENU_THEMES.length} ثيمات مدمجة جاهزة لهوية مطعمك`}
+                      ? isAr
+                        ? `${totalThemesCount} ثيماً حياً لهوية مطعمك`
+                        : `${totalThemesCount} Live Themes for Your Restaurant`
+                      : isAr
+                        ? `${MENU_THEMES.length} ثيمات مدمجة جاهزة لهوية مطعمك`
+                        : `${MENU_THEMES.length} Built-in Themes Ready for Your Brand`}
                   </span>
                 </span>
                 <h2 className="landing-cairo-heading text-xl sm:text-2xl text-[#14285A]">
-                  بدّل مظهر المنيو بنفس كود الطاولة
+                  {isAr
+                    ? 'بدّل مظهر المنيو بنفس كود الطاولة'
+                    : 'Switch menu styling with the same Table QR Code'}
                 </h2>
                 <div className="grid grid-cols-2 gap-2.5 pt-1">
                   {PREVIEW_THEMES.map((themeItem, idx) => (
@@ -743,13 +952,13 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                       key={themeItem.id}
                       type="button"
                       onClick={() => setActiveThemeIdx(idx)}
-                      className={`px-3 py-2.5 rounded-xl border text-xs font-bold text-right transition-colors cursor-pointer flex items-center justify-between ${
+                      className={`px-3 py-2.5 rounded-xl border text-xs font-bold text-start transition-colors cursor-pointer flex items-center justify-between ${
                         activeThemeIdx === idx
                           ? 'bg-[#14285A] border-[#14285A] text-[#FBF7EF]'
                           : 'bg-[#F3EBDD] border-[#E6D9C3] text-[#14285A]'
                       }`}
                     >
-                      <span>{themeItem.label}</span>
+                      <span>{isAr ? themeItem.labelAr : themeItem.labelEn}</span>
                       <span
                         className="w-3 h-3 rounded-full border border-white/40"
                         style={{ backgroundColor: themeItem.bg }}
@@ -768,23 +977,40 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                     color: activeHeroTheme.text,
                   }}
                 >
-                  <div className="flex items-center justify-between pb-3 mb-3 border-b" style={{ borderColor: activeHeroTheme.border }}>
-                    <span className="landing-cairo-heading text-sm sm:text-base" style={{ color: activeHeroTheme.heading }}>
-                      مثال معاينة · {activeHeroTheme.label}
+                  <div
+                    className="flex items-center justify-between pb-3 mb-3 border-b"
+                    style={{ borderColor: activeHeroTheme.border }}
+                  >
+                    <span
+                      className="landing-cairo-heading text-sm sm:text-base"
+                      style={{ color: activeHeroTheme.heading }}
+                    >
+                      {isAr
+                        ? `مثال معاينة · ${activeHeroTheme.labelAr}`
+                        : `Live Preview · ${activeHeroTheme.labelEn}`}
                     </span>
                     <span
                       className="px-2.5 py-1 rounded-lg text-[11px] font-bold"
-                      style={{ backgroundColor: activeHeroTheme.ctaBg, color: activeHeroTheme.ctaText }}
+                      style={{
+                        backgroundColor: activeHeroTheme.ctaBg,
+                        color: activeHeroTheme.ctaText,
+                      }}
                     >
-                      ثابت على نفس الـ QR
+                      {isAr ? 'ثابت على نفس الكود' : 'Same Table QR Code'}
                     </span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {['وجبة شيش مشوي · ١٩٥ ج.م', 'قهوة مثلجة · ٧٠ ج.م'].map((sample) => (
+                    {(isAr
+                      ? ['وجبة شيش مشوي · 195 ج.م', 'قهوة مثلجة · 70 ج.م']
+                      : ['Chargrilled Shish Meal · 195 EGP', 'Iced Specialty Coffee · 70 EGP']
+                    ).map((sample) => (
                       <div
                         key={sample}
-                        className="rounded-xl border px-3.5 py-3 text-xs font-bold"
-                        style={{ backgroundColor: activeHeroTheme.surface, borderColor: activeHeroTheme.border }}
+                        className="rounded-xl border px-3.5 py-3 text-xs font-bold font-mono-num"
+                        style={{
+                          backgroundColor: activeHeroTheme.surface,
+                          borderColor: activeHeroTheme.border,
+                        }}
                       >
                         {sample}
                       </div>
@@ -807,19 +1033,23 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
           onScrollToContact={() => scrollToSection('contact', 'contact')}
         />
 
-        {/* 1. المنيو الرقمي */}
+        {/* 1. Digital Menu */}
         <section id="digital-menu" className="scroll-mt-20 py-16 sm:py-24 border-t border-[#E6D9C3] bg-[#FBF7EF]">
           <div className="max-w-5xl mx-auto px-4 sm:px-6 space-y-8">
             <div className="space-y-3">
               <span className="text-xs font-bold text-[#14285A] flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-[#E8833A]" />
-                <span>٠١ · المنيو الرقمي</span>
+                <span className="font-mono-num">
+                  {isAr ? '01 · المنيو الرقمي' : '01 · Digital Menu'}
+                </span>
               </span>
               <h2 className="landing-cairo-heading text-3xl sm:text-4xl text-[#14285A]">
-                منيو يتحدث لحظياً في كل طاولة
+                {isAr ? 'منيو يتحدث لحظياً في كل طاولة' : 'A Digital Menu that updates instantly at every table'}
               </h2>
               <p className="text-base sm:text-lg text-[#0E1B3D]/85">
-                غيّر السعر أو لغة العرض ليصل التحديث لضيفك في نفس الثانية دون إعادة طباعة.
+                {isAr
+                  ? 'غيّر السعر أو لغة العرض ليصل التحديث لضيفك في نفس الثانية دون إعادة طباعة.'
+                  : 'Update any price or toggle Arabic and English—guests see live changes in seconds with zero reprinting.'}
               </p>
             </div>
 
@@ -827,16 +1057,24 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             <div className="bg-[#F3EBDD] border border-[#E6D9C3] rounded-3xl p-6 sm:p-8 space-y-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <span className="px-3 py-1 rounded-xl bg-[#FBF7EF] border border-[#E6D9C3] text-xs font-bold text-[#14285A]">
-                  مثال · محاكاة تحديث السعر واللغة
+                  {isAr
+                    ? 'مثال · محاكاة تحديث السعر واللغة'
+                    : 'Example · Live Price & Language Sync'}
                 </span>
 
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setMenuPriceUpdated((prev) => !prev)}
-                    className="px-3.5 py-2 rounded-xl bg-[#14285A] text-[#FBF7EF] text-xs font-bold cursor-pointer hover:opacity-95 transition-opacity"
+                    className="px-3.5 py-2 rounded-xl bg-[#14285A] text-[#FBF7EF] text-xs font-bold cursor-pointer hover:opacity-95 transition-opacity font-mono-num"
                   >
-                    {menuPriceUpdated ? 'إرجاع السعر ١٢٠' : 'تحديث السعر إلى ١٣٥'}
+                    {menuPriceUpdated
+                      ? isAr
+                        ? 'إرجاع السعر 120'
+                        : 'Reset Price to 120'
+                      : isAr
+                        ? 'تحديث السعر إلى 135'
+                        : 'Update Price to 135'}
                   </button>
                   <button
                     type="button"
@@ -844,7 +1082,15 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                     className="px-3.5 py-2 rounded-xl border border-[#E6D9C3] bg-[#FBF7EF] text-[#14285A] text-xs font-bold flex items-center gap-1.5 cursor-pointer"
                   >
                     <Languages className="w-4 h-4 text-[#E8833A]" />
-                    <span>{menuExampleLang === 'ar' ? 'التبديل إلى EN' : 'التبديل إلى عربي'}</span>
+                    <span>
+                      {menuExampleLang === 'ar'
+                        ? isAr
+                          ? 'التبديل إلى الإنجليزية'
+                          : 'Switch Card to EN'
+                        : isAr
+                          ? 'التبديل إلى العربية'
+                          : 'Switch Card to AR'}
+                    </span>
                   </button>
                 </div>
               </div>
@@ -873,17 +1119,17 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                 </div>
 
                 <div className="flex items-center gap-3 self-end sm:self-center">
-                  <div className="text-left sm:text-right">
+                  <div className="text-end">
                     <span className="block text-[11px] text-[#0E1B3D]/55 line-through font-mono-num">
-                      {menuPriceUpdated ? (menuExampleLang === 'ar' ? '١٢٠ ج.م' : '120 EGP') : ''}
+                      {menuPriceUpdated ? (menuExampleLang === 'ar' ? '120 ج.م' : '120 EGP') : ''}
                     </span>
                     <span className="landing-price-pulse inline-block landing-cairo-heading text-2xl text-[#14285A] font-mono-num">
                       {menuPriceUpdated
                         ? menuExampleLang === 'ar'
-                          ? '١٣٥ ج.م'
+                          ? '135 ج.م'
                           : '135 EGP'
                         : menuExampleLang === 'ar'
-                          ? '١٢٠ ج.م'
+                          ? '120 ج.م'
                           : '120 EGP'}
                     </span>
                   </div>
@@ -909,15 +1155,27 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             <ul className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm font-medium text-[#0E1B3D]">
               <li className="bg-[#F3EBDD] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
                 <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-                <span>تعديل الأسعار والأحجام والإضافات يظهر للضيوف في لحظتها.</span>
+                <span>
+                  {isAr
+                    ? 'تعديل الأسعار والأحجام والإضافات يظهر للضيوف في لحظتها.'
+                    : 'Edits to prices, sizes, and add-ons reflect on guest devices immediately.'}
+                </span>
               </li>
               <li className="bg-[#F3EBDD] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
                 <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-                <span>تبديل سلس بين العربية والإنجليزية بلمسة واحدة داخل المنيو.</span>
+                <span>
+                  {isAr
+                    ? 'تبديل سلس بين العربية والإنجليزية بلمسة واحدة داخل المنيو.'
+                    : 'Seamless one-tap Arabic and English switching built directly into the menu.'}
+                </span>
               </li>
               <li className="bg-[#F3EBDD] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
                 <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-                <span>نفس كود الـ QR يظل ثابتاً على كل طاولة دون تكاليف طباعة.</span>
+                <span>
+                  {isAr
+                    ? 'نفس كود الطاولة يظل ثابتاً على كل ترابيزة دون تكاليف طباعة.'
+                    : 'Your printed Table QR Code never changes—zero reprinting costs.'}
+                </span>
               </li>
             </ul>
 
@@ -927,26 +1185,34 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                 onClick={() => scrollToSection('contact', 'contact')}
                 className="px-6 py-3.5 rounded-2xl bg-[#14285A] text-[#FBF7EF] text-sm font-bold hover:opacity-95 transition-opacity inline-flex items-center gap-2 cursor-pointer"
               >
-                <span>تواصل لتفعيل المنيو الرقمي</span>
-                <ArrowLeft className="w-4 h-4 text-[#E8833A]" />
+                <span>
+                  {isAr ? 'تواصل لتفعيل المنيو الرقمي' : 'Activate Your Digital Menu'}
+                </span>
+                <DirectionalArrow className="w-4 h-4 text-[#E8833A]" />
               </button>
             </div>
           </div>
         </section>
 
-        {/* 2. الصالة والكابتن */}
+        {/* 2. Hall & Captain */}
         <section id="hall-captain" className="scroll-mt-20 py-16 sm:py-24 border-t border-[#E6D9C3] bg-[#F3EBDD]">
           <div className="max-w-5xl mx-auto px-4 sm:px-6 space-y-8">
             <div className="space-y-3">
               <span className="text-xs font-bold text-[#14285A] flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-[#E8833A]" />
-                <span>٠٢ · الصالة والكابتن</span>
+                <span className="font-mono-num">
+                  {isAr ? '02 · الصالة والكابتن' : '02 · Dine-in & Captain / Waiter'}
+                </span>
               </span>
               <h2 className="landing-cairo-heading text-3xl sm:text-4xl text-[#14285A]">
-                خريطة طاولات حية وطلب جماعي وفصل الحساب
+                {isAr
+                  ? 'خريطة طاولات حية وطلب جماعي وفصل الحساب'
+                  : 'Live table grid, group ordering & per-guest Split Check'}
               </h2>
               <p className="text-base sm:text-lg text-[#0E1B3D]/85">
-                متابعة فورية لحالة كل طاولة على الصالة مع تقسيم الشيك بالاسم بين أفراد الترابيزة.
+                {isAr
+                  ? 'متابعة فورية لحالة كل طاولة على الصالة مع تقسيم الشيك بالاسم بين أفراد الترابيزة.'
+                  : 'Track every Dine-in table color in real time while guests combine group carts or split the Check by name.'}
               </p>
             </div>
 
@@ -954,7 +1220,9 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             <div className="bg-[#FBF7EF] border border-[#E6D9C3] rounded-3xl p-6 sm:p-8 space-y-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <span className="px-3 py-1 rounded-xl bg-[#F3EBDD] border border-[#E6D9C3] text-xs font-bold text-[#14285A]">
-                  مثال · اضغط على أي طاولة لتغيير حالتها
+                  {isAr
+                    ? 'مثال · اضغط على أي طاولة لتغيير حالتها'
+                    : 'Example · Click any table to cycle its live status'}
                 </span>
                 <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold">
                   {TABLE_STATUS_ORDER.map((k) => (
@@ -964,10 +1232,13 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                       style={{
                         backgroundColor: TABLE_STATUS_META[k].badgeBg,
                         borderColor: TABLE_STATUS_META[k].border,
-                        color: TABLE_STATUS_META[k].badgeText === '#FBF7EF' && k === 'occupied' ? '#14285A' : TABLE_STATUS_META[k].text,
+                        color:
+                          TABLE_STATUS_META[k].badgeText === '#FBF7EF' && k === 'occupied'
+                            ? '#14285A'
+                            : TABLE_STATUS_META[k].text,
                       }}
                     >
-                      {TABLE_STATUS_META[k].label}
+                      {isAr ? TABLE_STATUS_META[k].ar : TABLE_STATUS_META[k].en}
                     </span>
                   ))}
                 </div>
@@ -984,7 +1255,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                         key={idx}
                         type="button"
                         onClick={() => cycleTableStatus(idx)}
-                        className={`p-4 rounded-2xl border-2 text-right transition-all duration-300 cursor-pointer flex flex-col justify-between min-h-[104px] ${
+                        className={`p-4 rounded-2xl border-2 text-start transition-all duration-300 cursor-pointer flex flex-col justify-between min-h-[104px] ${
                           isFocused ? 'ring-2 ring-[#E8833A]/40' : ''
                         }`}
                         style={{
@@ -994,14 +1265,16 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                         }}
                       >
                         <div className="flex items-center justify-between gap-2">
-                          <span className="landing-cairo-heading text-base">طاولة {idx + 1}</span>
+                          <span className="landing-cairo-heading text-base font-mono-num">
+                            {isAr ? `طاولة ${idx + 1}` : `Table ${idx + 1}`}
+                          </span>
                           <Users className="w-4 h-4 opacity-75" />
                         </div>
                         <span
                           className="self-start px-2.5 py-1 rounded-lg text-[11px] font-bold"
                           style={{ backgroundColor: meta.badgeBg, color: meta.badgeText }}
                         >
-                          {meta.label}
+                          {isAr ? meta.ar : meta.en}
                         </span>
                       </button>
                     );
@@ -1012,21 +1285,39 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                 <div className="lg:col-span-6 bg-[#F3EBDD] border border-[#E6D9C3] rounded-2xl p-5 space-y-3.5">
                   <div className="flex items-center justify-between border-b border-[#E6D9C3] pb-2.5">
                     <span className="landing-cairo-heading text-sm text-[#14285A]">
-                      الطلب الجماعي وتقسيم الشيك · طاولة {selectedTableIndex + 1} (مثال)
+                      {isAr
+                        ? `الطلب الجماعي وتقسيم الشيك · طاولة ${selectedTableIndex + 1} (مثال)`
+                        : `Group Order & Split Check · Table ${selectedTableIndex + 1} (Example)`}
                     </span>
-                    <span className="text-xs font-bold text-[#E8833A]">حساب منفصل</span>
+                    <span className="text-xs font-bold text-[#E8833A]">
+                      {isAr ? 'حساب منفصل' : 'Per Guest'}
+                    </span>
                   </div>
 
                   {[
-                    { guest: 'أحمد (برجر + كولا)', amount: '١٦٥ ج.م' },
-                    { guest: 'سارة (سلطة + قهوة)', amount: '١٢٠ ج.م' },
-                    { guest: 'كريم (باستا + عصير)', amount: '١٥٥ ج.م' },
+                    {
+                      ar: 'أحمد (برجر + كولا)',
+                      en: 'Ahmed (Burger + Cola)',
+                      amount: `165 ${currencyLabel}`,
+                    },
+                    {
+                      ar: 'سارة (سلطة + قهوة)',
+                      en: 'Sara (Salad + Coffee)',
+                      amount: `120 ${currencyLabel}`,
+                    },
+                    {
+                      ar: 'كريم (باستا + عصير)',
+                      en: 'Karim (Pasta + Juice)',
+                      amount: `155 ${currencyLabel}`,
+                    },
                   ].map((split) => (
                     <div
-                      key={split.guest}
+                      key={split.en}
                       className="bg-[#FBF7EF] border border-[#E6D9C3] rounded-xl px-3.5 py-2.5 flex items-center justify-between text-xs"
                     >
-                      <span className="font-semibold text-[#0E1B3D]">{split.guest}</span>
+                      <span className="font-semibold text-[#0E1B3D]">
+                        {isAr ? split.ar : split.en}
+                      </span>
                       <span className="font-mono-num font-bold text-[#14285A]">{split.amount}</span>
                     </div>
                   ))}
@@ -1037,15 +1328,27 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             <ul className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm font-medium text-[#0E1B3D]">
               <li className="bg-[#FBF7EF] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
                 <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-                <span>ألوان فورية تميز الطاولة المتاحة والمشغولة وطلب الفاتورة والمتأخرة.</span>
+                <span>
+                  {isAr
+                    ? 'ألوان فورية تميز الطاولة المتاحة والمشغولة وطلب الفاتورة والمتأخرة.'
+                    : 'Instant color states distinguish Available, Occupied, Bill Requested, and Overdue tables.'}
+                </span>
               </li>
               <li className="bg-[#FBF7EF] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
                 <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-                <span>طلب جماعي مشترك من موبايلات الضيوف في سلة واحدة للترابيزة.</span>
+                <span>
+                  {isAr
+                    ? 'طلب جماعي مشترك من موبايلات الضيوف في سلة واحدة للترابيزة.'
+                    : 'Collaborative multi-phone ordering merges into one unified table session.'}
+                </span>
               </li>
               <li className="bg-[#FBF7EF] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
                 <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-                <span>فصل وتقسيم الشيك لكل ضيف بالاسم دون حسابات يدوية.</span>
+                <span>
+                  {isAr
+                    ? 'فصل وتقسيم الشيك لكل ضيف بالاسم دون حسابات يدوية.'
+                    : 'Instant Split Check totals per guest by name with zero manual math.'}
+                </span>
               </li>
             </ul>
 
@@ -1055,26 +1358,34 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                 onClick={() => scrollToSection('contact', 'contact')}
                 className="px-6 py-3.5 rounded-2xl bg-[#14285A] text-[#FBF7EF] text-sm font-bold hover:opacity-95 transition-opacity inline-flex items-center gap-2 cursor-pointer"
               >
-                <span>تواصل لتجهيز الصالة والكابتن</span>
-                <ArrowLeft className="w-4 h-4 text-[#E8833A]" />
+                <span>
+                  {isAr ? 'تواصل لتجهيز الصالة والكابتن' : 'Set Up Your Dine-in Floor & Captain'}
+                </span>
+                <DirectionalArrow className="w-4 h-4 text-[#E8833A]" />
               </button>
             </div>
           </div>
         </section>
 
-        {/* 3. الكاشير */}
+        {/* 3. Cashier / POS */}
         <section id="cashier" className="scroll-mt-20 py-16 sm:py-24 border-t border-[#E6D9C3] bg-[#FBF7EF]">
           <div className="max-w-5xl mx-auto px-4 sm:px-6 space-y-8">
             <div className="space-y-3">
               <span className="text-xs font-bold text-[#14285A] flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-[#E8833A]" />
-                <span>٠٣ · الكاشير</span>
+                <span className="font-mono-num">
+                  {isAr ? '03 · الكاشير' : '03 · Cashier / POS'}
+                </span>
               </span>
               <h2 className="landing-cairo-heading text-3xl sm:text-4xl text-[#14285A]">
-                تحصيل مرن وشاشة نظيفة من الشيكات المقفولة
+                {isAr
+                  ? 'تحصيل مرن وشاشة نظيفة من الشيكات المقفولة'
+                  : 'Fast settlement and a queue clear of Paid checks'}
               </h2>
               <p className="text-base sm:text-lg text-[#0E1B3D]/85">
-                أغلق الشيك كاش أو فيزا أو مختلط ليُضاف الرصيد للدرج ويختفي الشيك فوراً من أمامك.
+                {isAr
+                  ? 'أغلق الشيك كاش أو فيزا أو مختلط ليُضاف الرصيد للدرج ويختفي الشيك فوراً من أمامك.'
+                  : 'Close each Check via Cash, Card, or Split tender—the Cash Drawer updates live and Paid checks move straight to history.'}
               </p>
             </div>
 
@@ -1082,13 +1393,15 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             <div className="bg-[#F3EBDD] border border-[#E6D9C3] rounded-3xl p-6 sm:p-8 space-y-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <span className="px-3 py-1 rounded-xl bg-[#FBF7EF] border border-[#E6D9C3] text-xs font-bold text-[#14285A]">
-                  مثال · محاكاة إقفال شيك وتحديث رصيد الدرج
+                  {isAr
+                    ? 'مثال · محاكاة إقفال شيك وتحديث رصيد الدرج'
+                    : 'Example · Check Settlement & Cash Drawer Update'}
                 </span>
                 <div className="bg-[#14285A] text-[#FBF7EF] px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2">
                   <CreditCard className="w-4 h-4 text-[#E8833A]" />
-                  <span>رصيد الدرج الحالي:</span>
+                  <span>{isAr ? 'رصيد الدرج الحالي:' : 'Cash Drawer Balance:'}</span>
                   <span className="font-mono-num text-base">
-                    {checkClosed ? '٤,٨٥٠ ج.م' : '٤,٦٠٠ ج.م'}
+                    {checkClosed ? `4,850 ${currencyLabel}` : `4,600 ${currencyLabel}`}
                   </span>
                 </div>
               </div>
@@ -1100,17 +1413,21 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                       <div className="flex items-center justify-between border-b border-[#E6D9C3] pb-3">
                         <div>
                           <p className="landing-cairo-heading text-base text-[#14285A]">
-                            شيك مفتوح #١٠٨ · طاولة ٥ (مثال)
+                            {isAr
+                              ? 'شيك مفتوح #108 · طاولة 5 (مثال)'
+                              : 'Open Check #108 · Table 5 (Example)'}
                           </p>
-                          <p className="text-xs text-[#0E1B3D]/70">٣ أصناف جاهزة للتحصيل</p>
+                          <p className="text-xs text-[#0E1B3D]/70 font-mono-num">
+                            {isAr ? '3 أصناف جاهزة للتحصيل' : '3 items ready for settlement'}
+                          </p>
                         </div>
                         <span className="landing-cairo-heading text-xl text-[#14285A] font-mono-num">
-                          ٢٥٠ ج.م
+                          250 {currencyLabel}
                         </span>
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2">
-                        {(['كاش', 'فيزا', 'مختلط'] as const).map((method) => (
+                        {(['cash', 'visa', 'split'] as const).map((method) => (
                           <button
                             key={method}
                             type="button"
@@ -1121,7 +1438,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                                 : 'bg-[#F3EBDD] border-[#E6D9C3] text-[#14285A]'
                             }`}
                           >
-                            {method}
+                            {paymentMethodLabel(method)}
                           </button>
                         ))}
                       </div>
@@ -1131,16 +1448,22 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                         onClick={() => setCheckClosed(true)}
                         className="w-full py-3 rounded-xl bg-[#14285A] text-[#FBF7EF] text-xs sm:text-sm font-bold hover:opacity-95 transition-opacity cursor-pointer"
                       >
-                        تأكيد التحصيل ({paymentMethod}) وإغلاق الشيك
+                        {isAr
+                          ? `تأكيد التحصيل (${paymentMethodLabel(paymentMethod)}) وإغلاق الشيك`
+                          : `Confirm Payment (${paymentMethodLabel(paymentMethod)}) & Close Check`}
                       </button>
                     </div>
                   ) : (
                     <div className="bg-[#FBF7EF] border border-dashed border-[#E6D9C3] rounded-2xl p-6 text-center space-y-3">
                       <span className="inline-flex px-3 py-1 rounded-lg bg-[#2F8F5B]/15 text-[#2F8F5B] text-xs font-bold">
-                        تم إقفال الشيك ({paymentMethod}) واختفاؤه من القائمة
+                        {isAr
+                          ? `تم إقفال الشيك (${paymentMethodLabel(paymentMethod)}) واختفاؤه من القائمة`
+                          : `Check Paid (${paymentMethodLabel(paymentMethod)}) & cleared from active queue`}
                       </span>
                       <p className="text-xs text-[#0E1B3D]/80">
-                        الشيكات المقفولة لا تزدحم بها شاشة الكاشير وتُحفظ في أرشيف صاحب المطعم.
+                        {isAr
+                          ? 'الشيكات المقفولة لا تزدحم بها شاشة الكاشير وتُحفظ في أرشيف صاحب المطعم.'
+                          : 'Paid checks keep your Cashier / POS screen uncluttered and remain archived for the owner.'}
                       </p>
                       <button
                         type="button"
@@ -1148,27 +1471,35 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                         className="px-4 py-2 rounded-xl border border-[#E6D9C3] bg-[#F3EBDD] text-[#14285A] text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
                       >
                         <RotateCcw className="w-3.5 h-3.5" />
-                        <span>إعادة عرض الشيك (مثال)</span>
+                        <span>{isAr ? 'إعادة عرض الشيك (مثال)' : 'Reset Check Example'}</span>
                       </button>
                     </div>
                   )}
                 </div>
 
                 <div className="md:col-span-5 bg-[#FBF7EF] border border-[#E6D9C3] rounded-2xl p-5 space-y-3">
-                  <p className="landing-cairo-heading text-sm text-[#14285A]">ملخص حركة الدرج (مثال)</p>
+                  <p className="landing-cairo-heading text-sm text-[#14285A]">
+                    {isAr ? 'ملخص حركة الدرج (مثال)' : 'Cash Drawer Summary (Example)'}
+                  </p>
                   <div className="flex items-center justify-between text-xs py-2 border-b border-[#E6D9C3]">
-                    <span>رصيد افتتاح الوردية</span>
-                    <span className="font-mono-num font-bold">٤,٦٠٠ ج.م</span>
+                    <span>{isAr ? 'رصيد افتتاح الوردية' : 'Shift Opening Float'}</span>
+                    <span className="font-mono-num font-bold">4,600 {currencyLabel}</span>
                   </div>
                   <div className="flex items-center justify-between text-xs py-2 border-b border-[#E6D9C3]">
-                    <span>آخر شيك محصّل ({paymentMethod})</span>
+                    <span>
+                      {isAr
+                        ? `آخر شيك محصّل (${paymentMethodLabel(paymentMethod)})`
+                        : `Last Paid Check (${paymentMethodLabel(paymentMethod)})`}
+                    </span>
                     <span className="font-mono-num font-bold text-[#2F8F5B]">
-                      {checkClosed ? '+ ٢٥٠ ج.م' : '٠ ج.م'}
+                      {checkClosed ? `+ 250 ${currencyLabel}` : `0 ${currencyLabel}`}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-xs font-bold text-[#14285A] pt-1">
-                    <span>الرصيد المتوقع بالدرج</span>
-                    <span className="font-mono-num">{checkClosed ? '٤,٨٥٠ ج.م' : '٤,٦٠٠ ج.م'}</span>
+                    <span>{isAr ? 'الرصيد المتوقع بالدرج' : 'Expected Drawer Cash'}</span>
+                    <span className="font-mono-num">
+                      {checkClosed ? `4,850 ${currencyLabel}` : `4,600 ${currencyLabel}`}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -1177,15 +1508,27 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             <ul className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm font-medium text-[#0E1B3D]">
               <li className="bg-[#F3EBDD] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
                 <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-                <span>تحصيل سريع كاش أو فيزا أو مختلط بينهما داخل نفس الشيك.</span>
+                <span>
+                  {isAr
+                    ? 'تحصيل سريع كاش أو فيزا أو مختلط بينهما داخل نفس الشيك.'
+                    : 'Fast Cash, Card, or Split settlement within a single Check.'}
+                </span>
               </li>
               <li className="bg-[#F3EBDD] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
                 <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-                <span>إضافة طلبات تيك أواي ودليفري ومتابعة خريطة الطاولات من شاشة الكاشير.</span>
+                <span>
+                  {isAr
+                    ? 'إضافة طلبات تيك أواي ودليفري ومتابعة خريطة الطاولات من شاشة الكاشير.'
+                    : 'Create Takeaway and Delivery orders while monitoring live Dine-in tables from one POS.'}
+                </span>
               </li>
               <li className="bg-[#F3EBDD] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
                 <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-                <span>إخفاء الشيكات المقفولة تلقائياً لمنع الزحام طوال الوردية.</span>
+                <span>
+                  {isAr
+                    ? 'إخفاء الشيكات المقفولة تلقائياً لمنع الزحام طوال الوردية.'
+                    : 'Automatically clears Paid checks so active queues stay fast throughout the Shift.'}
+                </span>
               </li>
             </ul>
 
@@ -1195,55 +1538,85 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                 onClick={() => scrollToSection('contact', 'contact')}
                 className="px-6 py-3.5 rounded-2xl bg-[#14285A] text-[#FBF7EF] text-sm font-bold hover:opacity-95 transition-opacity inline-flex items-center gap-2 cursor-pointer"
               >
-                <span>تواصل لتجربة شاشة الكاشير</span>
-                <ArrowLeft className="w-4 h-4 text-[#E8833A]" />
+                <span>
+                  {isAr ? 'تواصل لتجربة شاشة الكاشير' : 'Schedule a Cashier / POS Demo'}
+                </span>
+                <DirectionalArrow className="w-4 h-4 text-[#E8833A]" />
               </button>
             </div>
           </div>
         </section>
 
-        {/* 4. شاشات المطبخ */}
+        {/* 4. Kitchen Display System (KDS) */}
         <section id="kds" className="scroll-mt-20 py-16 sm:py-24 border-t border-[#E6D9C3] bg-[#F3EBDD]">
           <div className="max-w-5xl mx-auto px-4 sm:px-6 space-y-8">
             <div className="space-y-3">
               <span className="text-xs font-bold text-[#14285A] flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-[#E8833A]" />
-                <span>٠٤ · شاشات المطبخ (KDS)</span>
+                <span className="font-mono-num">
+                  {isAr ? '04 · شاشات المطبخ' : '04 · Kitchen Display System (KDS)'}
+                </span>
               </span>
               <h2 className="landing-cairo-heading text-3xl sm:text-4xl text-[#14285A]">
-                توجيه تلقائي للمطبخ والبار والحلواني
+                {isAr
+                  ? 'توجيه تلقائي للمطبخ والبار والحلواني'
+                  : 'Automatic routing to Kitchen, Bar, and Pastry'}
               </h2>
               <p className="text-base sm:text-lg text-[#0E1B3D]/85">
-                الطلب الواحد يتقسم على كل محطة تحضير بحالة واضحة من قيد التحضير حتى تم التقديم.
+                {isAr
+                  ? 'الطلب الواحد يتقسم على كل محطة تحضير بحالة واضحة من قيد التحضير حتى تم التقديم.'
+                  : 'Every order splits automatically across prep stations with clear status from Preparing to Ready and Served.'}
               </p>
             </div>
 
             {/* Interactive Simulation Card */}
             <div className="bg-[#FBF7EF] border border-[#E6D9C3] rounded-3xl p-6 sm:p-8 space-y-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <span className="px-3 py-1 rounded-xl bg-[#F3EBDD] border border-[#E6D9C3] text-xs font-bold text-[#14285A]">
-                  مثال · طلب #٢١٤ (طاولة ٥) — اضغط على المحطة لتحديث الحالة
+                <span className="px-3 py-1 rounded-xl bg-[#F3EBDD] border border-[#E6D9C3] text-xs font-bold text-[#14285A] font-mono-num">
+                  {isAr
+                    ? 'مثال · طلب #214 (طاولة 5) — اضغط على المحطة لتحديث الحالة'
+                    : 'Example · Order #214 (Table 5) — Tap a station to advance status'}
                 </span>
                 <span className="text-xs font-semibold text-[#0E1B3D]/70">
-                  برتقالي: قيد التحضير · أزرق: جاهز · أخضر: تم التقديم
+                  {isAr
+                    ? 'برتقالي: قيد التحضير · أزرق: جاهز · أخضر: تم التقديم'
+                    : 'Orange: Preparing · Royal Blue: Ready · Green: Served'}
                 </span>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {[
-                  { title: 'شاشة المطبخ', item: 'سماش برجر دبل', icon: ChefHat },
-                  { title: 'شاشة البار', item: 'موهيتو نعناع مثلج', icon: Coffee },
-                  { title: 'شاشة الحلواني', item: 'مولتن كيك شوكولاتة', icon: Sparkles },
+                  {
+                    titleAr: 'شاشة المطبخ',
+                    titleEn: 'Kitchen Display',
+                    itemAr: 'سماش برجر دبل',
+                    itemEn: 'Double Smash Burger',
+                    icon: ChefHat,
+                  },
+                  {
+                    titleAr: 'شاشة البار',
+                    titleEn: 'Bar Display',
+                    itemAr: 'موهيتو نعناع مثلج',
+                    itemEn: 'Iced Mint Mojito',
+                    icon: Coffee,
+                  },
+                  {
+                    titleAr: 'شاشة الحلواني',
+                    titleEn: 'Pastry Display',
+                    itemAr: 'مولتن كيك شوكولاتة',
+                    itemEn: 'Chocolate Molten Cake',
+                    icon: Sparkles,
+                  },
                 ].map((station, idx) => {
                   const stage = kdsStations[idx];
                   const meta = KDS_STAGE_META[stage];
                   const IconComp = station.icon;
                   return (
                     <button
-                      key={station.title}
+                      key={station.titleEn}
                       type="button"
                       onClick={() => advanceKdsStation(idx as 0 | 1 | 2)}
-                      className="bg-[#F3EBDD] border border-[#E6D9C3] rounded-2xl p-5 text-right space-y-4 hover:border-[#14285A]/45 transition-all cursor-pointer"
+                      className="bg-[#F3EBDD] border border-[#E6D9C3] rounded-2xl p-5 text-start space-y-4 hover:border-[#14285A]/45 transition-all cursor-pointer"
                     >
                       <div className="flex items-center justify-between">
                         <span className="w-10 h-10 rounded-xl bg-[#FBF7EF] border border-[#E6D9C3] text-[#14285A] flex items-center justify-center">
@@ -1253,13 +1626,15 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                           className="px-3 py-1 rounded-lg text-xs font-bold transition-colors"
                           style={{ backgroundColor: meta.badgeBg, color: meta.badgeText }}
                         >
-                          {meta.label}
+                          {isAr ? meta.ar : meta.en}
                         </span>
                       </div>
                       <div>
-                        <p className="text-[11px] font-bold text-[#0E1B3D]/65">{station.title}</p>
+                        <p className="text-[11px] font-bold text-[#0E1B3D]/65">
+                          {isAr ? station.titleAr : station.titleEn}
+                        </p>
                         <p className="landing-cairo-heading text-base text-[#14285A] mt-0.5">
-                          {station.item}
+                          {isAr ? station.itemAr : station.itemEn}
                         </p>
                       </div>
                     </button>
@@ -1271,15 +1646,27 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             <ul className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm font-medium text-[#0E1B3D]">
               <li className="bg-[#FBF7EF] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
                 <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-                <span>فصل تلقائي لأصناف المطبخ والبار والحلواني لحظة تأكيد الطلب.</span>
+                <span>
+                  {isAr
+                    ? 'فصل تلقائي لأصناف المطبخ والبار والحلواني لحظة تأكيد الطلب.'
+                    : 'Automatic routing splits Kitchen, Bar, and Pastry items upon submission.'}
+                </span>
               </li>
               <li className="bg-[#FBF7EF] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
                 <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-                <span>تتبع واضح للحالة: قيد التحضير ثم جاهز ثم تم التقديم.</span>
+                <span>
+                  {isAr
+                    ? 'تتبع واضح للحالة: قيد التحضير ثم جاهز ثم تم التقديم.'
+                    : 'Clear stage tracking: Preparing, Ready for pickup, and Served.'}
+                </span>
               </li>
               <li className="bg-[#FBF7EF] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
                 <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-                <span>تنبيهات فورية تقلل زمن التحضير وتمنع نسيان أي صنف.</span>
+                <span>
+                  {isAr
+                    ? 'تنبيهات فورية تقلل زمن التحضير وتمنع نسيان أي صنف.'
+                    : 'Instant ready alerts speed up ticket times and eliminate missed dishes.'}
+                </span>
               </li>
             </ul>
 
@@ -1289,26 +1676,34 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                 onClick={() => scrollToSection('contact', 'contact')}
                 className="px-6 py-3.5 rounded-2xl bg-[#14285A] text-[#FBF7EF] text-sm font-bold hover:opacity-95 transition-opacity inline-flex items-center gap-2 cursor-pointer"
               >
-                <span>تواصل لتجهيز شاشات المطبخ</span>
-                <ArrowLeft className="w-4 h-4 text-[#E8833A]" />
+                <span>
+                  {isAr ? 'تواصل لتجهيز شاشات المطبخ' : 'Configure Your Kitchen Display System'}
+                </span>
+                <DirectionalArrow className="w-4 h-4 text-[#E8833A]" />
               </button>
             </div>
           </div>
         </section>
 
-        {/* 5. الإدارة والتقارير */}
+        {/* 5. Management & Reports */}
         <section id="management" className="scroll-mt-20 py-16 sm:py-24 border-t border-[#E6D9C3] bg-[#FBF7EF]">
           <div className="max-w-5xl mx-auto px-4 sm:px-6 space-y-8">
             <div className="space-y-3">
               <span className="text-xs font-bold text-[#14285A] flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-[#E8833A]" />
-                <span>٠٥ · الإدارة والتقارير</span>
+                <span className="font-mono-num">
+                  {isAr ? '05 · الإدارة والتقارير' : '05 · Management & Reports'}
+                </span>
               </span>
               <h2 className="landing-cairo-heading text-3xl sm:text-4xl text-[#14285A]">
-                مراجعة الورديات السابقة وسجل الرقابة والصلاحيات
+                {isAr
+                  ? 'مراجعة الورديات السابقة وسجل الرقابة والصلاحيات'
+                  : 'Past shift archives, Audit Log, and granular Permissions'}
               </h2>
               <p className="text-base sm:text-lg text-[#0E1B3D]/85">
-                افتح شيكات أي يوم بضغطة، راجع أسباب التعديل، وحدد صلاحيات المدير بدقة.
+                {isAr
+                  ? 'افتح شيكات أي يوم بضغطة، راجع أسباب التعديل، وحدد صلاحيات المدير بدقة.'
+                  : 'Inspect any closed day’s checks in one click, review documented edits, and toggle Manager Permissions anytime.'}
               </p>
             </div>
 
@@ -1316,7 +1711,9 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             <div className="bg-[#F3EBDD] border border-[#E6D9C3] rounded-3xl p-6 sm:p-8 space-y-6">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <span className="px-3 py-1 rounded-xl bg-[#FBF7EF] border border-[#E6D9C3] text-xs font-bold text-[#14285A]">
-                  مثال · مصفوفة الورديات وسجل الرقابة وصلاحيات المدير
+                  {isAr
+                    ? 'مثال · مصفوفة الورديات وسجل الرقابة وصلاحيات المدير'
+                    : 'Example · Shift Matrix, Audit Log & Manager Permissions'}
                 </span>
               </div>
 
@@ -1325,7 +1722,11 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                 <div className="lg:col-span-6 bg-[#FBF7EF] border border-[#E6D9C3] rounded-2xl p-5 space-y-4">
                   <div className="flex items-center gap-2 text-xs font-bold text-[#14285A]">
                     <Calendar className="w-4 h-4 text-[#E8833A]" />
-                    <span>اضغط على أي يوم لفتح شيكاته (مثال)</span>
+                    <span>
+                      {isAr
+                        ? 'اضغط على أي يوم لفتح شيكاته (مثال)'
+                        : 'Select any day to inspect archived checks (Example)'}
+                    </span>
                   </div>
 
                   <div className="grid grid-cols-3 gap-2">
@@ -1340,16 +1741,22 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                             : 'bg-[#F3EBDD] border-[#E6D9C3] text-[#14285A]'
                         }`}
                       >
-                        <p className="text-xs font-bold">{day.dayLabel}</p>
-                        <p className="text-[11px] opacity-80 font-mono-num">{day.checksCount}</p>
+                        <p className="text-xs font-bold">{isAr ? day.dayAr : day.dayEn}</p>
+                        <p className="text-[11px] opacity-80 font-mono-num">
+                          {isAr ? `${day.checksCount} شيك` : `${day.checksCount} checks`}
+                        </p>
                       </button>
                     ))}
                   </div>
 
                   <div className="space-y-2 pt-1">
                     <div className="flex items-center justify-between text-xs font-bold text-[#14285A]">
-                      <span>شيكات {activeShift.dayLabel}</span>
-                      <span className="font-mono-num">{activeShift.totalSales}</span>
+                      <span>
+                        {isAr ? `شيكات ${activeShift.dayAr}` : `${activeShift.dayEn} Checks`}
+                      </span>
+                      <span className="font-mono-num">
+                        {activeShift.totalSales} {currencyLabel}
+                      </span>
                     </div>
                     {activeShift.checks.map((chk) => (
                       <div
@@ -1357,9 +1764,11 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                         className="bg-[#F3EBDD] border border-[#E6D9C3] rounded-xl px-3 py-2 flex items-center justify-between text-xs"
                       >
                         <span>
-                          {chk.id} · {chk.table} ({chk.method})
+                          {chk.id} · {isAr ? chk.tableAr : chk.tableEn} ({isAr ? chk.methodAr : chk.methodEn})
                         </span>
-                        <span className="font-mono-num font-bold text-[#14285A]">{chk.amount}</span>
+                        <span className="font-mono-num font-bold text-[#14285A]">
+                          {chk.amount} {currencyLabel}
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -1371,22 +1780,42 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                     <div className="flex items-center justify-between text-xs font-bold text-[#14285A]">
                       <span className="flex items-center gap-1.5">
                         <Receipt className="w-4 h-4 text-[#E8833A]" />
-                        <span>سجل الرقابة (مثال)</span>
+                        <span>{isAr ? 'سجل الرقابة (مثال)' : 'Audit Log (Example)'}</span>
                       </span>
-                      <span className="px-2 py-0.5 rounded bg-[#E8833A]/15 text-[#E8833A]">موثّق</span>
+                      <span className="px-2 py-0.5 rounded bg-[#E8833A]/15 text-[#E8833A]">
+                        {isAr ? 'موثّق' : 'Logged'}
+                      </span>
                     </div>
                     <p className="text-xs text-[#0E1B3D]/85">
-                      المدير (@mosalah) قام بإلغاء صنف من طاولة ٦ · السبب: «طلب الضيف قبل التحضير».
+                      {isAr
+                        ? 'المدير (@mosalah) قام بإلغاء صنف من طاولة 6 · السبب: «طلب الضيف قبل التحضير».'
+                        : 'Manager (@mosalah) cancelled an item on Table 6 · Reason: "Guest request before prep."'}
                     </p>
                   </div>
 
                   <div className="bg-[#FBF7EF] border border-[#E6D9C3] rounded-2xl p-4 space-y-2.5">
-                    <p className="text-xs font-bold text-[#14285A]">صلاحيات المدير (تبديل مثال)</p>
+                    <p className="text-xs font-bold text-[#14285A]">
+                      {isAr
+                        ? 'صلاحيات المدير (تبديل مثال)'
+                        : 'Manager Permissions (Interactive Example)'}
+                    </p>
                     {(
                       [
-                        { key: 'pauseItems', label: 'إيقاف الأصناف غير المتوفرة مؤقتاً' },
-                        { key: 'editWithReason', label: 'تعديل أو إلغاء الشيك بكتابة سبب' },
-                        { key: 'tableQr', label: 'صلاحية توليد QR الطاولات' },
+                        {
+                          key: 'pauseItems',
+                          ar: 'إيقاف الأصناف غير المتوفرة مؤقتاً',
+                          en: 'Pause out-of-stock items',
+                        },
+                        {
+                          key: 'editWithReason',
+                          ar: 'تعديل أو إلغاء الشيك بكتابة سبب',
+                          en: 'Edit or cancel checks with reason',
+                        },
+                        {
+                          key: 'tableQr',
+                          ar: 'صلاحية توليد كود الطاولات',
+                          en: 'Generate Table QR Codes',
+                        },
                       ] as const
                     ).map((perm) => {
                       const active = managerPerms[perm.key];
@@ -1399,15 +1828,17 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                           }
                           className="w-full bg-[#F3EBDD] border border-[#E6D9C3] rounded-xl px-3 py-2 flex items-center justify-between text-xs cursor-pointer"
                         >
-                          <span className="font-semibold text-[#0E1B3D]">{perm.label}</span>
+                          <span className="font-semibold text-[#0E1B3D] text-start">
+                            {isAr ? perm.ar : perm.en}
+                          </span>
                           <span
-                            className={`px-2.5 py-0.5 rounded-md font-bold transition-colors ${
+                            className={`px-2.5 py-0.5 rounded-md font-bold transition-colors shrink-0 ${
                               active
                                 ? 'bg-[#2F8F5B]/15 text-[#2F8F5B]'
                                 : 'bg-[#E6D9C3] text-[#0E1B3D]/70'
                             }`}
                           >
-                            {active ? 'مفعّل' : 'مقفل'}
+                            {active ? (isAr ? 'مفعّل' : 'Enabled') : isAr ? 'مقفل' : 'Locked'}
                           </span>
                         </button>
                       );
@@ -1420,15 +1851,27 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             <ul className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm font-medium text-[#0E1B3D]">
               <li className="bg-[#F3EBDD] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
                 <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-                <span>مراجعة شيكات أي يوم أو وردية مغلقة في أرشيف صاحب المطعم.</span>
+                <span>
+                  {isAr
+                    ? 'مراجعة شيكات أي يوم أو وردية مغلقة في أرشيف صاحب المطعم.'
+                    : 'Revisit closed shifts and inspect every check inside the owner archive.'}
+                </span>
               </li>
               <li className="bg-[#F3EBDD] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
                 <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-                <span>سجل رقابة إلزامي لسبب كل تعديل أو إلغاء يقوم به المدير.</span>
+                <span>
+                  {isAr
+                    ? 'سجل رقابة إلزامي لسبب كل تعديل أو إلغاء يقوم به المدير.'
+                    : 'Mandatory reason-locked Audit Log for every manager edit or cancellation.'}
+                </span>
               </li>
               <li className="bg-[#F3EBDD] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
                 <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-                <span>تحكم مرن من المالك في فتح أو إغلاق صلاحيات المدير لحظياً.</span>
+                <span>
+                  {isAr
+                    ? 'تحكم مرن من المالك في فتح أو إغلاق صلاحيات المدير لحظياً.'
+                    : 'Instant owner toggle switches to grant or restrict Manager Permissions.'}
+                </span>
               </li>
             </ul>
 
@@ -1438,26 +1881,34 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                 onClick={() => scrollToSection('contact', 'contact')}
                 className="px-6 py-3.5 rounded-2xl bg-[#14285A] text-[#FBF7EF] text-sm font-bold hover:opacity-95 transition-opacity inline-flex items-center gap-2 cursor-pointer"
               >
-                <span>تواصل لمعرفة أدوات الإدارة</span>
-                <ArrowLeft className="w-4 h-4 text-[#E8833A]" />
+                <span>
+                  {isAr ? 'تواصل لمعرفة أدوات الإدارة' : 'Explore Management & Audit Tools'}
+                </span>
+                <DirectionalArrow className="w-4 h-4 text-[#E8833A]" />
               </button>
             </div>
           </div>
         </section>
 
-        {/* 6. العملاء والولاء */}
+        {/* 6. Customers & Loyalty */}
         <section id="loyalty" className="scroll-mt-20 py-16 sm:py-24 border-t border-[#E6D9C3] bg-[#F3EBDD]">
           <div className="max-w-5xl mx-auto px-4 sm:px-6 space-y-8">
             <div className="space-y-3">
               <span className="text-xs font-bold text-[#14285A] flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-[#E8833A]" />
-                <span>٠٦ · العملاء والولاء</span>
+                <span className="font-mono-num">
+                  {isAr ? '06 · العملاء والولاء' : '06 · Customers & Loyalty'}
+                </span>
               </span>
               <h2 className="landing-cairo-heading text-3xl sm:text-4xl text-[#14285A]">
-                بطاقة أختام ورادار أعياد الميلاد لعملائك
+                {isAr
+                  ? 'بطاقة أختام ورادار أعياد الميلاد لعملائك'
+                  : 'Digital Punch Card & automated Birthday Radar'}
               </h2>
               <p className="text-base sm:text-lg text-[#0E1B3D]/85">
-                كافئ الزيارات المتكررة وتواصل مع ضيفك قبل عيد ميلاده بهدية عبر واتساب.
+                {isAr
+                  ? 'كافئ الزيارات المتكررة وتواصل مع ضيفك قبل عيد ميلاده بهدية عبر واتساب.'
+                  : 'Reward repeat guests automatically and send timely birthday treats via WhatsApp before their big day.'}
               </p>
             </div>
 
@@ -1465,7 +1916,9 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             <div className="bg-[#FBF7EF] border border-[#E6D9C3] rounded-3xl p-6 sm:p-8 space-y-6">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <span className="px-3 py-1 rounded-xl bg-[#F3EBDD] border border-[#E6D9C3] text-xs font-bold text-[#14285A]">
-                  مثال · بطاقة أختام تفاعلية وتنبيه عيد ميلاد
+                  {isAr
+                    ? 'مثال · بطاقة أختام تفاعلية وتنبيه عيد ميلاد'
+                    : 'Example · Interactive Punch Card & Birthday Alert'}
                 </span>
               </div>
 
@@ -1475,9 +1928,11 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                   <div className="flex items-center justify-between text-xs font-bold text-[#14285A]">
                     <span className="flex items-center gap-1.5">
                       <Gift className="w-4 h-4 text-[#E8833A]" />
-                      <span>بطاقة أختام الزيارات (مثال)</span>
+                      <span>
+                        {isAr ? 'بطاقة أختام الزيارات (مثال)' : 'Visit Punch Card (Example)'}
+                      </span>
                     </span>
-                    <span className="font-mono-num">{stampCount} / ٥</span>
+                    <span className="font-mono-num">{stampCount} / 5</span>
                   </div>
 
                   <div className="grid grid-cols-5 gap-2">
@@ -1504,11 +1959,17 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                       onClick={() => setStampCount((c) => (c >= 5 ? 1 : c + 1))}
                       className="px-4 py-2 rounded-xl bg-[#14285A] text-[#FBF7EF] text-xs font-bold cursor-pointer"
                     >
-                      {stampCount >= 5 ? 'إعادة مثال الأختام' : 'أضف ختم زيارة'}
+                      {stampCount >= 5
+                        ? isAr
+                          ? 'إعادة مثال الأختام'
+                          : 'Reset Stamp Example'
+                        : isAr
+                          ? 'أضف ختم زيارة'
+                          : 'Add Visit Stamp'}
                     </button>
                     {stampCount >= 5 && (
                       <span className="px-2.5 py-1 rounded-lg bg-[#2F8F5B]/15 text-[#2F8F5B] text-xs font-bold">
-                        تم اكتمال المكافأة
+                        {isAr ? 'تم اكتمال المكافأة' : 'Reward Complete'}
                       </span>
                     )}
                   </div>
@@ -1520,17 +1981,21 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                     <div className="flex items-center justify-between">
                       <span className="flex items-center gap-1.5 text-xs font-bold text-[#14285A]">
                         <Cake className="w-4 h-4 text-[#E8833A]" />
-                        <span>تنبيه عيد ميلاد قريب (مثال)</span>
+                        <span>
+                          {isAr ? 'تنبيه عيد ميلاد قريب (مثال)' : 'Upcoming Birthday Alert (Example)'}
+                        </span>
                       </span>
                       <span className="px-2 py-0.5 rounded bg-[#E8833A]/15 text-[#E8833A] text-[11px] font-bold">
-                        بعد يومين
+                        {isAr ? 'بعد يومين' : 'In 2 days'}
                       </span>
                     </div>
                     <p className="landing-cairo-heading text-base text-[#14285A]">
-                      أ. منى محمود · عميل متكرر
+                      {isAr ? 'أ. منى محمود · عميل متكرر' : 'Mona Mahmoud · Regular Guest'}
                     </p>
                     <p className="text-xs text-[#0E1B3D]/80">
-                      مفضل لها: قهوة لاتيه + مولتن كيك — جاهزة لإرسال معايدة وخصم ضيافة.
+                      {isAr
+                        ? 'مفضل لها: قهوة لاتيه + مولتن كيك — جاهزة لإرسال معايدة وخصم ضيافة.'
+                        : 'Favorites: Cafe Latte + Molten Cake — ready for a birthday greeting & hospitality perk.'}
                     </p>
                   </div>
 
@@ -1541,11 +2006,19 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                       className="px-4 py-2.5 rounded-xl bg-[#14285A] text-[#FBF7EF] text-xs font-bold flex items-center gap-2 cursor-pointer"
                     >
                       <MessageCircle className="w-4 h-4 text-[#E8833A]" />
-                      <span>{birthdayGreetSent ? 'إعادة ضبط المثال' : 'معايدة عبر واتساب'}</span>
+                      <span>
+                        {birthdayGreetSent
+                          ? isAr
+                            ? 'إعادة ضبط المثال'
+                            : 'Reset Example'
+                          : isAr
+                            ? 'معايدة عبر واتساب'
+                            : 'Send WhatsApp Wish'}
+                      </span>
                     </button>
                     {birthdayGreetSent && (
                       <span className="px-2.5 py-1 rounded-lg bg-[#2F8F5B]/15 text-[#2F8F5B] text-xs font-bold">
-                        تم تجهيز التهنئة
+                        {isAr ? 'تم تجهيز التهنئة' : 'Greeting Ready'}
                       </span>
                     )}
                   </div>
@@ -1556,15 +2029,27 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             <ul className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm font-medium text-[#0E1B3D]">
               <li className="bg-[#FBF7EF] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
                 <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-                <span>تسجيل سريع برقم الهاتف لبناء قاعدة عملاء حقيقية لمطعمك.</span>
+                <span>
+                  {isAr
+                    ? 'تسجيل سريع برقم الهاتف لبناء قاعدة عملاء حقيقية لمطعمك.'
+                    : 'Fast phone sign-up builds a verified Customer CRM database for your venue.'}
+                </span>
               </li>
               <li className="bg-[#FBF7EF] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
                 <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-                <span>بطاقة أختام رقمية تكافئ الضيوف وتشجعهم على العودة.</span>
+                <span>
+                  {isAr
+                    ? 'بطاقة أختام رقمية تكافئ الضيوف وتشجعهم على العودة.'
+                    : 'Digital Punch Card rewards keep loyal diners coming back.'}
+                </span>
               </li>
               <li className="bg-[#FBF7EF] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
                 <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-                <span>رادار أعياد الميلاد قبل ٣ أيام مع إرسال تهنئة بضغطة واحدة.</span>
+                <span>
+                  {isAr
+                    ? 'رادار أعياد الميلاد قبل 3 أيام مع إرسال تهنئة بضغطة واحدة.'
+                    : 'Birthday radar alerts your team 3 days prior with 1-click WhatsApp wishes.'}
+                </span>
               </li>
             </ul>
 
@@ -1574,26 +2059,32 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                 onClick={() => scrollToSection('contact', 'contact')}
                 className="px-6 py-3.5 rounded-2xl bg-[#14285A] text-[#FBF7EF] text-sm font-bold hover:opacity-95 transition-opacity inline-flex items-center gap-2 cursor-pointer"
               >
-                <span>تواصل لتفعيل نظام الولاء</span>
-                <ArrowLeft className="w-4 h-4 text-[#E8833A]" />
+                <span>{isAr ? 'تواصل لتفعيل نظام الولاء' : 'Enable Loyalty for Your Venue'}</span>
+                <DirectionalArrow className="w-4 h-4 text-[#E8833A]" />
               </button>
             </div>
           </div>
         </section>
 
-        {/* 7. التكامل مع تايجوس */}
+        {/* 7. Tygos Integration */}
         <section id="tygos" className="scroll-mt-20 py-16 sm:py-24 border-t border-[#E6D9C3] bg-[#FBF7EF]">
           <div className="max-w-5xl mx-auto px-4 sm:px-6 space-y-8">
             <div className="space-y-3">
               <span className="text-xs font-bold text-[#14285A] flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-[#E8833A]" />
-                <span>٠٧ · التكامل مع تايجوس</span>
+                <span className="font-mono-num">
+                  {isAr ? '07 · التكامل مع تايجوس' : '07 · Tygos ERP Integration'}
+                </span>
               </span>
               <h2 className="landing-cairo-heading text-3xl sm:text-4xl text-[#14285A]">
-                من المبيعات إلى تكلفة الوجبة والمخازن مع تايجوس
+                {isAr
+                  ? 'من المبيعات إلى تكلفة الوجبة والمخازن مع تايجوس'
+                  : 'From guest sales to dish costing and inventory with Tygos'}
               </h2>
               <p className="text-base sm:text-lg text-[#0E1B3D]/85">
-                ربط مباشر بين طلبات سُفرة QR ومنظومة تايجوس لحساب خامات كل طبق وهامش ربحه.
+                {isAr
+                  ? 'ربط مباشر بين طلبات سُفرة QR ومنظومة تايجوس لحساب خامات كل طبق وهامش ربحه.'
+                  : 'Direct cloud sync connecting Sufra QR orders to Tygos for recipe ingredient deduction and live dish profitability.'}
               </p>
             </div>
 
@@ -1601,7 +2092,9 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             <div className="bg-[#F3EBDD] border border-[#E6D9C3] rounded-3xl p-6 sm:p-8 space-y-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <span className="px-3 py-1 rounded-xl bg-[#FBF7EF] border border-[#E6D9C3] text-xs font-bold text-[#14285A]">
-                  مثال · كارت تكلفة الوجبة وهامش الربح (بيانات توضيحية)
+                  {isAr
+                    ? 'مثال · كارت تكلفة الوجبة وهامش الربح (بيانات توضيحية)'
+                    : 'Example · Recipe Cost & Gross Margin Card'}
                 </span>
                 <div className="flex items-center gap-2">
                   {TYGOS_MEAL_EXAMPLES.map((m, idx) => (
@@ -1615,7 +2108,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                           : 'bg-[#FBF7EF] border-[#E6D9C3] text-[#14285A]'
                       }`}
                     >
-                      {idx === 0 ? 'برجر (مثال)' : 'باستا (مثال)'}
+                      {isAr ? m.shortAr : m.shortEn}
                     </button>
                   ))}
                 </div>
@@ -1624,20 +2117,31 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
               <div className="bg-[#FBF7EF] border border-[#E6D9C3] rounded-2xl p-5 sm:p-6 space-y-5">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#E6D9C3] pb-3.5">
                   <div>
-                    <h3 className="landing-cairo-heading text-lg text-[#14285A]">{activeMeal.name}</h3>
-                    <p className="text-xs text-[#0E1B3D]/75 mt-0.5">الخامات المخصومة: {activeMeal.ingredients}</p>
+                    <h3 className="landing-cairo-heading text-lg text-[#14285A]">
+                      {isAr ? activeMeal.nameAr : activeMeal.nameEn}
+                    </h3>
+                    <p className="text-xs text-[#0E1B3D]/75 mt-0.5">
+                      {isAr ? 'الخامات المخصومة:' : 'Deducted Ingredients:'}{' '}
+                      {isAr ? activeMeal.ingredientsAr : activeMeal.ingredientsEn}
+                    </p>
                   </div>
-                  <div className="flex items-center gap-2 text-xs font-bold text-[#14285A]">
+                  <div className="flex items-center gap-2 text-xs font-bold text-[#14285A] font-mono-num">
                     <TrendingUp className="w-4 h-4 text-[#E8833A]" />
-                    <span>هامش الربح التقديري: {activeMeal.marginPercent}%</span>
+                    <span>
+                      {isAr
+                        ? `هامش الربح التقديري: ${activeMeal.marginPercent}%`
+                        : `Estimated Margin: ${activeMeal.marginPercent}%`}
+                    </span>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="bg-[#F3EBDD] border border-[#E6D9C3] rounded-xl p-4 space-y-2">
-                    <p className="text-xs text-[#0E1B3D]/75">سعر البيع (مثال)</p>
+                    <p className="text-xs text-[#0E1B3D]/75">
+                      {isAr ? 'سعر البيع (مثال)' : 'Selling Price (Example)'}
+                    </p>
                     <p className="landing-cairo-heading text-2xl text-[#14285A] font-mono-num">
-                      {activeMeal.sellPrice} ج.م
+                      {activeMeal.sellPrice} {currencyLabel}
                     </p>
                     <div className="h-2 rounded-full bg-[#E6D9C3] overflow-hidden">
                       <div className="h-full bg-[#14285A] w-full transition-all duration-300" />
@@ -1645,9 +2149,11 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                   </div>
 
                   <div className="bg-[#F3EBDD] border border-[#E6D9C3] rounded-xl p-4 space-y-2">
-                    <p className="text-xs text-[#0E1B3D]/75">تكلفة الخامات (مثال)</p>
+                    <p className="text-xs text-[#0E1B3D]/75">
+                      {isAr ? 'تكلفة الخامات (مثال)' : 'Ingredient Cost (Example)'}
+                    </p>
                     <p className="landing-cairo-heading text-2xl text-[#14285A] font-mono-num">
-                      {activeMeal.cost} ج.م
+                      {activeMeal.cost} {currencyLabel}
                     </p>
                     <div className="h-2 rounded-full bg-[#E6D9C3] overflow-hidden">
                       <div
@@ -1658,9 +2164,11 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                   </div>
 
                   <div className="bg-[#F3EBDD] border border-[#E6D9C3] rounded-xl p-4 space-y-2">
-                    <p className="text-xs text-[#0E1B3D]/75">صافي الهامش (مثال)</p>
+                    <p className="text-xs text-[#0E1B3D]/75">
+                      {isAr ? 'صافي الهامش (مثال)' : 'Net Margin (Example)'}
+                    </p>
                     <p className="landing-cairo-heading text-2xl text-[#14285A] font-mono-num">
-                      {activeMeal.sellPrice - activeMeal.cost} ج.م
+                      {activeMeal.sellPrice - activeMeal.cost} {currencyLabel}
                     </p>
                     <div className="h-2 rounded-full bg-[#E6D9C3] overflow-hidden">
                       <div
@@ -1676,15 +2184,27 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             <ul className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm font-medium text-[#0E1B3D]">
               <li className="bg-[#F3EBDD] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
                 <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-                <span>خصم آلي لمكونات كل وجبة من المخزون فور إتمام الطلب.</span>
+                <span>
+                  {isAr
+                    ? 'خصم آلي لمكونات كل وجبة من المخزون فور إتمام الطلب.'
+                    : 'Automatic recipe ingredient deduction from inventory the moment an order completes.'}
+                </span>
               </li>
               <li className="bg-[#F3EBDD] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
                 <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-                <span>حساب فوري لتكلفة الطبق وهامش الربح في كل فرع.</span>
+                <span>
+                  {isAr
+                    ? 'حساب فوري لتكلفة الطبق وهامش الربح في كل فرع.'
+                    : 'Instant plate costing and profit margin visibility across every branch.'}
+                </span>
               </li>
               <li className="bg-[#F3EBDD] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
                 <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-                <span>توحيد الجرد والموردين والحسابات العامة في منظومة تايجوس.</span>
+                <span>
+                  {isAr
+                    ? 'توحيد الجرد والموردين والحسابات العامة في منظومة تايجوس.'
+                    : 'Unifies stocktakes, supplier procurement, and general ledger inside Tygos.'}
+                </span>
               </li>
             </ul>
 
@@ -1694,33 +2214,41 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                 onClick={() => scrollToSection('contact', 'contact')}
                 className="px-6 py-3.5 rounded-2xl bg-[#14285A] text-[#FBF7EF] text-sm font-bold hover:opacity-95 transition-opacity inline-flex items-center gap-2 cursor-pointer"
               >
-                <span>اطلب عرض ربط مع تايجوس</span>
-                <ArrowLeft className="w-4 h-4 text-[#E8833A]" />
+                <span>
+                  {isAr ? 'اطلب عرض ربط مع تايجوس' : 'Request a Tygos Integration Demo'}
+                </span>
+                <DirectionalArrow className="w-4 h-4 text-[#E8833A]" />
               </button>
             </div>
           </div>
         </section>
 
-        {/* 8. الأسعار */}
+        {/* 8. Pricing */}
         <section id="pricing" className="scroll-mt-20 py-16 sm:py-24 border-t border-[#E6D9C3] bg-[#F3EBDD]">
           <div className="max-w-5xl mx-auto px-4 sm:px-6 space-y-8">
             <div className="space-y-3">
               <span className="text-xs font-bold text-[#14285A] flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-[#E8833A]" />
-                <span>٠٨ · الأسعار</span>
+                <span className="font-mono-num">{isAr ? '08 · الأسعار' : '08 · Pricing'}</span>
               </span>
               <h2 className="landing-cairo-heading text-3xl sm:text-4xl text-[#14285A]">
-                ثلاث باقات مرنة تناسب حجم مطعمك
+                {isAr
+                  ? 'ثلاث باقات مرنة تناسب حجم مطعمك'
+                  : 'Three flexible plans tailored to your restaurant'}
               </h2>
               <p className="text-base sm:text-lg text-[#0E1B3D]/85">
-                نصوص وأسعار نائبة قابلة للتعديل حسب خطة التشغيل وعدد الصالات.
+                {isAr
+                  ? 'نصوص وأسعار نائبة قابلة للتعديل حسب خطة التشغيل وعدد الصالات.'
+                  : 'Editable placeholder packages adaptable to your operating scale and number of dining halls.'}
               </p>
             </div>
 
             {/* Interactive Simulation Card Container (3 Placeholder Cards) */}
             <div className="bg-[#FBF7EF] border border-[#E6D9C3] rounded-3xl p-6 sm:p-8 space-y-5">
               <span className="inline-block px-3 py-1 rounded-xl bg-[#F3EBDD] border border-[#E6D9C3] text-xs font-bold text-[#14285A]">
-                مثال · باقات نائبة قابلة للتعديل (الأكثر طلباً مميزة)
+                {isAr
+                  ? 'مثال · باقات نائبة قابلة للتعديل (الأكثر طلباً مميزة)'
+                  : 'Example · Customizable Placeholder Plans (Popular Tier Highlighted)'}
               </span>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-stretch">
@@ -1742,7 +2270,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                               : 'bg-[#FBF7EF] border border-[#E6D9C3] text-[#14285A]'
                           }`}
                         >
-                          {plan.badge}
+                          {isAr ? plan.badgeAr : plan.badgeEn}
                         </span>
                       </div>
 
@@ -1751,7 +2279,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                           plan.featured ? 'text-[#FBF7EF]' : 'text-[#14285A]'
                         }`}
                       >
-                        {plan.name}
+                        {isAr ? plan.nameAr : plan.nameEn}
                       </h3>
 
                       <div
@@ -1759,14 +2287,20 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                           plan.featured ? 'border-[#FBF7EF]/20' : 'border-[#E6D9C3]'
                         }`}
                       >
-                        <p className="landing-cairo-heading text-xl">{plan.price}</p>
-                        <p className="text-xs opacity-75">{plan.period}</p>
+                        <p className="landing-cairo-heading text-xl">
+                          {isAr ? plan.priceAr : plan.priceEn}
+                        </p>
+                        <p className="text-xs opacity-75">
+                          {isAr ? plan.periodAr : plan.periodEn}
+                        </p>
                       </div>
 
-                      <p className="text-xs opacity-85 leading-relaxed">{plan.description}</p>
+                      <p className="text-xs opacity-85 leading-relaxed">
+                        {isAr ? plan.descriptionAr : plan.descriptionEn}
+                      </p>
 
                       <ul className="space-y-2 text-xs">
-                        {plan.bullets.map((bullet) => (
+                        {(isAr ? plan.bulletsAr : plan.bulletsEn).map((bullet) => (
                           <li key={bullet} className="flex items-start gap-2">
                             <span className="w-1.5 h-1.5 rounded-full bg-[#E8833A] mt-1.5 shrink-0" />
                             <span>{bullet}</span>
@@ -1784,7 +2318,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                           : 'bg-[#14285A] text-[#FBF7EF]'
                       }`}
                     >
-                      طلب تسعير الباقة
+                      {isAr ? 'طلب تسعير الباقة' : 'Request Plan Quote'}
                     </button>
                   </article>
                 ))}
@@ -1794,15 +2328,27 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             <ul className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm font-medium text-[#0E1B3D]">
               <li className="bg-[#FBF7EF] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
                 <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-                <span>باقات مرنة تناسب الكافيهات الفردية والمطاعم متعددة الفروع.</span>
+                <span>
+                  {isAr
+                    ? 'باقات مرنة تناسب الكافيهات الفردية والمطاعم متعددة الفروع.'
+                    : 'Flexible tiers designed for independent cafes and multi-branch chains.'}
+                </span>
               </li>
               <li className="bg-[#FBF7EF] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
                 <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-                <span>إمكانية الترقية لاحقاً بدون إعادة إدخال المنيو أو البيانات.</span>
+                <span>
+                  {isAr
+                    ? 'إمكانية الترقية لاحقاً بدون إعادة إدخال المنيو أو البيانات.'
+                    : 'Upgrade anytime without re-entering menus, tables, or customer history.'}
+                </span>
               </li>
               <li className="bg-[#FBF7EF] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
                 <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-                <span>تدريب مبدئي لفريق الصالة والكاشير عند بدء التشغيل.</span>
+                <span>
+                  {isAr
+                    ? 'تدريب مبدئي لفريق الصالة والكاشير عند بدء التشغيل.'
+                    : 'Guided onboarding and team training for floor and Cashier / POS staff.'}
+                </span>
               </li>
             </ul>
 
@@ -1812,33 +2358,41 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                 onClick={() => scrollToSection('contact', 'contact')}
                 className="px-6 py-3.5 rounded-2xl bg-[#14285A] text-[#FBF7EF] text-sm font-bold hover:opacity-95 transition-opacity inline-flex items-center gap-2 cursor-pointer"
               >
-                <span>تواصل لمعرفة الباقة الأنسب</span>
-                <ArrowLeft className="w-4 h-4 text-[#E8833A]" />
+                <span>
+                  {isAr ? 'تواصل لمعرفة الباقة الأنسب' : 'Find the Best Plan for Your Team'}
+                </span>
+                <DirectionalArrow className="w-4 h-4 text-[#E8833A]" />
               </button>
             </div>
           </div>
         </section>
 
-        {/* 9. تواصل معنا */}
+        {/* 9. Contact Us */}
         <section id="contact" className="scroll-mt-20 py-16 sm:py-24 border-t border-[#E6D9C3] bg-[#FBF7EF]">
           <div className="max-w-5xl mx-auto px-4 sm:px-6 space-y-8">
             <div className="space-y-3">
               <span className="text-xs font-bold text-[#14285A] flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-[#E8833A]" />
-                <span>٠٩ · تواصل معنا</span>
+                <span className="font-mono-num">{isAr ? '09 · تواصل معنا' : '09 · Contact Us'}</span>
               </span>
               <h2 className="landing-cairo-heading text-3xl sm:text-4xl text-[#14285A]">
-                ابدأ تجهيز مطعمك اليوم عبر واتساب
+                {isAr
+                  ? 'ابدأ تجهيز مطعمك اليوم عبر واتساب'
+                  : 'Launch your restaurant setup today on WhatsApp'}
               </h2>
               <p className="text-base sm:text-lg text-[#0E1B3D]/85">
-                راسلنا مباشرة على واتساب أو اكتب بيانات مطعمك في النموذج لإرسال رسالة جاهزة.
+                {isAr
+                  ? 'راسلنا مباشرة على واتساب أو اكتب بيانات مطعمك في النموذج لإرسال رسالة جاهزة.'
+                  : 'Message us directly on WhatsApp or fill in your venue details below to send a ready-to-go inquiry.'}
               </p>
             </div>
 
             {/* Interactive Contact Card */}
             <div className="bg-[#F3EBDD] border border-[#E6D9C3] rounded-3xl p-6 sm:p-8 space-y-6">
               <span className="inline-block px-3 py-1 rounded-xl bg-[#FBF7EF] border border-[#E6D9C3] text-xs font-bold text-[#14285A]">
-                مثال · تواصل مباشر أو نموذج تجهيز رسالة واتساب
+                {isAr
+                  ? 'مثال · تواصل مباشر أو نموذج تجهيز رسالة واتساب'
+                  : 'Example · Direct WhatsApp Chat or Prefilled Inquiry Form'}
               </span>
 
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
@@ -1847,9 +2401,13 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                     <div className="w-11 h-11 rounded-xl bg-[#FBF7EF]/15 flex items-center justify-center">
                       <MessageCircle className="w-6 h-6 text-[#E8833A]" />
                     </div>
-                    <h3 className="landing-cairo-heading text-xl">محادثة فورية مع الفريق</h3>
+                    <h3 className="landing-cairo-heading text-xl">
+                      {isAr ? 'محادثة فورية مع الفريق' : 'Instant Chat with Our Team'}
+                    </h3>
                     <p className="text-xs sm:text-sm text-[#FBF7EF]/85 leading-relaxed">
-                      أرسل اسم مطعمك عبر واتساب لنرسل لك تجربة مباشرة ونجهز معك المنيو وطاولات الصالة.
+                      {isAr
+                        ? 'أرسل اسم مطعمك عبر واتساب لنرسل لك تجربة مباشرة ونجهز معك المنيو وطاولات الصالة.'
+                        : 'Send your restaurant name on WhatsApp to receive a live walkthrough and set up your menu and tables.'}
                     </p>
                   </div>
 
@@ -1860,7 +2418,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                     className="w-full py-3.5 px-4 rounded-xl bg-[#FBF7EF] text-[#14285A] text-sm font-bold text-center hover:opacity-95 transition-opacity flex items-center justify-center gap-2"
                   >
                     <MessageCircle className="w-4 h-4 text-[#E8833A]" />
-                    <span>تواصل عبر واتساب الآن</span>
+                    <span>{isAr ? 'تواصل عبر واتساب الآن' : 'Chat on WhatsApp Now'}</span>
                   </a>
                 </div>
 
@@ -1871,7 +2429,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     <div>
                       <label className="block text-xs font-bold text-[#14285A] mb-1.5">
-                        اسمك أو اسم المطعم
+                        {isAr ? 'اسمك أو اسم المطعم' : 'Your Name or Restaurant'}
                       </label>
                       <input
                         type="text"
@@ -1881,31 +2439,32 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                           setContactName(e.target.value);
                           setContactSubmitted(false);
                         }}
-                        placeholder="مثال: مطعم الأصيل"
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6D9C3] bg-[#F3EBDD] text-sm text-[#0E1B3D] focus:outline-none focus:border-[#14285A]"
+                        placeholder={isAr ? 'مثال: مطعم الأصيل' : 'Example: Al-Saraya Kitchen'}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6D9C3] bg-[#F3EBDD] text-sm text-[#0E1B3D] focus:outline-none focus:border-[#14285A] text-start"
                       />
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-[#14285A] mb-1.5">
-                        رقم الواتساب
+                        {isAr ? 'رقم الواتساب' : 'WhatsApp Number'}
                       </label>
                       <input
                         type="tel"
+                        dir="ltr"
                         required
                         value={contactPhone}
                         onChange={(e) => {
                           setContactPhone(e.target.value);
                           setContactSubmitted(false);
                         }}
-                        placeholder="مثال: 01000000000"
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6D9C3] bg-[#F3EBDD] text-sm text-[#0E1B3D] focus:outline-none focus:border-[#14285A]"
+                        placeholder={isAr ? 'مثال: 01000000000' : 'Example: 01000000000'}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6D9C3] bg-[#F3EBDD] text-sm text-[#0E1B3D] font-mono-num focus:outline-none focus:border-[#14285A] text-start"
                       />
                     </div>
                   </div>
 
                   <div>
                     <label className="block text-xs font-bold text-[#14285A] mb-1.5">
-                      ملاحظة سريعة (اختياري)
+                      {isAr ? 'ملاحظة سريعة (اختياري)' : 'Quick Note (Optional)'}
                     </label>
                     <input
                       type="text"
@@ -1914,8 +2473,10 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                         setContactNotes(e.target.value);
                         setContactSubmitted(false);
                       }}
-                      placeholder="مثال: ١٥ طاولة + شاشة مطبخ"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6D9C3] bg-[#F3EBDD] text-sm text-[#0E1B3D] focus:outline-none focus:border-[#14285A]"
+                      placeholder={
+                        isAr ? 'مثال: 15 طاولة + شاشة مطبخ' : 'Example: 15 tables + Kitchen Display'
+                      }
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-[#E6D9C3] bg-[#F3EBDD] text-sm text-[#0E1B3D] focus:outline-none focus:border-[#14285A] text-start"
                     />
                   </div>
 
@@ -1924,12 +2485,12 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                       type="submit"
                       className="w-full py-3 rounded-xl bg-[#14285A] text-[#FBF7EF] text-sm font-bold hover:opacity-95 transition-opacity cursor-pointer"
                     >
-                      تجهيز طلب التواصل
+                      {isAr ? 'تجهيز طلب التواصل' : 'Prepare Inquiry Message'}
                     </button>
                   ) : (
                     <div className="bg-[#F3EBDD] border border-[#E6D9C3] rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <span className="px-2.5 py-1 rounded-lg bg-[#2F8F5B]/15 text-[#2F8F5B] text-xs font-bold self-start sm:self-center">
-                        تم تجهيز الرسالة بنجاح
+                        {isAr ? 'تم تجهيز الرسالة بنجاح' : 'Message prepared successfully'}
                       </span>
                       <a
                         href={contactPreFilledWhatsapp}
@@ -1937,8 +2498,8 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                         rel="noopener noreferrer"
                         className="px-4 py-2 rounded-xl bg-[#14285A] text-[#FBF7EF] text-xs font-bold inline-flex items-center justify-center gap-1.5"
                       >
-                        <span>إرسال في واتساب</span>
-                        <ArrowLeft className="w-3.5 h-3.5 text-[#E8833A]" />
+                        <span>{isAr ? 'إرسال في واتساب' : 'Send on WhatsApp'}</span>
+                        <DirectionalArrow className="w-3.5 h-3.5 text-[#E8833A]" />
                       </a>
                     </div>
                   )}
@@ -1949,15 +2510,27 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             <ul className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm font-medium text-[#0E1B3D]">
               <li className="bg-[#F3EBDD] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
                 <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-                <span>رد مباشر لتنسيق عرض حي للمنيو وشاشات الصالة والمطبخ.</span>
+                <span>
+                  {isAr
+                    ? 'رد مباشر لتنسيق عرض حي للمنيو وشاشات الصالة والمطبخ.'
+                    : 'Direct response to schedule a live demo of the menu, Dine-in floor, and KDS.'}
+                </span>
               </li>
               <li className="bg-[#F3EBDD] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
                 <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-                <span>مساعدة في اختيار الباقة الملائمة لعدد الطاولات والأقسام.</span>
+                <span>
+                  {isAr
+                    ? 'مساعدة في اختيار الباقة الملائمة لعدد الطاولات والأقسام.'
+                    : 'Tailored guidance picking the right tier for your table count and stations.'}
+                </span>
               </li>
               <li className="bg-[#F3EBDD] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">
                 <span className="w-2 h-2 rounded-full bg-[#E8833A] mt-2 shrink-0" />
-                <span>مرافقة خطوة بخطوة حتى يبدأ فريقك العمل بسلاسة.</span>
+                <span>
+                  {isAr
+                    ? 'مرافقة خطوة بخطوة حتى يبدأ فريقك العمل بسلاسة.'
+                    : 'Step-by-step onboarding support until your team is running smoothly.'}
+                </span>
               </li>
             </ul>
 
@@ -1969,14 +2542,14 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                 className="px-7 py-3.5 rounded-2xl bg-[#14285A] text-[#FBF7EF] text-sm font-bold hover:opacity-95 transition-opacity inline-flex items-center gap-2"
               >
                 <MessageCircle className="w-4 h-4 text-[#E8833A]" />
-                <span>تواصل معنا عبر واتساب</span>
+                <span>{isAr ? 'تواصل معنا عبر واتساب' : 'Message Us on WhatsApp'}</span>
               </a>
               <button
                 type="button"
                 onClick={handlePrimaryStart}
                 className="px-6 py-3.5 rounded-2xl border border-[#E6D9C3] bg-[#F3EBDD] text-[#14285A] text-sm font-bold hover:border-[#14285A]/40 transition-colors cursor-pointer"
               >
-                دخول لوحة الإدارة
+                {isAr ? 'دخول لوحة الإدارة' : 'Open Admin Console'}
               </button>
             </div>
           </div>
@@ -1987,7 +2560,9 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
       <footer className="border-t border-[#E6D9C3] bg-[#F3EBDD] py-6 pb-20 sm:pb-6">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#0E1B3D]/75">
           <span className="font-semibold text-[#14285A]">
-            سُفرة QR · المنيو الرقمي وتشغيل الصالة والمطبخ
+            {isAr
+              ? 'سُفرة QR · المنيو الرقمي وتشغيل الصالة والمطبخ'
+              : 'Sufra QR · Digital Menu & Restaurant Floor, Cashier & Kitchen Operations'}
           </span>
           <div className="flex items-center gap-5">
             <a
@@ -1998,7 +2573,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
               }}
               className="hover:text-[#14285A] font-semibold"
             >
-              معاينة منيو حي
+              {isAr ? 'معاينة منيو حي' : 'Live Menu Preview'}
             </a>
             <a
               href="/admin"
@@ -2008,7 +2583,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
               }}
               className="hover:text-[#14285A] font-semibold"
             >
-              لوحة التحكم
+              {isAr ? 'لوحة التحكم' : 'Dashboard'}
             </a>
           </div>
         </div>
@@ -2019,11 +2594,13 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
         href={whatsappDirectHref}
         target="_blank"
         rel="noopener noreferrer"
-        aria-label="تواصل معنا عبر واتساب"
-        className="fixed bottom-4 left-4 z-30 px-4 py-3 rounded-2xl bg-[#14285A] text-[#FBF7EF] border border-[#E6D9C3]/30 shadow-lg hover:opacity-95 transition-opacity flex items-center gap-2 text-xs sm:text-sm font-bold"
+        aria-label={isAr ? 'تواصل معنا عبر واتساب' : 'Contact us on WhatsApp'}
+        className={`fixed bottom-4 ${
+          dir === 'rtl' ? 'left-4' : 'right-4'
+        } z-30 px-4 py-3 rounded-2xl bg-[#14285A] text-[#FBF7EF] border border-[#E6D9C3]/30 shadow-lg hover:opacity-95 transition-opacity flex items-center gap-2 text-xs sm:text-sm font-bold`}
       >
         <MessageCircle className="w-4 h-4 text-[#E8833A]" />
-        <span>واتساب</span>
+        <span>{isAr ? 'واتساب' : 'WhatsApp'}</span>
       </a>
 
       {/* Owner Auth Modal */}
@@ -2032,7 +2609,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
-          aria-label="تسجيل دخول الإدارة"
+          aria-label={isAr ? 'تسجيل دخول الإدارة' : 'Owner & Admin Sign In'}
         >
           <div
             onClick={() => setAuthModalOpen(false)}
@@ -2041,12 +2618,12 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
           <div className="relative z-10 w-full max-w-md bg-[#FBF7EF] border border-[#E6D9C3] rounded-3xl p-5 shadow-2xl">
             <div className="flex items-center justify-between mb-4">
               <span className="landing-cairo-heading text-lg text-[#14285A]">
-                دخول صاحب المطعم والإدارة
+                {isAr ? 'دخول صاحب المطعم والإدارة' : 'Restaurant Owner & Admin Sign In'}
               </span>
               <button
                 type="button"
                 onClick={() => setAuthModalOpen(false)}
-                aria-label="إغلاق نافذة الدخول"
+                aria-label={isAr ? 'إغلاق نافذة الدخول' : 'Close sign-in dialog'}
                 className="w-9 h-9 rounded-xl border border-[#E6D9C3] bg-[#F3EBDD] text-[#14285A] flex items-center justify-center cursor-pointer"
               >
                 <X className="w-4 h-4" />

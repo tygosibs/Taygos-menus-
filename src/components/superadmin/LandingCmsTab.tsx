@@ -34,14 +34,14 @@ const SECTION_LABELS: Record<LandingSectionId, { ar: string; en: string }> = {
   hero: { ar: 'الهيرو الترحيبي (أعلى الصفحة)', en: 'Hero Showcase Banner' },
   themes: { ar: 'معرض الـ 11 ثيماً التفاعلية', en: '11 Interactive Themes Showcase' },
   features: { ar: 'المميزات الأساسية للمنصة', en: 'Core Platform Features' },
-  operations: { ar: 'تشغيل الصالة، الصالات، الكابتن و KDS', en: 'Floor Operations, Separate Check & KDS' },
+  operations: { ar: 'تشغيل الصالة، الطاولات، الكابتن وشاشات المطبخ', en: 'Floor Operations, Separate Check & KDS' },
   loyalty: { ar: 'منظومة ولاء العملاء ورادار أعياد الميلاد', en: 'Smart Loyalty & Birthday Radar' },
   pricing: { ar: 'باقات الاشتراك والأسعار', en: 'Subscription Pricing Plans' },
-  tygos_promo: { ar: 'مسار الترقية لمنظومة تايجوس (Tygos Cloud ERP)', en: 'Tygos Cloud ERP Upgrade Section' },
+  tygos_promo: { ar: 'مسار الترقية لمنظومة تايجوس السحابية', en: 'Tygos Cloud ERP Upgrade Section' },
 };
 
 export function LandingCmsTab() {
-  const { lang, t } = useLanguage();
+  const { lang, dir, t } = useLanguage();
   const isEn = lang === 'en';
   const [form, setForm] = useState<PlatformLandingSettings>(DEFAULT_PLATFORM_LANDING);
   const [loading, setLoading] = useState(true);
@@ -130,7 +130,7 @@ export function LandingCmsTab() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form dir={dir} onSubmit={handleSubmit} className="space-y-6">
       <div className="bg-white border border-zinc-200 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-lg font-extrabold text-zinc-950">{t.superAdmin.cms.title}</h2>
@@ -183,7 +183,7 @@ export function LandingCmsTab() {
             <span>
               {isEn
                 ? '1. Landing Page Sections Order & Visibility'
-                : '١. ترتيب وإظهار / إخفاء أقسام صفحة الهبوط'}
+                : '1. ترتيب وإظهار / إخفاء أقسام صفحة الهبوط'}
             </span>
           </h3>
           <p className="text-[11px] text-zinc-500 mt-0.5">
@@ -219,7 +219,7 @@ export function LandingCmsTab() {
                     type="button"
                     disabled={idx === 0}
                     onClick={() => moveSection(idx, -1)}
-                    aria-label="Move up"
+                    aria-label={isEn ? 'Move up' : 'تحريك لأعلى'}
                     className="p-1.5 rounded-lg border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100 disabled:opacity-35 cursor-pointer"
                   >
                     <ArrowUp className="w-3.5 h-3.5" />
@@ -228,7 +228,7 @@ export function LandingCmsTab() {
                     type="button"
                     disabled={idx === orderedSections.length - 1}
                     onClick={() => moveSection(idx, 1)}
-                    aria-label="Move down"
+                    aria-label={isEn ? 'Move down' : 'تحريك لأسفل'}
                     className="p-1.5 rounded-lg border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100 disabled:opacity-35 cursor-pointer"
                   >
                     <ArrowDown className="w-3.5 h-3.5" />
@@ -266,7 +266,7 @@ export function LandingCmsTab() {
         <h3 className="text-sm font-extrabold text-zinc-950 border-b border-zinc-100 pb-3">
           {isEn
             ? '2. Hero & Global Settings (AR / EN)'
-            : '٢. إعدادات الهيرو والمنصة (عربي / إنجليزي)'}
+            : '2. إعدادات الهيرو والمنصة (عربي / إنجليزي)'}
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -492,7 +492,7 @@ export function LandingCmsTab() {
         <div className="flex flex-wrap items-center gap-4">
           <SafeImage
             src={form.platformLogoUrl || DEFAULT_PLATFORM_LANDING.platformLogoUrl}
-            alt="Sufra QR Platform Logo"
+            alt={isEn ? 'Sufra QR Platform Logo' : 'شعار منصة سُفرة QR'}
             className="w-16 h-16 rounded-2xl object-cover border border-zinc-200 shadow-xs"
           />
           <label className="px-4 py-2.5 rounded-xl border border-zinc-300 text-xs font-bold cursor-pointer hover:bg-zinc-50 flex items-center gap-2">
@@ -601,7 +601,7 @@ export function LandingCmsTab() {
       {/* Themes Section Headings (Dual AR / EN) */}
       <div className="bg-white border border-zinc-200 rounded-2xl p-6 space-y-4">
         <h3 className="text-sm font-extrabold text-zinc-950 border-b border-zinc-100 pb-3">
-          {isEn ? '3. Themes Section Copy (AR / EN)' : '٣. نصوص قسم الـ 11 ثيماً التفاعلية (AR / EN)'}
+          {isEn ? '3. Themes Section Copy (AR / EN)' : '3. نصوص قسم الـ 11 ثيماً التفاعلية (عربي / إنجليزي)'}
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
@@ -848,7 +848,7 @@ export function LandingCmsTab() {
         <h3 className="text-sm font-extrabold text-zinc-950 border-b border-zinc-100 pb-3">
           {isEn
             ? 'Operations, Group Tables & KDS Section (AR / EN)'
-            : 'قسم إدارة الصالات والترابيزات وشاشات KDS والكابتن (AR / EN)'}
+            : 'قسم إدارة الصالات والطاولات وشاشات المطبخ والكابتن (عربي / إنجليزي)'}
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <input
@@ -941,7 +941,7 @@ export function LandingCmsTab() {
         <h3 className="text-sm font-extrabold text-zinc-950 border-b border-zinc-100 pb-3">
           {isEn
             ? 'Smart Customer Loyalty & Birthday Radar Section (AR / EN)'
-            : 'قسم منظومة ولاء العملاء ورادار أعياد الميلاد (AR / EN)'}
+            : 'قسم منظومة ولاء العملاء ورادار أعياد الميلاد (عربي / إنجليزي)'}
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <input
@@ -1000,7 +1000,7 @@ export function LandingCmsTab() {
           />
           <div>
             <label className="block text-[11px] font-bold text-zinc-600 mb-1">
-              {isEn ? 'Loyalty Bullets (Arabic — 1 per line)' : 'نقاط الولاء والـ CRM (عربي — نقطة في كل سطر)'}
+              {isEn ? 'Loyalty Bullets (Arabic — 1 per line)' : 'نقاط الولاء وقاعدة العملاء (عربي — نقطة في كل سطر)'}
             </label>
             <textarea
               rows={4}
@@ -1014,7 +1014,7 @@ export function LandingCmsTab() {
           </div>
           <div>
             <label className="block text-[11px] font-bold text-zinc-600 mb-1">
-              {isEn ? 'Loyalty Bullets (English — 1 per line)' : 'نقاط الولاء والـ CRM (إنجليزي — نقطة في كل سطر)'}
+              {isEn ? 'Loyalty Bullets (English — 1 per line)' : 'نقاط الولاء وقاعدة العملاء (إنجليزي — نقطة في كل سطر)'}
             </label>
             <textarea
               rows={4}
@@ -1359,7 +1359,7 @@ export function LandingCmsTab() {
         <h3 className="text-sm font-extrabold text-zinc-950 border-b border-zinc-100 pb-3">
           {isEn
             ? 'Tygos Cloud ERP Upgrade Section (AR / EN)'
-            : 'قسم الترقية لمنظومة تايجوس Tygos Cloud ERP (AR / EN)'}
+            : 'قسم الترقية لمنظومة تايجوس السحابية (عربي / إنجليزي)'}
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <input

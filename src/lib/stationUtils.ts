@@ -60,7 +60,7 @@ export const STATION_ICON_OPTIONS: Array<{
   { id: 'cup-soda', labelAr: 'عصائر فريش', labelEn: 'Juices' },
   { id: 'wind', labelAr: 'شيشة / لاونج', labelEn: 'Shisha / Lounge' },
   { id: 'utensils', labelAr: 'شاورما / سريع', labelEn: 'Shawarma / Fast' },
-  { id: 'sparkles', labelAr: 'قسم خاص VIP', labelEn: 'Custom / VIP' },
+  { id: 'sparkles', labelAr: 'قسم خاص مميز', labelEn: 'Custom / VIP' },
 ];
 
 export const STATION_COLOR_PRESETS: string[] = [

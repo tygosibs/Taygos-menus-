@@ -8,6 +8,11 @@
     --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
   }
 
+  html[lang="en"] {
+    --font-display: 'Manrope', system-ui, sans-serif;
+    --font-body: 'Inter', system-ui, sans-serif;
+  }
+
   html, body {
     font-family: var(--font-body);
     overflow-x: clip;
@@ -90,6 +95,15 @@
 
 .landing-cairo-heading {
   font-family: 'Cairo', system-ui, sans-serif;
+  font-weight: 800;
+}
+
+html[lang="en"] .landing-plex-body {
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+html[lang="en"] .landing-cairo-heading {
+  font-family: 'Manrope', system-ui, sans-serif;
   font-weight: 800;
 }
 

@@ -20,6 +20,7 @@ import {
   Utensils,
 } from 'lucide-react';
 import { ConfirmSignOutModal } from '../components/ConfirmSignOutModal';
+import { LanguageToggleButton } from '../components/LanguageToggleButton';
 import { PWAInstallButton } from '../components/PWAInstallButton';
 import { CaptainWaiterTab } from '../components/admin/CaptainWaiterTab';
 import { LiveOrdersTab } from '../components/admin/LiveOrdersTab';
@@ -30,6 +31,7 @@ import { QrGeneratorTab } from '../components/admin/QrGeneratorTab';
 import { StaffManagementTab } from '../components/admin/StaffManagementTab';
 import { StaffShiftBar } from '../components/admin/StaffShiftBar';
 import { ThermalPrinterSettingsModal } from '../components/admin/ThermalPrinterSettingsModal';
+import { useLanguage } from '../contexts/LanguageContext';
 import { useScreenUi } from '../contexts/PlatformUiContext';
 import {
   deactivateStaffDevice,
@@ -154,6 +156,8 @@ function resolveInitialScreenWithQuery(
 }
 
 export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
+  const { lang, dir, loc, t } = useLanguage();
+  const isEn = lang === 'en';
   const managerUi = useScreenUi('manager_console');
   const cashierUi = useScreenUi('cashier_kds');
   const captainUi = useScreenUi('captain_waiter');
@@ -229,7 +233,6 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
       .then((rest) => {
         if (!mounted) return;
         setRestaurant(rest);
-        document.title = rest ? `${rest.name} — دخول الكادر` : 'دخول الكادر — سُفرة QR';
       })
       .finally(() => {
         if (mounted) setLoadingRest(false);
@@ -238,6 +241,15 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
       mounted = false;
     };
   }, [slug]);
+
+  useEffect(() => {
+    if (restaurant) {
+      const restName = loc(restaurant.name, restaurant.name_en);
+      document.title = isEn ? `${restName} — Staff Portal` : `${restName} — دخول الكادر`;
+    } else {
+      document.title = isEn ? 'Staff Portal — Sufra QR' : 'دخول الكادر — سُفرة QR';
+    }
+  }, [restaurant, isEn, loc]);
 
   const restaurantId = restaurant?.id;
 
@@ -408,12 +420,18 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
   const detectedIdentifier = useMemo(() => {
     if (!identifier.trim()) return null;
     const c = classifyLoginIdentifier(identifier);
-    return c.type === 'email'
-      ? 'بريد إلكتروني'
-      : c.type === 'phone'
-        ? 'رقم هاتف'
-        : 'اسم مستخدم';
-  }, [identifier]);
+    return isEn
+      ? c.type === 'email'
+        ? 'Email'
+        : c.type === 'phone'
+          ? 'Phone Number'
+          : 'Username'
+      : c.type === 'email'
+        ? 'بريد إلكتروني'
+        : c.type === 'phone'
+          ? 'رقم هاتف'
+          : 'اسم مستخدم';
+  }, [identifier, isEn]);
 
   const lastClosedCashierShift = useMemo(() => {
     return (
@@ -446,8 +464,8 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
       }
       setPassword('');
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'تعذر تسجيل الدخول.';
-      if (msg.includes('تم إيقاف شاشتك')) {
+      const msg = err instanceof Error ? err.message : isEn ? 'Could not sign in.' : 'تعذر تسجيل الدخول.';
+      if (msg.includes('تم إيقاف شاشتك') || msg.toLowerCase().includes('suspended')) {
         setSuspendedNotice(msg);
       }
       setLoginError(msg);
@@ -497,7 +515,9 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
       setNewPw('');
       setConfirmPw('');
     } catch (err) {
-      setPwError(err instanceof Error ? err.message : 'تعذر تحديث كلمة المرور.');
+      setPwError(
+        err instanceof Error ? err.message : isEn ? 'Could not update password.' : 'تعذر تحديث كلمة المرور.'
+      );
     } finally {
       setSavingPw(false);
     }
@@ -506,14 +526,14 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
   if (loadingRest || !authReady || (authUid && loadingStaff)) {
     return (
       <div
-        dir="rtl"
+        dir={dir}
         className="min-h-screen flex items-center justify-center p-6"
         style={{ backgroundColor: shellTheme.canvasBg, color: shellTheme.canvasText }}
       >
         <div className="text-center space-y-2">
           <Loader2 className="w-8 h-8 animate-spin mx-auto" style={{ color: shellTheme.accentHex }} />
           <p className="text-xs sm:text-sm font-bold" style={{ color: shellTheme.mutedText }}>
-            جاري تحميل بوابة الكادر...
+            {isEn ? 'Loading Staff Portal...' : 'جاري تحميل بوابة الكادر...'}
           </p>
         </div>
       </div>
@@ -523,7 +543,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
   if (!restaurant) {
     return (
       <div
-        dir="rtl"
+        dir={dir}
         className="min-h-screen flex items-center justify-center p-4"
         style={{ backgroundColor: shellTheme.canvasBg, color: shellTheme.canvasText }}
       >
@@ -536,12 +556,23 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
             boxShadow: shellTheme.cardShadow,
           }}
         >
+          <div className="flex justify-end">
+            <LanguageToggleButton compact />
+          </div>
           <AlertCircle className="w-10 h-10 text-rose-500 mx-auto" />
           <h1 className="text-lg font-extrabold" style={{ color: shellTheme.surfaceText }}>
-            المطعم غير موجود
+            {isEn ? 'Restaurant Not Found' : 'المطعم غير موجود'}
           </h1>
           <p className="text-xs" style={{ color: shellTheme.mutedText }}>
-            تأكد من صحة رابط صفحة الكادر الخاص بالمطعم (/staff/{slug}).
+            {isEn ? (
+              <>
+                Check the restaurant staff portal URL (<span dir="ltr">/staff/{slug}</span>).
+              </>
+            ) : (
+              <>
+                تأكد من صحة رابط صفحة الكادر الخاص بالمطعم (<span dir="ltr">/staff/{slug}</span>).
+              </>
+            )}
           </p>
           <button
             type="button"
@@ -549,18 +580,20 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
             className={`min-h-[42px] px-4 py-2.5 text-xs font-extrabold cursor-pointer ${shellRadius.button}`}
             style={{ backgroundColor: shellTheme.accentHex, color: shellTheme.accentTextHex }}
           >
-            العودة للرئيسية
+            {t.nav.home}
           </button>
         </div>
       </div>
     );
   }
 
+  const displayRestName = loc(restaurant.name, restaurant.name_en);
+
   // Dedicated Suspension Block Screen
   if (suspendedNotice && !staff) {
     return (
       <div
-        dir="rtl"
+        dir={dir}
         className="min-h-screen flex items-center justify-center p-4"
         style={{ backgroundColor: shellTheme.canvasBg, color: shellTheme.canvasText }}
       >
@@ -568,14 +601,19 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
           className="max-w-md w-full border-2 border-rose-300 rounded-3xl p-6 sm:p-7 shadow-xl text-center space-y-4"
           style={{ backgroundColor: shellTheme.surfaceBg, color: shellTheme.surfaceText }}
         >
+          <div className="flex justify-end">
+            <LanguageToggleButton compact />
+          </div>
           <span className="w-14 h-14 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
             <ShieldAlert className="w-7 h-7" />
           </span>
           <div className="space-y-1">
             <h1 className="text-lg font-extrabold" style={{ color: shellTheme.surfaceText }}>
-              {restaurant.name}
+              {displayRestName}
             </h1>
-            <p className="text-xs font-bold text-rose-700">تم تقييد الدخول لهذه الشاشة</p>
+            <p className="text-xs font-bold text-rose-700">
+              {isEn ? 'Access to this screen has been restricted' : 'تم تقييد الدخول لهذه الشاشة'}
+            </p>
           </div>
           <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-xs sm:text-sm font-extrabold text-rose-950 leading-relaxed">
             {suspendedNotice}
@@ -591,7 +629,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
                 className={`min-h-[42px] px-4 py-2 text-xs font-extrabold cursor-pointer ${shellRadius.button}`}
                 style={{ backgroundColor: shellTheme.accentHex, color: shellTheme.accentTextHex }}
               >
-                تسجيل الخروج والعودة
+                {isEn ? 'Sign Out & Return' : 'تسجيل الخروج والعودة'}
               </button>
             )}
             <button
@@ -604,7 +642,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
                 color: shellTheme.surfaceText,
               }}
             >
-              الدخول بحساب آخر
+              {isEn ? 'Sign in with Another Account' : 'الدخول بحساب آخر'}
             </button>
           </div>
         </div>
@@ -616,7 +654,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
   if (staff && staff.mustChangePassword) {
     return (
       <div
-        dir="rtl"
+        dir={dir}
         className="min-h-screen flex items-center justify-center p-4"
         style={{ backgroundColor: shellTheme.canvasBg, color: shellTheme.canvasText }}
       >
@@ -629,7 +667,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
             boxShadow: shellTheme.cardShadow,
           }}
         >
-          <div className="space-y-1">
+          <div className="flex items-center justify-between gap-2">
             <span
               className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-extrabold"
               style={{
@@ -639,13 +677,18 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
               }}
             >
               <KeyRound className="w-3.5 h-3.5" />
-              <span>تحديث كلمة المرور مطلوب</span>
+              <span>{isEn ? 'Password Update Required' : 'تحديث كلمة المرور مطلوب'}</span>
             </span>
-            <h1 className="text-lg font-extrabold pt-1" style={{ color: shellTheme.surfaceText }}>
-              مرحباً {staff.name}
+            <LanguageToggleButton compact />
+          </div>
+          <div className="space-y-1">
+            <h1 className="text-lg font-extrabold" style={{ color: shellTheme.surfaceText }}>
+              {isEn ? `Welcome, ${staff.name}` : `مرحباً ${staff.name}`}
             </h1>
             <p className="text-xs" style={{ color: shellTheme.mutedText }}>
-              لأمان حسابك، يرجى تعيين كلمة مرور دائمة وقوية قبل بدء العمل في {restaurant.name}.
+              {isEn
+                ? `For account security, please set a permanent strong password before starting work at ${displayRestName}.`
+                : `لأمان حسابك، يرجى تعيين كلمة مرور دائمة وقوية قبل بدء العمل في ${displayRestName}.`}
             </p>
           </div>
 
@@ -657,7 +700,11 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
 
           <form onSubmit={handleForcedPasswordSubmit} className="space-y-3">
             <label className="block space-y-1 text-xs font-bold" style={{ color: shellTheme.surfaceText }}>
-              <span>كلمة المرور الجديدة (8+ أحرف وأرقام) *</span>
+              <span>
+                {isEn
+                  ? 'New Password (8+ letters & numbers) *'
+                  : 'كلمة المرور الجديدة (8+ أحرف وأرقام) *'}
+              </span>
               <input
                 type="password"
                 required
@@ -673,7 +720,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
               />
             </label>
             <label className="block space-y-1 text-xs font-bold" style={{ color: shellTheme.surfaceText }}>
-              <span>تأكيد كلمة المرور الجديدة *</span>
+              <span>{isEn ? 'Confirm New Password *' : 'تأكيد كلمة المرور الجديدة *'}</span>
               <input
                 type="password"
                 required
@@ -697,7 +744,13 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
                 color: shellTheme.accentTextHex,
               }}
             >
-              {savingPw ? 'جاري الحفظ...' : 'حفظ كلمة المرور والدخول'}
+              {savingPw
+                ? isEn
+                  ? 'Saving...'
+                  : 'جاري الحفظ...'
+                : isEn
+                  ? 'Save Password & Enter'
+                  : 'حفظ كلمة المرور والدخول'}
             </button>
           </form>
         </div>
@@ -709,7 +762,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
   if (!staff) {
     return (
       <div
-        dir="rtl"
+        dir={dir}
         className="min-h-screen flex flex-col justify-between p-4 sm:p-6"
         style={{ backgroundColor: shellTheme.canvasBg, color: shellTheme.canvasText }}
       >
@@ -718,7 +771,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
             {restaurant.logoUrl ? (
               <img
                 src={restaurant.logoUrl}
-                alt={restaurant.name}
+                alt={displayRestName}
                 className="w-9 h-9 rounded-xl object-cover border"
                 style={{
                   borderColor: shellTheme.surfaceBorder,
@@ -738,29 +791,34 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
             )}
             <div>
               <p className="text-sm font-extrabold" style={{ color: shellTheme.canvasText }}>
-                {restaurant.name}
+                {displayRestName}
               </p>
               <p className="text-[11px]" style={{ color: shellTheme.mutedText }}>
-                بوابة دخول فريق العمل والكادر
+                {isEn ? 'Staff & Operations Portal' : 'بوابة دخول فريق العمل والكادر'}
               </p>
             </div>
           </div>
 
-          <PWAInstallButton variant="compact" />
+          <div className="flex items-center gap-2">
+            <LanguageToggleButton variant={shellTheme.isDarkShell ? 'dark' : 'light'} compact />
+            <PWAInstallButton variant="compact" />
+          </div>
         </header>
 
         <main className="max-w-md w-full mx-auto my-8 space-y-4">
           {mismatchAuthNotice && (
             <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 space-y-2.5 text-xs text-amber-950">
               <p className="font-extrabold">
-                الحساب المسجّل حالياً في المتصفح لا يملك صلاحية كادر فعّالة لهذا المطعم.
+                {isEn
+                  ? 'The currently signed-in browser account does not have active staff access for this restaurant.'
+                  : 'الحساب المسجّل حالياً في المتصفح لا يملك صلاحية كادر فعّالة لهذا المطعم.'}
               </p>
               <button
                 type="button"
                 onClick={() => signOut(auth)}
                 className="min-h-[40px] px-3.5 py-2 rounded-xl bg-amber-950 text-white font-bold cursor-pointer"
               >
-                تسجيل الخروج للعودة لدخول الكادر
+                {isEn ? 'Sign Out to Staff Login' : 'تسجيل الخروج للعودة لدخول الكادر'}
               </button>
             </div>
           )}
@@ -784,14 +842,23 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
                 }}
               >
                 <Lock className="w-3.5 h-3.5" />
-                <span>دخول آمن ومعزول للمطعم</span>
+                <span>{isEn ? 'Secure Isolated Restaurant Access' : 'دخول آمن ومعزول للمطعم'}</span>
               </span>
               <h1 className="text-xl font-extrabold pt-1" style={{ color: shellTheme.surfaceText }}>
-                {restaurant.name} — دخول الكادر
+                {isEn ? `${displayRestName} — Staff Sign In` : `${displayRestName} — دخول الكادر`}
               </h1>
               <p className="text-xs leading-relaxed" style={{ color: shellTheme.mutedText }}>
-                سجّل الدخول باستخدام <strong>اسم المستخدم</strong> أو <strong>رقم الهاتف</strong> أو{' '}
-                <strong>البريد الإلكتروني</strong> وكلمة المرور.
+                {isEn ? (
+                  <>
+                    Sign in using your <strong>username</strong>, <strong>phone number</strong>, or{' '}
+                    <strong>email</strong> and password.
+                  </>
+                ) : (
+                  <>
+                    سجّل الدخول باستخدام <strong>اسم المستخدم</strong> أو <strong>رقم الهاتف</strong> أو{' '}
+                    <strong>البريد الإلكتروني</strong> وكلمة المرور.
+                  </>
+                )}
               </p>
             </div>
 
@@ -804,7 +871,11 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
             <form onSubmit={handleLoginSubmit} className="space-y-4">
               <label className="block space-y-1.5 text-xs font-bold" style={{ color: shellTheme.surfaceText }}>
                 <div className="flex items-center justify-between gap-2">
-                  <span>اسم المستخدم أو رقم الهاتف أو الإيميل *</span>
+                  <span>
+                    {isEn
+                      ? 'Username, Phone Number, or Email *'
+                      : 'اسم المستخدم أو رقم الهاتف أو البريد الإلكتروني *'}
+                  </span>
                   {detectedIdentifier && (
                     <span className="text-[11px] font-extrabold" style={{ color: shellTheme.highlightHex || '#E8833A' }}>
                       {detectedIdentifier}
@@ -829,7 +900,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
               </label>
 
               <label className="block space-y-1.5 text-xs font-bold" style={{ color: shellTheme.surfaceText }}>
-                <span>كلمة المرور *</span>
+                <span>{isEn ? 'Password *' : 'كلمة المرور *'}</span>
                 <div className="relative">
                   <input
                     type={showPassword ? 'text' : 'password'}
@@ -849,7 +920,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
                   <button
                     type="button"
                     onClick={() => setShowPassword((v) => !v)}
-                    aria-label="إظهار أو إخفاء كلمة المرور"
+                    aria-label={isEn ? 'Show or hide password' : 'إظهار أو إخفاء كلمة المرور'}
                     className="absolute inset-y-0 end-2 px-2 flex items-center cursor-pointer"
                     style={{ color: shellTheme.mutedText }}
                   >
@@ -870,22 +941,30 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
                 {loggingIn ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>جاري التحقق والدخول...</span>
+                    <span>{isEn ? 'Verifying & Signing In...' : 'جاري التحقق والدخول...'}</span>
                   </>
                 ) : (
-                  <span>تسجيل الدخول لبدء العمل</span>
+                  <span>{isEn ? 'Sign In & Start Shift' : 'تسجيل الدخول لبدء العمل'}</span>
                 )}
               </button>
             </form>
 
             <div className="pt-3 border-t text-[11px] leading-relaxed" style={{ borderColor: shellTheme.surfaceBorder, color: shellTheme.mutedText }}>
-              هل نسيت كلمة المرور؟ اطلب من مدير المطعم إصدار <strong>رابط دعوة QR جديد</strong> أو إرسال رابط استعادة للإيميل.
+              {isEn ? (
+                <>
+                  Forgot your password? Ask your restaurant manager to issue a <strong>new QR invite link</strong> or send a password reset email.
+                </>
+              ) : (
+                <>
+                  هل نسيت كلمة المرور؟ اطلب من مدير المطعم إصدار <strong>رابط دعوة QR جديد</strong> أو إرسال رابط استعادة للبريد الإلكتروني.
+                </>
+              )}
             </div>
           </div>
         </main>
 
         <footer className="text-center text-[11px]" style={{ color: shellTheme.mutedText }}>
-          {restaurant.name} · بوابة تشغيل الكادر
+          {displayRestName} · {isEn ? 'Staff Operations Portal' : 'بوابة تشغيل الكادر'}
         </footer>
       </div>
     );
@@ -985,7 +1064,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
 
   return (
     <div
-      dir="rtl"
+      dir={dir}
       className="min-h-screen flex flex-col"
       style={{ backgroundColor: portalTheme.canvasBg, color: portalTheme.canvasText }}
     >
@@ -1004,7 +1083,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
               {restaurant.logoUrl ? (
                 <img
                   src={restaurant.logoUrl}
-                  alt={restaurant.name}
+                  alt={displayRestName}
                   className={`w-9 h-9 object-cover border shrink-0 ${activePortalUi.radiusClasses.button}`}
                   style={{ borderColor: portalTheme.surfaceBorder }}
                 />
@@ -1022,22 +1101,23 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="text-sm font-extrabold truncate" style={{ color: portalTheme.headerText }}>
-                    {restaurant.name}
+                    {displayRestName}
                   </span>
                   <span
                     className={`px-2 py-0.5 rounded-md border text-[10px] font-extrabold ${roleMeta.badgeClass}`}
                   >
-                    {roleMeta.labelAr}
+                    {isEn ? roleMeta.labelEn : roleMeta.labelAr}
                   </span>
                 </div>
                 <p className="text-[11px] truncate" style={{ color: portalTheme.mutedText }}>
                   {staff.name}
-                  {staff.hallName ? ` · الصالة: ${staff.hallName}` : ''}
+                  {staff.hallName ? ` · ${isEn ? 'Hall:' : 'الصالة:'} ${staff.hallName}` : ''}
                 </p>
               </div>
             </div>
 
             <div className="flex lg:hidden items-center gap-1.5 shrink-0">
+              <LanguageToggleButton variant={portalTheme.isDarkShell ? 'dark' : 'light'} compact />
               <PWAInstallButton variant="compact" />
               <button
                 type="button"
@@ -1045,7 +1125,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
                 className={`px-2.5 py-2 border border-rose-200 bg-rose-50 text-rose-700 text-xs font-bold inline-flex items-center gap-1 cursor-pointer ${activePortalUi.radiusClasses.button}`}
               >
                 <LogOut className="w-3.5 h-3.5" />
-                <span>خروج</span>
+                <span>{isEn ? 'Exit' : 'خروج'}</span>
               </button>
             </div>
           </div>
@@ -1081,7 +1161,13 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
                         }
                       >
                         <Crown className="w-3.5 h-3.5" />
-                        <span>{managerUi.getButtonLabel('supervision', 'ar', 'لوحة الإشراف')}</span>
+                        <span>
+                          {managerUi.getButtonLabel(
+                            'supervision',
+                            lang,
+                            isEn ? 'Supervision' : 'لوحة الإشراف'
+                          )}
+                        </span>
                       </button>
                     );
                   }
@@ -1112,7 +1198,13 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
                         }
                       >
                         <Utensils className="w-3.5 h-3.5" />
-                        <span>{managerUi.getButtonLabel('menu_editor', 'ar', 'المنيو والأصناف')}</span>
+                        <span>
+                          {managerUi.getButtonLabel(
+                            'menu_editor',
+                            lang,
+                            isEn ? 'Menu & Items' : 'المنيو والأصناف'
+                          )}
+                        </span>
                       </button>
                     );
                   }
@@ -1143,7 +1235,13 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
                         }
                       >
                         <FileSpreadsheet className="w-3.5 h-3.5" />
-                        <span>{managerUi.getButtonLabel('shift_reports', 'ar', 'تقرير الورديات')}</span>
+                        <span>
+                          {managerUi.getButtonLabel(
+                            'shift_reports',
+                            lang,
+                            isEn ? 'Shift Reports' : 'تقرير الورديات'
+                          )}
+                        </span>
                       </button>
                     );
                   }
@@ -1158,9 +1256,10 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
                   const Icon = getScreenIcon(scr, effectiveStations);
                   const isActive = managerMode === 'screen' && safeCurrentScreen === scr;
                   const meta = getScreenMetaDynamic(scr, effectiveStations);
+                  const fallbackShort = isEn ? meta.shortEn : meta.shortAr;
                   const labelText = isManager
-                    ? managerUi.getButtonLabel(scr, 'ar', meta.shortAr)
-                    : meta.shortAr;
+                    ? managerUi.getButtonLabel(scr, lang, fallbackShort)
+                    : fallbackShort;
                   return (
                     <button
                       key={scr}
@@ -1190,6 +1289,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
             )}
 
             <div className="hidden lg:flex items-center gap-2 shrink-0">
+              <LanguageToggleButton variant={portalTheme.isDarkShell ? 'dark' : 'light'} compact />
               <PWAInstallButton variant="outline" />
               <button
                 type="button"
@@ -1197,7 +1297,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
                 className={`min-h-[38px] px-3 py-2 border border-rose-200 bg-rose-50/70 hover:bg-rose-100 text-rose-700 text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${activePortalUi.radiusClasses.button}`}
               >
                 <LogOut className="w-3.5 h-3.5" />
-                <span>تسجيل الخروج</span>
+                <span>{t.admin.signOut}</span>
               </button>
             </div>
           </div>
@@ -1211,7 +1311,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
             restaurant={restaurant}
             staff={staff}
             activeScreen={safeCurrentScreen}
-            screenLabel={currentScreenMeta.shortAr}
+            screenLabel={isEn ? currentScreenMeta.shortEn : currentScreenMeta.shortAr}
             stationId={currentStationId}
             allStations={effectiveStations}
             myActiveShifts={myActiveShifts}
