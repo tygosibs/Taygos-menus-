@@ -610,12 +610,12 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
   return (
     <div
       dir={dir}
-      className="landing-plex-body min-h-screen bg-[#F3EBDD] text-[#0E1B3D] flex flex-col selection:bg-[#14285A]/15 selection:text-[#14285A]"
+      className="landing-plex-body min-h-screen overflow-x-clip max-w-full bg-[#F3EBDD] text-[#0E1B3D] flex flex-col selection:bg-[#14285A]/15 selection:text-[#14285A]"
     >
       {/* Sticky Header + Scroll Progress Bar */}
       <header className="sticky top-0 z-40 bg-[#F3EBDD]/95 backdrop-blur-sm border-b border-[#E6D9C3]">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
+        <div className="max-w-6xl mx-auto px-3 sm:px-6 h-16 flex items-center justify-between gap-2 sm:gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <button
               type="button"
               onClick={() => setDrawerOpen(true)}
@@ -632,22 +632,22 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                 e.preventDefault();
                 scrollToSection('hero', 'hero');
               }}
-              className="flex items-center gap-2.5 shrink-0"
+              className="flex items-center gap-2 shrink-0"
             >
-              <span className="w-9 h-9 rounded-xl bg-[#14285A] text-[#FBF7EF] flex items-center justify-center">
-                <svg viewBox="0 0 28 28" className="w-5 h-5" fill="none" aria-hidden="true">
+              <span className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#14285A] text-[#FBF7EF] flex items-center justify-center shrink-0">
+                <svg viewBox="0 0 28 28" className="w-4 h-4 sm:w-5 sm:h-5" fill="none" aria-hidden="true">
                   <rect x="4" y="4" width="8" height="8" rx="2" stroke="currentColor" strokeWidth="2.2" />
                   <rect x="16" y="4" width="8" height="8" rx="2" stroke="currentColor" strokeWidth="2.2" />
                   <rect x="4" y="16" width="8" height="8" rx="2" stroke="currentColor" strokeWidth="2.2" />
                   <circle cx="20" cy="20" r="3.5" fill="#E8833A" />
                 </svg>
               </span>
-              <span className="landing-cairo-heading text-lg sm:text-xl text-[#14285A]">
+              <span className="landing-cairo-heading text-base sm:text-xl text-[#14285A] whitespace-nowrap shrink-0">
                 {isAr ? 'سُفرة QR' : 'Sufra QR'}
               </span>
             </a>
 
-            <span className="hidden md:inline-flex items-center gap-1.5 text-xs font-semibold text-[#0E1B3D]/70 ps-3 border-s border-[#E6D9C3] truncate">
+            <span className="hidden md:inline-flex items-center gap-1.5 text-xs font-semibold text-[#0E1B3D]/75 ps-3 border-s border-[#E6D9C3] truncate">
               <span className="w-1.5 h-1.5 rounded-full bg-[#E8833A] shrink-0" />
               <span className="truncate">
                 {activeDrawerItem ? (isAr ? activeDrawerItem.ar : activeDrawerItem.en) : isAr ? 'الرئيسية' : 'Home'}
@@ -655,38 +655,37 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             </span>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
             <LanguageToggleButton variant="light" compact />
             {currentUser ? (
               <button
                 type="button"
                 onClick={handlePrimaryStart}
-                className="px-4 py-2.5 rounded-xl bg-[#14285A] text-[#FBF7EF] text-xs sm:text-sm font-bold hover:opacity-95 transition-opacity cursor-pointer flex items-center gap-2 whitespace-nowrap"
+                className="min-h-[44px] sm:min-h-[40px] px-2.5 sm:px-4 py-2 rounded-xl bg-[#14285A] text-[#FBF7EF] text-xs sm:text-sm font-bold hover:opacity-95 transition-opacity cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0"
               >
-                {isSuperAdmin && <ShieldCheck className="w-4 h-4 text-[#E8833A]" />}
-                <span>
-                  {isSuperAdmin
-                    ? isAr
-                      ? 'لوحة مدير المنصة'
-                      : 'Super Admin'
-                    : isAr
-                      ? 'لوحة التحكم'
-                      : 'Dashboard'}
-                </span>
+                {isSuperAdmin && <ShieldCheck className="w-4 h-4 text-[#FDBA74] shrink-0" />}
+                {isSuperAdmin ? (
+                  <>
+                    <span className="sm:hidden">{isAr ? 'لوحة المنصة' : 'Admin'}</span>
+                    <span className="hidden sm:inline">{isAr ? 'لوحة مدير المنصة' : 'Super Admin'}</span>
+                  </>
+                ) : (
+                  <span>{isAr ? 'لوحة التحكم' : 'Dashboard'}</span>
+                )}
               </button>
             ) : (
               <>
                 <button
                   type="button"
                   onClick={() => setAuthModalOpen(true)}
-                  className="hidden sm:inline-flex px-4 py-2.5 rounded-xl border border-[#E6D9C3] bg-[#FBF7EF] text-[#14285A] text-xs sm:text-sm font-bold hover:border-[#14285A]/40 transition-colors cursor-pointer whitespace-nowrap"
+                  className="hidden sm:inline-flex min-h-[44px] sm:min-h-[40px] px-4 py-2 rounded-xl border border-[#E6D9C3] bg-[#FBF7EF] text-[#14285A] text-xs sm:text-sm font-bold hover:border-[#14285A]/40 transition-colors cursor-pointer whitespace-nowrap shrink-0"
                 >
                   {isAr ? 'دخول الحساب' : 'Sign In'}
                 </button>
                 <button
                   type="button"
                   onClick={handlePrimaryStart}
-                  className="px-4 py-2.5 rounded-xl bg-[#14285A] text-[#FBF7EF] text-xs sm:text-sm font-bold hover:opacity-95 transition-opacity cursor-pointer whitespace-nowrap"
+                  className="min-h-[44px] sm:min-h-[40px] px-3 sm:px-4 py-2 rounded-xl bg-[#14285A] text-[#FBF7EF] text-xs sm:text-sm font-bold hover:opacity-95 transition-opacity cursor-pointer whitespace-nowrap shrink-0"
                 >
                   {isAr ? 'ابدأ الآن' : 'Get Started'}
                 </button>

@@ -56,6 +56,105 @@ export const SCREEN_META: Record<
   },
 };
 
+function parseHexRgb(hex: string): [number, number, number] | null {
+  if (!hex || typeof hex !== 'string') return null;
+  const clean = hex.replace('#', '').trim();
+  if (clean.length === 3) {
+    const r = parseInt(clean[0] + clean[0], 16);
+    const g = parseInt(clean[1] + clean[1], 16);
+    const b = parseInt(clean[2] + clean[2], 16);
+    if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) return null;
+    return [r, g, b];
+  }
+  if (clean.length === 6) {
+    const r = parseInt(clean.slice(0, 2), 16);
+    const g = parseInt(clean.slice(2, 4), 16);
+    const b = parseInt(clean.slice(4, 6), 16);
+    if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) return null;
+    return [r, g, b];
+  }
+  return null;
+}
+
+function relativeLuminance(rgb: [number, number, number]): number {
+  const toLinear = (c: number) => {
+    const s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  };
+  return 0.2126 * toLinear(rgb[0]) + 0.7152 * toLinear(rgb[1]) + 0.0722 * toLinear(rgb[2]);
+}
+
+export function getContrastRatio(hexA: string, hexB: string): number {
+  const a = parseHexRgb(hexA);
+  const b = parseHexRgb(hexB);
+  if (!a || !b) return 21;
+  const lumA = relativeLuminance(a);
+  const lumB = relativeLuminance(b);
+  const bright = Math.max(lumA, lumB);
+  const dark = Math.min(lumA, lumB);
+  return (bright + 0.05) / (dark + 0.05);
+}
+
+export function getReadableTextOnBg(
+  bgHex: string,
+  darkText = '#0E1B3D',
+  lightText = '#FBF7EF'
+): string {
+  const darkRatio = getContrastRatio(bgHex, darkText);
+  const lightRatio = getContrastRatio(bgHex, lightText);
+  return lightRatio >= darkRatio ? lightText : darkText;
+}
+
+export function getSidebarHighlightHex(theme: ScreenThemeTokens): string {
+  const candidates = theme.isDarkShell
+    ? [theme.highlightHex || '', theme.accentHex, '#FDBA74', '#FDE047', '#FFFFFF']
+    : [theme.accentHex, theme.highlightHex || '', '#14285A', '#0F172A'];
+  for (const cand of candidates) {
+    if (cand && getContrastRatio(cand, theme.sidebarBg) >= 4.5) {
+      return cand;
+    }
+  }
+  return theme.isDarkShell ? '#FDBA74' : '#14285A';
+}
+
+export function getSidebarActionColors(theme: ScreenThemeTokens): {
+  backgroundColor: string;
+  color: string;
+  borderColor: string;
+} {
+  if (theme.isDarkShell) {
+    const candidates = [
+      theme.accentHex,
+      theme.highlightHex || '',
+      theme.sidebarActiveBg,
+      '#E8833A',
+      '#FBBF24',
+      '#FFFFFF',
+    ];
+    let bg = '#E8833A';
+    for (const cand of candidates) {
+      if (!cand) continue;
+      const vsSidebar = getContrastRatio(cand, theme.sidebarBg);
+      const textCand = getReadableTextOnBg(cand, '#0E1B3D', '#FFFFFF');
+      const vsText = getContrastRatio(cand, textCand);
+      if (vsSidebar >= 4.5 && vsText >= 4.5) {
+        bg = cand;
+        break;
+      }
+    }
+    return {
+      backgroundColor: bg,
+      color: getReadableTextOnBg(bg, '#0E1B3D', '#FFFFFF'),
+      borderColor: 'rgba(255,255,255,0.22)',
+    };
+  }
+  return {
+    backgroundColor: theme.accentHex,
+    color: getReadableTextOnBg(theme.accentHex, '#0E1B3D', '#FFFFFF'),
+    borderColor: theme.accentHex,
+  };
+}
+
 export const SCREEN_THEMES: Record<ScreenThemeId, ScreenThemeTokens> = {
   sand_sapphire: {
     id: 'sand_sapphire',
@@ -70,11 +169,11 @@ export const SCREEN_THEMES: Record<ScreenThemeId, ScreenThemeTokens> = {
     surfaceSubtleBg: '#F3EBDD',
     surfaceBorder: '#E6D9C3',
     surfaceText: '#14285A',
-    mutedText: '#475569',
+    mutedText: '#334155',
     sidebarBg: '#14285A',
-    sidebarBorder: '#233B78',
+    sidebarBorder: '#2C478A',
     sidebarText: '#FBF7EF',
-    sidebarMuted: '#B8C4E0',
+    sidebarMuted: '#DCE6FA',
     sidebarActiveBg: '#E8833A',
     sidebarActiveText: '#0E1B3D',
     headerBg: '#FBF7EF',
@@ -100,11 +199,11 @@ export const SCREEN_THEMES: Record<ScreenThemeId, ScreenThemeTokens> = {
     surfaceSubtleBg: '#F9F8F5',
     surfaceBorder: '#E5E1D8',
     surfaceText: '#141518',
-    mutedText: '#625E55',
+    mutedText: '#4B473F',
     sidebarBg: '#0B0D12',
-    sidebarBorder: '#1E222D',
+    sidebarBorder: '#262B38',
     sidebarText: '#F5F3EE',
-    sidebarMuted: '#98948A',
+    sidebarMuted: '#D4CFC4',
     sidebarActiveBg: '#D99B26',
     sidebarActiveText: '#0B0D12',
     headerBg: '#FFFFFF',
@@ -128,11 +227,11 @@ export const SCREEN_THEMES: Record<ScreenThemeId, ScreenThemeTokens> = {
     surfaceSubtleBg: '#F4F1EA',
     surfaceBorder: '#E6E2D8',
     surfaceText: '#141413',
-    mutedText: '#6B675E',
+    mutedText: '#57534E',
     sidebarBg: '#FFFFFF',
     sidebarBorder: '#E6E2D8',
     sidebarText: '#141413',
-    sidebarMuted: '#78736A',
+    sidebarMuted: '#57534E',
     sidebarActiveBg: '#141413',
     sidebarActiveText: '#FAF9F6',
     headerBg: '#FFFFFF',
@@ -156,18 +255,19 @@ export const SCREEN_THEMES: Record<ScreenThemeId, ScreenThemeTokens> = {
     surfaceSubtleBg: '#ECF6F1',
     surfaceBorder: '#D4E6DD',
     surfaceText: '#0B241C',
-    mutedText: '#4B6B5E',
+    mutedText: '#345347',
     sidebarBg: '#063B2C',
-    sidebarBorder: '#0D503D',
+    sidebarBorder: '#125F49',
     sidebarText: '#ECFDF5',
-    sidebarMuted: '#99C7B6',
+    sidebarMuted: '#CBEAE0',
     sidebarActiveBg: '#10B981',
     sidebarActiveText: '#052E21',
     headerBg: '#FFFFFF',
     headerBorder: '#D4E6DD',
     headerText: '#0B241C',
-    accentHex: '#059669',
+    accentHex: '#047857',
     accentTextHex: '#FFFFFF',
+    highlightHex: '#34D399',
     cardShadow: '0 2px 6px rgba(6, 59, 44, 0.05)',
     previewSwatches: ['#063B2C', '#10B981', '#F2F7F5'],
   },
@@ -184,20 +284,21 @@ export const SCREEN_THEMES: Record<ScreenThemeId, ScreenThemeTokens> = {
     surfaceSubtleBg: '#F8FAFC',
     surfaceBorder: '#CBD5E1',
     surfaceText: '#0F172A',
-    mutedText: '#475569',
+    mutedText: '#334155',
     sidebarBg: '#0F172A',
-    sidebarBorder: '#1E293B',
+    sidebarBorder: '#28354D',
     sidebarText: '#F8FAFC',
-    sidebarMuted: '#94A3B8',
-    sidebarActiveBg: '#0284C7',
+    sidebarMuted: '#CBD5E1',
+    sidebarActiveBg: '#0369A1',
     sidebarActiveText: '#FFFFFF',
     headerBg: '#FFFFFF',
     headerBorder: '#CBD5E1',
     headerText: '#0F172A',
-    accentHex: '#0284C7',
+    accentHex: '#0369A1',
     accentTextHex: '#FFFFFF',
+    highlightHex: '#38BDF8',
     cardShadow: '0 2px 6px rgba(15, 23, 42, 0.06)',
-    previewSwatches: ['#0F172A', '#0284C7', '#F1F5F9'],
+    previewSwatches: ['#0F172A', '#0369A1', '#F1F5F9'],
   },
   espresso_bistro: {
     id: 'espresso_bistro',
@@ -212,11 +313,11 @@ export const SCREEN_THEMES: Record<ScreenThemeId, ScreenThemeTokens> = {
     surfaceSubtleBg: '#F6EFE6',
     surfaceBorder: '#E5D8C8',
     surfaceText: '#261710',
-    mutedText: '#6F5546',
+    mutedText: '#573F32',
     sidebarBg: '#2A1810',
-    sidebarBorder: '#41271B',
+    sidebarBorder: '#4B2D20',
     sidebarText: '#FBF7F2',
-    sidebarMuted: '#C7AE9E',
+    sidebarMuted: '#E5D3C8',
     sidebarActiveBg: '#D97706',
     sidebarActiveText: '#1F110A',
     headerBg: '#FFFDF9',
@@ -224,6 +325,7 @@ export const SCREEN_THEMES: Record<ScreenThemeId, ScreenThemeTokens> = {
     headerText: '#261710',
     accentHex: '#C2410C',
     accentTextHex: '#FFFFFF',
+    highlightHex: '#FBBF24',
     cardShadow: '0 2px 6px rgba(42, 24, 16, 0.06)',
     previewSwatches: ['#2A1810', '#C2410C', '#FBF7F2'],
   },
@@ -240,11 +342,11 @@ export const SCREEN_THEMES: Record<ScreenThemeId, ScreenThemeTokens> = {
     surfaceSubtleBg: '#F8FAFC',
     surfaceBorder: '#DDE3EC',
     surfaceText: '#111827',
-    mutedText: '#526075',
+    mutedText: '#475569',
     sidebarBg: '#F8FAFC',
     sidebarBorder: '#DDE3EC',
     sidebarText: '#0F172A',
-    sidebarMuted: '#64748B',
+    sidebarMuted: '#475569',
     sidebarActiveBg: '#3730A3',
     sidebarActiveText: '#FFFFFF',
     headerBg: '#FFFFFF',
@@ -268,11 +370,11 @@ export const SCREEN_THEMES: Record<ScreenThemeId, ScreenThemeTokens> = {
     surfaceSubtleBg: '#FAF0F2',
     surfaceBorder: '#EAD5DA',
     surfaceText: '#2A0A12',
-    mutedText: '#734B56',
+    mutedText: '#5C3842',
     sidebarBg: '#3E0B18',
-    sidebarBorder: '#5A1324',
+    sidebarBorder: '#63172B',
     sidebarText: '#FFF5F7',
-    sidebarMuted: '#D6A8B3',
+    sidebarMuted: '#F3CFD8',
     sidebarActiveBg: '#EAB308',
     sidebarActiveText: '#2A0A12',
     headerBg: '#FFFFFF',
@@ -280,6 +382,7 @@ export const SCREEN_THEMES: Record<ScreenThemeId, ScreenThemeTokens> = {
     headerText: '#2A0A12',
     accentHex: '#9F1239',
     accentTextHex: '#FFFFFF',
+    highlightHex: '#FDE047',
     cardShadow: '0 2px 6px rgba(62, 11, 24, 0.06)',
     previewSwatches: ['#3E0B18', '#9F1239', '#EAB308'],
   },
@@ -296,11 +399,11 @@ export const SCREEN_THEMES: Record<ScreenThemeId, ScreenThemeTokens> = {
     surfaceSubtleBg: '#FEF3E7',
     surfaceBorder: '#F0DEC9',
     surfaceText: '#1F1610',
-    mutedText: '#765D49',
+    mutedText: '#5E4736',
     sidebarBg: '#FFFFFF',
     sidebarBorder: '#F0DEC9',
     sidebarText: '#1F1610',
-    sidebarMuted: '#876B54',
+    sidebarMuted: '#654C39',
     sidebarActiveBg: '#C2410C',
     sidebarActiveText: '#FFFFFF',
     headerBg: '#FFFFFF',

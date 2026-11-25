@@ -48,6 +48,7 @@ import {
 } from '../lib/fcmNotificationService';
 import { auth, db } from '../lib/firebase';
 import { ActorDelegationCeiling } from '../lib/jobTitlesService';
+import { getSidebarHighlightHex } from '../lib/platformUiDefaults';
 import {
   getResolvedOperationsConfig,
   subscribeAllRestaurantShifts,
@@ -1269,9 +1270,9 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
           color: portalTheme.headerText,
         }}
       >
-        <div className="max-w-7xl mx-auto flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5 min-w-0">
+        <div className="max-w-7xl mx-auto flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 sm:gap-3">
+          <div className="flex items-center justify-between gap-2.5 min-w-0">
+            <div className="flex items-center gap-2.5 min-w-0 flex-1">
               {restaurant.logoUrl ? (
                 <img
                   src={restaurant.logoUrl}
@@ -1284,7 +1285,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
                   className={`w-9 h-9 flex items-center justify-center shrink-0 ${activePortalUi.radiusClasses.button}`}
                   style={{
                     backgroundColor: portalTheme.sidebarBg,
-                    color: portalTheme.accentHex,
+                    color: getSidebarHighlightHex(portalTheme),
                   }}
                 >
                   <LayoutGrid className="w-4 h-4" />
@@ -1292,11 +1293,11 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
               )}
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-sm font-extrabold truncate" style={{ color: portalTheme.headerText }}>
+                  <span className="text-sm font-extrabold leading-snug" style={{ color: portalTheme.headerText }}>
                     {displayRestName}
                   </span>
                   <span
-                    className={`px-2 py-0.5 rounded-md border text-[10px] font-extrabold ${roleMeta.badgeClass}`}
+                    className={`px-2 py-0.5 rounded-md border text-[11px] font-extrabold ${roleMeta.badgeClass}`}
                   >
                     {staff.jobTitle ||
                       (staff.jobTitleNames && staff.jobTitleNames.length > 0
@@ -1305,7 +1306,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
                       (isEn ? roleMeta.labelEn : roleMeta.labelAr)}
                   </span>
                 </div>
-                <p className="text-[11px] truncate" style={{ color: portalTheme.mutedText }}>
+                <p className="text-xs leading-snug" style={{ color: portalTheme.mutedText }}>
                   {staff.name}
                   {staff.hallName ? ` · ${isEn ? 'Hall:' : 'الصالة:'} ${staff.hallName}` : ''}
                 </p>
@@ -1314,19 +1315,10 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
 
             <div className="flex lg:hidden items-center gap-1.5 shrink-0">
               <LanguageToggleButton variant={portalTheme.isDarkShell ? 'dark' : 'light'} compact />
-              <PWAInstallButton variant="compact" />
-              <button
-                type="button"
-                onClick={() => setSignOutConfirmOpen(true)}
-                className={`px-2.5 py-2 border border-rose-200 bg-rose-50 text-rose-700 text-xs font-bold inline-flex items-center gap-1 cursor-pointer ${activePortalUi.radiusClasses.button}`}
-              >
-                <LogOut className="w-3.5 h-3.5" />
-                <span>{isEn ? 'Exit' : 'خروج'}</span>
-              </button>
             </div>
           </div>
 
-          {/* Navigation Strip: Unified multi-screen switcher for Manager or any Multi-Role Staff */}
+          {/* Navigation Strip & Utility Actions */}
           <div className="flex flex-wrap items-center justify-between lg:justify-end gap-2">
             {(isManager || orderedManagerNavIds.length > 1) && (
               <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 max-w-full">
@@ -1341,7 +1333,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
                           setManagerMode('supervision');
                           setSupervisoryOverride(null);
                         }}
-                        className={`min-h-[36px] px-3 py-1.5 text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors border ${activePortalUi.radiusClasses.button}`}
+                        className={`min-h-[44px] px-3.5 py-2 text-xs sm:text-[13px] font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors border ${activePortalUi.radiusClasses.button}`}
                         style={
                           isActive
                             ? {
@@ -1395,7 +1387,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
                           handleScreenChange(scr);
                         }
                       }}
-                      className={`min-h-[36px] px-3 py-1.5 text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors border ${activePortalUi.radiusClasses.button}`}
+                      className={`min-h-[44px] px-3.5 py-2 text-xs sm:text-[13px] font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors border ${activePortalUi.radiusClasses.button}`}
                       style={
                         isActive
                           ? {
@@ -1739,6 +1731,21 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
             )}
           </>
         )}
+
+        <div
+          className={`lg:hidden pt-3 border-t flex flex-wrap items-center justify-between gap-2.5`}
+          style={{ borderColor: portalTheme.surfaceBorder }}
+        >
+          <PWAInstallButton variant="compact" />
+          <button
+            type="button"
+            onClick={() => setSignOutConfirmOpen(true)}
+            className={`min-h-[44px] px-4 py-2 border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${activePortalUi.radiusClasses.button}`}
+          >
+            <LogOut className="w-4 h-4 shrink-0" />
+            <span>{t.admin.signOut}</span>
+          </button>
+        </div>
       </main>
 
       <ThermalPrinterSettingsModal

@@ -14,50 +14,30 @@ export const LanguageToggleButton: React.FC<LanguageToggleButtonProps> = ({
   className = '',
 }) => {
   const { lang, setLang } = useLanguage();
+  const nextLang = lang === 'ar' ? 'en' : 'ar';
 
-  const wrapperClass =
+  const buttonThemeClass =
     variant === 'dark'
-      ? 'bg-white/10 border-white/15 text-white'
+      ? 'bg-white/15 hover:bg-white/25 border-white/25 text-white'
       : variant === 'glass'
-      ? 'bg-black/35 backdrop-blur-md border-white/20 text-white'
-      : 'bg-zinc-100 border-zinc-200 text-zinc-800';
-
-  const activeBtnClass =
-    variant === 'dark' || variant === 'glass'
-      ? 'bg-white text-zinc-900 shadow-sm'
-      : 'bg-white text-zinc-900 shadow-sm border border-zinc-200/80';
-
-  const inactiveBtnClass =
-    variant === 'dark' || variant === 'glass'
-      ? 'text-white/75 hover:text-white'
-      : 'text-zinc-500 hover:text-zinc-900';
+        ? 'bg-black/55 hover:bg-black/70 backdrop-blur-md border-white/25 text-white'
+        : 'bg-white hover:bg-zinc-50 border-zinc-300 text-slate-900 shadow-xs';
 
   return (
-    <div
+    <button
+      type="button"
       dir="ltr"
-      role="group"
-      aria-label="Language Switcher"
-      className={`inline-flex items-center gap-0.5 rounded-lg border p-0.5 select-none ${wrapperClass} ${className}`}
+      onClick={() => setLang(nextLang)}
+      aria-label={lang === 'ar' ? 'Switch language to English' : 'التبديل إلى اللغة العربية'}
+      title={lang === 'ar' ? 'Switch to English' : 'التبديل للعربية'}
+      className={`inline-flex items-center justify-center gap-1.5 rounded-xl border font-extrabold whitespace-nowrap shrink-0 select-none transition-colors cursor-pointer ${
+        compact
+          ? 'min-h-[44px] sm:min-h-[38px] min-w-[44px] px-2.5 sm:px-3 py-1.5 text-xs'
+          : 'min-h-[44px] sm:min-h-[40px] min-w-[44px] px-3 py-2 text-xs'
+      } ${buttonThemeClass} ${className}`}
     >
-      {!compact && <Globe className="w-3.5 h-3.5 mx-1.5 opacity-70 shrink-0" />}
-      <button
-        type="button"
-        onClick={() => setLang('ar')}
-        className={`px-2 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
-          lang === 'ar' ? activeBtnClass : inactiveBtnClass
-        }`}
-      >
-        AR
-      </button>
-      <button
-        type="button"
-        onClick={() => setLang('en')}
-        className={`px-2 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
-          lang === 'en' ? activeBtnClass : inactiveBtnClass
-        }`}
-      >
-        EN
-      </button>
-    </div>
+      <Globe className="w-3.5 h-3.5 shrink-0" />
+      <span>{nextLang.toUpperCase()}</span>
+    </button>
   );
 };

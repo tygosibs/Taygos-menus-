@@ -15,6 +15,7 @@ import { db } from '../lib/firebase';
 import {
   DEFAULT_PLATFORM_UI_CONFIG,
   getRadiusClasses,
+  getReadableTextOnBg,
   normalizePlatformUiConfig,
   SCREEN_THEMES,
   UI_ACTION_CATALOG,
@@ -313,12 +314,17 @@ export function useScreenUi(
 
   const theme = useMemo<ScreenThemeTokens>(() => {
     const accent = screenConfig.accentColorOverride || baseTheme.accentHex;
+    const readableAccentText = screenConfig.accentColorOverride
+      ? getReadableTextOnBg(accent, '#0E1B3D', '#FFFFFF')
+      : baseTheme.accentTextHex;
     return {
       ...baseTheme,
       accentHex: accent,
+      accentTextHex: readableAccentText,
       highlightHex: baseTheme.highlightHex || '#E8833A',
       successHex: baseTheme.successHex || '#2F8F5B',
       sidebarActiveBg: screenConfig.accentColorOverride ? accent : baseTheme.sidebarActiveBg,
+      sidebarActiveText: screenConfig.accentColorOverride ? readableAccentText : baseTheme.sidebarActiveText,
     };
   }, [baseTheme, screenConfig.accentColorOverride]);
 

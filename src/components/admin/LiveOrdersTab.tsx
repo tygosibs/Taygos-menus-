@@ -1583,7 +1583,7 @@ export function LiveOrdersTab({
                 >
                   <span className="flex items-center gap-2 min-w-0">
                     <TabIcon className="w-4 h-4 shrink-0" />
-                    <span className="truncate">{tab.label}</span>
+                    <span className="whitespace-normal break-words leading-snug text-start">{tab.label}</span>
                   </span>
                   {tab.count !== undefined && tab.count > 0 && (
                     <span

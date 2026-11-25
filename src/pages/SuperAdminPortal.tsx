@@ -30,6 +30,7 @@ import { UiStudioTab } from '../components/superadmin/UiStudioTab';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useScreenUi } from '../contexts/PlatformUiContext';
 import { auth, isSuperAdminEmail, testConnection } from '../lib/firebase';
+import { getSidebarHighlightHex } from '../lib/platformUiDefaults';
 
 interface SuperAdminPortalProps {
   onNavigate: (path: string) => void;
@@ -304,40 +305,32 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
           }}
         >
           <div className="p-5 space-y-5">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <button
                 type="button"
                 onClick={() => setActiveTab('tenants')}
-                className="text-lg font-extrabold cursor-pointer flex items-center gap-2"
+                className="text-base sm:text-lg font-extrabold cursor-pointer flex items-center gap-2 min-w-0"
                 style={{ color: theme.sidebarText }}
               >
-                <ShieldCheck className="w-5 h-5" style={{ color: theme.accentHex }} />
-                <span>{t.nav.superAdmin}</span>
+                <ShieldCheck className="w-5 h-5 shrink-0" style={{ color: getSidebarHighlightHex(theme) }} />
+                <span className="whitespace-normal break-words leading-snug text-start">{t.nav.superAdmin}</span>
               </button>
-              <div className="lg:hidden flex items-center gap-2">
+              <div className="lg:hidden flex items-center gap-2 shrink-0">
                 <LanguageToggleButton variant={theme.isDarkShell ? 'dark' : 'light'} compact />
-                <button
-                  type="button"
-                  onClick={() => setSignOutConfirmOpen(true)}
-                  aria-label={t.admin.signOut}
-                  className="p-2 rounded-lg opacity-80 hover:opacity-100 cursor-pointer"
-                >
-                  <LogOut className="w-4 h-4" />
-                </button>
               </div>
             </div>
 
             <div
               className={`p-3.5 border space-y-1 ${ui.radiusClasses.card}`}
               style={{
-                backgroundColor: theme.isDarkShell ? 'rgba(255,255,255,0.05)' : theme.surfaceSubtleBg,
+                backgroundColor: theme.isDarkShell ? 'rgba(255,255,255,0.06)' : theme.surfaceSubtleBg,
                 borderColor: theme.sidebarBorder,
               }}
             >
-              <p className="text-[11px] font-bold" style={{ color: theme.accentHex }}>
+              <p className="text-xs font-extrabold" style={{ color: getSidebarHighlightHex(theme) }}>
                 {isEn ? 'Super Admin' : 'المدير العام للمنصة'}
               </p>
-              <p className="text-xs font-mono-num truncate" dir="ltr" style={{ color: theme.sidebarText }}>
+              <p className="text-xs font-mono-num truncate font-semibold" dir="ltr" style={{ color: theme.sidebarText }}>
                 {user.email}
               </p>
             </div>
@@ -363,12 +356,12 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
                   }
                 >
                   <p
-                    className="text-[10px] font-extrabold uppercase tracking-wider px-2"
+                    className="text-xs font-bold px-2"
                     style={{ color: theme.sidebarMuted }}
                   >
                     {isEn ? card.titleEn : card.titleAr}
                   </p>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:flex lg:flex-col gap-1">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:flex lg:flex-col gap-2">
                     {card.buttonIds.map((bid) => {
                       const item = getSuperItem(bid);
                       if (!item) return null;
@@ -379,7 +372,7 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
                           key={item.id}
                           type="button"
                           onClick={() => setActiveTab(item.id)}
-                          className={`flex items-center justify-center lg:justify-start gap-2 px-3 py-2.5 text-xs font-bold transition-all cursor-pointer min-h-[40px] ${ui.radiusClasses.button}`}
+                          className={`min-h-[46px] flex items-center justify-start gap-2 px-3 py-2.5 text-[12.5px] sm:text-[13px] font-bold leading-snug text-start transition-all cursor-pointer ${ui.radiusClasses.button}`}
                           style={
                             active
                               ? {
@@ -392,7 +385,7 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
                           }
                         >
                           <Icon className="w-4 h-4 shrink-0" />
-                          <span className="truncate">{item.label}</span>
+                          <span className="whitespace-normal break-words leading-snug">{item.label}</span>
                         </button>
                       );
                     })}
@@ -405,20 +398,34 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
               <button
                 type="button"
                 onClick={() => onNavigate('/admin')}
-                className={`py-2 px-3 border text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
+                className={`min-h-[44px] py-2.5 px-3 border text-xs font-bold leading-snug flex items-center justify-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
                 style={{ borderColor: theme.sidebarBorder, color: theme.sidebarText }}
               >
-                <Store className="w-3.5 h-3.5" />
-                <span className="truncate">{isEn ? 'Test Restaurant' : 'المطعم التجريبي'}</span>
+                <Store className="w-4 h-4 shrink-0" />
+                <span className="whitespace-normal break-words text-center">{isEn ? 'Test Restaurant' : 'المطعم التجريبي'}</span>
               </button>
               <button
                 type="button"
                 onClick={() => onNavigate('/?view=landing')}
-                className={`py-2 px-3 border text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
+                className={`min-h-[44px] py-2.5 px-3 border text-xs font-bold leading-snug flex items-center justify-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
                 style={{ borderColor: theme.sidebarBorder, color: theme.sidebarText }}
               >
-                <Globe className="w-3.5 h-3.5" />
-                <span className="truncate">{isEn ? 'Landing Preview' : 'معاينة الهبوط'}</span>
+                <Globe className="w-4 h-4 shrink-0" />
+                <span className="whitespace-normal break-words text-center">{isEn ? 'Landing Preview' : 'معاينة الهبوط'}</span>
+              </button>
+            </div>
+            <div className="lg:hidden pt-1">
+              <button
+                type="button"
+                onClick={() => setSignOutConfirmOpen(true)}
+                className={`w-full min-h-[44px] py-2.5 px-3 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer ${
+                  theme.isDarkShell
+                    ? 'text-rose-200 hover:bg-rose-500/20 border border-rose-300/30'
+                    : 'text-rose-700 hover:bg-rose-50 border border-rose-200'
+                } ${ui.radiusClasses.button}`}
+              >
+                <LogOut className="w-4 h-4 shrink-0" />
+                <span>{t.admin.signOut}</span>
               </button>
             </div>
           </div>
@@ -427,7 +434,7 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
             <button
               type="button"
               onClick={() => onNavigate('/admin')}
-              className={`w-full py-2.5 px-3 border text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
+              className={`w-full min-h-[44px] py-2.5 px-3 border text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
               style={{ borderColor: theme.sidebarBorder, color: theme.sidebarText }}
             >
               <Store className="w-3.5 h-3.5" />
@@ -436,8 +443,8 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
             <button
               type="button"
               onClick={() => onNavigate('/?view=landing')}
-              className={`w-full py-2 px-3 text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer opacity-80 hover:opacity-100 ${ui.radiusClasses.button}`}
-              style={{ color: theme.sidebarText }}
+              className={`w-full min-h-[44px] py-2.5 px-3 border text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
+              style={{ borderColor: theme.sidebarBorder, color: theme.sidebarText }}
             >
               <Globe className="w-3.5 h-3.5" />
               <span>{isEn ? 'Preview Landing Page' : 'معاينة صفحة الهبوط'}</span>
@@ -445,7 +452,11 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
             <button
               type="button"
               onClick={() => setSignOutConfirmOpen(true)}
-              className={`w-full py-2 px-3 text-xs font-semibold text-rose-400 hover:bg-rose-500/10 flex items-center justify-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
+              className={`w-full min-h-[44px] py-2.5 px-3 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer ${
+                theme.isDarkShell
+                  ? 'text-rose-200 hover:bg-rose-500/20 border border-rose-300/30'
+                  : 'text-rose-700 hover:bg-rose-50 border border-rose-200'
+              } ${ui.radiusClasses.button}`}
             >
               <LogOut className="w-3.5 h-3.5" />
               <span>{t.admin.signOut}</span>
@@ -457,39 +468,39 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
       {/* Main Content */}
       <div className="flex-1 min-w-0 flex flex-col">
         <header
-          className="border-b px-4 sm:px-6 py-3.5 flex flex-wrap items-center justify-between gap-3"
+          className="border-b px-3 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-2.5"
           style={{
             backgroundColor: theme.headerBg,
             borderColor: theme.headerBorder,
             color: theme.headerText,
           }}
         >
-          <div className="text-xs flex items-center gap-2 min-w-0 truncate" style={{ color: theme.mutedText }}>
+          <div className="text-xs flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1" style={{ color: theme.mutedText }}>
             <button
               type="button"
               onClick={() => setActiveTab('tenants')}
-              className="font-semibold cursor-pointer shrink-0 hover:opacity-80"
+              className="font-extrabold cursor-pointer whitespace-nowrap shrink-0 hover:opacity-80"
               style={{ color: theme.headerText }}
             >
               {t.brandName}
             </button>
-            <span>/</span>
-            <span className="hidden sm:inline">{t.nav.superAdmin}</span>
-            <span className="hidden sm:inline">/</span>
-            <span className="font-bold truncate" style={{ color: theme.headerText }}>
+            <span className="shrink-0">/</span>
+            <span className="hidden sm:inline shrink-0">{t.nav.superAdmin}</span>
+            <span className="hidden sm:inline shrink-0">/</span>
+            <span className="font-bold whitespace-normal break-words leading-snug" style={{ color: theme.headerText }}>
               {getSuperItem(activeTab)?.label}
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
             {activeTab !== 'tenants' && (
               <button
                 type="button"
                 onClick={() => setActiveTab('tenants')}
-                className={`px-3 py-1.5 text-xs font-extrabold cursor-pointer flex items-center gap-1 ${ui.radiusClasses.button}`}
+                className={`min-h-[44px] sm:min-h-[38px] px-3 py-1.5 text-xs font-extrabold cursor-pointer flex items-center gap-1 whitespace-nowrap ${ui.radiusClasses.button}`}
                 style={{ backgroundColor: theme.accentHex, color: theme.accentTextHex }}
               >
-                <ShieldCheck className="w-3.5 h-3.5" />
+                <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
                 <span>{isEn ? 'Super Admin Home' : 'الرئيسية'}</span>
               </button>
             )}
@@ -497,7 +508,7 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
               <button
                 type="button"
                 onClick={() => onNavigate('/admin')}
-                className={`px-3 py-1.5 border text-xs font-bold cursor-pointer ${ui.radiusClasses.button}`}
+                className={`min-h-[44px] sm:min-h-[38px] px-3 py-1.5 border text-xs font-bold cursor-pointer whitespace-nowrap ${ui.radiusClasses.button}`}
                 style={{ borderColor: theme.surfaceBorder, color: theme.headerText }}
               >
                 {isEn ? 'Test Restaurant' : 'المطعم التجريبي'}
@@ -509,17 +520,18 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
             <button
               type="button"
               onClick={() => onNavigate('/?view=landing')}
-              className={`px-3.5 py-1.5 border text-xs font-bold flex items-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
+              className={`min-h-[44px] sm:min-h-[38px] px-3 py-1.5 border text-xs font-bold flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${ui.radiusClasses.button}`}
               style={{ borderColor: theme.surfaceBorder, color: theme.headerText }}
             >
-              <Globe className="w-3.5 h-3.5" />
-              <span>{isEn ? 'Landing Preview' : 'معاينة صفحة الهبوط'}</span>
+              <Globe className="w-3.5 h-3.5 shrink-0" />
+              <span className="sm:hidden">{isEn ? 'Landing' : 'معاينة الهبوط'}</span>
+              <span className="hidden sm:inline">{isEn ? 'Landing Preview' : 'معاينة صفحة الهبوط'}</span>
             </button>
             {isTopDeck && (
               <button
                 type="button"
                 onClick={() => setSignOutConfirmOpen(true)}
-                className={`px-3 py-1.5 border border-rose-200 text-rose-700 text-xs font-bold cursor-pointer ${ui.radiusClasses.button}`}
+                className={`min-h-[44px] sm:min-h-[38px] px-3 py-1.5 border border-rose-200 text-rose-700 text-xs font-bold cursor-pointer whitespace-nowrap ${ui.radiusClasses.button}`}
               >
                 {t.admin.signOut}
               </button>
@@ -555,7 +567,7 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
                           key={item.id}
                           type="button"
                           onClick={() => setActiveTab(item.id)}
-                          className={`px-3 py-2 text-xs font-bold flex items-center gap-1.5 cursor-pointer border ${ui.radiusClasses.button}`}
+                          className={`min-h-[44px] px-3 py-2 text-xs sm:text-[13px] font-bold leading-snug text-start flex items-center gap-1.5 cursor-pointer border ${ui.radiusClasses.button}`}
                           style={
                             active
                               ? {
@@ -571,7 +583,7 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
                           }
                         >
                           <Icon className="w-3.5 h-3.5 shrink-0" />
-                          <span>{item.label}</span>
+                          <span className="whitespace-normal break-words">{item.label}</span>
                         </button>
                       );
                     })}

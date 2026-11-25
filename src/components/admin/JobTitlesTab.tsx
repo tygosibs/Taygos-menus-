@@ -770,7 +770,7 @@ export function JobTitlesTab({
                           onChange={() => toggleScreen(scr)}
                           className="w-4 h-4 accent-amber-500 shrink-0"
                         />
-                        <span className="truncate">{isEn ? meta.labelEn : meta.labelAr}</span>
+                        <span className="whitespace-normal break-words leading-snug text-start">{isEn ? meta.labelEn : meta.labelAr}</span>
                       </span>
                       {!screenAllowedInCeiling(scr) && <Lock className="w-3.5 h-3.5 shrink-0" />}
                     </label>
@@ -810,7 +810,7 @@ export function JobTitlesTab({
                           className="w-4 h-4 accent-amber-500 shrink-0"
                         />
                         <StIcon className="w-4 h-4 shrink-0" />
-                        <span className="truncate">{loc(st.label, st.label_en)}</span>
+                        <span className="whitespace-normal break-words leading-snug text-start">{loc(st.label, st.label_en)}</span>
                       </span>
                       {!screenAllowedInCeiling(scr) && <Lock className="w-3.5 h-3.5 shrink-0" />}
                     </label>
@@ -849,7 +849,7 @@ export function JobTitlesTab({
                             onChange={() => toggleCaptainSubScreen(cleanId)}
                             className="w-4 h-4 accent-teal-400 shrink-0"
                           />
-                          <span className="truncate">{loc(cap.label, cap.label_en)}</span>
+                          <span className="whitespace-normal break-words leading-snug text-start">{loc(cap.label, cap.label_en)}</span>
                         </span>
                         {!captainScreenAllowedInCeiling(cleanId) && <Lock className="w-3.5 h-3.5 shrink-0" />}
                       </label>
@@ -888,7 +888,7 @@ export function JobTitlesTab({
                           onChange={() => toggleScreen(scr)}
                           className="w-4 h-4 accent-indigo-400 shrink-0"
                         />
-                        <span className="truncate">{isEn ? meta.labelEn : meta.labelAr}</span>
+                        <span className="whitespace-normal break-words leading-snug text-start">{isEn ? meta.labelEn : meta.labelAr}</span>
                       </span>
                       {!screenAllowedInCeiling(scr) && <Lock className="w-3.5 h-3.5 shrink-0" />}
                     </label>
