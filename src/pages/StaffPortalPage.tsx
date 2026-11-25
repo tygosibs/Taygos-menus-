@@ -3,7 +3,10 @@ import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
 import {
   AlertCircle,
+  BellRing,
+  BookOpen,
   Briefcase,
+  Clock,
   Crown,
   Eye,
   EyeOff,
@@ -15,6 +18,7 @@ import {
   Loader2,
   Lock,
   LogOut,
+  Percent,
   QrCode,
   Receipt,
   ShieldAlert,
@@ -22,10 +26,13 @@ import {
   UserCheck,
   Users,
   Utensils,
+  Wallet,
+  XCircle,
 } from 'lucide-react';
 import { ConfirmSignOutModal } from '../components/ConfirmSignOutModal';
 import { LanguageToggleButton } from '../components/LanguageToggleButton';
 import { PWAInstallButton } from '../components/PWAInstallButton';
+import { UserGuideEntry, UserGuidePage } from '../components/UserGuidePage';
 import { CaptainAssignmentsTab } from '../components/admin/CaptainAssignmentsTab';
 import { CaptainWaiterTab } from '../components/admin/CaptainWaiterTab';
 import { CustomersCrmTab } from '../components/admin/CustomersCrmTab';
@@ -253,6 +260,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
     supervisory?: boolean;
     coveringStaffName?: string;
   } | null>(null);
+  const [showUserGuide, setShowUserGuide] = useState(false);
   const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
 
   const [dynamicStations, setDynamicStations] = useState<RestaurantStation[]>([]);
@@ -603,6 +611,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
     const effPerms = resolveEffectiveStaffPermissions(staff, managerPerms);
     const effective = computeEffectiveStaffScreens(staff, effPerms, effectiveStations);
     if (!effective.includes(scr)) return;
+    setShowUserGuide(false);
     setActiveScreen(scr);
     if (opts?.captainScreenId) {
       setActiveCaptainScreenId(opts.captainScreenId);
@@ -1227,6 +1236,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
     safeCurrentScreen === 'hall_manager';
 
   const canShowShiftBar =
+    !showUserGuide &&
     !isNonShiftManagementScreen &&
     (!isManager || managerMode === 'screen');
 
@@ -1255,179 +1265,727 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
     return result;
   })();
 
+  const getStaffNavMeta = (navId: string) => {
+    if (isManager && navId === 'supervision') {
+      return {
+        id: 'supervision',
+        icon: Crown,
+        labelAr: managerUi.getButtonLabel('supervision', 'ar', 'لوحة الإشراف'),
+        labelEn: managerUi.getButtonLabel('supervision', 'en', 'Supervision'),
+      };
+    }
+    const scr = navId as StaffScreen;
+    const meta = getScreenMetaDynamic(scr, effectiveStations);
+    return {
+      id: scr,
+      icon: getScreenIcon(scr, effectiveStations),
+      labelAr: isManager ? managerUi.getButtonLabel(scr, 'ar', meta.shortAr) : meta.shortAr,
+      labelEn: isManager ? managerUi.getButtonLabel(scr, 'en', meta.shortEn) : meta.shortEn,
+      meta,
+    };
+  };
+
+  const navigateStaffNavId = (navId: string) => {
+    setShowUserGuide(false);
+    if (isManager && navId === 'supervision') {
+      setStationCreateIntent(null);
+      setManagerMode('supervision');
+      setSupervisoryOverride(null);
+      return;
+    }
+    const scr = navId as StaffScreen;
+    if (
+      isManager &&
+      (scr === 'stations' || scr === 'menu_editor' || scr === 'shift_reports')
+    ) {
+      setStationCreateIntent(null);
+      setManagerMode(scr);
+      setSupervisoryOverride(null);
+      setActiveScreen(scr);
+    } else {
+      handleScreenChange(scr);
+    }
+  };
+
+  const activeNavId =
+    isManager && managerMode !== 'screen' ? managerMode : safeCurrentScreen;
+  const activeNavMeta = getStaffNavMeta(activeNavId);
+
+  const staffRoleDisplayAr =
+    staff.jobTitle ||
+    (staff.jobTitleNames && staff.jobTitleNames.length > 0 ? staff.jobTitleNames.join(' + ') : '') ||
+    roleMeta.labelAr;
+  const staffRoleDisplayEn =
+    staff.jobTitle ||
+    (staff.jobTitleNames && staff.jobTitleNames.length > 0 ? staff.jobTitleNames.join(' + ') : '') ||
+    roleMeta.labelEn;
+
+  const staffGuideEntries: UserGuideEntry[] = [];
+  for (const navId of orderedManagerNavIds) {
+    const navMeta = getStaffNavMeta(navId);
+    const pathAr = `المسار من قائمتك: القائمة الجانبية ← ${navMeta.labelAr}`;
+    const pathEn = `From your menu: Sidebar → ${navMeta.labelEn}`;
+
+    if (navId === 'supervision' && isManager) {
+      staffGuideEntries.push(
+        {
+          id: 'supervision_live',
+          icon: Crown,
+          titleAr: `${navMeta.labelAr} — متابعة الورديات والفتح الإشرافي`,
+          titleEn: `${navMeta.labelEn} — Live Shifts & Screen Access`,
+          pathAr,
+          pathEn,
+          stepsAr: 'شاهد كل الورديات المفتوحة حالياً وادخل لأي شاشة تشغيل للمتابعة أو التغطية.',
+          stepsEn: 'View all active shifts in real time and open any operational screen in supervisory mode.',
+          onGo: () => navigateStaffNavId('supervision'),
+        },
+        {
+          id: 'supervision_custody',
+          icon: Wallet,
+          titleAr: `${navMeta.labelAr} — تسليم العهدة والأصناف الموقوفة`,
+          titleEn: `${navMeta.labelEn} — Custody Transfer & Paused Items`,
+          pathAr,
+          pathEn,
+          stepsAr: 'سلّم العهدة النقدية لخزنة المالك وأعد تفعيل أي صنف تم إيقافه مؤقتاً.',
+          stepsEn: 'Transfer custody cash to the Owner vault and reactivate temporarily paused dishes.',
+          onGo: () => navigateStaffNavId('supervision'),
+        }
+      );
+      if (effectivePerms.canConfigureOperations) {
+        staffGuideEntries.push({
+          id: 'supervision_ops',
+          icon: Layers,
+          titleAr: `${navMeta.labelAr} — إعدادات التشغيل والورديات`,
+          titleEn: `${navMeta.labelEn} — Operations & Shift Settings`,
+          pathAr,
+          pathEn,
+          stepsAr: 'عدّل فترات الورديات ونسبة الخدمة والضرائب من زر إعدادات التشغيل داخل الإشراف.',
+          stepsEn: 'Configure shift slots, service charge, and tax settings inside Supervision.',
+          onGo: () => navigateStaffNavId('supervision'),
+        });
+      }
+      continue;
+    }
+
+    if (navId === 'hall_manager') {
+      staffGuideEntries.push({
+        id: 'hall_manager_floor',
+        icon: LayoutGrid,
+        titleAr: `${navMeta.labelAr} — متابعة الصالات والطاولات`,
+        titleEn: `${navMeta.labelEn} — Live Halls & Tables`,
+        pathAr,
+        pathEn,
+        stepsAr: 'راقب حالة كل طاولة في الصالات وتغطية الكباتن والأصناف الجاهزة للتقديم.',
+        stepsEn: 'Monitor table statuses across halls, captain coverage, and ready-to-serve dishes.',
+        onGo: () => navigateStaffNavId('hall_manager'),
+      });
+      if (effectivePerms.canManageServiceCalls) {
+        staffGuideEntries.push({
+          id: 'hall_manager_calls',
+          icon: BellRing,
+          titleAr: `${navMeta.labelAr} — نداءات الطاولات`,
+          titleEn: `${navMeta.labelEn} — Table Service Calls`,
+          pathAr,
+          pathEn,
+          stepsAr: 'استقبل نداءات النزلاء (طلب كابتن أو فاتورة) وأكد تلبية النداء.',
+          stepsEn: 'Receive guest service and check calls and mark them resolved once handled.',
+          onGo: () => navigateStaffNavId('hall_manager'),
+        });
+      }
+      if (effectivePerms.canAddEditTableOrders) {
+        staffGuideEntries.push({
+          id: 'hall_manager_orders',
+          icon: Utensils,
+          titleAr: `${navMeta.labelAr} — فتح طلب لطاولة`,
+          titleEn: `${navMeta.labelEn} — Add Table Orders`,
+          pathAr,
+          pathEn,
+          stepsAr: 'اضغط على أي طاولة لإضافة أصناف جديدة وإرسالها لمحطات التحضير مباشرة.',
+          stepsEn: 'Tap any table to add menu items and send them straight to prep stations.',
+          onGo: () => navigateStaffNavId('hall_manager'),
+        });
+      }
+      continue;
+    }
+
+    if (navId === 'cashier') {
+      staffGuideEntries.push(
+        {
+          id: 'cashier_shift',
+          icon: Clock,
+          titleAr: `${navMeta.labelAr} — فتح الوردية والطابعة والدرج`,
+          titleEn: `${navMeta.labelEn} — Shift Bar, Drawer & Printer`,
+          pathAr,
+          pathEn,
+          stepsAr: 'افتح ورديتك أو سلّمها من الشريط العلوي للشاشة، واضبط الطابعة الحرارية.',
+          stepsEn: 'Start or hand over your shift from the top shift bar and configure the thermal printer.',
+          onGo: () => navigateStaffNavId('cashier'),
+        },
+        {
+          id: 'cashier_orders',
+          icon: Receipt,
+          titleAr: `${navMeta.labelAr} — استقبال الطلبات الحية`,
+          titleEn: `${navMeta.labelEn} — Live Orders Queue`,
+          pathAr,
+          pathEn,
+          stepsAr: 'راجع طلبات الصالة والتييك أواي والدليفري وتابع حالة تحضير كل صنف.',
+          stepsEn: 'Review dine-in, takeaway, and delivery orders and track item preparation state.',
+          onGo: () => navigateStaffNavId('cashier'),
+        }
+      );
+      if (effectivePerms.canSettleChecks) {
+        staffGuideEntries.push({
+          id: 'cashier_settle',
+          icon: Wallet,
+          titleAr: `${navMeta.labelAr} — تقفيل الفواتير والتحصيل`,
+          titleEn: `${navMeta.labelEn} — Settle Checks & Collect Payment`,
+          pathAr,
+          pathEn,
+          stepsAr: 'اختر وسيلة الدفع (كاش / فيزا / مقسّم) ثم أقفل الشيك واطبع الإيصال.',
+          stepsEn: 'Choose payment method (Cash / Card / Split), settle the check, and print receipt.',
+          onGo: () => navigateStaffNavId('cashier'),
+        });
+      }
+      if (effectivePerms.canEditOpenOrders) {
+        staffGuideEntries.push({
+          id: 'cashier_edit',
+          icon: Utensils,
+          titleAr: `${navMeta.labelAr} — تعديل الطلبات المفتوحة`,
+          titleEn: `${navMeta.labelEn} — Edit Open Orders`,
+          pathAr,
+          pathEn,
+          stepsAr: 'افتح أي طلب قائم لإضافة أصناف أو تعديل الكميات والملاحظات.',
+          stepsEn: 'Open any active order to add items or adjust quantities and notes.',
+          onGo: () => navigateStaffNavId('cashier'),
+        });
+      }
+      if (effectivePerms.canApplyInstantDiscount) {
+        staffGuideEntries.push({
+          id: 'cashier_discount',
+          icon: Percent,
+          titleAr: `${navMeta.labelAr} — تطبيق خصم فوري`,
+          titleEn: `${navMeta.labelEn} — Apply Instant Discount`,
+          pathAr,
+          pathEn,
+          stepsAr: 'أضف خصماً فورياً على الطلب المفتوح قبل إغلاق الفاتورة.',
+          stepsEn: 'Apply an instant discount to an open order before settling the check.',
+          onGo: () => navigateStaffNavId('cashier'),
+        });
+      }
+      if (effectivePerms.canCancelOpenOrders) {
+        staffGuideEntries.push({
+          id: 'cashier_cancel',
+          icon: XCircle,
+          titleAr: `${navMeta.labelAr} — إلغاء الطلبات المفتوحة`,
+          titleEn: `${navMeta.labelEn} — Cancel Open Orders`,
+          pathAr,
+          pathEn,
+          stepsAr: 'ألغِ الطلب المفتوح عند الحاجة مع تسجيل سبب الإلغاء في السجل.',
+          stepsEn: 'Cancel an open order when needed with a required audit reason.',
+          onGo: () => navigateStaffNavId('cashier'),
+        });
+      }
+      if (effectivePerms.canAddDrawerExpenses) {
+        staffGuideEntries.push({
+          id: 'cashier_expenses',
+          icon: Wallet,
+          titleAr: `${navMeta.labelAr} — تسجيل مصروفات الدرج`,
+          titleEn: `${navMeta.labelEn} — Record Drawer Expenses`,
+          pathAr,
+          pathEn,
+          stepsAr: 'سجّل أي مصروفات نقدية خارجة من الدرج خلال الوردية ليُحسب الصافي بدقة.',
+          stepsEn: 'Log petty-cash payouts from the drawer during your shift for accurate closing totals.',
+          onGo: () => navigateStaffNavId('cashier'),
+        });
+      }
+      continue;
+    }
+
+    if (navId === 'captain') {
+      staffGuideEntries.push({
+        id: 'captain_floor',
+        icon: UserCheck,
+        titleAr: `${navMeta.labelAr} — خريطة الصالات والطاولات`,
+        titleEn: `${navMeta.labelEn} — Live Table Floor Map`,
+        pathAr,
+        pathEn,
+        stepsAr:
+          allowedCaptainScreenList.length > 1
+            ? 'شاهد حالة الطاولات الفارغة والمشغولة والجاهزة، وبدّل بين شاشات الكابتن من الشريط العلوي.'
+            : 'شاهد حالة كل طاولة في الصالة (متاحة، مشغولة، أو بها أصناف جاهزة للتقديم).',
+        stepsEn:
+          allowedCaptainScreenList.length > 1
+            ? 'Check free, occupied, and ready tables and switch Captain screens from the top bar.'
+            : 'See free, occupied, and ready-to-serve tables across the dining floor.',
+        onGo: () => navigateStaffNavId('captain'),
+      });
+      if (effectivePerms.canAddEditTableOrders) {
+        staffGuideEntries.push({
+          id: 'captain_orders',
+          icon: Utensils,
+          titleAr: `${navMeta.labelAr} — تسجيل طلبات الطاولات`,
+          titleEn: `${navMeta.labelEn} — Place & Edit Table Orders`,
+          pathAr,
+          pathEn,
+          stepsAr: 'اضغط على الطاولة لفتح نقطة الطلب السريعة وإرسال الأصناف لمحطات التحضير.',
+          stepsEn: 'Tap a table to open the fast order pad and fire items to prep stations.',
+          onGo: () => navigateStaffNavId('captain'),
+        });
+      }
+      if (effectivePerms.canManageServiceCalls || effectivePerms.canUpdatePrepProgress) {
+        staffGuideEntries.push({
+          id: 'captain_calls',
+          icon: BellRing,
+          titleAr: `${navMeta.labelAr} — النداءات والأصناف الجاهزة`,
+          titleEn: `${navMeta.labelEn} — Service Calls & Ready Items`,
+          pathAr,
+          pathEn,
+          stepsAr: 'لبِّ نداءات النزلاء واستلم الأصناف الجاهزة من المطبخ والبار لتسليمها للطاولة.',
+          stepsEn: 'Respond to guest service calls and pick up ready dishes from prep stations.',
+          onGo: () => navigateStaffNavId('captain'),
+        });
+      }
+      if (effectivePerms.canSettleChecks) {
+        staffGuideEntries.push({
+          id: 'captain_settle',
+          icon: Wallet,
+          titleAr: `${navMeta.labelAr} — تقفيل شيك الطاولة`,
+          titleEn: `${navMeta.labelEn} — Settle Table Check`,
+          pathAr,
+          pathEn,
+          stepsAr: 'حصّل قيمة الفاتورة وأغلق حساب الطاولة مباشرة من تفاصيل الطاولة.',
+          stepsEn: 'Collect payment and close out the table check directly from table details.',
+          onGo: () => navigateStaffNavId('captain'),
+        });
+      }
+      continue;
+    }
+
+    const stationId = screenToStationId(navId as StaffScreen);
+    if (stationId) {
+      staffGuideEntries.push(
+        {
+          id: `station_tickets_${stationId}`,
+          icon: navMeta.icon,
+          titleAr: `${navMeta.labelAr} — تذاكر التحضير والتجهيز`,
+          titleEn: `${navMeta.labelEn} — Prep Queue & Readiness`,
+          pathAr,
+          pathEn,
+          stepsAr: `تابع الأصناف الموجهة لمحطة «${navMeta.labelAr}» وحدّث حالة الصنف (قيد التحضير ← جاهز).`,
+          stepsEn: `Track items routed to "${navMeta.labelEn}" and update prep progress (Preparing → Ready).`,
+          onGo: () => navigateStaffNavId(navId),
+        },
+        {
+          id: `station_shift_${stationId}`,
+          icon: Clock,
+          titleAr: `${navMeta.labelAr} — شريط الوردية والطابعة`,
+          titleEn: `${navMeta.labelEn} — Shift Bar & Printer`,
+          pathAr,
+          pathEn,
+          stepsAr: 'ابدأ أو أنهِ وردية المحطة واضبط طابعة تذاكر المطبخ من الشريط أعلى الشاشة.',
+          stepsEn: 'Start or end your station shift and configure the ticket printer from the top bar.',
+          onGo: () => navigateStaffNavId(navId),
+        }
+      );
+      if (effectivePerms.canPauseItems && !allowedScreens.includes('menu_editor')) {
+        staffGuideEntries.push({
+          id: `station_pause_${stationId}`,
+          icon: Utensils,
+          titleAr: `${navMeta.labelAr} — إيقاف الأصناف المنتهية مؤقتاً`,
+          titleEn: `${navMeta.labelEn} — Temporarily Pause Out-of-Stock Items`,
+          pathAr,
+          pathEn,
+          stepsAr: 'أوقف أي صنف غير متوفر مؤقتاً ليختفي من طلبات العملاء والكابتن فوراً.',
+          stepsEn: 'Pause out-of-stock items temporarily so guests and Captains cannot order them.',
+          onGo: () => navigateStaffNavId(navId),
+        });
+      }
+      continue;
+    }
+
+    if (navId === 'hall_assignments' && effectivePerms.canManageHallAssignments) {
+      staffGuideEntries.push({
+        id: 'hall_assignments',
+        icon: Users,
+        titleAr: navMeta.labelAr,
+        titleEn: navMeta.labelEn,
+        pathAr,
+        pathEn,
+        stepsAr: 'وزّع الكباتن على الصالات والطاولات لكل وردية وتابع التغطية الفعلية.',
+        stepsEn: 'Assign Captains to halls and tables per shift and manage live coverage.',
+        onGo: () => navigateStaffNavId('hall_assignments'),
+      });
+    } else if (navId === 'halls' && effectivePerms.canManageHalls) {
+      staffGuideEntries.push({
+        id: 'halls',
+        icon: QrCode,
+        titleAr: navMeta.labelAr,
+        titleEn: navMeta.labelEn,
+        pathAr,
+        pathEn,
+        stepsAr: 'أضف الصالات والطاولات واطبع أكواد QR الخاصة بكل طاولة.',
+        stepsEn: 'Create dining halls and tables and print table QR codes.',
+        onGo: () => navigateStaffNavId('halls'),
+      });
+    } else if (navId === 'stations' && canManageStations) {
+      staffGuideEntries.push({
+        id: 'stations',
+        icon: Layers,
+        titleAr: navMeta.labelAr,
+        titleEn: navMeta.labelEn,
+        pathAr,
+        pathEn,
+        stepsAr: 'أضف شاشات كابتن أو محطات تحضير جديدة وعدّل اسمها أو أرشفها.',
+        stepsEn: 'Add new Captain screens or prep stations, rename them, or archive unused ones.',
+        onGo: () => navigateStaffNavId('stations'),
+      });
+    } else if (navId === 'menu_editor' && (effectivePerms.canEditMenu || effectivePerms.canPauseItems)) {
+      staffGuideEntries.push({
+        id: 'menu_editor',
+        icon: Utensils,
+        titleAr: navMeta.labelAr,
+        titleEn: navMeta.labelEn,
+        pathAr,
+        pathEn,
+        stepsAr: effectivePerms.canEditMenu
+          ? 'عدّل الأقسام والأصناف والأسعار وتوجيه المحطات، وأوقف الأصناف غير المتوفرة.'
+          : 'أوقف الأصناف غير المتوفرة مؤقتاً أو أعد تفعيلها للطلب.',
+        stepsEn: effectivePerms.canEditMenu
+          ? 'Edit categories, items, prices, station routing, and toggle item availability.'
+          : 'Temporarily pause out-of-stock items or re-enable them for ordering.',
+        onGo: () => navigateStaffNavId('menu_editor'),
+      });
+    } else if (navId === 'shift_reports' && effectivePerms.canViewShiftReports) {
+      staffGuideEntries.push({
+        id: 'shift_reports',
+        icon: FileSpreadsheet,
+        titleAr: navMeta.labelAr,
+        titleEn: navMeta.labelEn,
+        pathAr,
+        pathEn,
+        stepsAr: 'راجع تقارير الورديات المغلقة، المصروفات، العهدة، وسجل العمليات.',
+        stepsEn: 'Review closed shift reports, drawer expenses, custody transfers, and audit logs.',
+        onGo: () => navigateStaffNavId('shift_reports'),
+      });
+    } else if (navId === 'staff_management' && effectivePerms.canManageStaff) {
+      staffGuideEntries.push({
+        id: 'staff_management',
+        icon: ShieldCheck,
+        titleAr: navMeta.labelAr,
+        titleEn: navMeta.labelEn,
+        pathAr,
+        pathEn,
+        stepsAr: 'أضف حسابات الموظفين، فعّلها أو أوقفها، وأنشئ دعوات QR ضمن صلاحياتك.',
+        stepsEn: 'Create staff accounts, activate/suspend access, and generate QR invites.',
+        onGo: () => navigateStaffNavId('staff_management'),
+      });
+    } else if (navId === 'job_titles' && effectivePerms.canManageStaff) {
+      staffGuideEntries.push({
+        id: 'job_titles',
+        icon: Briefcase,
+        titleAr: navMeta.labelAr,
+        titleEn: navMeta.labelEn,
+        pathAr,
+        pathEn,
+        stepsAr: 'أنشئ وعدّل المسميات الوظيفية وحدد الشاشات والصلاحيات المسموحة لكل مسمى.',
+        stepsEn: 'Create and edit Job Titles with custom screen access and permissions.',
+        onGo: () => navigateStaffNavId('job_titles'),
+      });
+    } else if (navId === 'customers' && effectivePerms.canManageCustomers) {
+      staffGuideEntries.push({
+        id: 'customers',
+        icon: HeartHandshake,
+        titleAr: navMeta.labelAr,
+        titleEn: navMeta.labelEn,
+        pathAr,
+        pathEn,
+        stepsAr: 'تصفح ملفات العملاء ونقاط الولاء وأعياد الميلاد وسجل الطلبات.',
+        stepsEn: 'Browse customer profiles, loyalty points, upcoming birthdays, and order history.',
+        onGo: () => navigateStaffNavId('customers'),
+      });
+    }
+  }
+
   return (
     <div
       dir={dir}
-      className="min-h-screen flex flex-col"
+      className="min-h-screen flex flex-col lg:flex-row overflow-x-clip max-w-full"
       style={{ backgroundColor: portalTheme.canvasBg, color: portalTheme.canvasText }}
     >
-      {/* Staff Top Operational Header */}
-      <header
-        className="print:hidden border-b px-3 sm:px-6 py-3 sticky top-0 z-30"
+      {/* Desktop Sidebar */}
+      <aside
+        className="print:hidden hidden lg:flex lg:w-64 border-e shrink-0 flex-col justify-between"
         style={{
-          backgroundColor: portalTheme.headerBg,
-          borderColor: portalTheme.headerBorder,
-          color: portalTheme.headerText,
+          backgroundColor: portalTheme.sidebarBg,
+          borderColor: portalTheme.sidebarBorder,
+          color: portalTheme.sidebarText,
         }}
       >
-        <div className="max-w-7xl mx-auto flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 sm:gap-3">
-          <div className="flex items-center justify-between gap-2.5 min-w-0">
-            <div className="flex items-center gap-2.5 min-w-0 flex-1">
-              {restaurant.logoUrl ? (
-                <img
-                  src={restaurant.logoUrl}
-                  alt={displayRestName}
-                  className={`w-9 h-9 object-cover border shrink-0 ${activePortalUi.radiusClasses.button}`}
-                  style={{ borderColor: portalTheme.surfaceBorder }}
-                />
-              ) : (
-                <div
-                  className={`w-9 h-9 flex items-center justify-center shrink-0 ${activePortalUi.radiusClasses.button}`}
-                  style={{
-                    backgroundColor: portalTheme.sidebarBg,
-                    color: getSidebarHighlightHex(portalTheme),
-                  }}
-                >
-                  <LayoutGrid className="w-4 h-4" />
-                </div>
-              )}
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-sm font-extrabold leading-snug" style={{ color: portalTheme.headerText }}>
-                    {displayRestName}
-                  </span>
-                  <span
-                    className={`px-2 py-0.5 rounded-md border text-[11px] font-extrabold ${roleMeta.badgeClass}`}
-                  >
-                    {staff.jobTitle ||
-                      (staff.jobTitleNames && staff.jobTitleNames.length > 0
-                        ? staff.jobTitleNames.join(' + ')
-                        : '') ||
-                      (isEn ? roleMeta.labelEn : roleMeta.labelAr)}
-                  </span>
-                </div>
-                <p className="text-xs leading-snug" style={{ color: portalTheme.mutedText }}>
-                  {staff.name}
-                  {staff.hallName ? ` · ${isEn ? 'Hall:' : 'الصالة:'} ${staff.hallName}` : ''}
-                </p>
+        <div className="p-5 space-y-5">
+          <div className="flex items-center gap-2.5 min-w-0">
+            {restaurant.logoUrl ? (
+              <img
+                src={restaurant.logoUrl}
+                alt={displayRestName}
+                className={`w-9 h-9 object-cover border shrink-0 ${activePortalUi.radiusClasses.button}`}
+                style={{ borderColor: portalTheme.sidebarBorder }}
+              />
+            ) : (
+              <div
+                className={`w-9 h-9 flex items-center justify-center shrink-0 border ${activePortalUi.radiusClasses.button}`}
+                style={{
+                  backgroundColor: portalTheme.isDarkShell
+                    ? 'rgba(255,255,255,0.08)'
+                    : portalTheme.surfaceSubtleBg,
+                  borderColor: portalTheme.sidebarBorder,
+                  color: getSidebarHighlightHex(portalTheme),
+                }}
+              >
+                <LayoutGrid className="w-4 h-4" />
               </div>
-            </div>
-
-            <div className="flex lg:hidden items-center gap-1.5 shrink-0">
-              <LanguageToggleButton variant={portalTheme.isDarkShell ? 'dark' : 'light'} compact />
+            )}
+            <div className="min-w-0">
+              <p
+                className="text-sm font-extrabold leading-snug whitespace-normal break-words"
+                style={{ color: portalTheme.sidebarText }}
+              >
+                {displayRestName}
+              </p>
+              <p className="text-xs font-semibold leading-snug" style={{ color: portalTheme.sidebarMuted }}>
+                {staff.name}
+              </p>
             </div>
           </div>
 
-          {/* Navigation Strip & Utility Actions */}
-          <div className="flex flex-wrap items-center justify-between lg:justify-end gap-2">
-            {(isManager || orderedManagerNavIds.length > 1) && (
-              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 max-w-full">
-                {orderedManagerNavIds.map((navId) => {
-                  if (isManager && navId === 'supervision') {
-                    const isActive = managerMode === 'supervision';
-                    return (
-                      <button
-                        key="supervision"
-                        type="button"
-                        onClick={() => {
-                          setManagerMode('supervision');
-                          setSupervisoryOverride(null);
-                        }}
-                        className={`min-h-[44px] px-3.5 py-2 text-xs sm:text-[13px] font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors border ${activePortalUi.radiusClasses.button}`}
-                        style={
-                          isActive
-                            ? {
-                                backgroundColor: portalTheme.accentHex,
-                                borderColor: portalTheme.accentHex,
-                                color: portalTheme.accentTextHex,
-                              }
-                            : {
-                                backgroundColor: portalTheme.surfaceSubtleBg,
-                                borderColor: portalTheme.surfaceBorder,
-                                color: portalTheme.surfaceText,
-                              }
-                        }
-                      >
-                        <Crown className="w-3.5 h-3.5" />
-                        <span>
-                          {managerUi.getButtonLabel(
-                            'supervision',
-                            lang,
-                            isEn ? 'Supervision' : 'لوحة الإشراف'
-                          )}
-                        </span>
-                      </button>
-                    );
-                  }
-
-                  const scr = navId as StaffScreen;
-                  const Icon = getScreenIcon(scr, effectiveStations);
-                  const isActive =
-                    (isManager && managerMode === scr) ||
-                    (managerMode === 'screen' && safeCurrentScreen === scr);
-                  const meta = getScreenMetaDynamic(scr, effectiveStations);
-                  const fallbackShort = isEn ? meta.shortEn : meta.shortAr;
-                  const labelText = isManager
-                    ? managerUi.getButtonLabel(scr, lang, fallbackShort)
-                    : fallbackShort;
-                  return (
-                    <button
-                      key={scr}
-                      type="button"
-                      onClick={() => {
-                        if (
-                          isManager &&
-                          (scr === 'stations' || scr === 'menu_editor' || scr === 'shift_reports')
-                        ) {
-                          setStationCreateIntent(null);
-                          setManagerMode(scr);
-                          setSupervisoryOverride(null);
-                          setActiveScreen(scr);
-                        } else {
-                          handleScreenChange(scr);
-                        }
-                      }}
-                      className={`min-h-[44px] px-3.5 py-2 text-xs sm:text-[13px] font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors border ${activePortalUi.radiusClasses.button}`}
-                      style={
-                        isActive
-                          ? {
-                              backgroundColor: portalTheme.accentHex,
-                              borderColor: portalTheme.accentHex,
-                              color: portalTheme.accentTextHex,
-                            }
-                          : {
-                              backgroundColor: portalTheme.surfaceSubtleBg,
-                              borderColor: portalTheme.surfaceBorder,
-                              color: portalTheme.surfaceText,
-                            }
-                      }
-                    >
-                      <Icon className="w-3.5 h-3.5" />
-                      <span>{labelText}</span>
-                    </button>
-                  );
-                })}
-              </div>
+          <div
+            className={`p-3 border space-y-1 ${activePortalUi.radiusClasses.card}`}
+            style={{
+              backgroundColor: portalTheme.isDarkShell
+                ? 'rgba(255,255,255,0.06)'
+                : portalTheme.surfaceSubtleBg,
+              borderColor: portalTheme.sidebarBorder,
+            }}
+          >
+            <p className="text-xs font-extrabold leading-snug" style={{ color: getSidebarHighlightHex(portalTheme) }}>
+              {isEn ? staffRoleDisplayEn : staffRoleDisplayAr}
+            </p>
+            {staff.hallName && (
+              <p className="text-xs font-medium" style={{ color: portalTheme.sidebarMuted }}>
+                {isEn ? `Hall: ${staff.hallName}` : `الصالة: ${staff.hallName}`}
+              </p>
             )}
+          </div>
 
-            <div className="hidden lg:flex items-center gap-2 shrink-0">
-              <LanguageToggleButton variant={portalTheme.isDarkShell ? 'dark' : 'light'} compact />
-              <PWAInstallButton variant="outline" />
+          <nav className="space-y-1.5">
+            <p className="text-xs font-bold px-2 pb-1" style={{ color: portalTheme.sidebarMuted }}>
+              {isEn ? 'My Screens' : 'شاشاتي'}
+            </p>
+            {orderedManagerNavIds.map((navId) => {
+              const navMeta = getStaffNavMeta(navId);
+              const Icon = navMeta.icon;
+              const isActive = !showUserGuide && activeNavId === navId;
+              return (
+                <button
+                  key={navId}
+                  type="button"
+                  onClick={() => navigateStaffNavId(navId)}
+                  className={`w-full min-h-[46px] flex items-center justify-start gap-2 px-3 py-2.5 text-[13px] font-bold leading-snug text-start transition-all cursor-pointer ${activePortalUi.radiusClasses.button}`}
+                  style={
+                    isActive
+                      ? {
+                          backgroundColor: portalTheme.sidebarActiveBg,
+                          color: portalTheme.sidebarActiveText,
+                        }
+                      : {
+                          color: portalTheme.sidebarText,
+                        }
+                  }
+                >
+                  <Icon className="w-4 h-4 shrink-0" />
+                  <span className="whitespace-normal break-words leading-snug">
+                    {isEn ? navMeta.labelEn : navMeta.labelAr}
+                  </span>
+                </button>
+              );
+            })}
+
+            <div className="pt-2">
               <button
                 type="button"
-                onClick={() => setSignOutConfirmOpen(true)}
-                className={`min-h-[38px] px-3 py-2 border border-rose-200 bg-rose-50/70 hover:bg-rose-100 text-rose-700 text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${activePortalUi.radiusClasses.button}`}
+                onClick={() => setShowUserGuide(true)}
+                className={`w-full min-h-[46px] flex items-center justify-start gap-2 px-3 py-2.5 text-[13px] font-bold leading-snug text-start transition-all cursor-pointer border ${activePortalUi.radiusClasses.button}`}
+                style={
+                  showUserGuide
+                    ? {
+                        backgroundColor: portalTheme.sidebarActiveBg,
+                        borderColor: portalTheme.sidebarActiveBg,
+                        color: portalTheme.sidebarActiveText,
+                      }
+                    : {
+                        backgroundColor: portalTheme.isDarkShell
+                          ? 'rgba(255,255,255,0.04)'
+                          : portalTheme.surfaceSubtleBg,
+                        borderColor: portalTheme.sidebarBorder,
+                        color: portalTheme.sidebarText,
+                      }
+                }
               >
-                <LogOut className="w-3.5 h-3.5" />
-                <span>{t.admin.signOut}</span>
+                <BookOpen className="w-4 h-4 shrink-0" />
+                <span className="whitespace-normal break-words leading-snug">
+                  {isEn ? 'User Guide' : 'دليل الاستخدام'}
+                </span>
+              </button>
+            </div>
+          </nav>
+        </div>
+
+        <div className="p-4 border-t space-y-2" style={{ borderColor: portalTheme.sidebarBorder }}>
+          <div className="flex justify-center">
+            <PWAInstallButton variant="outline" />
+          </div>
+          <button
+            type="button"
+            onClick={() => setSignOutConfirmOpen(true)}
+            className={`w-full min-h-[44px] py-2.5 px-3 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer ${
+              portalTheme.isDarkShell
+                ? 'text-rose-200 hover:bg-rose-500/20 border border-rose-300/30'
+                : 'text-rose-700 hover:bg-rose-50 border border-rose-200'
+            } ${activePortalUi.radiusClasses.button}`}
+          >
+            <LogOut className="w-4 h-4 shrink-0" />
+            <span>{t.admin.signOut}</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* Main Content Shell */}
+      <div className="flex-1 min-w-0 flex flex-col">
+        {/* Staff Top Operational Header */}
+        <header
+          className="print:hidden border-b px-3 sm:px-6 py-3 sticky top-0 z-30"
+          style={{
+            backgroundColor: portalTheme.headerBg,
+            borderColor: portalTheme.headerBorder,
+            color: portalTheme.headerText,
+          }}
+        >
+          <div className="max-w-7xl mx-auto flex flex-col gap-2.5">
+            <div className="flex items-center justify-between gap-2.5 min-w-0">
+              <div className="flex lg:hidden items-center gap-2.5 min-w-0 flex-1">
+                {restaurant.logoUrl ? (
+                  <img
+                    src={restaurant.logoUrl}
+                    alt={displayRestName}
+                    className={`w-9 h-9 object-cover border shrink-0 ${activePortalUi.radiusClasses.button}`}
+                    style={{ borderColor: portalTheme.surfaceBorder }}
+                  />
+                ) : (
+                  <div
+                    className={`w-9 h-9 flex items-center justify-center shrink-0 ${activePortalUi.radiusClasses.button}`}
+                    style={{
+                      backgroundColor: portalTheme.sidebarBg,
+                      color: getSidebarHighlightHex(portalTheme),
+                    }}
+                  >
+                    <LayoutGrid className="w-4 h-4" />
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-sm font-extrabold leading-snug" style={{ color: portalTheme.headerText }}>
+                      {displayRestName}
+                    </span>
+                    <span
+                      className={`px-2 py-0.5 rounded-md border text-[11px] font-extrabold ${roleMeta.badgeClass}`}
+                    >
+                      {isEn ? staffRoleDisplayEn : staffRoleDisplayAr}
+                    </span>
+                  </div>
+                  <p className="text-xs leading-snug" style={{ color: portalTheme.mutedText }}>
+                    {staff.name}
+                    {staff.hallName ? ` · ${isEn ? 'Hall:' : 'الصالة:'} ${staff.hallName}` : ''}
+                  </p>
+                </div>
+              </div>
+
+              <div className="hidden lg:flex items-center gap-2 text-xs min-w-0" style={{ color: portalTheme.mutedText }}>
+                <span className="font-bold">{displayRestName}</span>
+                <span>/</span>
+                <span className="font-extrabold" style={{ color: portalTheme.headerText }}>
+                  {showUserGuide
+                    ? isEn
+                      ? 'User Guide'
+                      : 'دليل الاستخدام'
+                    : isEn
+                      ? activeNavMeta.labelEn
+                      : activeNavMeta.labelAr}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-1.5 shrink-0">
+                <LanguageToggleButton variant={portalTheme.isDarkShell ? 'dark' : 'light'} compact />
+              </div>
+            </div>
+
+            {/* Mobile Navigation Strip (includes screens + User Guide) */}
+            <div className="flex lg:hidden items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 max-w-full">
+              {orderedManagerNavIds.map((navId) => {
+                const navMeta = getStaffNavMeta(navId);
+                const Icon = navMeta.icon;
+                const isActive = !showUserGuide && activeNavId === navId;
+                return (
+                  <button
+                    key={navId}
+                    type="button"
+                    onClick={() => navigateStaffNavId(navId)}
+                    className={`min-h-[44px] px-3.5 py-2 text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors border ${activePortalUi.radiusClasses.button}`}
+                    style={
+                      isActive
+                        ? {
+                            backgroundColor: portalTheme.accentHex,
+                            borderColor: portalTheme.accentHex,
+                            color: portalTheme.accentTextHex,
+                          }
+                        : {
+                            backgroundColor: portalTheme.surfaceSubtleBg,
+                            borderColor: portalTheme.surfaceBorder,
+                            color: portalTheme.surfaceText,
+                          }
+                    }
+                  >
+                    <Icon className="w-3.5 h-3.5 shrink-0" />
+                    <span>{isEn ? navMeta.labelEn : navMeta.labelAr}</span>
+                  </button>
+                );
+              })}
+
+              <button
+                type="button"
+                onClick={() => setShowUserGuide(true)}
+                className={`min-h-[44px] px-3.5 py-2 text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors border ${activePortalUi.radiusClasses.button}`}
+                style={
+                  showUserGuide
+                    ? {
+                        backgroundColor: portalTheme.accentHex,
+                        borderColor: portalTheme.accentHex,
+                        color: portalTheme.accentTextHex,
+                      }
+                    : {
+                        backgroundColor: portalTheme.surfaceSubtleBg,
+                        borderColor: portalTheme.surfaceBorder,
+                        color: portalTheme.surfaceText,
+                      }
+                }
+              >
+                <BookOpen className="w-3.5 h-3.5 shrink-0" />
+                <span>{isEn ? 'User Guide' : 'دليل الاستخدام'}</span>
               </button>
             </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/* Isolated Screen Body */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 space-y-4">
+        {/* Isolated Screen Body */}
+        <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 space-y-4">
         {canShowShiftBar && (
           <StaffShiftBar
             restaurant={restaurant}
@@ -1448,7 +2006,20 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
           />
         )}
 
-        {isManager && managerMode === 'supervision' ? (
+        {showUserGuide ? (
+          <UserGuidePage
+            roleTitleAr={staffRoleDisplayAr}
+            roleTitleEn={staffRoleDisplayEn}
+            subtitleAr="دليل سريع يشرح أين تجد كل ميزة مفعّلة لحسابك وكيف تصل إليها مباشرة من قائمتك."
+            subtitleEn="Quick step-by-step guide to every feature enabled for your role and how to open it."
+            theme={portalTheme}
+            radiusClasses={activePortalUi.radiusClasses}
+            entries={staffGuideEntries}
+            onBackHome={() => setShowUserGuide(false)}
+            backHomeLabelAr="العودة للشاشة الحالية"
+            backHomeLabelEn="Back to Current Screen"
+          />
+        ) : isManager && managerMode === 'supervision' ? (
           <ManagerSupervisionDashboard
             restaurant={restaurant}
             actor={actor}
@@ -1747,6 +2318,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
           </button>
         </div>
       </main>
+      </div>
 
       <ThermalPrinterSettingsModal
         isOpen={printerModalOpen}

@@ -3,6 +3,7 @@ import { User, onAuthStateChanged, signOut } from 'firebase/auth';
 import {
   ArrowUpRight,
   BellRing,
+  BookOpen,
   Cake,
   Calculator,
   Check,
@@ -29,6 +30,7 @@ import {
 } from 'lucide-react';
 import { ConfirmSignOutModal } from '../components/ConfirmSignOutModal';
 import { LanguageToggleButton } from '../components/LanguageToggleButton';
+import { UserGuideEntry, UserGuidePage } from '../components/UserGuidePage';
 import { CaptainAssignmentsTab } from '../components/admin/CaptainAssignmentsTab';
 import { CaptainWaiterTab } from '../components/admin/CaptainWaiterTab';
 import { CustomersCrmTab } from '../components/admin/CustomersCrmTab';
@@ -88,7 +90,8 @@ type AdminTab =
   | 'menu'
   | 'offers'
   | 'theme'
-  | 'qr';
+  | 'qr'
+  | 'user_guide';
 
 const OWNER_TAB_STORAGE_KEY = 'sufra_owner_active_tab';
 
@@ -122,6 +125,7 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
         'offers',
         'theme',
         'qr',
+        'user_guide',
       ].includes(saved)
     ) {
       return saved;
@@ -594,9 +598,11 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
     );
   }
 
+  type OwnerNavTab = Exclude<AdminTab, 'user_guide'>;
+
   const navMetaMap: Record<
-    AdminTab,
-    { id: AdminTab; label: string; shortLabel: string; icon: typeof BellRing; badge?: number }
+    OwnerNavTab,
+    { id: OwnerNavTab; label: string; shortLabel: string; icon: typeof BellRing; badge?: number }
   > = {
     orders: {
       id: 'orders',
@@ -676,11 +682,123 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
   };
 
   const navItems = ui.orderedButtonIds
-    .map((id) => navMetaMap[id as AdminTab])
+    .map((id) => navMetaMap[id as OwnerNavTab])
     .filter(Boolean);
 
   const isOwnerTopDeck = ui.screenConfig.layoutStyle === 'top_deck';
   const isOwnerCompactRail = ui.screenConfig.layoutStyle === 'compact_rail';
+
+  const ownerTabGuides: Record<
+    OwnerNavTab,
+    { fallbackAr: string; fallbackEn: string; stepsAr: string; stepsEn: string }
+  > = {
+    orders: {
+      fallbackAr: 'شاشات الكاشير والمطبخ',
+      fallbackEn: 'Cashier & Multi-KDS',
+      stepsAr: 'استلم الطلبات الحية، افتح الوردية والدرج، قفّل الفواتير، وتابع تنفيذ الأصناف في المحطات.',
+      stepsEn: 'Receive live orders, manage shifts & cash drawer, settle checks, and monitor KDS prep.',
+    },
+    captain: {
+      fallbackAr: 'شاشة الكابتن',
+      fallbackEn: 'Captain Screen',
+      stepsAr: 'تابع خريطة الصالات والطاولات، أضف طلبات الطاولات، واستجب لنداءات العملاء والأصناف الجاهزة.',
+      stepsEn: 'View floor & table map, place table orders, and respond to service calls and ready items.',
+    },
+    hall_assignments: {
+      fallbackAr: 'توزيع الكباتن',
+      fallbackEn: 'Captain Assignments',
+      stepsAr: 'وزّع الكباتن على الصالات والطاولات لكل وردية وتابع التغطية الفورية.',
+      stepsEn: 'Assign Captains to dining halls and tables per shift and monitor live coverage.',
+    },
+    stations: {
+      fallbackAr: 'الشاشات والمحطات',
+      fallbackEn: 'Screens & Stations',
+      stepsAr: 'أضف شاشات كابتن أو محطات تحضير (مطبخ، بار، مخبز...) وعدّل اسمها أو أرشفها.',
+      stepsEn: 'Create Captain screens or prep stations (Kitchen, Bar, Bakery...), rename, or archive them.',
+    },
+    staff: {
+      fallbackAr: 'المدير والكادر والصلاحيات',
+      fallbackEn: 'Manager & Staff RBAC',
+      stepsAr: 'أضف المدير العام، مدير الصالات، الكاشير، الكباتن، ومسؤولي المحطات، وأنشئ دعوات QR.',
+      stepsEn: 'Add Managers, Hall Managers, Cashiers, Captains, and Station Staff with QR invites.',
+    },
+    job_titles: {
+      fallbackAr: 'المسميات الوظيفية والصلاحيات',
+      fallbackEn: 'Job Titles & Permissions',
+      stepsAr: 'أنشئ مسميات وظيفية مخصصة وحدد الشاشات والصلاحيات المفروضة على قاعدة البيانات.',
+      stepsEn: 'Create custom Job Titles with exact allowed screens and database-enforced permissions.',
+    },
+    reports: {
+      fallbackAr: 'تقرير الورديات والحسابات',
+      fallbackEn: 'Shifts, Treasury & Reports',
+      stepsAr: 'راجع الورديات المغلقة، المصروفات، تسليم العهدة لخزنة المالك، وسجل التدقيق.',
+      stepsEn: 'Review closed shifts, drawer expenses, treasury custody handovers, and audit logs.',
+    },
+    customers: {
+      fallbackAr: 'عملائي والتسويق الذكي',
+      fallbackEn: 'Customer CRM',
+      stepsAr: 'تصفح قائمة العملاء ونقاط الولاء وأعياد الميلاد وأرسل عروضاً عبر واتساب.',
+      stepsEn: 'Manage customer profiles, loyalty points, upcoming birthdays, and WhatsApp outreach.',
+    },
+    menu: {
+      fallbackAr: 'الأقسام والصور والأصناف',
+      fallbackEn: 'Menu, Sections & Photos',
+      stepsAr: 'أضف الأقسام والأصناف وارفع الصور وحدد المحطة التي يتوجه إليها كل قسم أو صنف.',
+      stepsEn: 'Build categories and menu items with photos and route each to its prep stations.',
+    },
+    offers: {
+      fallbackAr: 'العروض وأكواد الخصم',
+      fallbackEn: 'Offers & Promo Codes',
+      stepsAr: 'أنشئ العروض الترويجية وأكواد الخصم لعملاء المنيو وتابع حالة تفعيلها.',
+      stepsEn: 'Create promotional offers and discount codes for public menu orders.',
+    },
+    theme: {
+      fallbackAr: 'الثيم واللوجو والإعدادات',
+      fallbackEn: 'Themes, Logo & Info',
+      stepsAr: 'اختر ثيم المنيو العام وارفع اللوجو وعدّل بيانات المطعم وساعات العمل.',
+      stepsEn: 'Customize public menu theme, logo, restaurant details, and opening hours.',
+    },
+    qr: {
+      fallbackAr: 'الصالات وأكواد QR',
+      fallbackEn: 'Halls & Table QRs',
+      stepsAr: 'أنشئ الصالات والطاولات واطبع أكواد QR الخاصة بكل طاولة أو بالمنيو العام.',
+      stepsEn: 'Set up halls and tables, and generate printable table QR codes.',
+    },
+  };
+
+  const ownerGuideEntries: UserGuideEntry[] = [];
+  for (const card of ui.visibleCards) {
+    for (const bid of card.buttonIds) {
+      const tabId = bid as OwnerNavTab;
+      const item = navMetaMap[tabId];
+      const guide = ownerTabGuides[tabId];
+      if (!item || !guide) continue;
+      const labelAr = ui.getButtonLabel(tabId, 'ar', guide.fallbackAr);
+      const labelEn = ui.getButtonLabel(tabId, 'en', guide.fallbackEn);
+      ownerGuideEntries.push({
+        id: tabId,
+        icon: item.icon,
+        titleAr: labelAr,
+        titleEn: labelEn,
+        pathAr: `المسار من قائمتك: ${card.titleAr} ← ${labelAr}`,
+        pathEn: `From your menu: ${card.titleEn} → ${labelEn}`,
+        stepsAr: guide.stepsAr,
+        stepsEn: guide.stepsEn,
+        onGo: () => handleSelectOwnerTab(tabId),
+      });
+    }
+  }
+  ownerGuideEntries.push({
+    id: 'preview_public_menu',
+    icon: ExternalLink,
+    titleAr: 'معاينة المنيو العام للعملاء',
+    titleEn: 'Preview Public Customer Menu',
+    pathAr: isOwnerTopDeck ? 'الشريط العلوي ← معاينة المنيو' : 'أسفل القائمة الجانبية ← عرض المنيو للعملاء',
+    pathEn: isOwnerTopDeck ? 'Top bar → Preview Menu' : 'Sidebar footer → View Public Menu',
+    stepsAr: 'افتح المنيو الرقمي العام لمطعمك كما يظهر للعملاء عند مسح كود QR.',
+    stepsEn: 'Open your live customer-facing digital menu exactly as guests see it via QR.',
+    onGo: () => onNavigate(`/menu/${restaurant.slug}?preview=1`),
+  });
 
   const cleanWhatsappDigits = (supportWhatsapp || '').replace(/[^\d]/g, '') || '201000000000';
   const tygosInquiryText = encodeURIComponent(
@@ -869,7 +987,7 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
                   </p>
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:flex lg:flex-col gap-2">
                     {card.buttonIds.map((bid) => {
-                      const item = navMetaMap[bid as AdminTab];
+                      const item = navMetaMap[bid as OwnerNavTab];
                       if (!item) return null;
                       const Icon = item.icon;
                       const active = activeTab === item.id;
@@ -916,6 +1034,32 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
                   </div>
                 </div>
               ))}
+
+              <button
+                type="button"
+                onClick={() => handleSelectOwnerTab('user_guide')}
+                className={`w-full min-h-[46px] flex items-center justify-start gap-2 px-3 py-2.5 text-[12.5px] sm:text-[13px] font-bold leading-snug text-start transition-all cursor-pointer border ${ui.radiusClasses.button}`}
+                style={
+                  activeTab === 'user_guide'
+                    ? {
+                        backgroundColor: ownerTheme.sidebarActiveBg,
+                        borderColor: ownerTheme.sidebarActiveBg,
+                        color: ownerTheme.sidebarActiveText,
+                      }
+                    : {
+                        backgroundColor: ownerTheme.isDarkShell
+                          ? 'rgba(255,255,255,0.04)'
+                          : ownerTheme.surfaceSubtleBg,
+                        borderColor: ownerTheme.sidebarBorder,
+                        color: ownerTheme.sidebarText,
+                      }
+                }
+              >
+                <BookOpen className="w-4 h-4 shrink-0" />
+                <span className="whitespace-normal break-words leading-snug">
+                  {isEn ? 'User Guide' : 'دليل الاستخدام'}
+                </span>
+              </button>
             </nav>
           </div>
 
@@ -987,7 +1131,11 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
             <span className="hidden sm:inline shrink-0">{t.admin.workspaceTitle}</span>
             <span className="hidden sm:inline shrink-0">/</span>
             <span className="font-bold whitespace-normal break-words leading-snug" style={{ color: ownerTheme.headerText }}>
-              {navItems.find((n) => n.id === activeTab)?.label}
+              {activeTab === 'user_guide'
+                ? isEn
+                  ? 'User Guide'
+                  : 'دليل الاستخدام'
+                : navItems.find((n) => n.id === activeTab)?.label}
             </span>
           </div>
 
@@ -995,6 +1143,25 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
             <div className={isOwnerTopDeck ? 'block' : 'hidden lg:block'}>
               <LanguageToggleButton />
             </div>
+            {isOwnerTopDeck && (
+              <button
+                type="button"
+                onClick={() => handleSelectOwnerTab('user_guide')}
+                className={`min-h-[44px] sm:min-h-[38px] flex px-3 py-1.5 border text-xs font-bold items-center gap-1.5 cursor-pointer whitespace-nowrap ${ui.radiusClasses.button}`}
+                style={
+                  activeTab === 'user_guide'
+                    ? {
+                        backgroundColor: ownerTheme.accentHex,
+                        borderColor: ownerTheme.accentHex,
+                        color: ownerTheme.accentTextHex,
+                      }
+                    : { borderColor: ownerTheme.surfaceBorder, color: ownerTheme.headerText }
+                }
+              >
+                <BookOpen className="w-3.5 h-3.5 shrink-0" />
+                <span>{isEn ? 'User Guide' : 'دليل الاستخدام'}</span>
+              </button>
+            )}
             {isSuperAdminEmail(user.email) && (
               <button
                 type="button"
@@ -1065,7 +1232,7 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     {card.buttonIds.map((bid) => {
-                      const item = navMetaMap[bid as AdminTab];
+                      const item = navMetaMap[bid as OwnerNavTab];
                       if (!item) return null;
                       const Icon = item.icon;
                       const active = activeTab === item.id;
@@ -1280,6 +1447,18 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
             <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-xs font-bold text-rose-800">
               {t.menu.suspendedTitle} — {t.menu.suspendedDesc}
             </div>
+          )}
+          {activeTab === 'user_guide' && (
+            <UserGuidePage
+              roleTitleAr="صاحب المطعم"
+              roleTitleEn="Restaurant Owner"
+              subtitleAr="دليل سريع يشرح أين تجد كل ميزة في لوحة مطعمك وكيف تصل إليها مباشرة من قائمتك الجانبية."
+              subtitleEn="Quick step-by-step guide to every tool visible in your restaurant owner dashboard."
+              theme={ownerTheme}
+              radiusClasses={ui.radiusClasses}
+              entries={ownerGuideEntries}
+              onBackHome={() => setActiveTab('orders')}
+            />
           )}
           {activeTab === 'orders' && (
             <LiveOrdersTab

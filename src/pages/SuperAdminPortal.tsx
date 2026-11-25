@@ -3,6 +3,7 @@ import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import {
   ArrowLeft,
   ArrowRight,
+  BookOpen,
   Building2,
   Check,
   CheckCircle2,
@@ -21,6 +22,7 @@ import {
 import firebaseConfig from '../../firebase-applet-config.json';
 import { LanguageToggleButton } from '../components/LanguageToggleButton';
 import { ConfirmSignOutModal } from '../components/ConfirmSignOutModal';
+import { UserGuideEntry, UserGuidePage } from '../components/UserGuidePage';
 import { OwnerAuthCard } from '../components/auth/OwnerAuthCard';
 import { LandingCmsTab } from '../components/superadmin/LandingCmsTab';
 import { PlatformPromosTab } from '../components/superadmin/PlatformPromosTab';
@@ -36,7 +38,14 @@ interface SuperAdminPortalProps {
   onNavigate: (path: string) => void;
 }
 
-type SuperAdminTab = 'tenants' | 'promos' | 'ui_studio' | 'themes' | 'landing' | 'domain';
+type SuperAdminTab =
+  | 'tenants'
+  | 'promos'
+  | 'ui_studio'
+  | 'themes'
+  | 'landing'
+  | 'domain'
+  | 'user_guide';
 const SUPER_TAB_STORAGE_KEY = 'sufra_superadmin_active_tab';
 
 export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
@@ -51,7 +60,7 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
     const saved = window.sessionStorage.getItem(SUPER_TAB_STORAGE_KEY) as SuperAdminTab | null;
     if (
       saved &&
-      ['tenants', 'promos', 'ui_studio', 'themes', 'landing', 'domain'].includes(saved)
+      ['tenants', 'promos', 'ui_studio', 'themes', 'landing', 'domain', 'user_guide'].includes(saved)
     ) {
       return saved;
     }
@@ -253,7 +262,10 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
     );
   }
 
-  const baseNavMap: Record<SuperAdminTab, { id: SuperAdminTab; fallbackLabel: string; icon: typeof Building2 }> = {
+  const baseNavMap: Record<
+    Exclude<SuperAdminTab, 'user_guide'>,
+    { id: Exclude<SuperAdminTab, 'user_guide'>; fallbackLabel: string; icon: typeof Building2 }
+  > = {
     tenants: { id: 'tenants', fallbackLabel: t.superAdmin.tabs.tenants, icon: Building2 },
     promos: {
       id: 'promos',
@@ -275,7 +287,15 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
   };
 
   const getSuperItem = (id: string) => {
-    const meta = baseNavMap[id as SuperAdminTab];
+    if (id === 'user_guide') {
+      return {
+        id: 'user_guide' as SuperAdminTab,
+        fallbackLabel: isEn ? 'User Guide' : 'دليل الاستخدام',
+        label: isEn ? 'User Guide' : 'دليل الاستخدام',
+        icon: BookOpen,
+      };
+    }
+    const meta = baseNavMap[id as Exclude<SuperAdminTab, 'user_guide'>];
     if (!meta) return null;
     return {
       ...meta,
@@ -287,6 +307,82 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
   const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://suofra.vercel.app';
   const isTopDeck = ui.screenConfig.layoutStyle === 'top_deck';
   const isCompactRail = ui.screenConfig.layoutStyle === 'compact_rail';
+
+  const superTabGuides: Record<
+    Exclude<SuperAdminTab, 'user_guide'>,
+    { stepsAr: string; stepsEn: string }
+  > = {
+    tenants: {
+      stepsAr: 'أنشئ مطعماً جديداً، فعّل أو أوقف الحسابات، وادخل لمعاينة أي مطعم أو منيو عام.',
+      stepsEn: 'Create new restaurants, enable or suspend accounts, and preview any restaurant or public menu.',
+    },
+    promos: {
+      stepsAr: 'أنشئ أكواد خصم المنصة وحدد نسبة الخصم وعدد الاستخدامات وتابع تفعيلها.',
+      stepsEn: 'Create SaaS promo codes, set discount rates and usage limits, and monitor redemptions.',
+    },
+    ui_studio: {
+      stepsAr: 'خصّص الثيم وتخطيط البطاقات وأسماء الأزرار لكل شاشة ثم انشر التحديث للجميع.',
+      stepsEn: 'Customize screen themes, card groups, and button labels, then publish live for all users.',
+    },
+    themes: {
+      stepsAr: 'أدر الثيمات المخصصة وشفرات الألوان المتقدمة على مستوى المنصة.',
+      stepsEn: 'Manage custom platform color themes and advanced styling tokens.',
+    },
+    landing: {
+      stepsAr: 'عدّل نصوص صفحة الهبوط الرئيسية، الباقات، الأسعار، وأرقام الدعم الفني.',
+      stepsEn: 'Edit landing page headlines, subscription plans, pricing, and support contacts.',
+    },
+    domain: {
+      stepsAr: 'افحص اتصال قاعدة بيانات Firestore وانسخ النطاقات المصرح بها في Firebase.',
+      stepsEn: 'Test Firestore connectivity and copy authorized domains for Firebase Authentication.',
+    },
+  };
+
+  const superGuideEntries: UserGuideEntry[] = [];
+  for (const card of ui.visibleCards) {
+    for (const bid of card.buttonIds) {
+      const item = getSuperItem(bid);
+      if (!item || item.id === 'user_guide') continue;
+      const guide = superTabGuides[item.id];
+      const labelAr = ui.getButtonLabel(item.id, 'ar', baseNavMap[item.id].fallbackLabel);
+      const labelEn = ui.getButtonLabel(item.id, 'en', baseNavMap[item.id].fallbackLabel);
+      superGuideEntries.push({
+        id: item.id,
+        icon: item.icon,
+        titleAr: labelAr,
+        titleEn: labelEn,
+        pathAr: `المسار من قائمتك: ${card.titleAr} ← ${labelAr}`,
+        pathEn: `From your menu: ${card.titleEn} → ${labelEn}`,
+        stepsAr: guide.stepsAr,
+        stepsEn: guide.stepsEn,
+        onGo: () => setActiveTab(item.id),
+      });
+    }
+  }
+  superGuideEntries.push(
+    {
+      id: 'open_test_restaurant',
+      icon: Store,
+      titleAr: 'فتح المطعم التجريبي',
+      titleEn: 'Open Test Restaurant',
+      pathAr: isTopDeck ? 'الشريط العلوي ← المطعم التجريبي' : 'أسفل القائمة الجانبية ← فتح المطعم التجريبي',
+      pathEn: isTopDeck ? 'Top bar → Test Restaurant' : 'Sidebar footer → Open Test Restaurant',
+      stepsAr: 'انتقل مباشرة إلى لوحة إدارة المطعم لتجربة شاشات المالك والمنيو.',
+      stepsEn: 'Jump straight to the Owner dashboard to test restaurant and menu operations.',
+      onGo: () => onNavigate('/admin'),
+    },
+    {
+      id: 'preview_landing',
+      icon: Globe,
+      titleAr: 'معاينة صفحة الهبوط',
+      titleEn: 'Preview Landing Page',
+      pathAr: isTopDeck ? 'الشريط العلوي ← معاينة صفحة الهبوط' : 'أسفل القائمة الجانبية ← معاينة صفحة الهبوط',
+      pathEn: isTopDeck ? 'Top bar → Landing Preview' : 'Sidebar footer → Preview Landing Page',
+      stepsAr: 'افتح الصفحة الرئيسية العامة للمنصة كما يراها الزوار وأصحاب المطاعم.',
+      stepsEn: 'Open the public SaaS landing page as seen by visitors and restaurant owners.',
+      onGo: () => onNavigate('/?view=landing'),
+    }
+  );
 
   return (
     <div
@@ -392,6 +488,32 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
                   </div>
                 </div>
               ))}
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('user_guide')}
+                className={`w-full min-h-[46px] flex items-center justify-start gap-2 px-3 py-2.5 text-[12.5px] sm:text-[13px] font-bold leading-snug text-start transition-all cursor-pointer border ${ui.radiusClasses.button}`}
+                style={
+                  activeTab === 'user_guide'
+                    ? {
+                        backgroundColor: theme.sidebarActiveBg,
+                        borderColor: theme.sidebarActiveBg,
+                        color: theme.sidebarActiveText,
+                      }
+                    : {
+                        backgroundColor: theme.isDarkShell
+                          ? 'rgba(255,255,255,0.04)'
+                          : theme.surfaceSubtleBg,
+                        borderColor: theme.sidebarBorder,
+                        color: theme.sidebarText,
+                      }
+                }
+              >
+                <BookOpen className="w-4 h-4 shrink-0" />
+                <span className="whitespace-normal break-words leading-snug">
+                  {isEn ? 'User Guide' : 'دليل الاستخدام'}
+                </span>
+              </button>
             </nav>
 
             <div className="grid grid-cols-2 gap-2 lg:hidden">
@@ -505,14 +627,36 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
               </button>
             )}
             {isTopDeck && (
-              <button
-                type="button"
-                onClick={() => onNavigate('/admin')}
-                className={`min-h-[44px] sm:min-h-[38px] px-3 py-1.5 border text-xs font-bold cursor-pointer whitespace-nowrap ${ui.radiusClasses.button}`}
-                style={{ borderColor: theme.surfaceBorder, color: theme.headerText }}
-              >
-                {isEn ? 'Test Restaurant' : 'المطعم التجريبي'}
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('user_guide')}
+                  className={`min-h-[44px] sm:min-h-[38px] px-3 py-1.5 border text-xs font-bold flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${ui.radiusClasses.button}`}
+                  style={
+                    activeTab === 'user_guide'
+                      ? {
+                          backgroundColor: theme.accentHex,
+                          borderColor: theme.accentHex,
+                          color: theme.accentTextHex,
+                        }
+                      : {
+                          borderColor: theme.surfaceBorder,
+                          color: theme.headerText,
+                        }
+                  }
+                >
+                  <BookOpen className="w-3.5 h-3.5 shrink-0" />
+                  <span>{isEn ? 'User Guide' : 'دليل الاستخدام'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onNavigate('/admin')}
+                  className={`min-h-[44px] sm:min-h-[38px] px-3 py-1.5 border text-xs font-bold cursor-pointer whitespace-nowrap ${ui.radiusClasses.button}`}
+                  style={{ borderColor: theme.surfaceBorder, color: theme.headerText }}
+                >
+                  {isEn ? 'Test Restaurant' : 'المطعم التجريبي'}
+                </button>
+              </>
             )}
             <div className={isTopDeck ? 'block' : 'hidden lg:block'}>
               <LanguageToggleButton />
@@ -595,6 +739,18 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
         )}
 
         <main className="p-4 sm:p-6 max-w-6xl w-full mx-auto">
+          {activeTab === 'user_guide' && (
+            <UserGuidePage
+              roleTitleAr="السوبر أدمن"
+              roleTitleEn="Super Admin"
+              subtitleAr="دليل سريع لأهم أقسام لوحة الإدارة العليا المتاحة لك وكيفية الوصول إليها من قائمتك."
+              subtitleEn="Quick step-by-step guide to every Super Admin tool visible in your console."
+              theme={theme}
+              radiusClasses={ui.radiusClasses}
+              entries={superGuideEntries}
+              onBackHome={() => setActiveTab('tenants')}
+            />
+          )}
           {activeTab === 'tenants' && (
             <TenantsManagerTab onOpenPublicMenu={(path) => onNavigate(path)} />
           )}
