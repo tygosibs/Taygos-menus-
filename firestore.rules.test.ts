@@ -26,5 +26,13 @@ export const DIRTY_DOZEN_CASES: DirtyDozenCase[] = [
   { id: 'DD-17', description: 'Poisoned loyaltyConfig percent > 50 or shadow key', path: '/restaurants/rest_1', operation: 'update', expected: 'PERMISSION_DENIED' },
   { id: 'DD-18', description: 'Non-SuperAdmin writing/listing platform_promo_codes or redeeming invalid code', path: '/platform_promo_codes/BDAY50', operation: 'create', expected: 'PERMISSION_DENIED' },
   { id: 'DD-19', description: 'Malformed ownerBirthday or shadow key in platform_settings/landing', path: '/platform_settings/landing', operation: 'update', expected: 'PERMISSION_DENIED' },
+  { id: 'DD-20', description: 'Staff without canCancelOpenOrders or empty cancelReason trying to cancel open order', path: '/orders/ord_1', operation: 'update', expected: 'PERMISSION_DENIED' },
+  { id: 'DD-21', description: 'Staff without canApplyInstantDiscount or missing manualDiscountReason trying instant discount', path: '/orders/ord_1', operation: 'update', expected: 'PERMISSION_DENIED' },
+  { id: 'DD-22', description: 'Staff without canSettleChecks trying to mark order completed/paid', path: '/orders/ord_1', operation: 'update', expected: 'PERMISSION_DENIED' },
+  { id: 'DD-23', description: 'Updating closed order after its linked shift completed without Super Admin unlock', path: '/orders/ord_1', operation: 'update', expected: 'PERMISSION_DENIED' },
+  { id: 'DD-24', description: 'Manager with canManageStaff attempting to grant higher permissions/screens above their ceiling', path: '/restaurants/rest_1/job_titles/jt_1', operation: 'create', expected: 'PERMISSION_DENIED' },
+  { id: 'DD-25', description: 'Pause-only staff (canPauseItems without canEditMenu) trying to modify basePrice on menu item', path: '/menu_items/item_1', operation: 'update', expected: 'PERMISSION_DENIED' },
+  { id: 'DD-26', description: 'Staff with canConfigureOperations attempting to escalate operationsConfig.managerPermissions', path: '/restaurants/rest_1', operation: 'update', expected: 'PERMISSION_DENIED' },
+  { id: 'DD-27', description: 'Prep station or non-CRM staff attempting to list customer loyalty records', path: '/restaurants/rest_1/customers', operation: 'list', expected: 'PERMISSION_DENIED' },
 ];
 

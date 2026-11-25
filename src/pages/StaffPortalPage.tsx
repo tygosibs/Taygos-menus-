@@ -1,12 +1,14 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
 import {
   AlertCircle,
+  Briefcase,
   Crown,
   Eye,
   EyeOff,
   FileSpreadsheet,
+  HeartHandshake,
   KeyRound,
   Layers,
   LayoutGrid,
@@ -18,12 +20,17 @@ import {
   ShieldAlert,
   ShieldCheck,
   UserCheck,
+  Users,
   Utensils,
 } from 'lucide-react';
 import { ConfirmSignOutModal } from '../components/ConfirmSignOutModal';
 import { LanguageToggleButton } from '../components/LanguageToggleButton';
 import { PWAInstallButton } from '../components/PWAInstallButton';
+import { CaptainAssignmentsTab } from '../components/admin/CaptainAssignmentsTab';
 import { CaptainWaiterTab } from '../components/admin/CaptainWaiterTab';
+import { CustomersCrmTab } from '../components/admin/CustomersCrmTab';
+import { HallManagerConsole } from '../components/admin/HallManagerConsole';
+import { JobTitlesTab } from '../components/admin/JobTitlesTab';
 import { LiveOrdersTab } from '../components/admin/LiveOrdersTab';
 import { ManagerSupervisionDashboard } from '../components/admin/ManagerSupervisionDashboard';
 import { MenuBuilderTab } from '../components/admin/MenuBuilderTab';
@@ -40,9 +47,9 @@ import {
   registerStaffDeviceAndFcm,
 } from '../lib/fcmNotificationService';
 import { auth, db } from '../lib/firebase';
+import { ActorDelegationCeiling } from '../lib/jobTitlesService';
 import {
   getResolvedOperationsConfig,
-  getTimestampMillis,
   subscribeAllRestaurantShifts,
   subscribeDrawerExpenses,
   subscribeTreasuryTransfers,
@@ -53,17 +60,20 @@ import {
 } from '../lib/shiftsService';
 import {
   classifyLoginIdentifier,
+  getResolvedHallManagerPermissions,
   getSavedStaffScreen,
   getScreenMetaDynamic,
+  resolveEffectiveAllowedScreens,
+  resolveEffectiveStaffPermissions,
   saveStaffScreen,
   STAFF_ROLE_META,
 } from '../lib/staffAuthUtils';
 import {
   completeForcedPasswordChange,
   fetchRestaurantBySlugForStaff,
-  getMyStaffProfile,
   loginStaffMember,
   resolveStaffSuspensionState,
+  subscribeMyStaffProfile,
   subscribeRestaurantStaff,
   subscribeStaffAuditLogs,
   unsuspendStaffMember,
@@ -85,6 +95,7 @@ import {
 } from '../lib/thermalPrinterService';
 import {
   DrawerExpense,
+  EffectiveStaffPermissions,
   Restaurant,
   RestaurantStation,
   StaffActorInfo,
@@ -105,8 +116,15 @@ type ManagerPortalMode = 'supervision' | 'stations' | 'menu_editor' | 'shift_rep
 
 function getScreenIcon(scr: StaffScreen, stations: StationMeta[]) {
   if (scr === 'staff_management') return ShieldCheck;
+  if (scr === 'job_titles') return Briefcase;
+  if (scr === 'stations') return Layers;
+  if (scr === 'menu_editor') return Utensils;
+  if (scr === 'shift_reports') return FileSpreadsheet;
+  if (scr === 'customers') return HeartHandshake;
   if (scr === 'cashier') return Receipt;
   if (scr === 'captain') return UserCheck;
+  if (scr === 'hall_manager') return LayoutGrid;
+  if (scr === 'hall_assignments') return Users;
   if (scr === 'halls') return QrCode;
   const stId = screenToStationId(scr);
   if (stId) {
@@ -118,26 +136,49 @@ function getScreenIcon(scr: StaffScreen, stations: StationMeta[]) {
 
 function computeEffectiveStaffScreens(
   staff: StaffMember,
-  canManageStaff: boolean,
-  canManageHalls: boolean,
+  effectivePerms: EffectiveStaffPermissions,
   dynamicStations?: StationMeta[]
 ): StaffScreen[] {
-  const isMgr = staff.role === 'manager';
-  const base = (staff.allowedScreens || []).filter((scr) => {
-    if (scr === 'staff_management') return isMgr && canManageStaff;
-    if (scr === 'halls') return isMgr && canManageHalls;
-    return true;
-  });
-  if (isMgr && canManageHalls && !base.includes('halls')) {
-    base.push('halls');
+  const resolvedSet = new Set<StaffScreen>(resolveEffectiveAllowedScreens(staff));
+
+  if (staff.role === 'hall_manager' && !staff.effectivePermissions) {
+    const hmPerms = getResolvedHallManagerPermissions(staff.hallManagerPermissions);
+    resolvedSet.add('hall_manager');
+    if (hmPerms.canManageHallAssignments) resolvedSet.add('hall_assignments');
+    if (hmPerms.canManageHalls) resolvedSet.add('halls');
   }
-  if (isMgr && dynamicStations && dynamicStations.length > 0) {
+
+  if (staff.role === 'manager' && !staff.effectivePermissions && dynamicStations) {
     dynamicStations.forEach((st) => {
-      const scr = stationIdToScreen(st.stationId);
-      if (!base.includes(scr)) base.push(scr);
+      resolvedSet.add(stationIdToScreen(st.stationId));
     });
   }
-  return base.length > 0 ? base : ['cashier'];
+
+  const revokedSet = new Set<StaffScreen>(staff.revokedScreens || []);
+  const syncImpliedScreen = (granted: boolean, scr: StaffScreen) => {
+    if (granted && !revokedSet.has(scr)) {
+      resolvedSet.add(scr);
+    }
+    if (!granted) {
+      resolvedSet.delete(scr);
+    }
+  };
+
+  syncImpliedScreen(effectivePerms.canManageStaff, 'staff_management');
+  syncImpliedScreen(effectivePerms.canManageStaff, 'job_titles');
+  syncImpliedScreen(effectivePerms.canManageStations, 'stations');
+  syncImpliedScreen(effectivePerms.canEditMenu || effectivePerms.canPauseItems, 'menu_editor');
+  syncImpliedScreen(effectivePerms.canViewShiftReports, 'shift_reports');
+  syncImpliedScreen(effectivePerms.canManageCustomers, 'customers');
+  syncImpliedScreen(effectivePerms.canManageHallAssignments, 'hall_assignments');
+  syncImpliedScreen(effectivePerms.canManageHalls, 'halls');
+
+  if (staff.role === 'manager' && !staff.effectivePermissions) {
+    resolvedSet.delete('hall_manager');
+  }
+
+  const base = Array.from(resolvedSet);
+  return base.length > 0 ? base : [staff.role === 'hall_manager' ? 'hall_manager' : 'cashier'];
 }
 
 function resolveInitialScreenWithQuery(
@@ -145,11 +186,8 @@ function resolveInitialScreenWithQuery(
   staff: StaffMember
 ): StaffScreen {
   const perms = getResolvedOperationsConfig(restaurant).managerPermissions;
-  const effectiveAllowed = computeEffectiveStaffScreens(
-    staff,
-    perms.canManageStaff,
-    perms.canManageHalls
-  );
+  const effectivePerms = resolveEffectiveStaffPermissions(staff, perms);
+  const effectiveAllowed = computeEffectiveStaffScreens(staff, effectivePerms);
   if (typeof window !== 'undefined') {
     const urlScr = (new URLSearchParams(window.location.search).get('screen') || '').trim();
     if (urlScr && effectiveAllowed.includes(urlScr as StaffScreen)) {
@@ -227,6 +265,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
   const [openHandoverSignal, setOpenHandoverSignal] = useState(0);
 
   const [printerModalOpen, setPrinterModalOpen] = useState(false);
+  const hydratedStaffUidRef = useRef<string | null>(null);
   const [printerLabel, setPrinterLabel] = useState<string>(() => {
     const conn = getActivePrinterConnection();
     if (conn.connected && conn.name) return conn.name;
@@ -298,21 +337,25 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
   useEffect(() => {
     if (!authReady || !restaurantId) return;
     if (!authUid) {
+      hydratedStaffUidRef.current = null;
       setStaff(null);
       setSuspendedNotice(null);
       setMismatchAuthNotice(false);
+      setLoadingStaff(false);
       return;
     }
 
-    let mounted = true;
     setLoadingStaff(true);
     setMismatchAuthNotice(false);
     setSuspendedNotice(null);
 
-    getMyStaffProfile(restaurantId, authUid)
-      .then(async (profile) => {
-        if (!mounted) return;
+    const unsub = subscribeMyStaffProfile(
+      restaurantId,
+      authUid,
+      (profile) => {
+        setLoadingStaff(false);
         if (!profile || profile.restaurantId !== restaurantId) {
+          hydratedStaffUidRef.current = null;
           setStaff(null);
           setMismatchAuthNotice(true);
           return;
@@ -328,6 +371,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
             actor: { uid: profile.uid, name: profile.name, role: profile.role },
           }).catch(() => {});
         } else if (suspState.isSuspended && !profile.mustChangePassword) {
+          hydratedStaffUidRef.current = null;
           setStaff(null);
           setSuspendedNotice(suspState.message);
           return;
@@ -337,24 +381,27 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
         setMismatchAuthNotice(false);
         setSuspendedNotice(null);
 
-        const initial = resolveInitialScreenWithQuery(restaurant, effectiveProfile);
-        setActiveScreen(initial);
-        const urlScr =
-          typeof window !== 'undefined'
-            ? (new URLSearchParams(window.location.search).get('screen') || '').trim()
-            : '';
-        if (effectiveProfile.role === 'manager' && !urlScr) {
-          setManagerMode('supervision');
-        } else {
-          setManagerMode('screen');
+        if (hydratedStaffUidRef.current !== effectiveProfile.uid && restaurant) {
+          hydratedStaffUidRef.current = effectiveProfile.uid;
+          const initial = resolveInitialScreenWithQuery(restaurant, effectiveProfile);
+          setActiveScreen(initial);
+          const urlScr =
+            typeof window !== 'undefined'
+              ? (new URLSearchParams(window.location.search).get('screen') || '').trim()
+              : '';
+          if (effectiveProfile.role === 'manager' && !urlScr) {
+            setManagerMode('supervision');
+          } else {
+            setManagerMode('screen');
+          }
         }
-      })
-      .finally(() => {
-        if (mounted) setLoadingStaff(false);
-      });
-    return () => {
-      mounted = false;
-    };
+      },
+      () => {
+        setLoadingStaff(false);
+      }
+    );
+
+    return () => unsub();
   }, [authReady, authUid, restaurantId]);
 
   useEffect(() => {
@@ -380,28 +427,76 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
       setAuditLogs([]);
       return;
     }
-    const isManagerOrCashier =
+
+    const perms = resolveEffectiveStaffPermissions(
+      staff,
+      restaurant?.operationsConfig?.managerPermissions
+    );
+    const needsShiftRecords =
       staff.role === 'manager' ||
-      staff.role === 'cashier' ||
+      perms.canSettleChecks ||
+      perms.canManageShifts ||
+      perms.canViewShiftReports ||
+      perms.canEditDrawerFloat ||
       staff.allowedScreens?.includes('cashier');
+    const needsStaffDirectory =
+      staff.role === 'manager' ||
+      perms.canManageStaff ||
+      perms.canManageHallAssignments ||
+      perms.canManageShifts ||
+      perms.canSettleChecks;
+    const needsDrawerExpenses =
+      staff.role === 'manager' || perms.canViewShiftReports || perms.canAddDrawerExpenses;
+    const needsTreasury =
+      staff.role === 'manager' ||
+      perms.canViewShiftReports ||
+      perms.canEditDrawerFloat ||
+      perms.canManageShifts;
+    const needsAuditLogs =
+      staff.role === 'manager' || perms.canViewShiftReports || perms.canManageStaff;
 
     const unsubs: Array<() => void> = [];
     unsubs.push(subscribeAllActiveRestaurantShifts(restaurantId, setAllActiveShifts, () => {}));
 
-    if (isManagerOrCashier) {
+    if (needsShiftRecords) {
       unsubs.push(subscribeAllRestaurantShifts(restaurantId, setAllRestaurantShifts, () => {}));
-      unsubs.push(subscribeRestaurantStaff(restaurantId, setRestaurantStaffList, () => {}));
-      unsubs.push(subscribeDrawerExpenses(restaurantId, setDrawerExpenses, () => {}));
+    } else {
+      setAllRestaurantShifts([]);
     }
-    if (staff.role === 'manager') {
+    if (needsStaffDirectory) {
+      unsubs.push(subscribeRestaurantStaff(restaurantId, setRestaurantStaffList, () => {}));
+    } else {
+      setRestaurantStaffList([]);
+    }
+    if (needsDrawerExpenses) {
+      unsubs.push(subscribeDrawerExpenses(restaurantId, setDrawerExpenses, () => {}));
+    } else {
+      setDrawerExpenses([]);
+    }
+    if (needsTreasury) {
       unsubs.push(subscribeTreasuryTransfers(restaurantId, setTreasuryTransfers, () => {}));
+    } else {
+      setTreasuryTransfers([]);
+    }
+    if (needsAuditLogs) {
       unsubs.push(subscribeStaffAuditLogs(restaurantId, setAuditLogs, () => {}));
+    } else {
+      setAuditLogs([]);
     }
 
     return () => {
       unsubs.forEach((u) => u());
     };
-  }, [restaurantId, staff?.uid, staff?.role, staff?.allowedScreens]);
+  }, [
+    restaurantId,
+    restaurant?.operationsConfig?.managerPermissions,
+    staff?.uid,
+    staff?.role,
+    staff?.allowedScreens,
+    staff?.effectivePermissions,
+    staff?.permissionOverrides,
+    staff?.revokedPermissions,
+  ]);
 
   useEffect(() => {
     if (!restaurant?.id || !staff?.uid || staff.mustChangePassword) return;
@@ -504,12 +599,8 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
     opts?: { supervisory?: boolean; coveringStaffName?: string; captainScreenId?: string }
   ) => {
     if (!restaurant || !staff) return;
-    const effective = computeEffectiveStaffScreens(
-      staff,
-      managerPerms.canManageStaff,
-      managerPerms.canManageHalls,
-      effectiveStations
-    );
+    const effPerms = resolveEffectiveStaffPermissions(staff, managerPerms);
+    const effective = computeEffectiveStaffScreens(staff, effPerms, effectiveStations);
     if (!effective.includes(scr)) return;
     setActiveScreen(scr);
     if (opts?.captainScreenId) {
@@ -534,7 +625,8 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
     returnScreen?: StaffScreen,
     screenType?: StationScreenType
   ) => {
-    if (managerPerms.canManageStations === false) return;
+    const effPerms = staff ? resolveEffectiveStaffPermissions(staff, managerPerms) : null;
+    if (effPerms && !effPerms.canManageStations) return;
     const returnLabel =
       returnMode === 'menu_editor'
         ? isEn
@@ -554,7 +646,12 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
       screenType,
       returnLabel,
     });
-    setManagerMode('stations');
+    if (staff?.role === 'manager') {
+      setManagerMode('stations');
+    } else {
+      setActiveScreen('stations');
+      setManagerMode('screen');
+    }
   };
 
   const handleForcedPasswordSubmit = async (e: FormEvent) => {
@@ -1029,18 +1126,19 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
   }
 
   // Authenticated Active Staff Workspace (strictly screen-isolated)
-  const roleMeta = STAFF_ROLE_META[staff.role] || STAFF_ROLE_META.cashier;
+  const roleMeta = STAFF_ROLE_META[staff.role] || STAFF_ROLE_META.custom;
   const isManager = staff.role === 'manager';
-  const canManageStations = isManager && managerPerms.canManageStations !== false;
+  const isHallManager = staff.role === 'hall_manager';
+  const effectivePerms = resolveEffectiveStaffPermissions(staff, managerPerms);
+  const canManageStations = effectivePerms.canManageStations;
   const allowedScreens = computeEffectiveStaffScreens(
     staff,
-    managerPerms.canManageStaff,
-    managerPerms.canManageHalls,
+    effectivePerms,
     effectiveStations
   );
   const safeCurrentScreen: StaffScreen = allowedScreens.includes(activeScreen)
     ? activeScreen
-    : allowedScreens[0] || 'cashier';
+    : allowedScreens[0] || (isHallManager ? 'hall_manager' : 'cashier');
 
   const allowedCaptainScreenList: StationMeta[] = (() => {
     if (effectiveCaptainScreens.length === 0) return [];
@@ -1053,6 +1151,14 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
     }
     return effectiveCaptainScreens;
   })();
+
+  const callerCeiling: ActorDelegationCeiling = {
+    isUnbounded: false,
+    permissions: effectivePerms,
+    allowedScreens,
+    allowedStations: staff.allowedStations || [],
+    allowedCaptainScreens: allowedCaptainScreenList.map((c) => c.stationId),
+  };
 
   const activeCaptainScreenMeta: StationMeta | undefined =
     allowedCaptainScreenList.length > 0
@@ -1103,27 +1209,31 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
   const activePortalUi =
     isManager
       ? managerUi
-      : safeCurrentScreen === 'captain'
+      : safeCurrentScreen === 'captain' || safeCurrentScreen === 'hall_manager'
         ? captainUi
         : cashierUi;
   const portalTheme = activePortalUi.theme;
 
+  const isNonShiftManagementScreen =
+    safeCurrentScreen === 'staff_management' ||
+    safeCurrentScreen === 'job_titles' ||
+    safeCurrentScreen === 'stations' ||
+    safeCurrentScreen === 'menu_editor' ||
+    safeCurrentScreen === 'shift_reports' ||
+    safeCurrentScreen === 'customers' ||
+    safeCurrentScreen === 'hall_assignments' ||
+    safeCurrentScreen === 'halls' ||
+    safeCurrentScreen === 'hall_manager';
+
   const canShowShiftBar =
-    !isManager ||
-    (managerMode === 'screen' &&
-      safeCurrentScreen !== 'staff_management' &&
-      safeCurrentScreen !== 'halls');
+    !isNonShiftManagementScreen &&
+    (!isManager || managerMode === 'screen');
 
   // Build ordered navigation list for Manager & Staff respecting UI Studio order/labels while enforcing RBAC
   const orderedManagerNavIds = (() => {
     const baseAllowed = [
-      'supervision',
-      ...(canManageStations ? ['stations'] : []),
-      ...(managerPerms.canEditMenu || managerPerms.canPauseItems ? ['menu_editor'] : []),
-      ...(managerPerms.canViewShiftReports ? ['shift_reports'] : []),
-      ...allowedScreens.filter(
-        (scr) => !(scr === 'staff_management' && !managerPerms.canManageStaff)
-      ),
+      ...(isManager ? ['supervision'] : []),
+      ...allowedScreens,
     ];
     if (!isManager) return allowedScreens;
     const preferredOrder = managerUi.orderedButtonIds;
@@ -1188,7 +1298,11 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
                   <span
                     className={`px-2 py-0.5 rounded-md border text-[10px] font-extrabold ${roleMeta.badgeClass}`}
                   >
-                    {isEn ? roleMeta.labelEn : roleMeta.labelAr}
+                    {staff.jobTitle ||
+                      (staff.jobTitleNames && staff.jobTitleNames.length > 0
+                        ? staff.jobTitleNames.join(' + ')
+                        : '') ||
+                      (isEn ? roleMeta.labelEn : roleMeta.labelAr)}
                   </span>
                 </div>
                 <p className="text-[11px] truncate" style={{ color: portalTheme.mutedText }}>
@@ -1212,9 +1326,9 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
             </div>
           </div>
 
-          {/* Navigation Strip: Manager gets Supervision Console + Menu + Shift Reports + Screens; regular staff gets their allowedScreens */}
+          {/* Navigation Strip: Unified multi-screen switcher for Manager or any Multi-Role Staff */}
           <div className="flex flex-wrap items-center justify-between lg:justify-end gap-2">
-            {(isManager || allowedScreens.length > 1) && (
+            {(isManager || orderedManagerNavIds.length > 1) && (
               <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 max-w-full">
                 {orderedManagerNavIds.map((navId) => {
                   if (isManager && navId === 'supervision') {
@@ -1254,129 +1368,11 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
                     );
                   }
 
-                  if (isManager && navId === 'stations' && canManageStations) {
-                    const isActive = managerMode === 'stations';
-                    return (
-                      <button
-                        key="stations"
-                        type="button"
-                        onClick={() => {
-                          setStationCreateIntent(null);
-                          setManagerMode('stations');
-                          setSupervisoryOverride(null);
-                        }}
-                        className={`min-h-[36px] px-3 py-1.5 text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors border ${activePortalUi.radiusClasses.button}`}
-                        style={
-                          isActive
-                            ? {
-                                backgroundColor: portalTheme.accentHex,
-                                borderColor: portalTheme.accentHex,
-                                color: portalTheme.accentTextHex,
-                              }
-                            : {
-                                backgroundColor: portalTheme.surfaceSubtleBg,
-                                borderColor: portalTheme.surfaceBorder,
-                                color: portalTheme.surfaceText,
-                              }
-                        }
-                      >
-                        <Layers className="w-3.5 h-3.5" />
-                        <span>
-                          {managerUi.getButtonLabel(
-                            'stations',
-                            lang,
-                            isEn ? 'Screens & Stations' : 'الشاشات والمحطات'
-                          )}
-                        </span>
-                      </button>
-                    );
-                  }
-
-                  if (isManager && navId === 'menu_editor') {
-                    const isActive = managerMode === 'menu_editor';
-                    return (
-                      <button
-                        key="menu_editor"
-                        type="button"
-                        onClick={() => {
-                          setStationCreateIntent(null);
-                          setManagerMode('menu_editor');
-                          setSupervisoryOverride(null);
-                        }}
-                        className={`min-h-[36px] px-3 py-1.5 text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors border ${activePortalUi.radiusClasses.button}`}
-                        style={
-                          isActive
-                            ? {
-                                backgroundColor: portalTheme.accentHex,
-                                borderColor: portalTheme.accentHex,
-                                color: portalTheme.accentTextHex,
-                              }
-                            : {
-                                backgroundColor: portalTheme.surfaceSubtleBg,
-                                borderColor: portalTheme.surfaceBorder,
-                                color: portalTheme.surfaceText,
-                              }
-                        }
-                      >
-                        <Utensils className="w-3.5 h-3.5" />
-                        <span>
-                          {managerUi.getButtonLabel(
-                            'menu_editor',
-                            lang,
-                            isEn ? 'Menu & Items' : 'المنيو والأصناف'
-                          )}
-                        </span>
-                      </button>
-                    );
-                  }
-
-                  if (isManager && navId === 'shift_reports') {
-                    const isActive = managerMode === 'shift_reports';
-                    return (
-                      <button
-                        key="shift_reports"
-                        type="button"
-                        onClick={() => {
-                          setStationCreateIntent(null);
-                          setManagerMode('shift_reports');
-                          setSupervisoryOverride(null);
-                        }}
-                        className={`min-h-[36px] px-3 py-1.5 text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors border ${activePortalUi.radiusClasses.button}`}
-                        style={
-                          isActive
-                            ? {
-                                backgroundColor: portalTheme.accentHex,
-                                borderColor: portalTheme.accentHex,
-                                color: portalTheme.accentTextHex,
-                              }
-                            : {
-                                backgroundColor: portalTheme.surfaceSubtleBg,
-                                borderColor: portalTheme.surfaceBorder,
-                                color: portalTheme.surfaceText,
-                              }
-                        }
-                      >
-                        <FileSpreadsheet className="w-3.5 h-3.5" />
-                        <span>
-                          {managerUi.getButtonLabel(
-                            'shift_reports',
-                            lang,
-                            isEn ? 'Shift Reports' : 'تقرير الورديات'
-                          )}
-                        </span>
-                      </button>
-                    );
-                  }
-
                   const scr = navId as StaffScreen;
-                  if (scr === 'staff_management' && (!isManager || !managerPerms.canManageStaff)) {
-                    return null;
-                  }
-                  if (scr === 'halls' && (!isManager || !managerPerms.canManageHalls)) {
-                    return null;
-                  }
                   const Icon = getScreenIcon(scr, effectiveStations);
-                  const isActive = managerMode === 'screen' && safeCurrentScreen === scr;
+                  const isActive =
+                    (isManager && managerMode === scr) ||
+                    (managerMode === 'screen' && safeCurrentScreen === scr);
                   const meta = getScreenMetaDynamic(scr, effectiveStations);
                   const fallbackShort = isEn ? meta.shortEn : meta.shortAr;
                   const labelText = isManager
@@ -1386,7 +1382,19 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
                     <button
                       key={scr}
                       type="button"
-                      onClick={() => handleScreenChange(scr)}
+                      onClick={() => {
+                        if (
+                          isManager &&
+                          (scr === 'stations' || scr === 'menu_editor' || scr === 'shift_reports')
+                        ) {
+                          setStationCreateIntent(null);
+                          setManagerMode(scr);
+                          setSupervisoryOverride(null);
+                          setActiveScreen(scr);
+                        } else {
+                          handleScreenChange(scr);
+                        }
+                      }}
                       className={`min-h-[36px] px-3 py-1.5 text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors border ${activePortalUi.radiusClasses.button}`}
                       style={
                         isActive
@@ -1444,6 +1452,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
             lastClosedCashierShift={lastClosedCashierShift}
             onRequestCashierHandoverModal={() => setOpenHandoverSignal((n) => n + 1)}
             onSwitchCashierNextSlot={() => setOpenHandoverSignal((n) => n + 1)}
+            canManageShifts={effectivePerms.canManageShifts}
           />
         )}
 
@@ -1454,6 +1463,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
             activeShifts={allActiveShifts}
             dynamicStations={dynamicStations}
             treasuryTransfers={treasuryTransfers}
+            effectivePermissions={effectivePerms}
             onNavigateScreen={(scr, opts) => handleScreenChange(scr, opts)}
             onOpenStations={
               canManageStations
@@ -1463,9 +1473,14 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
                   }
                 : undefined
             }
+            onOpenAssignments={
+              effectivePerms.canManageHallAssignments
+                ? () => handleScreenChange('hall_assignments')
+                : undefined
+            }
             onRestaurantUpdated={(updated) => setRestaurant(updated)}
           />
-        ) : isManager && managerMode === 'stations' && canManageStations ? (
+        ) : ((isManager && managerMode === 'stations') || safeCurrentScreen === 'stations') && canManageStations ? (
           <StationsManagerTab
             restaurant={restaurant}
             actor={actor}
@@ -1473,7 +1488,11 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
             createIntent={stationCreateIntent}
             onGoHome={() => {
               setStationCreateIntent(null);
-              setManagerMode('supervision');
+              if (isManager) {
+                setManagerMode('supervision');
+              } else {
+                handleScreenChange(allowedScreens.find((s) => s !== 'stations') || 'cashier');
+              }
             }}
             onReturnAfterCreate={() => {
               const retMode = stationCreateIntent?.returnMode;
@@ -1498,16 +1517,25 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
               }
             }}
           />
-        ) : isManager && managerMode === 'menu_editor' ? (
+        ) : ((isManager && managerMode === 'menu_editor') || safeCurrentScreen === 'menu_editor') &&
+          (effectivePerms.canEditMenu || effectivePerms.canPauseItems) ? (
           <MenuBuilderTab
             restaurant={restaurant}
+            canEditMenu={effectivePerms.canEditMenu}
+            canPauseItems={effectivePerms.canPauseItems}
             onOpenAddScreen={
               canManageStations
-                ? () => openManagerAddScreen('menu_editor', undefined, 'prep')
+                ? () =>
+                    openManagerAddScreen(
+                      isManager ? 'menu_editor' : 'screen',
+                      isManager ? undefined : 'menu_editor',
+                      'prep'
+                    )
                 : undefined
             }
           />
-        ) : isManager && managerMode === 'shift_reports' ? (
+        ) : ((isManager && managerMode === 'shift_reports') || safeCurrentScreen === 'shift_reports') &&
+          effectivePerms.canViewShiftReports ? (
           <OwnerShiftReportTab
             restaurant={restaurant}
             actor={actor}
@@ -1519,17 +1547,41 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
           />
         ) : (
           <>
-            {safeCurrentScreen === 'staff_management' && isManager && managerPerms.canManageStaff && (
+            {safeCurrentScreen === 'staff_management' && effectivePerms.canManageStaff && (
               <StaffManagementTab
                 restaurant={restaurant}
                 mode="manager"
                 actor={actor}
+                actorCeiling={callerCeiling}
                 onRestaurantUpdated={(updated) => setRestaurant(updated)}
+                onOpenJobTitles={() => handleScreenChange('job_titles')}
                 onOpenAddScreen={
                   canManageStations
                     ? (scrType) => openManagerAddScreen('screen', 'staff_management', scrType)
                     : undefined
                 }
+              />
+            )}
+
+            {safeCurrentScreen === 'job_titles' && effectivePerms.canManageStaff && (
+              <JobTitlesTab
+                restaurant={restaurant}
+                mode="manager"
+                actor={actor}
+                actorCeiling={callerCeiling}
+                onBack={() => handleScreenChange('staff_management')}
+                onGoHome={() =>
+                  isManager
+                    ? setManagerMode('supervision')
+                    : handleScreenChange(allowedScreens.find((s) => s !== 'job_titles') || 'cashier')
+                }
+              />
+            )}
+
+            {safeCurrentScreen === 'customers' && effectivePerms.canManageCustomers && (
+              <CustomersCrmTab
+                restaurant={restaurant}
+                onRestaurantUpdated={(updated) => setRestaurant(updated)}
               />
             )}
 
@@ -1540,17 +1592,24 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
                 initialStation="cashier"
                 staffMode
                 actor={actor}
+                effectivePermissions={effectivePerms}
                 activeCashierShift={activeCashierShift}
                 allShifts={allRestaurantShifts}
                 staffList={restaurantStaffList}
                 expenses={drawerExpenses}
                 supervisoryMode={isSupervisoryHere}
                 coveringStaffName={coveringName}
-                hideHistoryArchive={staff.role === 'cashier'}
+                hideHistoryArchive={!effectivePerms.canViewShiftReports}
                 openHandoverSignal={openHandoverSignal}
                 onOpenShiftReports={
-                  isManager && managerPerms.canViewShiftReports
-                    ? () => setManagerMode('shift_reports')
+                  effectivePerms.canViewShiftReports
+                    ? () => {
+                        if (isManager) {
+                          setManagerMode('shift_reports');
+                        } else {
+                          handleScreenChange('shift_reports');
+                        }
+                      }
                     : undefined
                 }
                 onRestaurantUpdated={(updated) => setRestaurant(updated)}
@@ -1564,6 +1623,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
                 initialStation={currentStationId}
                 staffMode
                 actor={actor}
+                effectivePermissions={effectivePerms}
                 supervisoryMode={isSupervisoryHere}
                 coveringStaffName={coveringName}
               />
@@ -1617,13 +1677,64 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
                   captainScreenMeta={activeCaptainScreenMeta}
                   defaultHallName={staff.hallName}
                   staffMode
+                  captainUid={staff.uid}
+                  staffRole={staff.role}
                   actor={actor}
+                  effectivePermissions={effectivePerms}
                   onRestaurantUpdated={(updated) => setRestaurant(updated)}
                 />
               </div>
             )}
 
-            {safeCurrentScreen === 'halls' && isManager && managerPerms.canManageHalls && (
+            {safeCurrentScreen === 'hall_manager' && (
+              <HallManagerConsole
+                restaurant={restaurant}
+                staff={staff}
+                actor={actor}
+                activeShifts={allActiveShifts}
+                effectivePermissions={effectivePerms}
+                onOpenAssignments={
+                  effectivePerms.canManageHallAssignments
+                    ? () => handleScreenChange('hall_assignments')
+                    : undefined
+                }
+                onOpenHalls={
+                  effectivePerms.canManageHalls
+                    ? () => handleScreenChange('halls')
+                    : undefined
+                }
+              />
+            )}
+
+            {safeCurrentScreen === 'hall_assignments' && effectivePerms.canManageHallAssignments && (
+              <CaptainAssignmentsTab
+                restaurant={restaurant}
+                actor={actor}
+                staffMembers={restaurantStaffList}
+                activeShifts={allActiveShifts}
+                captainStations={effectiveCaptainScreens}
+                onBack={() =>
+                  isManager
+                    ? setManagerMode('supervision')
+                    : handleScreenChange(
+                        allowedScreens.includes('hall_manager')
+                          ? 'hall_manager'
+                          : allowedScreens.find((s) => s !== 'hall_assignments') || 'cashier'
+                      )
+                }
+                onGoHome={() =>
+                  isManager
+                    ? setManagerMode('supervision')
+                    : handleScreenChange(
+                        allowedScreens.includes('hall_manager')
+                          ? 'hall_manager'
+                          : allowedScreens.find((s) => s !== 'hall_assignments') || 'cashier'
+                      )
+                }
+              />
+            )}
+
+            {safeCurrentScreen === 'halls' && effectivePerms.canManageHalls && (
               <QrGeneratorTab restaurant={restaurant} />
             )}
           </>

@@ -32,16 +32,29 @@ import {
   X,
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { formatFirestoreErrorMessage } from '../../lib/firebase';
 import { subscribeHalls } from '../../lib/firestoreService';
+import { ActorDelegationCeiling, subscribeJobTitles } from '../../lib/jobTitlesService';
 import {
   getResolvedOperationsConfig,
   updateRestaurantOperationsConfig,
 } from '../../lib/operationsService';
 import { subscribeAllActiveRestaurantShifts } from '../../lib/shiftsService';
 import {
+  actorCoversTargetGrant,
+  ALL_STAFF_PERMISSION_KEYS,
+  computeCombinedJobTitleGrant,
+  DEFAULT_HALL_MANAGER_PERMISSIONS,
+  EMPTY_STAFF_PERMISSIONS,
   getDefaultScreensForRole,
   getManagerScreensForStations,
+  getResolvedHallManagerPermissions,
   getScreenMetaDynamic,
+  OWNER_FULL_PERMISSIONS,
+  PERMISSION_CATALOG,
+  PERMISSION_GROUPS,
+  resolveEffectiveStaffPermissions,
+  sanitizeEffectivePermissions,
   STAFF_ROLE_META,
 } from '../../lib/staffAuthUtils';
 import {
@@ -68,13 +81,17 @@ import {
   stationIdToScreen,
 } from '../../lib/stationUtils';
 import {
+  EffectiveStaffPermissions,
   Hall,
+  HallManagerPermissions,
+  JobTitle,
   ManagerPermissions,
   Restaurant,
   RestaurantStation,
   StaffActorInfo,
   StaffAuditLog,
   StaffMember,
+  StaffPermissionKey,
   StaffRole,
   StaffScreen,
   StaffShift,
@@ -89,8 +106,10 @@ interface StaffManagementTabProps {
   restaurant: Restaurant;
   mode: 'owner' | 'manager';
   actor: StaffActorInfo;
+  actorCeiling?: ActorDelegationCeiling;
   onRestaurantUpdated?: (updated: Restaurant) => void;
   onOpenAddScreen?: (screenType?: StationScreenType) => void;
+  onOpenJobTitles?: () => void;
 }
 
 const MANAGER_PERMISSION_LABELS: Array<{
@@ -185,11 +204,83 @@ const MANAGER_PERMISSION_LABELS: Array<{
     hintEn: 'Create/edit halls and print table QR stands',
   },
   {
+    key: 'canManageHallAssignments',
+    labelAr: 'توزيع الكباتن على الصالات والطاولات',
+    labelEn: 'Assign Captains to Halls & Tables',
+    hintAr: 'توزيع الكباتن على الصالات والطاولات لكل وردية ومراقبة التغطية',
+    hintEn: 'Assign floor captains to halls and tables per shift',
+  },
+  {
     key: 'canManageStations',
     labelAr: 'إدارة الشاشات والمحطات',
     labelEn: 'Manage Screens & Stations',
     hintAr: 'إضافة وتعديل وتعطيل وأرشفة محطات التحضير وشاشات الكابتن',
     hintEn: 'Create, edit, pause, and archive prep stations and captain screens',
+  },
+];
+
+const HALL_MANAGER_PERMISSION_LABELS: Array<{
+  key: keyof HallManagerPermissions;
+  labelAr: string;
+  labelEn: string;
+  hintAr: string;
+  hintEn: string;
+}> = [
+  {
+    key: 'canManageHalls',
+    labelAr: 'إدارة الصالات وأكواد QR للطاولات',
+    labelEn: 'Manage Halls & Table QR',
+    hintAr: 'إنشاء وتعديل وحذف الصالات وأرقام الطاولات وطباعة QR',
+    hintEn: 'Create, edit, delete halls/tables and print QR codes',
+  },
+  {
+    key: 'canManageHallAssignments',
+    labelAr: 'توزيع الكباتن على الصالات والطاولات',
+    labelEn: 'Captain Hall & Table Assignments',
+    hintAr: 'تعيين الكباتن للصالات والطاولات في كل وردية ونسخ التوزيع',
+    hintEn: 'Assign captains to halls/tables per shift and copy schedules',
+  },
+  {
+    key: 'canMonitorFloorAndCalls',
+    labelAr: 'مراقبة الصالات الحية ونداءات الطاولات',
+    labelEn: 'Monitor Live Floor & Calls',
+    hintAr: 'متابعة حالة كل الطاولات والرد على نداءات العملاء وطلبات الشيك',
+    hintEn: 'Track all tables live and acknowledge/resolve service calls',
+  },
+  {
+    key: 'canAddEditTableOrders',
+    labelAr: 'إضافة وتعديل طلبات الطاولات',
+    labelEn: 'Add & Edit Dine-In Orders',
+    hintAr: 'تسجيل أصناف وطلبات طاولات وتعديل الطلبات المفتوحة من خريطة الصالات',
+    hintEn: 'Submit and modify open dine-in orders directly from the floor drawer',
+  },
+  {
+    key: 'canApplyInstantDiscount',
+    labelAr: 'منح خصم فوري على الطلبات القائمة',
+    labelEn: 'Instant Discount on Existing Orders',
+    hintAr: 'تطبيق خصم فوري (بسبب إلزامي) ومفروض في قواعد قاعدة البيانات',
+    hintEn: 'Apply instant discount (mandatory reason enforced by Firestore Rules)',
+  },
+  {
+    key: 'canCancelOrders',
+    labelAr: 'إلغاء الطلبات القائمة',
+    labelEn: 'Cancel Open Orders',
+    hintAr: 'إلغاء طلب مفتوح مع سبب موثق — مفروض في قواعد قاعدة البيانات',
+    hintEn: 'Cancel open orders with documented reason (enforced by Firestore Rules)',
+  },
+  {
+    key: 'canSettleChecks',
+    labelAr: 'تقفيل الشيك والتحصيل',
+    labelEn: 'Settle Checks & Collect Payment',
+    hintAr: 'تحصيل كاش/فيزا وإغلاق شيك الطاولة — مفروض في قواعد قاعدة البيانات',
+    hintEn: 'Collect payment and close table checks (enforced by Firestore Rules)',
+  },
+  {
+    key: 'showPrices',
+    labelAr: 'إظهار الأسعار وإجمالي الطاولات (إعداد عرض)',
+    labelEn: 'Show Prices & Table Totals (UI Setting)',
+    hintAr: 'إعداد عرض فقط: إظهار أو إخفاء أسعار الأصناف في لوحة مدير الصالات',
+    hintEn: 'UI display setting: show or hide prices in Hall Manager Console',
   },
 ];
 
@@ -218,6 +309,11 @@ const AUDIT_LABELS_AR: Record<string, string> = {
   kds_item_updated: 'تحديث شاشة التحضير',
   table_closed: 'إقفال حساب طاولة',
   service_call_handled: 'تلبية نداء طاولة',
+  hall_assignment_updated: 'تحديث توزيع الكباتن',
+  job_title_created: 'إنشاء مسمى وظيفي',
+  job_title_updated: 'تحديث مسمى وظيفي',
+  job_title_deleted: 'حذف مسمى وظيفي',
+  staff_permissions_updated: 'تحديث صلاحيات موظف',
   station_created: 'إضافة قسم تحضير',
   station_updated: 'تعديل قسم تحضير',
   station_deleted: 'حذف قسم تحضير',
@@ -252,6 +348,11 @@ const AUDIT_LABELS_EN: Record<string, string> = {
   kds_item_updated: 'Prep Station Item Updated',
   table_closed: 'Table Check Closed',
   service_call_handled: 'Service Call Handled',
+  hall_assignment_updated: 'Captain Hall Assignment Updated',
+  job_title_created: 'Job Title Created',
+  job_title_updated: 'Job Title Updated',
+  job_title_deleted: 'Job Title Deleted',
+  staff_permissions_updated: 'Staff Permissions Updated',
   station_created: 'Prep Station Created',
   station_updated: 'Prep Station Updated',
   station_deleted: 'Prep Station Deleted',
@@ -282,8 +383,10 @@ export function StaffManagementTab({
   restaurant,
   mode,
   actor,
+  actorCeiling,
   onRestaurantUpdated,
   onOpenAddScreen,
+  onOpenJobTitles,
 }: StaffManagementTabProps) {
   const { lang, dir, loc } = useLanguage();
   const isEn = lang === 'en';
@@ -297,6 +400,7 @@ export function StaffManagementTab({
   const [savingManagerPerms, setSavingManagerPerms] = useState(false);
 
   const [staffList, setStaffList] = useState<StaffMember[]>([]);
+  const [jobTitles, setJobTitles] = useState<JobTitle[]>([]);
   const [auditLogs, setAuditLogs] = useState<StaffAuditLog[]>([]);
   const [halls, setHalls] = useState<Hall[]>([]);
   const [dynamicStations, setDynamicStations] = useState<RestaurantStation[]>([]);
@@ -305,6 +409,7 @@ export function StaffManagementTab({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [subView, setSubView] = useState<'members' | 'stations' | 'audit'>('members');
   const [roleFilter, setRoleFilter] = useState<'all' | StaffRole>('all');
+  const [jobTitleFilter, setJobTitleFilter] = useState<string>('all');
   const [confirmDeleteUid, setConfirmDeleteUid] = useState<string | null>(null);
 
   // Suspension Modal State
@@ -325,10 +430,18 @@ export function StaffManagementTab({
   const [phoneInput, setPhoneInput] = useState('');
   const [emailInput, setEmailInput] = useState('');
   const [jobTitleInput, setJobTitleInput] = useState('');
+  const [selectedJobTitleIdsInput, setSelectedJobTitleIdsInput] = useState<string[]>([]);
   const [roleInput, setRoleInput] = useState<StaffRole>('cashier');
   const [hallIdInput, setHallIdInput] = useState('');
   const [allowedScreensInput, setAllowedScreensInput] = useState<StaffScreen[]>(['cashier']);
   const [allowedCaptainScreensInput, setAllowedCaptainScreensInput] = useState<string[]>([]);
+  const [hallManagerPermsInput, setHallManagerPermsInput] = useState<HallManagerPermissions>(() => ({
+    ...DEFAULT_HALL_MANAGER_PERMISSIONS,
+  }));
+  const [effectivePermissionsInput, setEffectivePermissionsInput] =
+    useState<EffectiveStaffPermissions>(() => ({ ...EMPTY_STAFF_PERMISSIONS }));
+  const [useCustomPermsOverride, setUseCustomPermsOverride] = useState(false);
+  const [showGranularOverrides, setShowGranularOverrides] = useState(false);
   const [defaultScreenInput, setDefaultScreenInput] = useState<StaffScreen>('cashier');
   const [useOneTimeInvite, setUseOneTimeInvite] = useState(true);
   const [directPasswordInput, setDirectPasswordInput] = useState('');
@@ -360,11 +473,15 @@ export function StaffManagementTab({
         setLoading(false);
       },
       (err) => {
-        setLoadError(
-          err.message || (isEn ? 'Unable to load staff roster' : 'تعذر تحميل قائمة الكادر')
-        );
+        setLoadError(formatFirestoreErrorMessage(err, isEn));
         setLoading(false);
       }
+    );
+
+    const unsubTitles = subscribeJobTitles(
+      restaurant.id,
+      setJobTitles,
+      () => {}
     );
 
     const unsubAudit = subscribeStaffAuditLogs(
@@ -393,6 +510,7 @@ export function StaffManagementTab({
 
     return () => {
       unsubStaff();
+      unsubTitles();
       unsubAudit();
       unsubHalls();
       unsubStations();
@@ -424,21 +542,97 @@ export function StaffManagementTab({
     [dynamicStations]
   );
 
-  const canManageStations = mode === 'owner' || opsConfig.managerPermissions.canManageStations !== false;
+  const effectiveCeiling = useMemo<ActorDelegationCeiling>(() => {
+    if (actorCeiling) return actorCeiling;
+    if (mode === 'owner') {
+      return {
+        isUnbounded: true,
+        permissions: { ...OWNER_FULL_PERMISSIONS },
+        allowedScreens: [
+          'staff_management',
+          'job_titles',
+          'cashier',
+          'captain',
+          'hall_manager',
+          'hall_assignments',
+          'halls',
+          'stations',
+          'menu_editor',
+          'shift_reports',
+          'customers',
+          ...effectiveStations.map((s) => stationIdToScreen(s.stationId)),
+        ],
+        allowedStations: effectiveStations.map((s) => s.stationId),
+        allowedCaptainScreens: effectiveCaptainScreens.map((c) => c.stationId),
+      };
+    }
+    const mgrPerms = resolveEffectiveStaffPermissions(
+      { role: 'manager', allowedScreens: ['staff_management', 'cashier'] },
+      opsConfig.managerPermissions
+    );
+    return {
+      isUnbounded: false,
+      permissions: mgrPerms,
+      allowedScreens: [
+        'staff_management',
+        'job_titles',
+        'cashier',
+        'captain',
+        'hall_manager',
+        ...(mgrPerms.canManageHallAssignments ? (['hall_assignments'] as StaffScreen[]) : []),
+        ...(mgrPerms.canManageHalls ? (['halls'] as StaffScreen[]) : []),
+        ...(mgrPerms.canManageStations ? (['stations'] as StaffScreen[]) : []),
+        ...(mgrPerms.canEditMenu || mgrPerms.canPauseItems ? (['menu_editor'] as StaffScreen[]) : []),
+        ...(mgrPerms.canViewShiftReports ? (['shift_reports'] as StaffScreen[]) : []),
+        ...(mgrPerms.canManageCustomers ? (['customers'] as StaffScreen[]) : []),
+        ...effectiveStations.map((s) => stationIdToScreen(s.stationId)),
+      ],
+      allowedStations: effectiveStations.map((s) => s.stationId),
+      allowedCaptainScreens: effectiveCaptainScreens.map((c) => c.stationId),
+    };
+  }, [actorCeiling, mode, effectiveStations, effectiveCaptainScreens, opsConfig.managerPermissions]);
+
+  const canManageStations =
+    mode === 'owner' ||
+    (effectiveCeiling.permissions.canManageStations &&
+      opsConfig.managerPermissions.canManageStations !== false);
 
   const dynamicManagerScreens = useMemo(
-    () => getManagerScreensForStations(effectiveStations, opsConfig.managerPermissions.canManageHalls),
-    [effectiveStations, opsConfig.managerPermissions.canManageHalls]
+    () =>
+      getManagerScreensForStations(
+        effectiveStations,
+        opsConfig.managerPermissions.canManageHalls,
+        opsConfig.managerPermissions.canManageHallAssignments !== false
+      ),
+    [
+      effectiveStations,
+      opsConfig.managerPermissions.canManageHalls,
+      opsConfig.managerPermissions.canManageHallAssignments,
+    ]
   );
 
-  const dynamicEmployeeAssignableScreens = useMemo<StaffScreen[]>(
-    () => [
+  const dynamicEmployeeAssignableScreens = useMemo<StaffScreen[]>(() => {
+    const base: StaffScreen[] = [
       'cashier',
       ...effectiveStations.map((st) => stationIdToScreen(st.stationId)),
       'captain',
-    ],
-    [effectiveStations]
-  );
+      'hall_manager',
+      'hall_assignments',
+      'halls',
+      'stations',
+      'menu_editor',
+      'shift_reports',
+      'customers',
+      'job_titles',
+      'staff_management',
+    ];
+    if (effectiveCeiling.isUnbounded) return base;
+    return base.filter((scr) => {
+      if (effectiveCeiling.allowedScreens.includes(scr)) return true;
+      const st = screenToStationId(scr);
+      return st ? effectiveCeiling.allowedStations.includes(st) : false;
+    });
+  }, [effectiveStations, effectiveCeiling]);
 
   const activeShiftByStaffUid = useMemo(() => {
     const map = new Map<string, StaffShift[]>();
@@ -469,11 +663,47 @@ export function StaffManagementTab({
   );
 
   const filteredStaff = useMemo(() => {
-    if (roleFilter === 'all') return staffList;
-    return staffList.filter((m) => m.role === roleFilter);
-  }, [staffList, roleFilter]);
+    return staffList.filter((m) => {
+      if (roleFilter !== 'all' && m.role !== roleFilter) return false;
+      if (
+        jobTitleFilter !== 'all' &&
+        (!Array.isArray(m.jobTitleIds) || !m.jobTitleIds.includes(jobTitleFilter))
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }, [staffList, roleFilter, jobTitleFilter]);
+
+  const memberExceedsCeiling = (member: StaffMember): boolean => {
+    if (effectiveCeiling.isUnbounded) return false;
+    if (member.role === 'manager' && member.uid !== actor.uid) return true;
+    const memberPerms = resolveEffectiveStaffPermissions(
+      member,
+      opsConfig.managerPermissions
+    );
+    const cov = actorCoversTargetGrant({
+      actorIsUnbounded: false,
+      actorPermissions: effectiveCeiling.permissions,
+      actorScreens: effectiveCeiling.allowedScreens,
+      actorStations: effectiveCeiling.allowedStations,
+      targetPermissions: memberPerms,
+      targetScreens: member.allowedScreens || [],
+      targetStations: member.allowedStations || [],
+    });
+    return !cov.allowed;
+  };
+
+  const permAllowedInCeiling = (key: StaffPermissionKey): boolean => {
+    if (effectiveCeiling.isUnbounded) return true;
+    return effectiveCeiling.permissions[key] === true;
+  };
 
   const openCreateManagerModal = () => {
+    const defaults = resolveEffectiveStaffPermissions(
+      { role: 'manager', allowedScreens: dynamicManagerScreens },
+      opsConfig.managerPermissions
+    );
     setFormKind('manager');
     setEditingMember(null);
     setNameInput('');
@@ -481,10 +711,14 @@ export function StaffManagementTab({
     setPhoneInput('');
     setEmailInput('');
     setJobTitleInput(isEn ? 'Restaurant Operations Manager' : 'مدير تشغيل المطعم');
+    setSelectedJobTitleIdsInput([]);
     setRoleInput('manager');
     setHallIdInput('');
     setAllowedScreensInput([...dynamicManagerScreens]);
     setAllowedCaptainScreensInput(effectiveCaptainScreens.map((c) => c.stationId));
+    setEffectivePermissionsInput(defaults);
+    setUseCustomPermsOverride(false);
+    setShowGranularOverrides(false);
     setDefaultScreenInput('staff_management');
     setUseOneTimeInvite(true);
     setDirectPasswordInput('');
@@ -494,6 +728,10 @@ export function StaffManagementTab({
 
   const openCreateEmployeeModal = () => {
     const defaults = getDefaultScreensForRole('cashier', effectiveStations);
+    const defaultPerms = resolveEffectiveStaffPermissions(
+      { role: 'cashier', allowedScreens: defaults.allowedScreens },
+      opsConfig.managerPermissions
+    );
     setFormKind('employee');
     setEditingMember(null);
     setNameInput('');
@@ -501,10 +739,15 @@ export function StaffManagementTab({
     setPhoneInput('');
     setEmailInput('');
     setJobTitleInput('');
+    setSelectedJobTitleIdsInput([]);
     setRoleInput('cashier');
     setHallIdInput('');
     setAllowedScreensInput(defaults.allowedScreens);
     setAllowedCaptainScreensInput([]);
+    setHallManagerPermsInput({ ...DEFAULT_HALL_MANAGER_PERMISSIONS });
+    setEffectivePermissionsInput(defaultPerms);
+    setUseCustomPermsOverride(false);
+    setShowGranularOverrides(false);
     setDefaultScreenInput(defaults.defaultScreen);
     setUseOneTimeInvite(true);
     setDirectPasswordInput('');
@@ -520,14 +763,21 @@ export function StaffManagementTab({
     setPhoneInput(member.phone);
     setEmailInput(member.email || '');
     setJobTitleInput(member.jobTitle || '');
+    setSelectedJobTitleIdsInput(member.jobTitleIds || []);
     setRoleInput(member.role);
     setHallIdInput(member.hallId || '');
-    const sanitizedScreens = (member.allowedScreens || ['cashier']).filter(
-      (s) => member.role === 'manager' || s !== 'halls'
-    );
-    const nextScreens: StaffScreen[] = sanitizedScreens.length > 0 ? sanitizedScreens : ['cashier'];
+    const nextScreens: StaffScreen[] =
+      member.allowedScreens && member.allowedScreens.length > 0
+        ? [...member.allowedScreens]
+        : ['cashier'];
     setAllowedScreensInput(nextScreens);
     setAllowedCaptainScreensInput(member.allowedCaptainScreens || []);
+    setHallManagerPermsInput(getResolvedHallManagerPermissions(member.hallManagerPermissions));
+    setEffectivePermissionsInput(
+      resolveEffectiveStaffPermissions(member, opsConfig.managerPermissions)
+    );
+    setUseCustomPermsOverride(Boolean(member.effectivePermissions));
+    setShowGranularOverrides(Boolean(member.effectivePermissions));
     const preferredDefault =
       member.defaultScreen && nextScreens.includes(member.defaultScreen)
         ? member.defaultScreen
@@ -539,12 +789,65 @@ export function StaffManagementTab({
     setFormOpen(true);
   };
 
+  const handleToggleJobTitleSelection = (titleId: string) => {
+    const nextIds = selectedJobTitleIdsInput.includes(titleId)
+      ? selectedJobTitleIdsInput.filter((id) => id !== titleId)
+      : [...selectedJobTitleIdsInput, titleId];
+    setSelectedJobTitleIdsInput(nextIds);
+    const chosenTitles = jobTitles.filter((jt) => nextIds.includes(jt.id));
+    if (chosenTitles.length === 0) {
+      return;
+    }
+    const combined = computeCombinedJobTitleGrant({
+      selectedJobTitles: chosenTitles,
+      ceiling: effectiveCeiling,
+    });
+    setRoleInput(combined.role);
+    setJobTitleInput(combined.jobTitleDisplay);
+    setAllowedScreensInput(
+      combined.allowedScreens.length > 0
+        ? combined.allowedScreens
+        : ([effectiveCeiling.allowedScreens[0] || 'cashier'] as StaffScreen[])
+    );
+    setAllowedCaptainScreensInput(combined.allowedCaptainScreens);
+    setEffectivePermissionsInput(combined.effectivePermissions);
+    setUseCustomPermsOverride(true);
+    setDefaultScreenInput(combined.defaultScreen);
+    if (combined.hallManagerPermissions) {
+      setHallManagerPermsInput(combined.hallManagerPermissions);
+    }
+  };
+
   const handleRoleSelectionChange = (nextRole: StaffRole) => {
     setRoleInput(nextRole);
-    const defaults = getDefaultScreensForRole(nextRole, effectiveStations);
+    setSelectedJobTitleIdsInput([]);
+    const defaults = getDefaultScreensForRole(
+      nextRole,
+      effectiveStations,
+      nextRole === 'hall_manager' ? DEFAULT_HALL_MANAGER_PERMISSIONS : undefined
+    );
     setAllowedScreensInput(defaults.allowedScreens);
     setDefaultScreenInput(defaults.defaultScreen);
-    if (nextRole === 'captain' && effectiveCaptainScreens.length > 0) {
+    const rolePerms = resolveEffectiveStaffPermissions(
+      {
+        role: nextRole,
+        allowedScreens: defaults.allowedScreens,
+        allowedStations: defaults.allowedStations,
+        hallManagerPermissions:
+          nextRole === 'hall_manager' ? DEFAULT_HALL_MANAGER_PERMISSIONS : undefined,
+      },
+      opsConfig.managerPermissions
+    );
+    if (!effectiveCeiling.isUnbounded) {
+      for (const k of ALL_STAFF_PERMISSION_KEYS) {
+        if (!permAllowedInCeiling(k)) rolePerms[k] = false;
+      }
+    }
+    setEffectivePermissionsInput(rolePerms);
+    if (nextRole === 'hall_manager') {
+      setHallManagerPermsInput({ ...DEFAULT_HALL_MANAGER_PERMISSIONS });
+      setAllowedCaptainScreensInput([]);
+    } else if (nextRole === 'captain' && effectiveCaptainScreens.length > 0) {
       setAllowedCaptainScreensInput([effectiveCaptainScreens[0].stationId]);
     } else if (nextRole === 'manager') {
       setAllowedCaptainScreensInput(effectiveCaptainScreens.map((c) => c.stationId));
@@ -577,6 +880,30 @@ export function StaffManagementTab({
     });
   };
 
+  const toggleSinglePermissionOverride = (key: StaffPermissionKey) => {
+    if (!permAllowedInCeiling(key)) return;
+    setUseCustomPermsOverride(true);
+    setEffectivePermissionsInput((prev) => {
+      const nextVal = !prev[key];
+      const next = { ...prev, [key]: nextVal };
+      if (
+        nextVal &&
+        key !== 'canViewOrders' &&
+        (key === 'canAddEditTableOrders' ||
+          key === 'canEditOpenOrders' ||
+          key === 'canApplyInstantDiscount' ||
+          key === 'canCancelOpenOrders' ||
+          key === 'canSettleChecks' ||
+          key === 'canEditClosedChecks' ||
+          key === 'canUpdatePrepProgress') &&
+        permAllowedInCeiling('canViewOrders')
+      ) {
+        next.canViewOrders = true;
+      }
+      return next;
+    });
+  };
+
   const handleFormSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setFormError(null);
@@ -587,13 +914,25 @@ export function StaffManagementTab({
     const selectedHall = halls.find((h) => h.id === hallIdInput);
     const hallName = selectedHall ? selectedHall.name : editingMember?.hallName || '';
 
-    const isTargetManager = formKind === 'manager' || roleInput === 'manager';
-    const rawCombinedScreens = isTargetManager
-      ? Array.from(new Set([...dynamicManagerScreens, ...allowedScreensInput]))
-      : allowedScreensInput.filter((s) => s !== 'halls' && s !== 'staff_management');
-    const finalScreens = isTargetManager && !opsConfig.managerPermissions.canManageHalls
-      ? rawCombinedScreens.filter((s) => s !== 'halls')
-      : rawCombinedScreens;
+    const chosenTitles = jobTitles.filter((jt) => selectedJobTitleIdsInput.includes(jt.id));
+    const hasJobTitles = chosenTitles.length > 0;
+    const isTargetManager = !hasJobTitles && (formKind === 'manager' || roleInput === 'manager');
+    const isTargetHallManager = !hasJobTitles && !isTargetManager && roleInput === 'hall_manager';
+
+    let finalScreens: StaffScreen[];
+    if (hasJobTitles || useCustomPermsOverride) {
+      finalScreens = Array.from(new Set<StaffScreen>(allowedScreensInput));
+    } else if (isTargetManager) {
+      finalScreens = Array.from(new Set([...dynamicManagerScreens, ...allowedScreensInput])).filter(
+        (s) =>
+          !(s === 'halls' && !opsConfig.managerPermissions.canManageHalls) &&
+          !(s === 'hall_assignments' && opsConfig.managerPermissions.canManageHallAssignments === false)
+      );
+    } else if (isTargetHallManager) {
+      finalScreens = getDefaultScreensForRole('hall_manager', effectiveStations, hallManagerPermsInput).allowedScreens;
+    } else {
+      finalScreens = allowedScreensInput;
+    }
 
     const extractedStations = Array.from(
       new Set(
@@ -602,10 +941,48 @@ export function StaffManagementTab({
           .filter((id): id is string => Boolean(id))
       )
     );
-    const defaultFromScreen = screenToStationId(
-      formKind === 'manager' ? 'staff_management' : defaultScreenInput
+    const chosenDefaultScreen: StaffScreen = finalScreens.includes(defaultScreenInput)
+      ? defaultScreenInput
+      : finalScreens[0] || 'cashier';
+    const defaultStationId =
+      screenToStationId(chosenDefaultScreen) || extractedStations[0] || '';
+
+    const computedEffectivePerms = sanitizeEffectivePermissions(
+      hasJobTitles || useCustomPermsOverride
+        ? effectivePermissionsInput
+        : resolveEffectiveStaffPermissions(
+            {
+              role: formKind === 'manager' ? 'manager' : roleInput,
+              allowedScreens: finalScreens,
+              allowedStations: extractedStations,
+              hallManagerPermissions: isTargetHallManager ? hallManagerPermsInput : undefined,
+            },
+            opsConfig.managerPermissions
+          )
     );
-    const defaultStationId = defaultFromScreen || extractedStations[0] || '';
+
+    if (!effectiveCeiling.isUnbounded) {
+      const cov = actorCoversTargetGrant({
+        actorIsUnbounded: false,
+        actorPermissions: effectiveCeiling.permissions,
+        actorScreens: effectiveCeiling.allowedScreens,
+        actorStations: effectiveCeiling.allowedStations,
+        targetPermissions: computedEffectivePerms,
+        targetScreens: finalScreens,
+        targetStations: extractedStations,
+      });
+      if (!cov.allowed) {
+        setFormError(
+          isEn
+            ? 'Security restriction: Cannot assign permissions or screens beyond your own account ceiling.'
+            : 'قيد أمان: لا يمكنك منح صلاحيات أو شاشات تتجاوز سقف صلاحيات حسابك الحالي.'
+        );
+        setSubmitting(false);
+        return;
+      }
+    }
+
+    const jobTitleNames = chosenTitles.map((jt) => (isEn ? jt.nameEn || jt.nameAr : jt.nameAr));
 
     try {
       if (formKind === 'edit' && editingMember) {
@@ -617,13 +994,23 @@ export function StaffManagementTab({
             name: nameInput,
             phone: phoneInput,
             email: emailInput,
-            jobTitle: jobTitleInput,
-            role: mode === 'owner' ? roleInput : editingMember.role === 'manager' ? 'manager' : roleInput,
+            jobTitle: jobTitleInput || jobTitleNames.join(' + '),
+            jobTitleIds: selectedJobTitleIdsInput,
+            jobTitleNames,
+            role: effectiveCeiling.isUnbounded
+              ? roleInput
+              : editingMember.role === 'manager'
+                ? 'manager'
+                : roleInput === 'manager'
+                  ? 'custom'
+                  : roleInput,
             allowedScreens: finalScreens,
             allowedStations: extractedStations,
-            allowedCaptainScreens: allowedCaptainScreensInput,
+            allowedCaptainScreens: isTargetHallManager ? [] : allowedCaptainScreensInput,
+            hallManagerPermissions: isTargetHallManager ? hallManagerPermsInput : undefined,
+            effectivePermissions: computedEffectivePerms,
             defaultStationId,
-            defaultScreen: defaultScreenInput,
+            defaultScreen: chosenDefaultScreen,
             hallId: hallIdInput,
             hallName: selectedHall ? selectedHall.name : '',
           },
@@ -642,14 +1029,25 @@ export function StaffManagementTab({
           username: usernameInput,
           phone: phoneInput,
           email: emailInput,
-          jobTitle: jobTitleInput,
-          role: formKind === 'manager' ? 'manager' : roleInput,
+          jobTitle: jobTitleInput || jobTitleNames.join(' + '),
+          jobTitleIds: selectedJobTitleIdsInput,
+          jobTitleNames,
+          role: effectiveCeiling.isUnbounded
+            ? hasJobTitles
+              ? roleInput
+              : formKind === 'manager'
+                ? 'manager'
+                : roleInput
+            : roleInput === 'manager'
+              ? 'custom'
+              : roleInput,
           allowedScreens: finalScreens,
           allowedStations: extractedStations,
-          allowedCaptainScreens: allowedCaptainScreensInput,
+          allowedCaptainScreens: isTargetHallManager ? [] : allowedCaptainScreensInput,
+          hallManagerPermissions: isTargetHallManager ? hallManagerPermsInput : undefined,
+          effectivePermissions: computedEffectivePerms,
           defaultStationId,
-          defaultScreen:
-            formKind === 'manager' ? 'staff_management' : defaultScreenInput,
+          defaultScreen: chosenDefaultScreen,
           hallId: hallIdInput,
           hallName,
           useOneTimeInvite,
@@ -660,34 +1058,31 @@ export function StaffManagementTab({
           setInviteCopied(false);
           setInviteModalData(result);
         } else {
-          const roleMeta = STAFF_ROLE_META[result.staff.role];
-          const roleText = isEn ? roleMeta?.labelEn || result.staff.role : roleMeta?.labelAr || result.staff.role;
+          const displayLabel =
+            jobTitleNames.join(' + ') ||
+            (isEn
+              ? STAFF_ROLE_META[result.staff.role]?.labelEn || result.staff.role
+              : STAFF_ROLE_META[result.staff.role]?.labelAr || result.staff.role);
           setActionMsg(
             isEn
-              ? `Account created and activated for "${result.staff.name}" (${roleText}).`
-              : `تم إنشاء حساب "${result.staff.name}" (${roleText}) وتفعيله مباشرة.`
+              ? `Account created and activated for "${result.staff.name}" (${displayLabel}).`
+              : `تم إنشاء حساب "${result.staff.name}" (${displayLabel}) وتفعيله مباشرة.`
           );
         }
       }
     } catch (err) {
-      setFormError(
-        err instanceof Error
-          ? err.message
-          : isEn
-            ? 'Unable to save staff member details.'
-            : 'تعذر حفظ بيانات الموظف.'
-      );
+      setFormError(formatFirestoreErrorMessage(err, isEn));
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleDeleteStaffMember = async (member: StaffMember) => {
-    if (mode === 'manager' && member.role === 'manager') {
+    if (memberExceedsCeiling(member)) {
       setActionError(
         isEn
-          ? 'Only the restaurant owner can delete a manager account.'
-          : 'حذف المدير يتم من حساب المالك فقط.'
+          ? 'Security restriction: You cannot delete an account holding higher privileges than yours.'
+          : 'قيد أمان: لا يمكنك حذف حساب يمتلك صلاحيات أعلى من صلاحياتك.'
       );
       return;
     }
@@ -715,13 +1110,7 @@ export function StaffManagementTab({
           : `تم حذف "${member.name}" وإلغاء وصوله وصلاحياته فوراً.`
       );
     } catch (err) {
-      setActionError(
-        err instanceof Error
-          ? err.message
-          : isEn
-            ? 'Unable to delete staff member.'
-            : 'تعذر حذف الموظف.'
-      );
+      setActionError(formatFirestoreErrorMessage(err, isEn));
     } finally {
       setBusyUid(null);
     }
@@ -742,17 +1131,11 @@ export function StaffManagementTab({
       onRestaurantUpdated?.({ ...restaurant, operationsConfig: nextCfg });
       setActionMsg(
         isEn
-          ? 'Manager permissions saved and applied immediately.'
-          : 'تم حفظ صلاحيات المدير وتطبيقها لحظياً على حسابه.'
+          ? 'Manager permissions saved and synced immediately.'
+          : 'تم حفظ صلاحيات المدير ومزامنتها لحظياً مع حسابات المديرين.'
       );
     } catch (err) {
-      setActionError(
-        err instanceof Error
-          ? err.message
-          : isEn
-            ? 'Unable to save manager permissions.'
-            : 'تعذر حفظ صلاحيات المدير.'
-      );
+      setActionError(formatFirestoreErrorMessage(err, isEn));
     } finally {
       setSavingManagerPerms(false);
     }
@@ -983,6 +1366,16 @@ export function StaffManagementTab({
           </div>
 
           <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {onOpenJobTitles && (
+              <button
+                type="button"
+                onClick={onOpenJobTitles}
+                className="min-h-[42px] px-3.5 py-2 rounded-xl border border-zinc-300 bg-white hover:bg-zinc-50 text-zinc-900 text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
+              >
+                <Layers className="w-4 h-4 shrink-0" />
+                <span>{isEn ? `Job Titles (${jobTitles.length})` : `المسميات الوظيفية (${jobTitles.length})`}</span>
+              </button>
+            )}
             {mode === 'owner' && (
               <button
                 type="button"
@@ -1056,29 +1449,45 @@ export function StaffManagementTab({
           </div>
 
           {subView === 'members' && (
-            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-              {(
-                ['all', 'manager', 'cashier', 'station_staff', 'kitchen', 'bar', 'pastry', 'captain', 'custom'] as const
-              ).map((r) => (
-                <button
-                  key={r}
-                  type="button"
-                  onClick={() => setRoleFilter(r)}
-                  className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold whitespace-nowrap shrink-0 cursor-pointer ${
-                    roleFilter === r
-                      ? 'bg-amber-500 text-zinc-950'
-                      : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
-                  }`}
+            <div className="flex flex-wrap items-center gap-2">
+              {jobTitles.length > 0 && (
+                <select
+                  value={jobTitleFilter}
+                  onChange={(e) => setJobTitleFilter(e.target.value)}
+                  className="px-2.5 py-1.5 rounded-lg border border-zinc-200 bg-white text-[11px] font-bold text-zinc-800"
                 >
-                  {r === 'all'
-                    ? isEn
-                      ? 'All'
-                      : 'الكل'
-                    : isEn
-                      ? STAFF_ROLE_META[r].labelEn
-                      : STAFF_ROLE_META[r].labelAr}
-                </button>
-              ))}
+                  <option value="all">{isEn ? 'All Job Titles' : 'كل المسميات الوظيفية'}</option>
+                  {jobTitles.map((jt) => (
+                    <option key={jt.id} value={jt.id}>
+                      {isEn ? jt.nameEn : jt.nameAr}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                {(
+                  ['all', 'manager', 'hall_manager', 'cashier', 'station_staff', 'kitchen', 'bar', 'pastry', 'captain', 'custom'] as const
+                ).map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => setRoleFilter(r)}
+                    className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold whitespace-nowrap shrink-0 cursor-pointer ${
+                      roleFilter === r
+                        ? 'bg-amber-500 text-zinc-950'
+                        : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+                    }`}
+                  >
+                    {r === 'all'
+                      ? isEn
+                        ? 'All'
+                        : 'الكل'
+                      : isEn
+                        ? STAFF_ROLE_META[r].labelEn
+                        : STAFF_ROLE_META[r].labelAr}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -1410,10 +1819,16 @@ export function StaffManagementTab({
               {filteredStaff.map((member) => {
                 const roleMeta = STAFF_ROLE_META[member.role] || STAFF_ROLE_META.cashier;
                 const isBusy = busyUid === member.uid;
-                const isManagerLocked =
-                  mode === 'manager' && member.role === 'manager' && member.uid !== actor.uid;
+                const isManagerLocked = memberExceedsCeiling(member);
                 const memberShifts = activeShiftByStaffUid.get(member.uid) || [];
                 const defaultMeta = getScreenMetaDynamic(member.defaultScreen, effectiveStations);
+                const resolvedMemberPerms = resolveEffectiveStaffPermissions(
+                  member,
+                  opsConfig.managerPermissions
+                );
+                const activePermsCount = ALL_STAFF_PERMISSION_KEYS.filter(
+                  (k) => resolvedMemberPerms[k] === true
+                ).length;
 
                 return (
                   <article
@@ -1432,7 +1847,11 @@ export function StaffManagementTab({
                             <span
                               className={`px-2 py-0.5 rounded-md border text-[11px] font-extrabold ${roleMeta.badgeClass}`}
                             >
-                              {isEn ? roleMeta.labelEn : roleMeta.labelAr}
+                              {member.jobTitleNames && member.jobTitleNames.length > 0
+                                ? member.jobTitleNames.join(' + ')
+                                : isEn
+                                  ? roleMeta.labelEn
+                                  : roleMeta.labelAr}
                             </span>
                             {memberShifts.length > 0 && (
                               <span className="px-2 py-0.5 rounded-md bg-emerald-100 border border-emerald-300 text-emerald-900 text-[10px] font-extrabold inline-flex items-center gap-1">
@@ -1455,6 +1874,12 @@ export function StaffManagementTab({
                                 <span dir="ltr">{member.email}</span>
                               </>
                             ) : null}
+                            <span>·</span>
+                            <span className="font-mono-num">
+                              {isEn
+                                ? `${activePermsCount} permissions`
+                                : `${activePermsCount} صلاحية`}
+                            </span>
                           </p>
                           {(member.jobTitle || member.hallName) && (
                             <p className="text-[11px] text-zinc-600 font-semibold">
@@ -1511,7 +1936,9 @@ export function StaffManagementTab({
                             : `الشاشات المصرّح بها (الافتراضية: ${defaultMeta.shortAr}):`}
                         </p>
                         <div className="flex flex-wrap gap-1.5">
-                          {(member.allowedScreens || []).map((scr) => {
+                          {(member.allowedScreens || [])
+                            .filter((scr) => !(member.role === 'hall_manager' && scr === 'captain'))
+                            .map((scr) => {
                             const meta = getScreenMetaDynamic(scr, effectiveStations);
                             return (
                               <span
@@ -1526,6 +1953,28 @@ export function StaffManagementTab({
                               </span>
                             );
                           })}
+                          {member.role === 'hall_manager' && (() => {
+                            const hmPerms = getResolvedHallManagerPermissions(member.hallManagerPermissions);
+                            return (
+                              <>
+                                {hmPerms.canMonitorFloorAndCalls && (
+                                  <span className="px-2 py-0.5 rounded-md text-[11px] font-bold border bg-teal-50 text-teal-800 border-teal-200">
+                                    {isEn ? 'Floor & Calls' : 'مراقبة الصالات والنداءات'}
+                                  </span>
+                                )}
+                                {hmPerms.canAddEditTableOrders && (
+                                  <span className="px-2 py-0.5 rounded-md text-[11px] font-bold border bg-emerald-50 text-emerald-800 border-emerald-200">
+                                    {isEn ? 'Add Table Orders' : 'إضافة طلبات طاولات'}
+                                  </span>
+                                )}
+                                {!hmPerms.showPrices && (
+                                  <span className="px-2 py-0.5 rounded-md text-[11px] font-bold border bg-zinc-100 text-zinc-600 border-zinc-200">
+                                    {isEn ? 'Prices Hidden' : 'بدون أسعار'}
+                                  </span>
+                                )}
+                              </>
+                            );
+                          })()}
                           {(member.allowedCaptainScreens || []).map((capId) => {
                             const capMeta = effectiveCaptainScreens.find(
                               (c) => cleanStationId(c.stationId) === cleanStationId(capId)
@@ -1795,6 +2244,9 @@ export function StaffManagementTab({
                           {isEn ? 'Restaurant Manager' : 'مدير المطعم'}
                         </option>
                       )}
+                      <option value="hall_manager">
+                        {isEn ? 'Hall Manager' : 'مدير الصالات'}
+                      </option>
                       <option value="cashier">{isEn ? 'Cashier' : 'كاشير'}</option>
                       <option value="station_staff">
                         {isEn ? 'Station Chef / Lead' : 'شيف / مسؤول قسم تحضير'}
@@ -1802,7 +2254,7 @@ export function StaffManagementTab({
                       <option value="kitchen">{isEn ? 'Kitchen Chef' : 'شيف المطبخ'}</option>
                       <option value="bar">{isEn ? 'Barista / Bar' : 'باريستا / بار'}</option>
                       <option value="pastry">{isEn ? 'Pastry / Desserts' : 'باستري / حلويات'}</option>
-                      <option value="captain">{isEn ? 'Floor Captain / Waiter' : 'كابتن صالة / ويتر'}</option>
+                      <option value="captain">{isEn ? 'Floor Captain' : 'كابتن صالة'}</option>
                       <option value="custom">{isEn ? 'Custom Permissions' : 'صلاحيات مخصصة'}</option>
                     </select>
                   </label>
@@ -1822,8 +2274,8 @@ export function StaffManagementTab({
                 <label className="space-y-1 text-xs font-bold text-zinc-800 sm:col-span-2">
                   <span>
                     {isEn
-                      ? 'Assigned Hall (Optional — mainly for Captains & Waiters)'
-                      : 'الصالة المسندة (اختياري — خاصةً للكابتن والويتر)'}
+                      ? 'Assigned Hall (Optional — mainly for Captains)'
+                      : 'الصالة المسندة (اختياري — خاصةً للكابتن)'}
                   </span>
                   <select
                     value={hallIdInput}
@@ -1842,14 +2294,135 @@ export function StaffManagementTab({
                 </label>
               </div>
 
-              {/* Allowed Screens */}
+              {/* Flexible Job Titles Assignment (Multi-select) */}
+              {formKind !== 'manager' && jobTitles.length > 0 && (
+                <div className="p-3.5 rounded-2xl bg-indigo-50/50 border border-indigo-200 space-y-2.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <span className="text-xs font-extrabold text-indigo-950 block">
+                        {isEn
+                          ? 'Assign Job Titles (Single or Combined — Optional)'
+                          : 'تعيين المسمى الوظيفي (مسمى واحد أو دمج أكثر من مسمى)'}
+                      </span>
+                      <span className="text-[11px] text-indigo-700">
+                        {isEn
+                          ? 'Selecting multiple job titles automatically combines their screens and DB permissions.'
+                          : 'اختيار أكثر من مسمى وظيفي يدمج الشاشات والصلاحيات تلقائياً داخل نفس الحساب الواحد.'}
+                      </span>
+                    </div>
+                    {onOpenJobTitles && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFormOpen(false);
+                          onOpenJobTitles();
+                        }}
+                        className="text-[11px] font-extrabold text-indigo-700 hover:underline cursor-pointer"
+                      >
+                        {isEn ? 'Manage Titles' : 'إدارة المسميات'}
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {jobTitles
+                      .filter((jt) => jt.isActive !== false)
+                      .map((jt) => {
+                        const checked = selectedJobTitleIdsInput.includes(jt.id);
+                        const cov = actorCoversTargetGrant({
+                          actorIsUnbounded: effectiveCeiling.isUnbounded,
+                          actorPermissions: effectiveCeiling.permissions,
+                          actorScreens: effectiveCeiling.allowedScreens,
+                          actorStations: effectiveCeiling.allowedStations,
+                          targetPermissions: sanitizeEffectivePermissions(jt.permissions),
+                          targetScreens: jt.allowedScreens || [],
+                          targetStations: jt.allowedStations || [],
+                        });
+                        return (
+                          <button
+                            key={jt.id}
+                            type="button"
+                            disabled={!cov.allowed && !checked}
+                            onClick={() => handleToggleJobTitleSelection(jt.id)}
+                            className={`px-3 py-1.5 rounded-xl border text-xs font-extrabold inline-flex items-center gap-1.5 transition-colors ${
+                              !cov.allowed && !checked
+                                ? 'bg-zinc-100 border-zinc-200 text-zinc-400 cursor-not-allowed'
+                                : checked
+                                  ? 'bg-zinc-950 text-white border-zinc-950 cursor-pointer'
+                                  : 'bg-white text-zinc-800 border-zinc-200 hover:bg-zinc-50 cursor-pointer'
+                            }`}
+                          >
+                            <span
+                              style={{ backgroundColor: jt.color || '#4F46E5' }}
+                              className="w-2.5 h-2.5 rounded-full shrink-0"
+                            />
+                            <span>{isEn ? jt.nameEn : jt.nameAr}</span>
+                            {!cov.allowed && <Lock className="w-3 h-3 shrink-0" />}
+                          </button>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
+
+              {/* Hall Manager Permissions Matrix OR Allowed Screens + Granular Permissions */}
+              {formKind !== 'manager' && roleInput === 'hall_manager' && selectedJobTitleIdsInput.length === 0 ? (
+                <div className="p-3.5 rounded-2xl bg-teal-50/60 border border-teal-200 space-y-3">
+                  <div className="space-y-0.5">
+                    <span className="text-xs font-extrabold text-teal-950 block">
+                      {isEn ? 'Hall Manager Permissions' : 'صلاحيات مدير الصالات'}
+                    </span>
+                    <p className="text-[11px] text-teal-800">
+                      {isEn
+                        ? 'All operational toggles here are directly enforced by Firestore security rules.'
+                        : 'جميع المفاتيح التشغيلية هنا مفروضة ومطبقة مباشرة في قواعد قاعدة البيانات.'}
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {HALL_MANAGER_PERMISSION_LABELS.map((item) => {
+                      const checked = Boolean(hallManagerPermsInput[item.key]);
+                      return (
+                        <label
+                          key={item.key}
+                          className={`flex items-start gap-2.5 p-2.5 rounded-xl border text-xs cursor-pointer ${
+                            checked
+                              ? 'bg-white border-teal-700 text-zinc-950'
+                              : 'bg-white/60 border-teal-200/80 text-zinc-600'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) =>
+                              setHallManagerPermsInput((prev) => ({
+                                ...prev,
+                                [item.key]: e.target.checked,
+                              }))
+                            }
+                            className="mt-0.5 w-4 h-4 accent-teal-700 shrink-0"
+                          />
+                          <div className="min-w-0">
+                            <p className="font-extrabold leading-snug">
+                              {isEn ? item.labelEn : item.labelAr}
+                            </p>
+                            <p className="text-[10px] text-zinc-500 mt-0.5 leading-snug">
+                              {isEn ? item.hintEn : item.hintAr}
+                            </p>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
               <div className="p-3.5 rounded-2xl bg-zinc-50 border border-zinc-200 space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-xs font-extrabold text-zinc-900">
                     {isEn ? 'Allowed Screens & Prep Stations' : 'الشاشات والأقسام المسموح بها لهذا الحساب'}
                   </span>
                   <div className="flex flex-wrap items-center gap-2.5">
-                    <span className="text-[11px] text-zinc-500">
+                    <span className="text-[11px] text-zinc-500 tabular-nums">
                       {isEn
                         ? `${assignableScreens.length} screens`
                         : `${assignableScreens.length} شاشة متاحة`}
@@ -2003,7 +2576,73 @@ export function StaffManagementTab({
                     })}
                   </select>
                 </label>
+
+                {/* Per-Employee Granular DB Permissions Override */}
+                <div className="pt-2 border-t border-zinc-200/80 space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowGranularOverrides((v) => !v)}
+                    className="w-full flex items-center justify-between text-xs font-extrabold text-zinc-900 py-1 cursor-pointer"
+                  >
+                    <span>
+                      {isEn
+                        ? `Granular Permissions Override (${ALL_STAFF_PERMISSION_KEYS.filter((k) => effectivePermissionsInput[k]).length}/${ALL_STAFF_PERMISSION_KEYS.length} active)`
+                        : `تخصيص الصلاحيات التفصيلية للموظف (${ALL_STAFF_PERMISSION_KEYS.filter((k) => effectivePermissionsInput[k]).length}/${ALL_STAFF_PERMISSION_KEYS.length} مفعّلة)`}
+                    </span>
+                    <span className="text-[11px] text-indigo-700">
+                      {showGranularOverrides ? (isEn ? 'Hide' : 'إخفاء') : isEn ? 'Customize' : 'تخصيص'}
+                    </span>
+                  </button>
+
+                  {showGranularOverrides && (
+                    <div className="space-y-3 pt-1">
+                      {PERMISSION_GROUPS.map((grp) => {
+                        const grpItems = PERMISSION_CATALOG.filter((p) => p.group === grp.id);
+                        return (
+                          <div key={grp.id} className="space-y-1.5">
+                            <p className="text-[11px] font-extrabold text-zinc-600">
+                              {isEn ? grp.titleEn : grp.titleAr}
+                            </p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                              {grpItems.map((perm) => {
+                                const checked = Boolean(effectivePermissionsInput[perm.key]);
+                                const allowed = permAllowedInCeiling(perm.key);
+                                return (
+                                  <label
+                                    key={perm.key}
+                                    className={`flex items-start justify-between gap-2 p-2 rounded-xl border text-[11px] font-bold ${
+                                      !allowed
+                                        ? 'bg-zinc-100 border-zinc-200 text-zinc-400 cursor-not-allowed'
+                                        : checked
+                                          ? 'bg-emerald-50 border-emerald-500 text-zinc-950 cursor-pointer'
+                                          : 'bg-white border-zinc-200 text-zinc-700 cursor-pointer'
+                                    }`}
+                                  >
+                                    <span className="flex items-start gap-2 min-w-0">
+                                      <input
+                                        type="checkbox"
+                                        checked={checked}
+                                        disabled={!allowed}
+                                        onChange={() => toggleSinglePermissionOverride(perm.key)}
+                                        className="mt-0.5 w-3.5 h-3.5 accent-emerald-700 shrink-0"
+                                      />
+                                      <span className="leading-snug">
+                                        {isEn ? perm.labelEn : perm.labelAr}
+                                      </span>
+                                    </span>
+                                    {!allowed && <Lock className="w-3 h-3 shrink-0 mt-0.5" />}
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
+              )}
 
               {/* Activation Mode for new creation */}
               {formKind !== 'edit' && (

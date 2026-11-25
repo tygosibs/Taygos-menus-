@@ -18,6 +18,8 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import {
+  EffectiveStaffPermissions,
+  HallManagerPermissions,
   Restaurant,
   StaffAccess,
   StaffActorInfo,
@@ -25,6 +27,7 @@ import {
   StaffAuditLog,
   StaffInvite,
   StaffMember,
+  StaffPermissionKey,
   StaffRole,
   StaffScreen,
 } from '../types/menu';
@@ -39,10 +42,14 @@ import {
   classifyLoginIdentifier,
   deriveInviteBootstrapPassword,
   generateSecureInviteToken,
+  getHallManagerScreens,
   getLoginLockoutState,
+  getResolvedHallManagerPermissions,
   normalizeStaffPhone,
   recordLoginFailure,
   resetLoginFailures,
+  resolveEffectiveStaffPermissions,
+  sanitizeEffectivePermissions,
   sanitizeStaffUsername,
   sha256Hex,
   validateStaffPassword,
@@ -169,10 +176,18 @@ export interface CreateStaffInput {
   phone: string;
   email?: string;
   jobTitle?: string;
+  jobTitleIds?: string[];
+  jobTitleNames?: string[];
   role: StaffRole;
   allowedScreens: StaffScreen[];
   allowedStations?: string[];
   allowedCaptainScreens?: string[];
+  screenOverrides?: StaffScreen[];
+  revokedScreens?: StaffScreen[];
+  hallManagerPermissions?: HallManagerPermissions;
+  permissionOverrides?: Partial<EffectiveStaffPermissions>;
+  revokedPermissions?: StaffPermissionKey[];
+  effectivePermissions?: EffectiveStaffPermissions;
   defaultScreen: StaffScreen;
   defaultStationId?: string;
   hallId?: string;
@@ -228,7 +243,18 @@ export async function createManagerOrStaffAccount(
     }
   }
 
-  const allowedCaptainScreens = cleanStationIdList(input.allowedCaptainScreens).slice(0, 30);
+  const hasExplicitRbac =
+    Boolean(input.effectivePermissions) || (Array.isArray(input.jobTitleIds) && input.jobTitleIds.length > 0);
+
+  const resolvedHallManagerPermissions =
+    input.role === 'hall_manager'
+      ? getResolvedHallManagerPermissions(input.hallManagerPermissions)
+      : undefined;
+
+  const allowedCaptainScreens =
+    input.role === 'hall_manager' && !hasExplicitRbac
+      ? []
+      : cleanStationIdList(input.allowedCaptainScreens).slice(0, 30);
   const rawInputScreens =
     allowedCaptainScreens.length > 0 && !input.allowedScreens.includes('captain')
       ? ([...input.allowedScreens, 'captain'] as StaffScreen[])
@@ -236,11 +262,22 @@ export async function createManagerOrStaffAccount(
 
   const allowedScreens = Array.from(
     new Set<StaffScreen>(
-      input.role === 'manager'
-        ? rawInputScreens.length > 0
-          ? rawInputScreens
-          : ['staff_management', 'cashier', 'kitchen', 'bar', 'pastry', 'captain', 'halls']
-        : rawInputScreens.filter((s) => s !== 'staff_management' && s !== 'halls')
+      hasExplicitRbac
+        ? rawInputScreens
+        : input.role === 'manager'
+          ? rawInputScreens.length > 0
+            ? rawInputScreens
+            : ['staff_management', 'cashier', 'kitchen', 'bar', 'pastry', 'captain', 'hall_assignments', 'halls']
+          : input.role === 'hall_manager'
+            ? getHallManagerScreens(resolvedHallManagerPermissions)
+            : rawInputScreens.filter(
+                (s) =>
+                  s !== 'staff_management' &&
+                  s !== 'job_titles' &&
+                  s !== 'halls' &&
+                  s !== 'hall_manager' &&
+                  s !== 'hall_assignments'
+              )
     )
   ).slice(0, 30);
 
@@ -249,9 +286,12 @@ export async function createManagerOrStaffAccount(
       isEn ? 'Please select at least one screen for this staff member.' : 'يرجى اختيار شاشة واحدة على الأقل للموظف.'
     );
   }
-  const defaultScreen: StaffScreen = allowedScreens.includes(input.defaultScreen)
-    ? input.defaultScreen
-    : allowedScreens[0];
+  const defaultScreen: StaffScreen =
+    input.role === 'hall_manager' && !hasExplicitRbac
+      ? 'hall_manager'
+      : allowedScreens.includes(input.defaultScreen)
+        ? input.defaultScreen
+        : allowedScreens[0];
 
   const derivedStations = new Set<string>();
   (input.allowedStations || []).forEach((s) => {
@@ -268,6 +308,26 @@ export async function createManagerOrStaffAccount(
     screenToStationId(defaultScreen) ||
     allowedStations[0] ||
     '';
+
+  const cleanJobTitleIds = Array.isArray(input.jobTitleIds)
+    ? Array.from(new Set(input.jobTitleIds.map((id) => id.trim()).filter(Boolean))).slice(0, 10)
+    : [];
+  const cleanJobTitleNames = Array.isArray(input.jobTitleNames)
+    ? input.jobTitleNames.map((n) => n.trim().slice(0, 80)).filter(Boolean).slice(0, 10)
+    : [];
+  const resolvedEffectivePermissions = input.effectivePermissions
+    ? sanitizeEffectivePermissions(input.effectivePermissions)
+    : resolveEffectiveStaffPermissions(
+        {
+          role: input.role,
+          allowedScreens,
+          allowedStations,
+          hallManagerPermissions: resolvedHallManagerPermissions,
+          permissionOverrides: input.permissionOverrides,
+          revokedPermissions: input.revokedPermissions,
+        },
+        input.restaurant.operationsConfig?.managerPermissions
+      );
 
   const [uLookupId, pLookupId, eLookupId] = await Promise.all([
     buildLoginIndexId('u', input.restaurant.id, cleanUsername),
@@ -351,10 +411,18 @@ export async function createManagerOrStaffAccount(
     email: cleanEmail,
     authEmail,
     jobTitle: cleanJobTitle,
+    ...(cleanJobTitleIds.length > 0 ? { jobTitleIds: cleanJobTitleIds } : {}),
+    ...(cleanJobTitleNames.length > 0 ? { jobTitleNames: cleanJobTitleNames } : {}),
     role: input.role,
     allowedScreens,
     allowedStations,
     allowedCaptainScreens,
+    ...(input.screenOverrides && input.screenOverrides.length > 0 ? { screenOverrides: input.screenOverrides } : {}),
+    ...(input.revokedScreens && input.revokedScreens.length > 0 ? { revokedScreens: input.revokedScreens } : {}),
+    ...(resolvedHallManagerPermissions ? { hallManagerPermissions: resolvedHallManagerPermissions } : {}),
+    ...(input.permissionOverrides ? { permissionOverrides: input.permissionOverrides } : {}),
+    ...(input.revokedPermissions && input.revokedPermissions.length > 0 ? { revokedPermissions: input.revokedPermissions } : {}),
+    effectivePermissions: resolvedEffectivePermissions,
     defaultScreen,
     defaultStationId,
     hallId: (input.hallId || '').trim().slice(0, 128),
@@ -372,9 +440,12 @@ export async function createManagerOrStaffAccount(
     restaurantId: input.restaurant.id,
     ownerId: input.restaurant.ownerId,
     role: input.role,
+    ...(cleanJobTitleIds.length > 0 ? { jobTitleIds: cleanJobTitleIds } : {}),
     allowedScreens,
     allowedStations,
     allowedCaptainScreens,
+    ...(resolvedHallManagerPermissions ? { hallManagerPermissions: resolvedHallManagerPermissions } : {}),
+    effectivePermissions: resolvedEffectivePermissions,
     defaultScreen,
     defaultStationId,
     hallId: (input.hallId || '').trim().slice(0, 128),
@@ -411,11 +482,15 @@ export async function createManagerOrStaffAccount(
         staffEmail: cleanEmail,
         staffRole: input.role,
         staffJobTitle: cleanJobTitle,
+        ...(cleanJobTitleIds.length > 0 ? { jobTitleIds: cleanJobTitleIds } : {}),
+        ...(cleanJobTitleNames.length > 0 ? { jobTitleNames: cleanJobTitleNames } : {}),
         staffHallId: (input.hallId || '').trim().slice(0, 128),
         staffHallName: (input.hallName || '').trim().slice(0, 80),
         allowedScreens,
         allowedStations,
         allowedCaptainScreens,
+        ...(resolvedHallManagerPermissions ? { hallManagerPermissions: resolvedHallManagerPermissions } : {}),
+        effectivePermissions: resolvedEffectivePermissions,
         defaultScreen,
         defaultStationId,
         expiresAt: Timestamp.fromMillis(expiresAtMs),
@@ -529,10 +604,18 @@ export async function createManagerOrStaffAccount(
       email: cleanEmail,
       authEmail,
       jobTitle: cleanJobTitle,
+      ...(cleanJobTitleIds.length > 0 ? { jobTitleIds: cleanJobTitleIds } : {}),
+      ...(cleanJobTitleNames.length > 0 ? { jobTitleNames: cleanJobTitleNames } : {}),
       role: input.role,
       allowedScreens,
       allowedStations,
       allowedCaptainScreens,
+      ...(input.screenOverrides && input.screenOverrides.length > 0 ? { screenOverrides: input.screenOverrides } : {}),
+      ...(input.revokedScreens && input.revokedScreens.length > 0 ? { revokedScreens: input.revokedScreens } : {}),
+      ...(resolvedHallManagerPermissions ? { hallManagerPermissions: resolvedHallManagerPermissions } : {}),
+      ...(input.permissionOverrides ? { permissionOverrides: input.permissionOverrides } : {}),
+      ...(input.revokedPermissions && input.revokedPermissions.length > 0 ? { revokedPermissions: input.revokedPermissions } : {}),
+      effectivePermissions: resolvedEffectivePermissions,
       defaultScreen,
       defaultStationId,
       hallId: input.hallId || '',
@@ -615,6 +698,15 @@ export async function regenerateStaffInvite(params: {
   const newAccessRef = doc(db, 'staff_access', newUid);
   const newInviteRef = doc(db, 'restaurants', restaurant.id, 'staff_invites', tokenHash);
 
+  const preservedHallManagerPermissions =
+    existingStaff.role === 'hall_manager'
+      ? getResolvedHallManagerPermissions(existingStaff.hallManagerPermissions)
+      : undefined;
+
+  const preservedEffectivePermissions = existingStaff.effectivePermissions
+    ? sanitizeEffectivePermissions(existingStaff.effectivePermissions)
+    : undefined;
+
   try {
     // Batch 1: Create new staff + access + invite (3 writes)
     const coreBatch = writeBatch(db);
@@ -628,10 +720,18 @@ export async function regenerateStaffInvite(params: {
       email: existingStaff.email || '',
       authEmail: newAuthEmail,
       jobTitle: existingStaff.jobTitle || '',
+      ...(existingStaff.jobTitleIds?.length ? { jobTitleIds: existingStaff.jobTitleIds } : {}),
+      ...(existingStaff.jobTitleNames?.length ? { jobTitleNames: existingStaff.jobTitleNames } : {}),
       role: existingStaff.role,
       allowedScreens: existingStaff.allowedScreens,
       allowedStations: existingStaff.allowedStations || [],
       allowedCaptainScreens: existingStaff.allowedCaptainScreens || [],
+      ...(existingStaff.screenOverrides?.length ? { screenOverrides: existingStaff.screenOverrides } : {}),
+      ...(existingStaff.revokedScreens?.length ? { revokedScreens: existingStaff.revokedScreens } : {}),
+      ...(preservedHallManagerPermissions ? { hallManagerPermissions: preservedHallManagerPermissions } : {}),
+      ...(existingStaff.permissionOverrides ? { permissionOverrides: existingStaff.permissionOverrides } : {}),
+      ...(existingStaff.revokedPermissions?.length ? { revokedPermissions: existingStaff.revokedPermissions } : {}),
+      ...(preservedEffectivePermissions ? { effectivePermissions: preservedEffectivePermissions } : {}),
       defaultScreen: existingStaff.defaultScreen,
       defaultStationId: existingStaff.defaultStationId || '',
       hallId: existingStaff.hallId || '',
@@ -648,9 +748,12 @@ export async function regenerateStaffInvite(params: {
       restaurantId: restaurant.id,
       ownerId: restaurant.ownerId,
       role: existingStaff.role,
+      ...(existingStaff.jobTitleIds?.length ? { jobTitleIds: existingStaff.jobTitleIds } : {}),
       allowedScreens: existingStaff.allowedScreens,
       allowedStations: existingStaff.allowedStations || [],
       allowedCaptainScreens: existingStaff.allowedCaptainScreens || [],
+      ...(preservedHallManagerPermissions ? { hallManagerPermissions: preservedHallManagerPermissions } : {}),
+      ...(preservedEffectivePermissions ? { effectivePermissions: preservedEffectivePermissions } : {}),
       defaultScreen: existingStaff.defaultScreen,
       defaultStationId: existingStaff.defaultStationId || '',
       hallId: existingStaff.hallId || '',
@@ -674,11 +777,15 @@ export async function regenerateStaffInvite(params: {
       staffEmail: existingStaff.email || '',
       staffRole: existingStaff.role,
       staffJobTitle: existingStaff.jobTitle || '',
+      ...(existingStaff.jobTitleIds?.length ? { jobTitleIds: existingStaff.jobTitleIds } : {}),
+      ...(existingStaff.jobTitleNames?.length ? { jobTitleNames: existingStaff.jobTitleNames } : {}),
       staffHallId: existingStaff.hallId || '',
       staffHallName: existingStaff.hallName || '',
       allowedScreens: existingStaff.allowedScreens,
       allowedStations: existingStaff.allowedStations || [],
       allowedCaptainScreens: existingStaff.allowedCaptainScreens || [],
+      ...(preservedHallManagerPermissions ? { hallManagerPermissions: preservedHallManagerPermissions } : {}),
+      ...(preservedEffectivePermissions ? { effectivePermissions: preservedEffectivePermissions } : {}),
       defaultScreen: existingStaff.defaultScreen,
       defaultStationId: existingStaff.defaultStationId || '',
       expiresAt: Timestamp.fromMillis(expiresAtMs),
@@ -848,10 +955,18 @@ export async function updateStaffPermissionsAndProfile(params: {
     phone?: string;
     email?: string;
     jobTitle?: string;
+    jobTitleIds?: string[];
+    jobTitleNames?: string[];
     role?: StaffRole;
     allowedScreens?: StaffScreen[];
     allowedStations?: string[];
     allowedCaptainScreens?: string[];
+    screenOverrides?: StaffScreen[];
+    revokedScreens?: StaffScreen[];
+    hallManagerPermissions?: HallManagerPermissions;
+    permissionOverrides?: Partial<EffectiveStaffPermissions>;
+    revokedPermissions?: StaffPermissionKey[];
+    effectivePermissions?: EffectiveStaffPermissions;
     defaultScreen?: StaffScreen;
     defaultStationId?: string;
     hallId?: string;
@@ -865,9 +980,21 @@ export async function updateStaffPermissionsAndProfile(params: {
   const nextEmail = (updates.email ?? staff.email ?? '').trim().toLowerCase().slice(0, 254);
   const nextJobTitle = (updates.jobTitle ?? staff.jobTitle ?? '').trim().slice(0, 80);
   const nextRole = updates.role ?? staff.role;
-  const nextCaptainScreens = cleanStationIdList(
-    updates.allowedCaptainScreens ?? staff.allowedCaptainScreens ?? []
-  ).slice(0, 30);
+  const nextJobTitleIds = updates.jobTitleIds ?? staff.jobTitleIds ?? [];
+  const nextJobTitleNames = updates.jobTitleNames ?? staff.jobTitleNames ?? [];
+  const hasExplicitRbac =
+    Boolean(updates.effectivePermissions) ||
+    Boolean(staff.effectivePermissions) ||
+    nextJobTitleIds.length > 0;
+
+  const nextHallManagerPermissions =
+    nextRole === 'hall_manager'
+      ? getResolvedHallManagerPermissions(updates.hallManagerPermissions ?? staff.hallManagerPermissions)
+      : undefined;
+  const nextCaptainScreens =
+    nextRole === 'hall_manager' && !hasExplicitRbac
+      ? []
+      : cleanStationIdList(updates.allowedCaptainScreens ?? staff.allowedCaptainScreens ?? []).slice(0, 30);
   const baseScreens = updates.allowedScreens ?? staff.allowedScreens;
   const rawScreens =
     nextCaptainScreens.length > 0 && !baseScreens.includes('captain')
@@ -875,11 +1002,22 @@ export async function updateStaffPermissionsAndProfile(params: {
       : baseScreens;
   const nextScreens = Array.from(
     new Set<StaffScreen>(
-      nextRole === 'manager'
-        ? rawScreens.length > 0
-          ? rawScreens
-          : ['staff_management', 'cashier', 'kitchen', 'bar', 'pastry', 'captain', 'halls']
-        : rawScreens.filter((s) => s !== 'staff_management' && s !== 'halls')
+      hasExplicitRbac
+        ? rawScreens
+        : nextRole === 'manager'
+          ? rawScreens.length > 0
+            ? rawScreens
+            : ['staff_management', 'cashier', 'kitchen', 'bar', 'pastry', 'captain', 'hall_assignments', 'halls']
+          : nextRole === 'hall_manager'
+            ? getHallManagerScreens(nextHallManagerPermissions)
+            : rawScreens.filter(
+                (s) =>
+                  s !== 'staff_management' &&
+                  s !== 'job_titles' &&
+                  s !== 'halls' &&
+                  s !== 'hall_manager' &&
+                  s !== 'hall_assignments'
+              )
     )
   ).slice(0, 30);
 
@@ -890,7 +1028,12 @@ export async function updateStaffPermissionsAndProfile(params: {
     );
   }
   const candidateDefault = updates.defaultScreen ?? staff.defaultScreen;
-  const nextDefault = nextScreens.includes(candidateDefault) ? candidateDefault : nextScreens[0];
+  const nextDefault =
+    nextRole === 'hall_manager' && !hasExplicitRbac
+      ? 'hall_manager'
+      : nextScreens.includes(candidateDefault)
+        ? candidateDefault
+        : nextScreens[0];
 
   const derivedStations = new Set<string>();
   (updates.allowedStations ?? staff.allowedStations ?? []).forEach((s) => {
@@ -907,6 +1050,23 @@ export async function updateStaffPermissionsAndProfile(params: {
     screenToStationId(nextDefault) ||
     nextStations[0] ||
     '';
+
+  const nextScreenOverrides = updates.screenOverrides ?? staff.screenOverrides ?? [];
+  const nextRevokedScreens = updates.revokedScreens ?? staff.revokedScreens ?? [];
+  const nextPermissionOverrides = updates.permissionOverrides ?? staff.permissionOverrides;
+  const nextRevokedPermissions = updates.revokedPermissions ?? staff.revokedPermissions ?? [];
+
+  const nextEffectivePermissions = updates.effectivePermissions
+    ? sanitizeEffectivePermissions(updates.effectivePermissions)
+    : resolveEffectiveStaffPermissions({
+        role: nextRole,
+        allowedScreens: nextScreens,
+        allowedStations: nextStations,
+        hallManagerPermissions: nextHallManagerPermissions,
+        effectivePermissions: staff.effectivePermissions,
+        permissionOverrides: nextPermissionOverrides,
+        revokedPermissions: nextRevokedPermissions,
+      });
 
   const nextHallId = (updates.hallId ?? staff.hallId ?? '').trim().slice(0, 128);
   const nextHallName = (updates.hallName ?? staff.hallName ?? '').trim().slice(0, 80);
@@ -942,10 +1102,18 @@ export async function updateStaffPermissionsAndProfile(params: {
     phone: nextPhone,
     email: nextEmail,
     jobTitle: nextJobTitle,
+    jobTitleIds: nextJobTitleIds,
+    jobTitleNames: nextJobTitleNames,
     role: nextRole,
     allowedScreens: nextScreens,
     allowedStations: nextStations,
     allowedCaptainScreens: nextCaptainScreens,
+    screenOverrides: nextScreenOverrides,
+    revokedScreens: nextRevokedScreens,
+    ...(nextHallManagerPermissions ? { hallManagerPermissions: nextHallManagerPermissions } : {}),
+    ...(nextPermissionOverrides ? { permissionOverrides: nextPermissionOverrides } : {}),
+    revokedPermissions: nextRevokedPermissions,
+    effectivePermissions: nextEffectivePermissions,
     defaultScreen: nextDefault,
     defaultStationId: nextDefaultStation,
     hallId: nextHallId,
@@ -956,9 +1124,12 @@ export async function updateStaffPermissionsAndProfile(params: {
 
   batch.update(doc(db, 'staff_access', staff.uid), {
     role: nextRole,
+    jobTitleIds: nextJobTitleIds,
     allowedScreens: nextScreens,
     allowedStations: nextStations,
     allowedCaptainScreens: nextCaptainScreens,
+    ...(nextHallManagerPermissions ? { hallManagerPermissions: nextHallManagerPermissions } : {}),
+    effectivePermissions: nextEffectivePermissions,
     defaultScreen: nextDefault,
     defaultStationId: nextDefaultStation,
     hallId: nextHallId,
@@ -1823,6 +1994,33 @@ export async function getMyStaffProfile(
   } catch {
     return null;
   }
+}
+
+export function subscribeMyStaffProfile(
+  restaurantId: string,
+  uid: string,
+  onData: (staff: StaffMember | null) => void,
+  onError?: (err: Error) => void
+): () => void {
+  if (!restaurantId || !uid) {
+    onData(null);
+    return () => {};
+  }
+  return onSnapshot(
+    doc(db, 'restaurants', restaurantId, 'staff', uid),
+    (snap) => {
+      if (!snap.exists()) {
+        onData(null);
+        return;
+      }
+      onData({ ...(snap.data() as StaffMember), uid: snap.id });
+    },
+    (err) => {
+      if (onError) {
+        onError(err instanceof Error ? err : new Error(String(err)));
+      }
+    }
+  );
 }
 
 export async function getStaffAccessForUid(uid: string): Promise<StaffAccess | null> {

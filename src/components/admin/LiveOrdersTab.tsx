@@ -79,10 +79,13 @@ import {
   printThermalJobsSequentially,
   tryAutoReconnectSavedPrinter,
 } from '../../lib/thermalPrinterService';
+import { formatFirestoreErrorMessage } from '../../lib/firebase';
+import { OWNER_FULL_PERMISSIONS, resolveEffectiveStaffPermissions } from '../../lib/staffAuthUtils';
 import {
   Category,
   CustomerProfile,
   DrawerExpense,
+  EffectiveStaffPermissions,
   Hall,
   ItemPrepState,
   MenuItem,
@@ -119,6 +122,7 @@ interface LiveOrdersTabProps {
   initialStation?: StationView;
   staffMode?: boolean;
   actor?: StaffActorInfo;
+  effectivePermissions?: EffectiveStaffPermissions;
   activeCashierShift?: StaffShift | null;
   allShifts?: StaffShift[];
   staffList?: StaffMember[];
@@ -166,6 +170,7 @@ export function LiveOrdersTab({
   initialStation,
   staffMode = false,
   actor,
+  effectivePermissions,
   activeCashierShift,
   allShifts,
   staffList = [],
@@ -183,14 +188,27 @@ export function LiveOrdersTab({
 
   const opsConfig = useMemo(() => getResolvedOperationsConfig(restaurant), [restaurant]);
   const isOwnerActor = !actor || actor.role === 'owner';
-  const isManagerActor = actor?.role === 'manager';
   const managerPerms = opsConfig.managerPermissions;
+  const resolvedPerms = useMemo(() => {
+    if (effectivePermissions) return effectivePermissions;
+    if (!actor || isOwnerActor || actor.role === 'owner' || actor.role === 'superadmin') {
+      return OWNER_FULL_PERMISSIONS;
+    }
+    return resolveEffectiveStaffPermissions({ role: actor.role }, managerPerms);
+  }, [effectivePermissions, isOwnerActor, actor, managerPerms]);
 
-  const canEditOpenOrders = isOwnerActor || (isManagerActor && managerPerms.canEditOpenOrders);
-  const canCancelOpenOrders = isOwnerActor || (isManagerActor && managerPerms.canCancelOpenOrders);
-  const canApplyInstantDiscount = isOwnerActor || (isManagerActor && managerPerms.canApplyInstantDiscount);
-  const canEditClosedChecks = isOwnerActor || (isManagerActor && managerPerms.canEditClosedChecks);
-  const canEditDrawerFloat = isOwnerActor || (isManagerActor && managerPerms.canEditDrawerFloat);
+  const canAddEditTableOrders = isOwnerActor || resolvedPerms.canAddEditTableOrders;
+  const canEditOpenOrders = isOwnerActor || resolvedPerms.canEditOpenOrders;
+  const canCancelOpenOrders = isOwnerActor || resolvedPerms.canCancelOpenOrders;
+  const canApplyInstantDiscount = isOwnerActor || resolvedPerms.canApplyInstantDiscount;
+  const canSettleChecks = isOwnerActor || resolvedPerms.canSettleChecks;
+  const canEditClosedChecks = isOwnerActor || resolvedPerms.canEditClosedChecks;
+  const canUpdatePrepProgress = isOwnerActor || resolvedPerms.canUpdatePrepProgress;
+  const canManageServiceCalls = isOwnerActor || resolvedPerms.canManageServiceCalls;
+  const canManageShifts = isOwnerActor || resolvedPerms.canManageShifts;
+  const canAddDrawerExpenses = isOwnerActor || resolvedPerms.canAddDrawerExpenses;
+  const canEditDrawerFloat = isOwnerActor || resolvedPerms.canEditDrawerFloat;
+  const canConfigureOperations = isOwnerActor || resolvedPerms.canConfigureOperations;
 
   const effectiveActor: StaffActorInfo = useMemo(
     () =>
@@ -1044,9 +1062,11 @@ export function LiveOrdersTab({
 
   const handleSaveModifiedOrder = async (cancelOrder = false) => {
     if (!modifyTargetOrder) return;
-    if (!modifyAuditReason.trim()) {
+    if (modifyAuditReason.trim().length < 2) {
       setModifyError(
-        isEn ? 'Please enter a reason for modifying or cancelling.' : 'يجب كتابة سبب التعديل أو الإلغاء.'
+        isEn
+          ? 'Please enter a clear reason (at least 2 characters).'
+          : 'يجب كتابة سبب التعديل أو الإلغاء (حرفين على الأقل).'
       );
       return;
     }
@@ -1086,7 +1106,7 @@ export function LiveOrdersTab({
       });
       setModifyTargetOrder(null);
     } catch (err) {
-      setModifyError(err instanceof Error ? err.message : isEn ? 'Could not save changes.' : 'تعذر حفظ التعديل.');
+      setModifyError(formatFirestoreErrorMessage(err, isEn));
     } finally {
       setModifyBusy(false);
     }
@@ -1248,7 +1268,7 @@ export function LiveOrdersTab({
   const getCallMeta = (type: ServiceCallType) => {
     if (type === 'call_waiter') {
       return {
-        label: isEn ? 'Call Captain / Waiter' : 'نداء الكابتن / الويتر',
+        label: isEn ? 'Call Captain' : 'نداء الكابتن',
         badgeClass: 'bg-amber-100 text-amber-900 border-amber-300',
         Icon: BellRing,
       };
@@ -1892,7 +1912,7 @@ export function LiveOrdersTab({
                                     </div>
 
                                     <div className="flex flex-wrap items-center gap-1.5 shrink-0">
-                                      {prepState === 'pending' && allowPrepareBtn && (
+                                      {canUpdatePrepProgress && prepState === 'pending' && allowPrepareBtn && (
                                         <button
                                           type="button"
                                           disabled={updatingItemKey === `${order.id}:preparing:${originalIndex}`}
@@ -1909,7 +1929,7 @@ export function LiveOrdersTab({
                                           {isEn ? 'Prep' : 'تحضير'}
                                         </button>
                                       )}
-                                      {(prepState === 'pending' || prepState === 'preparing') && allowReadyBtn && (
+                                      {canUpdatePrepProgress && (prepState === 'pending' || prepState === 'preparing') && allowReadyBtn && (
                                         <button
                                           type="button"
                                           disabled={updatingItemKey === `${order.id}:ready:${originalIndex}`}
@@ -1932,7 +1952,7 @@ export function LiveOrdersTab({
                                               : 'جاهز'}
                                         </button>
                                       )}
-                                      {prepState === 'ready' && allowServedBtn && (
+                                      {canUpdatePrepProgress && prepState === 'ready' && allowServedBtn && (
                                         <button
                                           type="button"
                                           disabled={updatingItemKey === `${order.id}:served:${originalIndex}`}
@@ -1964,7 +1984,7 @@ export function LiveOrdersTab({
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2 pt-1">
-                          {allowReadyBtn && unreadyIndices.length > 1 && (
+                          {canUpdatePrepProgress && allowReadyBtn && unreadyIndices.length > 1 && (
                             <button
                               type="button"
                               disabled={updatingItemKey === batchKey}
@@ -2091,27 +2111,29 @@ export function LiveOrdersTab({
               )}
             </button>
 
-            <button
-              type="button"
-              onClick={() => setCashierSubView('pos')}
-              className={`min-h-[42px] px-3.5 py-2 border text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap cursor-pointer transition-colors ${ui.radiusClasses.button}`}
-              style={
-                cashierSubView === 'pos'
-                  ? {
-                      backgroundColor: ui.theme.accentHex,
-                      borderColor: ui.theme.accentHex,
-                      color: ui.theme.accentTextHex,
-                    }
-                  : {
-                      backgroundColor: ui.theme.surfaceSubtleBg,
-                      borderColor: ui.theme.surfaceBorder,
-                      color: ui.theme.surfaceText,
-                    }
-              }
-            >
-              <ShoppingBag className="w-4 h-4 shrink-0" />
-              <span>{isEn ? 'Cashier Fast POS' : 'نقطة بيع الكاشير (صالة / تيك أواي / دليفري)'}</span>
-            </button>
+            {canAddEditTableOrders && (
+              <button
+                type="button"
+                onClick={() => setCashierSubView('pos')}
+                className={`min-h-[42px] px-3.5 py-2 border text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap cursor-pointer transition-colors ${ui.radiusClasses.button}`}
+                style={
+                  cashierSubView === 'pos'
+                    ? {
+                        backgroundColor: ui.theme.accentHex,
+                        borderColor: ui.theme.accentHex,
+                        color: ui.theme.accentTextHex,
+                      }
+                    : {
+                        backgroundColor: ui.theme.surfaceSubtleBg,
+                        borderColor: ui.theme.surfaceBorder,
+                        color: ui.theme.surfaceText,
+                      }
+                }
+              >
+                <ShoppingBag className="w-4 h-4 shrink-0" />
+                <span>{isEn ? 'Cashier Fast POS' : 'نقطة بيع الكاشير (صالة / تيك أواي / دليفري)'}</span>
+              </button>
+            )}
           </div>
 
           {cashierSubView !== 'orders' ? (
@@ -2130,7 +2152,10 @@ export function LiveOrdersTab({
               canEditOpenOrders={canEditOpenOrders}
               canApplyInstantDiscount={canApplyInstantDiscount}
               canCancelOpenOrders={canCancelOpenOrders}
-              canConfigureGridColors={isOwnerActor || (isManagerActor && managerPerms.canConfigureOperations)}
+              canConfigureGridColors={canConfigureOperations}
+              canAddEditTableOrders={canAddEditTableOrders}
+              canSettleChecks={canSettleChecks}
+              canManageServiceCalls={canManageServiceCalls}
               mode={cashierSubView}
               prefillPosTable={posPrefillTable}
               onConsumePrefill={() => setPosPrefillTable(null)}
@@ -2240,25 +2265,29 @@ export function LiveOrdersTab({
                               </button>
                             );
                           })()}
-                        {!isAck && (
-                          <button
-                            type="button"
-                            disabled={updatingCallId === call.id}
-                            onClick={() => handleCallStatusChange(call, 'acknowledged')}
-                            className="flex-1 py-2 px-2.5 rounded-lg bg-blue-600 text-white text-[11px] font-bold hover:bg-blue-700 cursor-pointer disabled:opacity-50"
-                          >
-                            {isEn ? 'On the Way' : 'جاري التلبية'}
-                          </button>
+                        {canManageServiceCalls && (
+                          <>
+                            {!isAck && (
+                              <button
+                                type="button"
+                                disabled={updatingCallId === call.id}
+                                onClick={() => handleCallStatusChange(call, 'acknowledged')}
+                                className="flex-1 py-2 px-2.5 rounded-lg bg-blue-600 text-white text-[11px] font-bold hover:bg-blue-700 cursor-pointer disabled:opacity-50"
+                              >
+                                {isEn ? 'On the Way' : 'جاري التلبية'}
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              disabled={updatingCallId === call.id}
+                              onClick={() => handleCallStatusChange(call, 'resolved')}
+                              className="flex-1 py-2 px-2.5 rounded-lg bg-emerald-600 text-white text-[11px] font-bold hover:bg-emerald-700 flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50"
+                            >
+                              <CheckCheck className="w-3.5 h-3.5" />
+                              <span>{isEn ? 'Done' : 'تم التنفيذ'}</span>
+                            </button>
+                          </>
                         )}
-                        <button
-                          type="button"
-                          disabled={updatingCallId === call.id}
-                          onClick={() => handleCallStatusChange(call, 'resolved')}
-                          className="flex-1 py-2 px-2.5 rounded-lg bg-emerald-600 text-white text-[11px] font-bold hover:bg-emerald-700 flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50"
-                        >
-                          <CheckCheck className="w-3.5 h-3.5" />
-                          <span>{isEn ? 'Done' : 'تم التنفيذ'}</span>
-                        </button>
                       </div>
                     </div>
                   );
@@ -2475,14 +2504,16 @@ export function LiveOrdersTab({
                         <span>{isEn ? 'Print Receipt' : 'طباعة الريسيت'}</span>
                       </button>
 
-                      <button
-                        type="button"
-                        onClick={() => openSettlementModal({ type: 'table', group }, 'cash')}
-                        className={`flex-1 min-h-[42px] px-4 py-2 bg-emerald-600 text-white text-xs font-extrabold hover:bg-emerald-700 flex items-center justify-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
-                      >
-                        <Banknote className="w-4 h-4" />
-                        <span>{isEn ? 'Settle & Close' : 'تحصيل وإقفال الشيك'}</span>
-                      </button>
+                      {canSettleChecks && (
+                        <button
+                          type="button"
+                          onClick={() => openSettlementModal({ type: 'table', group }, 'cash')}
+                          className={`flex-1 min-h-[42px] px-4 py-2 bg-emerald-600 text-white text-xs font-extrabold hover:bg-emerald-700 flex items-center justify-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
+                        >
+                          <Banknote className="w-4 h-4" />
+                          <span>{isEn ? 'Settle & Close' : 'تحصيل وإقفال الشيك'}</span>
+                        </button>
+                      )}
                     </div>
                   </article>
                 ))}
@@ -2888,7 +2919,7 @@ export function LiveOrdersTab({
 
                           {!isTerminal && (
                             <>
-                              {order.status === 'pending' && (
+                              {(canUpdatePrepProgress || canEditOpenOrders) && order.status === 'pending' && (
                                 <button
                                   type="button"
                                   disabled={updatingId === order.id}
@@ -2898,14 +2929,16 @@ export function LiveOrdersTab({
                                   {t.admin.orders.btnStartPreparing}
                                 </button>
                               )}
-                              <button
-                                type="button"
-                                onClick={() => openSettlementModal({ type: 'order', order }, 'cash')}
-                                className="flex-1 py-2 px-3 rounded-xl bg-emerald-600 text-white text-xs font-extrabold hover:bg-emerald-700 cursor-pointer flex items-center justify-center gap-1"
-                              >
-                                <Banknote className="w-3.5 h-3.5" />
-                                <span>{isEn ? 'Settle & Close' : 'تحصيل وإغلاق'}</span>
-                              </button>
+                              {canSettleChecks && (
+                                <button
+                                  type="button"
+                                  onClick={() => openSettlementModal({ type: 'order', order }, 'cash')}
+                                  className="flex-1 py-2 px-3 rounded-xl bg-emerald-600 text-white text-xs font-extrabold hover:bg-emerald-700 cursor-pointer flex items-center justify-center gap-1"
+                                >
+                                  <Banknote className="w-3.5 h-3.5" />
+                                  <span>{isEn ? 'Settle & Close' : 'تحصيل وإغلاق'}</span>
+                                </button>
+                              )}
                             </>
                           )}
                         </div>
@@ -3591,73 +3624,79 @@ export function LiveOrdersTab({
                         </div>
 
                         {/* Quick Expense Entry */}
-                        <div className="p-4 rounded-2xl border border-zinc-200 space-y-3">
-                          <h4 className="text-xs font-extrabold text-zinc-950">
-                            {isEn ? 'Add Drawer Expense / Petty Cash' : 'إضافة مصروف/نثريات من الدرج'}
-                          </h4>
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                            <input
-                              type="number"
-                              min={1}
-                              dir="ltr"
-                              placeholder={isEn ? 'Amount *' : 'المبلغ *'}
-                              value={expenseAmountInput}
-                              onChange={(e) => setExpenseAmountInput(e.target.value)}
-                              className="px-3 py-2 rounded-xl border border-zinc-300 text-xs font-mono-num font-bold"
-                            />
-                            <input
-                              type="text"
-                              placeholder={
-                                isEn ? 'Expense description (e.g. ice / supplies) *' : 'بيان المصروف (مثال: ثلج / دليفري) *'
-                              }
-                              value={expenseDescInput}
-                              onChange={(e) => setExpenseDescInput(e.target.value)}
-                              className="sm:col-span-2 px-3 py-2 rounded-xl border border-zinc-300 text-xs font-bold"
-                            />
-                          </div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <input
-                              type="text"
-                              placeholder={isEn ? 'Extra note (optional)' : 'ملاحظة إضافية (اختياري)'}
-                              value={expenseNoteInput}
-                              onChange={(e) => setExpenseNoteInput(e.target.value)}
-                              className="flex-1 px-3 py-2 rounded-xl border border-zinc-200 text-xs"
-                            />
-                            <button
-                              type="button"
-                              disabled={savingExpense}
-                              onClick={handleAddShiftExpense}
-                              className="min-h-[38px] px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-extrabold cursor-pointer disabled:opacity-50"
-                            >
-                              {savingExpense
-                                ? isEn
-                                  ? 'Recording...'
-                                  : 'جاري التسجيل...'
-                                : isEn
-                                  ? 'Record Drawer Expense'
-                                  : 'تسجيل مصروف من الدرج'}
-                            </button>
-                          </div>
-
-                          {shiftExpenses.length > 0 && (
-                            <div className="space-y-1.5 pt-2 border-t border-zinc-100 max-h-32 overflow-y-auto">
-                              {shiftExpenses.map((ex) => (
-                                <div
-                                  key={ex.id}
-                                  className="flex items-center justify-between text-[11px] bg-zinc-50 px-3 py-1.5 rounded-lg"
-                                >
-                                  <span className="font-bold text-zinc-800">
-                                    {ex.description}
-                                    {ex.note ? ` (${ex.note})` : ''}
-                                  </span>
-                                  <span className="font-mono-num font-extrabold text-rose-700">
-                                    -{formatMoney(ex.amount)}
-                                  </span>
+                        {(canAddDrawerExpenses || shiftExpenses.length > 0) && (
+                          <div className="p-4 rounded-2xl border border-zinc-200 space-y-3">
+                            <h4 className="text-xs font-extrabold text-zinc-950">
+                              {isEn ? 'Drawer Expenses / Petty Cash' : 'مصروفات ونثريات الدرج'}
+                            </h4>
+                            {canAddDrawerExpenses && (
+                              <>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    dir="ltr"
+                                    placeholder={isEn ? 'Amount *' : 'المبلغ *'}
+                                    value={expenseAmountInput}
+                                    onChange={(e) => setExpenseAmountInput(e.target.value)}
+                                    className="px-3 py-2 rounded-xl border border-zinc-300 text-xs font-mono-num font-bold"
+                                  />
+                                  <input
+                                    type="text"
+                                    placeholder={
+                                      isEn ? 'Expense description (e.g. ice / supplies) *' : 'بيان المصروف (مثال: ثلج / دليفري) *'
+                                    }
+                                    value={expenseDescInput}
+                                    onChange={(e) => setExpenseDescInput(e.target.value)}
+                                    className="sm:col-span-2 px-3 py-2 rounded-xl border border-zinc-300 text-xs font-bold"
+                                  />
                                 </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <input
+                                    type="text"
+                                    placeholder={isEn ? 'Extra note (optional)' : 'ملاحظة إضافية (اختياري)'}
+                                    value={expenseNoteInput}
+                                    onChange={(e) => setExpenseNoteInput(e.target.value)}
+                                    className="flex-1 px-3 py-2 rounded-xl border border-zinc-200 text-xs"
+                                  />
+                                  <button
+                                    type="button"
+                                    disabled={savingExpense}
+                                    onClick={handleAddShiftExpense}
+                                    className="min-h-[38px] px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-extrabold cursor-pointer disabled:opacity-50"
+                                  >
+                                    {savingExpense
+                                      ? isEn
+                                        ? 'Recording...'
+                                        : 'جاري التسجيل...'
+                                      : isEn
+                                        ? 'Record Drawer Expense'
+                                        : 'تسجيل مصروف من الدرج'}
+                                  </button>
+                                </div>
+                              </>
+                            )}
+
+                            {shiftExpenses.length > 0 && (
+                              <div className="space-y-1.5 pt-2 border-t border-zinc-100 max-h-32 overflow-y-auto">
+                                {shiftExpenses.map((ex) => (
+                                  <div
+                                    key={ex.id}
+                                    className="flex items-center justify-between text-[11px] bg-zinc-50 px-3 py-1.5 rounded-lg"
+                                  >
+                                    <span className="font-bold text-zinc-800">
+                                      {ex.description}
+                                      {ex.note ? ` (${ex.note})` : ''}
+                                    </span>
+                                    <span className="font-mono-num font-extrabold text-rose-700">
+                                      -{formatMoney(ex.amount)}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
 
                         {/* Open Tables Warning */}
                         {openTableGroups.length > 0 && (
@@ -3687,139 +3726,147 @@ export function LiveOrdersTab({
                         )}
 
                         {/* Shift Handover Form */}
-                        <div className="p-4 rounded-2xl bg-zinc-50 border border-zinc-200 space-y-3">
-                          <h4 className="text-xs font-extrabold text-zinc-950 flex items-center gap-1.5">
-                            <ArrowRightLeft className="w-4 h-4 text-indigo-600" />
-                            <span>
-                              {isEn ? 'Close Shift & Hand Over Drawer To:' : 'تقفيل الوردية وتسليم الدرج إلى:'}
-                            </span>
-                          </h4>
+                        {canManageShifts ? (
+                          <div className="p-4 rounded-2xl bg-zinc-50 border border-zinc-200 space-y-3">
+                            <h4 className="text-xs font-extrabold text-zinc-950 flex items-center gap-1.5">
+                              <ArrowRightLeft className="w-4 h-4 text-indigo-600" />
+                              <span>
+                                {isEn ? 'Close Shift & Hand Over Drawer To:' : 'تقفيل الوردية وتسليم الدرج إلى:'}
+                              </span>
+                            </h4>
 
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                            {(
-                              [
-                                { id: 'cashier' as const, label: isEn ? 'Next Cashier' : 'كاشير تالي' },
-                                { id: 'manager' as const, label: isEn ? 'Manager Custody' : 'عهدة المدير' },
-                                { id: 'owner' as const, label: isEn ? 'Owner Vault' : 'خزنة المالك' },
-                                {
-                                  id: 'self_next_slot' as const,
-                                  label: isEn ? 'Continue Next Shift' : 'استمر للوردية التالية',
-                                },
-                              ] as const
-                            ).map((opt) => (
-                              <button
-                                key={opt.id}
-                                type="button"
-                                onClick={() => setHandoverRecipientType(opt.id)}
-                                className={`min-h-[38px] px-2.5 py-2 rounded-xl border text-[11px] font-extrabold cursor-pointer ${
-                                  handoverRecipientType === opt.id
-                                    ? 'bg-indigo-700 text-white border-indigo-700'
-                                    : 'bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-100'
-                                }`}
-                              >
-                                {opt.label}
-                              </button>
-                            ))}
-                          </div>
-
-                          {handoverRecipientType === 'cashier' && (
-                            <div className="space-y-2">
-                              {otherCashiers.length > 0 && (
-                                <select
-                                  value={handoverRecipientUid}
-                                  onChange={(e) => setHandoverRecipientUid(e.target.value)}
-                                  className="w-full px-3 py-2 rounded-xl border border-zinc-300 bg-white text-xs font-bold"
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                              {(
+                                [
+                                  { id: 'cashier' as const, label: isEn ? 'Next Cashier' : 'كاشير تالي' },
+                                  { id: 'manager' as const, label: isEn ? 'Manager Custody' : 'عهدة المدير' },
+                                  { id: 'owner' as const, label: isEn ? 'Owner Vault' : 'خزنة المالك' },
+                                  {
+                                    id: 'self_next_slot' as const,
+                                    label: isEn ? 'Continue Next Shift' : 'استمر للوردية التالية',
+                                  },
+                                ] as const
+                              ).map((opt) => (
+                                <button
+                                  key={opt.id}
+                                  type="button"
+                                  onClick={() => setHandoverRecipientType(opt.id)}
+                                  className={`min-h-[38px] px-2.5 py-2 rounded-xl border text-[11px] font-extrabold cursor-pointer ${
+                                    handoverRecipientType === opt.id
+                                      ? 'bg-indigo-700 text-white border-indigo-700'
+                                      : 'bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-100'
+                                  }`}
                                 >
-                                  <option value="">
-                                    {isEn ? 'Select receiving cashier...' : 'اختر الكاشير المستلم...'}
-                                  </option>
-                                  {otherCashiers.map((c) => (
-                                    <option key={c.uid} value={c.uid}>
-                                      {c.name} (@{c.username})
-                                    </option>
-                                  ))}
-                                </select>
-                              )}
-                              {(!otherCashiers.length || !handoverRecipientUid) && (
-                                <input
-                                  type="text"
-                                  placeholder={
-                                    isEn
-                                      ? 'Or enter receiving cashier name manually'
-                                      : 'أو اكتب اسم الكاشير المستلم يدوياً'
-                                  }
-                                  value={handoverCustomName}
-                                  onChange={(e) => setHandoverCustomName(e.target.value)}
-                                  className="w-full px-3 py-2 rounded-xl border border-zinc-300 bg-white text-xs font-bold"
-                                />
-                              )}
+                                  {opt.label}
+                                </button>
+                              ))}
                             </div>
-                          )}
 
-                          {handoverRecipientType === 'manager' && (
-                            <div className="space-y-2">
-                              {activeManagers.length > 0 ? (
-                                <select
-                                  value={handoverRecipientUid}
-                                  onChange={(e) => setHandoverRecipientUid(e.target.value)}
-                                  className="w-full px-3 py-2 rounded-xl border border-zinc-300 bg-white text-xs font-bold"
-                                >
-                                  <option value="">
-                                    {isEn ? 'Select receiving manager...' : 'اختر المدير المستلم...'}
-                                  </option>
-                                  {activeManagers.map((m) => (
-                                    <option key={m.uid} value={m.uid}>
-                                      {m.name}
+                            {handoverRecipientType === 'cashier' && (
+                              <div className="space-y-2">
+                                {otherCashiers.length > 0 && (
+                                  <select
+                                    value={handoverRecipientUid}
+                                    onChange={(e) => setHandoverRecipientUid(e.target.value)}
+                                    className="w-full px-3 py-2 rounded-xl border border-zinc-300 bg-white text-xs font-bold"
+                                  >
+                                    <option value="">
+                                      {isEn ? 'Select receiving cashier...' : 'اختر الكاشير المستلم...'}
                                     </option>
-                                  ))}
-                                </select>
-                              ) : (
-                                <input
-                                  type="text"
-                                  placeholder={
-                                    isEn
-                                      ? 'Receiving manager name (default: Restaurant Manager)'
-                                      : 'اسم المدير المستلم (افتراضي: مدير المطعم)'
-                                  }
-                                  value={handoverCustomName}
-                                  onChange={(e) => setHandoverCustomName(e.target.value)}
-                                  className="w-full px-3 py-2 rounded-xl border border-zinc-300 bg-white text-xs font-bold"
-                                />
-                              )}
-                            </div>
-                          )}
+                                    {otherCashiers.map((c) => (
+                                      <option key={c.uid} value={c.uid}>
+                                        {c.name} (@{c.username})
+                                      </option>
+                                    ))}
+                                  </select>
+                                )}
+                                {(!otherCashiers.length || !handoverRecipientUid) && (
+                                  <input
+                                    type="text"
+                                    placeholder={
+                                      isEn
+                                        ? 'Or enter receiving cashier name manually'
+                                        : 'أو اكتب اسم الكاشير المستلم يدوياً'
+                                    }
+                                    value={handoverCustomName}
+                                    onChange={(e) => setHandoverCustomName(e.target.value)}
+                                    className="w-full px-3 py-2 rounded-xl border border-zinc-300 bg-white text-xs font-bold"
+                                  />
+                                )}
+                              </div>
+                            )}
 
-                          <input
-                            type="text"
-                            placeholder={isEn ? 'Handover note (optional)' : 'ملاحظة التسليم (اختياري)'}
-                            value={handoverNote}
-                            onChange={(e) => setHandoverNote(e.target.value)}
-                            className="w-full px-3 py-2 rounded-xl border border-zinc-200 bg-white text-xs"
-                          />
+                            {handoverRecipientType === 'manager' && (
+                              <div className="space-y-2">
+                                {activeManagers.length > 0 ? (
+                                  <select
+                                    value={handoverRecipientUid}
+                                    onChange={(e) => setHandoverRecipientUid(e.target.value)}
+                                    className="w-full px-3 py-2 rounded-xl border border-zinc-300 bg-white text-xs font-bold"
+                                  >
+                                    <option value="">
+                                      {isEn ? 'Select receiving manager...' : 'اختر المدير المستلم...'}
+                                    </option>
+                                    {activeManagers.map((m) => (
+                                      <option key={m.uid} value={m.uid}>
+                                        {m.name}
+                                      </option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <input
+                                    type="text"
+                                    placeholder={
+                                      isEn
+                                        ? 'Receiving manager name (default: Restaurant Manager)'
+                                        : 'اسم المدير المستلم (افتراضي: مدير المطعم)'
+                                    }
+                                    value={handoverCustomName}
+                                    onChange={(e) => setHandoverCustomName(e.target.value)}
+                                    className="w-full px-3 py-2 rounded-xl border border-zinc-300 bg-white text-xs font-bold"
+                                  />
+                                )}
+                              </div>
+                            )}
 
-                          <button
-                            type="button"
-                            disabled={closingHandover}
-                            onClick={handleConfirmHandoverClose}
-                            className={`w-full min-h-[44px] text-xs font-extrabold cursor-pointer disabled:opacity-50 ${ui.radiusClasses.button}`}
-                            style={{
-                              backgroundColor: ui.theme.accentHex,
-                              color: ui.theme.accentTextHex,
-                            }}
-                          >
-                            {closingHandover
-                              ? isEn
-                                ? 'Closing & handing over shift...'
-                                : 'جاري تسليم وإغلاق الوردية...'
-                              : handoverRecipientType === 'self_next_slot'
+                            <input
+                              type="text"
+                              placeholder={isEn ? 'Handover note (optional)' : 'ملاحظة التسليم (اختياري)'}
+                              value={handoverNote}
+                              onChange={(e) => setHandoverNote(e.target.value)}
+                              className="w-full px-3 py-2 rounded-xl border border-zinc-200 bg-white text-xs"
+                            />
+
+                            <button
+                              type="button"
+                              disabled={closingHandover}
+                              onClick={handleConfirmHandoverClose}
+                              className={`w-full min-h-[44px] text-xs font-extrabold cursor-pointer disabled:opacity-50 ${ui.radiusClasses.button}`}
+                              style={{
+                                backgroundColor: ui.theme.accentHex,
+                                color: ui.theme.accentTextHex,
+                              }}
+                            >
+                              {closingHandover
                                 ? isEn
-                                  ? 'Carry Over Cash & Start Next Shift'
-                                  : 'ترحيل الكاش وبدء الوردية التالية'
-                                : isEn
-                                  ? 'Confirm Drawer Handover & Close Shift'
-                                  : 'تأكيد تسليم الدرج وإنهاء الوردية'}
-                          </button>
-                        </div>
+                                  ? 'Closing & handing over shift...'
+                                  : 'جاري تسليم وإغلاق الوردية...'
+                                : handoverRecipientType === 'self_next_slot'
+                                  ? isEn
+                                    ? 'Carry Over Cash & Start Next Shift'
+                                    : 'ترحيل الكاش وبدء الوردية التالية'
+                                  : isEn
+                                    ? 'Confirm Drawer Handover & Close Shift'
+                                    : 'تأكيد تسليم الدرج وإنهاء الوردية'}
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="p-3.5 rounded-2xl bg-zinc-50 border border-zinc-200 text-xs font-bold text-zinc-600 text-center">
+                            {isEn
+                              ? 'Shift closing & drawer handover requires shift management permission.'
+                              : 'تقفيل الوردية وتسليم الدرج يتطلب صلاحية إدارة الوردية.'}
+                          </div>
+                        )}
                       </>
                     );
                   })()}

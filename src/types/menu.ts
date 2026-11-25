@@ -213,9 +213,21 @@ export interface ManagerPermissions {
   canEditDrawerFloat: boolean;
   canManageStaff: boolean;
   canManageHalls: boolean;
+  canManageHallAssignments?: boolean;
   canManageStations?: boolean;
   canConfigureOperations: boolean;
   canToggleScreenPrices: boolean;
+}
+
+export interface HallManagerPermissions {
+  canManageHalls: boolean;
+  canManageHallAssignments: boolean;
+  canMonitorFloorAndCalls: boolean;
+  canAddEditTableOrders: boolean;
+  canApplyInstantDiscount: boolean;
+  canCancelOrders: boolean;
+  canSettleChecks: boolean;
+  showPrices: boolean;
 }
 
 export interface ShowPricesByRole {
@@ -391,17 +403,82 @@ export interface GuestCheckSummary {
   total: number;
 }
 
-export type StaffRole = 'manager' | 'cashier' | 'kitchen' | 'bar' | 'pastry' | 'captain' | 'station_staff' | 'custom';
+export type StaffRole =
+  | 'manager'
+  | 'hall_manager'
+  | 'cashier'
+  | 'kitchen'
+  | 'bar'
+  | 'pastry'
+  | 'captain'
+  | 'station_staff'
+  | 'custom';
 
 export type StaffScreen =
   | 'staff_management'
+  | 'job_titles'
+  | 'hall_manager'
+  | 'hall_assignments'
   | 'cashier'
   | 'kitchen'
   | 'bar'
   | 'pastry'
   | 'captain'
   | 'halls'
+  | 'stations'
+  | 'menu_editor'
+  | 'shift_reports'
+  | 'customers'
   | `station:${string}`;
+
+export type StaffPermissionKey =
+  | 'canViewOrders'
+  | 'canAddEditTableOrders'
+  | 'canEditOpenOrders'
+  | 'canApplyInstantDiscount'
+  | 'canCancelOpenOrders'
+  | 'canSettleChecks'
+  | 'canEditClosedChecks'
+  | 'canUpdatePrepProgress'
+  | 'canManageServiceCalls'
+  | 'canPauseItems'
+  | 'canEditMenu'
+  | 'canManageShifts'
+  | 'canAddDrawerExpenses'
+  | 'canEditDrawerFloat'
+  | 'canViewShiftReports'
+  | 'canManageHalls'
+  | 'canManageHallAssignments'
+  | 'canManageStations'
+  | 'canManageCustomers'
+  | 'canManageStaff'
+  | 'canConfigureOperations';
+
+export type EffectiveStaffPermissions = Record<StaffPermissionKey, boolean>;
+
+export interface JobTitle {
+  id: string;
+  restaurantId: string;
+  ownerId: string;
+  nameAr: string;
+  nameEn: string;
+  descriptionAr?: string;
+  descriptionEn?: string;
+  color: string;
+  baseRoleHint?: StaffRole;
+  allowedScreens: StaffScreen[];
+  allowedStations: string[];
+  allowedCaptainScreens: string[];
+  defaultScreen: StaffScreen;
+  defaultStationId?: string;
+  permissions: EffectiveStaffPermissions;
+  isSystemDefault?: boolean;
+  isActive: boolean;
+  sortOrder: number;
+  createdBy: string;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+}
 
 export interface StaffActorInfo {
   uid: string;
@@ -566,10 +643,18 @@ export interface StaffMember {
   email: string;
   authEmail: string;
   jobTitle?: string;
+  jobTitleIds?: string[];
+  jobTitleNames?: string[];
   role: StaffRole;
   allowedScreens: StaffScreen[];
   allowedStations?: string[];
   allowedCaptainScreens?: string[];
+  screenOverrides?: StaffScreen[];
+  revokedScreens?: StaffScreen[];
+  hallManagerPermissions?: HallManagerPermissions;
+  permissionOverrides?: Partial<EffectiveStaffPermissions>;
+  revokedPermissions?: StaffPermissionKey[];
+  effectivePermissions?: EffectiveStaffPermissions;
   defaultScreen: StaffScreen;
   defaultStationId?: string;
   hallId?: string;
@@ -605,11 +690,19 @@ export interface StaffInvite {
   staffEmail?: string;
   staffRole: StaffRole;
   staffJobTitle?: string;
+  jobTitleIds?: string[];
+  jobTitleNames?: string[];
   staffHallId?: string;
   staffHallName?: string;
   allowedScreens: StaffScreen[];
   allowedStations?: string[];
   allowedCaptainScreens?: string[];
+  screenOverrides?: StaffScreen[];
+  revokedScreens?: StaffScreen[];
+  hallManagerPermissions?: HallManagerPermissions;
+  permissionOverrides?: Partial<EffectiveStaffPermissions>;
+  revokedPermissions?: StaffPermissionKey[];
+  effectivePermissions?: EffectiveStaffPermissions;
   defaultScreen: StaffScreen;
   defaultStationId?: string;
   expiresAt: unknown;
@@ -626,9 +719,12 @@ export interface StaffAccess {
   restaurantId: string;
   ownerId: string;
   role: StaffRole;
+  jobTitleIds?: string[];
   allowedScreens: StaffScreen[];
   allowedStations?: string[];
   allowedCaptainScreens?: string[];
+  hallManagerPermissions?: HallManagerPermissions;
+  effectivePermissions?: EffectiveStaffPermissions;
   defaultScreen: StaffScreen;
   defaultStationId?: string;
   hallId?: string;
@@ -636,6 +732,25 @@ export interface StaffAccess {
   mustChangePassword: boolean;
   suspendedType?: SuspensionType;
   suspendedUntil?: unknown;
+  updatedAt?: unknown;
+}
+
+export interface HallCaptainAssignment {
+  id: string; // `${shiftSlotId}__${captainUid}`
+  restaurantId: string;
+  ownerId: string;
+  shiftSlotId: string;
+  shiftSlotName?: string;
+  captainUid: string;
+  captainName: string;
+  hallIds: string[];
+  hallNames?: string[];
+  tableNumbersByHall?: Record<string, string[]>;
+  tableNumbers?: string[];
+  assignedByUid: string;
+  assignedByName: string;
+  assignedByRole: string;
+  createdAt?: unknown;
   updatedAt?: unknown;
 }
 
@@ -761,6 +876,11 @@ export type StaffAuditEventType =
   | 'float_adjusted'
   | 'superadmin_shift_unlocked'
   | 'station_uncovered_alert'
+  | 'hall_assignment_updated'
+  | 'job_title_created'
+  | 'job_title_updated'
+  | 'job_title_deleted'
+  | 'staff_permissions_updated'
   | 'domain_verified';
 
 export interface StaffAuditLog {

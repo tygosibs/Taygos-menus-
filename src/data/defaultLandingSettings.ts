@@ -19,7 +19,7 @@ export const DEFAULT_PLATFORM_LANDING: PlatformLandingSettings = {
   heroSubtitle:
     'ارتقِ بتجربة ضيوفك بـ 10 ثيمات احترافية منها كتاب المنيو ثلاثي الأبعاد وشات واتساب التفاعلي، مع إدارة كاملة للصالات والترابيزات وتقسيم الشيك بالاسم، وشاشات المطبخ والكابتن اللحظية، ومنظومة ولاء العملاء وأعياد الميلاد.',
   heroSubtitle_en:
-    'Elevate every guest visit with 10 built-in interactive themes including our 3D Flipbook and WhatsApp Ordering Chat, collaborative group tables with Split Check billing, multi-station KDS & Captain / Waiter screens, and automated Loyalty & Birthday CRM.',
+    'Elevate every guest visit with 10 built-in interactive themes including our 3D Flipbook and WhatsApp Ordering Chat, collaborative group tables with Split Check billing, multi-station KDS & Captain screens, and automated Loyalty & Birthday CRM.',
   ctaButtonText: 'ابدأ الآن وأطلق منيو مطعمك',
   ctaButtonText_en: 'Launch Your Digital Menu',
   heroSecondaryBtnText: 'جرّب المنيو التفاعلي مباشرة',
@@ -77,7 +77,7 @@ export const DEFAULT_PLATFORM_LANDING: PlatformLandingSettings = {
   operationsBadge: 'تشغيل الصالة والمطبخ بدون أخطاء',
   operationsBadge_en: 'Unified Dining Floor & Kitchen Operations',
   operationsTitle: 'من الترابيزة للمطبخ والكابتن.. في أقل من ثانية',
-  operationsTitle_en: 'Seamless Table-to-Kitchen & Waiter Synchronization',
+  operationsTitle_en: 'Seamless Table-to-Kitchen & Captain Synchronization',
   operationsSubtitle:
     'نظام صالة متكامل يمنح ضيوفك حرية الطلب الجماعي وتقسيم الشيك، ويمنح فريقك شاشات تشغيل واضحة لكل محطة تحضير.',
   operationsSubtitle_en:
@@ -86,13 +86,13 @@ export const DEFAULT_PLATFORM_LANDING: PlatformLandingSettings = {
     'تقسيم المطعم لصالات ومناطق متعددة وتوليد أكواد الطاولات بضغطة واحدة (من 1 إلى 200 طاولة).',
     'الطلب الجماعي على الطاولة وتقسيم الشيك بالاسم: كل ضيف يطلب من هاتفه ويراجع حسابه الخاص أو الإجمالي.',
     'شاشات التحضير المقسمة: فصل تلقائي لأصناف المطبخ الساخن والبار والمشروبات والباستري مع متابعة لحظية.',
-    'شاشة الكابتن والويتر الفورية: استقبال نداء الكابتن وطلبات الفاتورة (كاش أو فيزا) وطلبات المياه والأدوات بتنبيه صوتي واضح.',
+    'شاشة الكابتن الفورية: استقبال نداء الكابتن وطلبات الفاتورة (كاش أو فيزا) وطلبات المياه والأدوات بتنبيه صوتي واضح.',
   ],
   operationsBullets_en: [
     'Multi-hall zoning with 1-click Bulk Table QR Code generation for any table count (1 to 200 tables per hall).',
     'Collaborative Group Table Cart & Split Check billing by guest name right from each phone.',
     'Kitchen Display System (KDS) screens routing dishes automatically to Kitchen, Bar, and Pastry prep stations.',
-    'Instant Captain / Waiter console for table calls, Cash/Card check requests, and water/cutlery alerts.',
+    'Instant Captain console for table calls, Cash/Card check requests, and water/cutlery alerts.',
   ],
   loyaltyBadge: 'ولاء ذكي يضاعف عودة العملاء',
   loyaltyBadge_en: 'Smart Retention, Loyalty & Birthday Radar',
@@ -155,7 +155,7 @@ export const DEFAULT_PLATFORM_LANDING: PlatformLandingSettings = {
       period: 'ج.م / شهرياً',
       period_en: 'EGP / month',
       description: 'الحل المتكامل للمطاعم النشطة لتشغيل الصالة والمطبخ وولاء العملاء.',
-      description_en: 'Full dining room operations, KDS, Captain / Waiter console, and Customer CRM.',
+      description_en: 'Full dining room operations, KDS, Captain console, and Customer CRM.',
       features: [
         'شاشات الكاشير والمطبخ المقسمة + شاشة الكابتن',
         'الطلب الجماعي وتقسيم الشيك بالاسم',
@@ -163,7 +163,7 @@ export const DEFAULT_PLATFORM_LANDING: PlatformLandingSettings = {
         'ثيم كتاب ثلاثي الأبعاد وشات واتساب التفاعلي',
       ],
       features_en: [
-        'Cashier / POS, Multi-Station KDS & Captain / Waiter screens',
+        'Cashier / POS, Multi-Station KDS & Captain screens',
         'Group Table Cart & Split Check billing',
         'Customer CRM, Punch Cards & 3-Day Birthday Radar',
         'Flagship 3D Flipbook & WhatsApp Chat themes',
@@ -215,5 +215,5 @@ export const DEFAULT_PLATFORM_LANDING: PlatformLandingSettings = {
   shareDescription:
     '10 ثيمات عالمية، إدارة الصالات وتقسيم الشيك، شاشات المطبخ والكابتن، ومنظومة ولاء وأعياد ميلاد العملاء في منصة واحدة.',
   shareDescription_en:
-    '10 interactive themes, group table Split Check billing, KDS, Captain / Waiter console, and smart Customer CRM.',
+    '10 interactive themes, group table Split Check billing, KDS, Captain console, and smart Customer CRM.',
 };

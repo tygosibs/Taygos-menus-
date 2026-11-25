@@ -54,6 +54,7 @@ interface StaffShiftBarProps {
   lastClosedCashierShift?: StaffShift | null;
   onRequestCashierHandoverModal?: () => void;
   onSwitchCashierNextSlot?: () => void;
+  canManageShifts?: boolean;
 }
 
 function formatDuration(startedAt: unknown, nowMs: number): string {
@@ -84,6 +85,7 @@ export const StaffShiftBar: React.FC<StaffShiftBarProps> = ({
   lastClosedCashierShift,
   onRequestCashierHandoverModal,
   onSwitchCashierNextSlot,
+  canManageShifts = true,
 }) => {
   const { lang, dir, isRtl, loc, formatCurrency } = useLanguage();
   const isEn = lang === 'en';
@@ -376,41 +378,43 @@ export const StaffShiftBar: React.FC<StaffShiftBarProps> = ({
                 : `انتهى الموعد الرسمي لوردية "${activeSlotLabel}" (${activeSlotObj.endTime}) — يمكنك الاستمرار بساعة إضافية، الانتقال لـ "${nextSlotLabel}"، أو تسليم الدرج.`}
             </span>
           </div>
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
-            <button
-              type="button"
-              disabled={busy}
-              onClick={handleExtendShift}
-              className="px-3 py-1.5 rounded-xl bg-white border border-amber-300 hover:bg-amber-100 text-amber-950 font-extrabold cursor-pointer disabled:opacity-50"
-            >
-              {isEn ? 'Continue (+1h)' : 'تكملة (+1 ساعة)'}
-            </button>
-            {isCashierScreen && onSwitchCashierNextSlot && (
+          {canManageShifts && (
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
               <button
                 type="button"
                 disabled={busy}
-                onClick={onSwitchCashierNextSlot}
-                className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold inline-flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                onClick={handleExtendShift}
+                className="px-3 py-1.5 rounded-xl bg-white border border-amber-300 hover:bg-amber-100 text-amber-950 font-extrabold cursor-pointer disabled:opacity-50"
               >
-                <span>{isEn ? 'Switch to Next Shift' : 'الانتقال للوردية التالية'}</span>
-                <DirectionArrow className="w-3.5 h-3.5" />
+                {isEn ? 'Continue (+1h)' : 'تكملة (+1 ساعة)'}
               </button>
-            )}
-            <button
-              type="button"
-              disabled={busy}
-              onClick={handleEndShift}
-              className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold cursor-pointer disabled:opacity-50"
-            >
-              {isCashierScreen
-                ? isEn
-                  ? 'Handover & End Shift'
-                  : 'تسليم وإنهاء الوردية'
-                : isEn
-                  ? 'End My Shift'
-                  : 'إنهاء ورديتي'}
-            </button>
-          </div>
+              {isCashierScreen && onSwitchCashierNextSlot && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={onSwitchCashierNextSlot}
+                  className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold inline-flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                >
+                  <span>{isEn ? 'Switch to Next Shift' : 'الانتقال للوردية التالية'}</span>
+                  <DirectionArrow className="w-3.5 h-3.5" />
+                </button>
+              )}
+              <button
+                type="button"
+                disabled={busy}
+                onClick={handleEndShift}
+                className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold cursor-pointer disabled:opacity-50"
+              >
+                {isCashierScreen
+                  ? isEn
+                    ? 'Handover & End Shift'
+                    : 'تسليم وإنهاء الوردية'
+                  : isEn
+                    ? 'End My Shift'
+                    : 'إنهاء ورديتي'}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -460,23 +464,25 @@ export const StaffShiftBar: React.FC<StaffShiftBarProps> = ({
                   )}
                 </span>
               )}
-              <button
-                type="button"
-                disabled={busy}
-                onClick={handleEndShift}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3.5 py-1.5 text-xs font-extrabold text-red-700 transition hover:bg-red-100 disabled:opacity-50 cursor-pointer"
-              >
-                {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Square className="h-3.5 w-3.5" />}
-                <span>
-                  {isCashierScreen
-                    ? isEn
-                      ? 'Close Drawer & End Shift'
-                      : 'تسليم الدرج وإنهاء الوردية'
-                    : isEn
-                      ? 'End My Shift'
-                      : 'إنهاء ورديتي'}
-                </span>
-              </button>
+              {canManageShifts && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={handleEndShift}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3.5 py-1.5 text-xs font-extrabold text-red-700 transition hover:bg-red-100 disabled:opacity-50 cursor-pointer"
+                >
+                  {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Square className="h-3.5 w-3.5" />}
+                  <span>
+                    {isCashierScreen
+                      ? isEn
+                        ? 'Close Drawer & End Shift'
+                        : 'تسليم الدرج وإنهاء الوردية'
+                      : isEn
+                        ? 'End My Shift'
+                        : 'إنهاء ورديتي'}
+                  </span>
+                </button>
+              )}
             </>
           ) : isBlockedSupervisory ? (
             <span className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-900">
@@ -484,7 +490,7 @@ export const StaffShiftBar: React.FC<StaffShiftBarProps> = ({
                 ? `Supervisory View (${coveringStaffName})`
                 : `معاينة إشرافية (شاشة ${coveringStaffName})`}
             </span>
-          ) : (
+          ) : canManageShifts ? (
             <>
               <span className="inline-flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-900">
                 {isEn
@@ -509,6 +515,12 @@ export const StaffShiftBar: React.FC<StaffShiftBarProps> = ({
                 </span>
               </button>
             </>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-bold text-zinc-600">
+              {isEn
+                ? `Read-only shift bar on "${screenLabel}"`
+                : `عرض حالة الوردية على "${screenLabel}"`}
+            </span>
           )}
         </div>
 

@@ -64,9 +64,16 @@ const QUICK_ADDON_PRESETS: Array<{ name: string; name_en: string; price: number 
 interface MenuBuilderTabProps {
   restaurant: Restaurant;
   onOpenAddScreen?: () => void;
+  canEditMenu?: boolean;
+  canPauseItems?: boolean;
 }
 
-export function MenuBuilderTab({ restaurant, onOpenAddScreen }: MenuBuilderTabProps) {
+export function MenuBuilderTab({
+  restaurant,
+  onOpenAddScreen,
+  canEditMenu = true,
+  canPauseItems = true,
+}: MenuBuilderTabProps) {
   const { lang, dir, t, loc, formatCurrency } = useLanguage();
   const isEn = lang === 'en';
   const currencyLabel = formatCurrency(restaurant.currency);
@@ -765,49 +772,51 @@ export function MenuBuilderTab({ restaurant, onOpenAddScreen }: MenuBuilderTabPr
               : 'نظّم منيو مطعمك باحترافية: قوائم رئيسية (مثل: المطبخ، البار) ← أقسام فرعية (سلطات، مشويات، قهوة) ← أصناف.'}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
-          {categories.length === 0 && (
+        {canEditMenu && (
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {categories.length === 0 && (
+              <button
+                type="button"
+                disabled={seeding}
+                onClick={handleSeedStarter}
+                className="px-4 py-2 rounded-xl border border-amber-300 bg-amber-50 text-amber-900 text-xs font-bold hover:bg-amber-100 flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>{seeding ? t.admin.menu.seedingBtn : t.admin.menu.seedBtn}</span>
+              </button>
+            )}
             <button
               type="button"
-              disabled={seeding}
-              onClick={handleSeedStarter}
-              className="px-4 py-2 rounded-xl border border-amber-300 bg-amber-50 text-amber-900 text-xs font-bold hover:bg-amber-100 flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+              onClick={openNewMainCategory}
+              className="px-3.5 py-2 rounded-xl border border-zinc-300 text-zinc-800 text-xs font-bold hover:bg-zinc-50 flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
             >
-              <Sparkles className="w-4 h-4" />
-              <span>{seeding ? t.admin.menu.seedingBtn : t.admin.menu.seedBtn}</span>
+              <FolderTree className="w-4 h-4" />
+              <span>{isEn ? 'Add Main Category' : 'إضافة قائمة رئيسية'}</span>
             </button>
-          )}
-          <button
-            type="button"
-            onClick={openNewMainCategory}
-            className="px-3.5 py-2 rounded-xl border border-zinc-300 text-zinc-800 text-xs font-bold hover:bg-zinc-50 flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
-          >
-            <FolderTree className="w-4 h-4" />
-            <span>{isEn ? 'Add Main Category' : 'إضافة قائمة رئيسية'}</span>
-          </button>
-          <button
-            type="button"
-            disabled={hierarchy.mainCategories.length === 0}
-            onClick={() =>
-              openNewSubCategory(
-                activeMainFilter !== 'all' ? activeMainFilter : hierarchy.mainCategories[0]?.id
-              )
-            }
-            className="px-3.5 py-2 rounded-xl border border-amber-300 bg-amber-50/70 text-amber-950 text-xs font-bold hover:bg-amber-100 flex items-center gap-1.5 cursor-pointer disabled:opacity-40 whitespace-nowrap"
-          >
-            <Layers className="w-4 h-4" />
-            <span>{isEn ? 'Add Subcategory' : 'إضافة قسم فرعي'}</span>
-          </button>
-          <button
-            type="button"
-            disabled={categories.length === 0}
-            onClick={() => openNewItem()}
-            className="px-4 py-2 rounded-xl bg-zinc-950 text-white text-xs font-bold hover:bg-zinc-800 flex items-center gap-1.5 cursor-pointer disabled:opacity-40 whitespace-nowrap"
-          >
-            <Plus className="w-4 h-4" />
-            <span>{t.admin.menu.addItemBtn}</span>
-          </button>
-        </div>
+            <button
+              type="button"
+              disabled={hierarchy.mainCategories.length === 0}
+              onClick={() =>
+                openNewSubCategory(
+                  activeMainFilter !== 'all' ? activeMainFilter : hierarchy.mainCategories[0]?.id
+                )
+              }
+              className="px-3.5 py-2 rounded-xl border border-amber-300 bg-amber-50/70 text-amber-950 text-xs font-bold hover:bg-amber-100 flex items-center gap-1.5 cursor-pointer disabled:opacity-40 whitespace-nowrap"
+            >
+              <Layers className="w-4 h-4" />
+              <span>{isEn ? 'Add Subcategory' : 'إضافة قسم فرعي'}</span>
+            </button>
+            <button
+              type="button"
+              disabled={categories.length === 0}
+              onClick={() => openNewItem()}
+              className="px-4 py-2 rounded-xl bg-zinc-950 text-white text-xs font-bold hover:bg-zinc-800 flex items-center gap-1.5 cursor-pointer disabled:opacity-40 whitespace-nowrap"
+            >
+              <Plus className="w-4 h-4" />
+              <span>{t.admin.menu.addItemBtn}</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Hierarchical Categories (Main Categories -> Subcategories) with Drag & Drop Reordering */}
@@ -819,7 +828,7 @@ export function MenuBuilderTab({ restaurant, onOpenAddScreen }: MenuBuilderTabPr
                 ? `Menu Structure (${hierarchy.mainCategories.length} Main · ${categories.length - hierarchy.mainCategories.length} Sub)`
                 : `هيكل القوائم (${hierarchy.mainCategories.length} رئيسية · ${categories.length - hierarchy.mainCategories.length} فرعية)`}
             </h3>
-            {categories.length > 1 && (
+            {canEditMenu && categories.length > 1 && (
               <p className="text-[11px] text-zinc-500 mt-0.5 flex items-center gap-1">
                 <GripVertical className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
                 <span>
@@ -876,15 +885,17 @@ export function MenuBuilderTab({ restaurant, onOpenAddScreen }: MenuBuilderTabPr
                   {/* Main Category Header Row */}
                   <div className="p-3.5 bg-white border-b border-zinc-200/80 flex flex-wrap items-center justify-between gap-3">
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <button
-                        type="button"
-                        onPointerDown={(e) => startMainCategoryDrag(e, main.id)}
-                        aria-label={isEn ? 'Drag main category' : 'اسحب لترتيب القائمة الرئيسية'}
-                        title={isEn ? 'Drag to reorder' : 'اسحب للترتيب'}
-                        className="p-1.5 -ms-1 rounded-lg text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 cursor-grab active:cursor-grabbing touch-none select-none shrink-0"
-                      >
-                        <GripVertical className="w-4 h-4" />
-                      </button>
+                      {canEditMenu && (
+                        <button
+                          type="button"
+                          onPointerDown={(e) => startMainCategoryDrag(e, main.id)}
+                          aria-label={isEn ? 'Drag main category' : 'اسحب لترتيب القائمة الرئيسية'}
+                          title={isEn ? 'Drag to reorder' : 'اسحب للترتيب'}
+                          className="p-1.5 -ms-1 rounded-lg text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 cursor-grab active:cursor-grabbing touch-none select-none shrink-0"
+                        >
+                          <GripVertical className="w-4 h-4" />
+                        </button>
+                      )}
                       <SafeImage
                         src={main.imageUrl}
                         alt={loc(main.name, main.name_en)}
@@ -922,58 +933,60 @@ export function MenuBuilderTab({ restaurant, onOpenAddScreen }: MenuBuilderTabPr
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-1.5 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => openNewSubCategory(main.id)}
-                        className="px-2.5 py-1.5 rounded-lg border border-amber-300 bg-amber-50 text-amber-900 text-[11px] font-bold hover:bg-amber-100 flex items-center gap-1 cursor-pointer whitespace-nowrap"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>{isEn ? 'Subcategory' : 'قسم فرعي'}</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => openNewItem(main.id)}
-                        className="px-2.5 py-1.5 rounded-lg border border-zinc-200 bg-white text-zinc-700 text-[11px] font-bold hover:bg-zinc-50 flex items-center gap-1 cursor-pointer whitespace-nowrap"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>{isEn ? 'Dish' : 'صنف'}</span>
-                      </button>
-                      <button
-                        type="button"
-                        disabled={mainIdx === 0}
-                        onClick={() => moveMainCategory(mainIdx, -1)}
-                        aria-label="Move Main Up"
-                        className="p-1.5 rounded-lg text-zinc-500 hover:bg-zinc-100 disabled:opacity-30 cursor-pointer"
-                      >
-                        <ArrowUp className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        disabled={mainIdx === hierarchy.mainCategories.length - 1}
-                        onClick={() => moveMainCategory(mainIdx, 1)}
-                        aria-label="Move Main Down"
-                        className="p-1.5 rounded-lg text-zinc-500 hover:bg-zinc-100 disabled:opacity-30 cursor-pointer"
-                      >
-                        <ArrowDown className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => openEditCategory(main)}
-                        aria-label="Edit Main Category"
-                        className="p-1.5 rounded-lg text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 cursor-pointer"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => removeCategory(main.id, subs)}
-                        aria-label="Delete Main Category"
-                        className="p-1.5 rounded-lg text-zinc-400 hover:bg-red-50 hover:text-red-600 cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                    {canEditMenu && (
+                      <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => openNewSubCategory(main.id)}
+                          className="px-2.5 py-1.5 rounded-lg border border-amber-300 bg-amber-50 text-amber-900 text-[11px] font-bold hover:bg-amber-100 flex items-center gap-1 cursor-pointer whitespace-nowrap"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>{isEn ? 'Subcategory' : 'قسم فرعي'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openNewItem(main.id)}
+                          className="px-2.5 py-1.5 rounded-lg border border-zinc-200 bg-white text-zinc-700 text-[11px] font-bold hover:bg-zinc-50 flex items-center gap-1 cursor-pointer whitespace-nowrap"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>{isEn ? 'Dish' : 'صنف'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          disabled={mainIdx === 0}
+                          onClick={() => moveMainCategory(mainIdx, -1)}
+                          aria-label="Move Main Up"
+                          className="p-1.5 rounded-lg text-zinc-500 hover:bg-zinc-100 disabled:opacity-30 cursor-pointer"
+                        >
+                          <ArrowUp className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={mainIdx === hierarchy.mainCategories.length - 1}
+                          onClick={() => moveMainCategory(mainIdx, 1)}
+                          aria-label="Move Main Down"
+                          className="p-1.5 rounded-lg text-zinc-500 hover:bg-zinc-100 disabled:opacity-30 cursor-pointer"
+                        >
+                          <ArrowDown className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openEditCategory(main)}
+                          aria-label="Edit Main Category"
+                          className="p-1.5 rounded-lg text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 cursor-pointer"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeCategory(main.id, subs)}
+                          aria-label="Delete Main Category"
+                          className="p-1.5 rounded-lg text-zinc-400 hover:bg-red-50 hover:text-red-600 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   {/* Nested Subcategories Inside Main Category */}
@@ -985,13 +998,15 @@ export function MenuBuilderTab({ restaurant, onOpenAddScreen }: MenuBuilderTabPr
                             ? 'No subcategories yet (e.g. Salads, Grills). You can add subcategories or add dishes directly under this Main Category.'
                             : 'لا توجد أقسام فرعية تحت هذه القائمة بعد (مثل: سلطات، مشويات، قهوة). يمكنك إضافة قسم فرعي أو إضافة أصناف مباشرة.'}
                         </span>
-                        <button
-                          type="button"
-                          onClick={() => openNewSubCategory(main.id)}
-                          className="font-bold text-amber-800 hover:underline cursor-pointer whitespace-nowrap"
-                        >
-                          {isEn ? '+ Add first subcategory' : '+ أضف أول قسم فرعي'}
-                        </button>
+                        {canEditMenu && (
+                          <button
+                            type="button"
+                            onClick={() => openNewSubCategory(main.id)}
+                            className="font-bold text-amber-800 hover:underline cursor-pointer whitespace-nowrap"
+                          >
+                            {isEn ? '+ Add first subcategory' : '+ أضف أول قسم فرعي'}
+                          </button>
+                        )}
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
@@ -1010,14 +1025,16 @@ export function MenuBuilderTab({ restaurant, onOpenAddScreen }: MenuBuilderTabPr
                               }`}
                             >
                               <div className="flex items-center gap-2 min-w-0">
-                                <button
-                                  type="button"
-                                  onPointerDown={(e) => startSubCategoryDrag(e, sub.id, main.id)}
-                                  aria-label={isEn ? 'Drag subcategory' : 'اسحب لترتيب القسم الفرعي'}
-                                  className="p-1 -ms-0.5 rounded-md text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 cursor-grab active:cursor-grabbing touch-none select-none shrink-0"
-                                >
-                                  <GripVertical className="w-3.5 h-3.5" />
-                                </button>
+                                {canEditMenu && (
+                                  <button
+                                    type="button"
+                                    onPointerDown={(e) => startSubCategoryDrag(e, sub.id, main.id)}
+                                    aria-label={isEn ? 'Drag subcategory' : 'اسحب لترتيب القسم الفرعي'}
+                                    className="p-1 -ms-0.5 rounded-md text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 cursor-grab active:cursor-grabbing touch-none select-none shrink-0"
+                                  >
+                                    <GripVertical className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
                                 <SafeImage
                                   src={sub.imageUrl}
                                   alt={loc(sub.name, sub.name_en)}
@@ -1048,50 +1065,52 @@ export function MenuBuilderTab({ restaurant, onOpenAddScreen }: MenuBuilderTabPr
                                 </div>
                               </div>
 
-                              <div className="flex items-center gap-0.5 shrink-0">
-                                <button
-                                  type="button"
-                                  onClick={() => openNewItem(sub.id)}
-                                  title={isEn ? 'Add dish to this subcategory' : 'إضافة صنف هنا'}
-                                  className="p-1.5 rounded-lg text-amber-800 hover:bg-amber-50 cursor-pointer"
-                                >
-                                  <Plus className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={subIdx === 0}
-                                  onClick={() => moveSubCategory(main.id, subIdx, -1)}
-                                  aria-label="Move Sub Up"
-                                  className="p-1 rounded-lg text-zinc-500 hover:bg-zinc-100 disabled:opacity-30 cursor-pointer"
-                                >
-                                  <ArrowUp className="w-3 h-3" />
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={subIdx === subs.length - 1}
-                                  onClick={() => moveSubCategory(main.id, subIdx, 1)}
-                                  aria-label="Move Sub Down"
-                                  className="p-1 rounded-lg text-zinc-500 hover:bg-zinc-100 disabled:opacity-30 cursor-pointer"
-                                >
-                                  <ArrowDown className="w-3 h-3" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => openEditCategory(sub)}
-                                  aria-label="Edit Subcategory"
-                                  className="p-1 rounded-lg text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 cursor-pointer"
-                                >
-                                  <Edit3 className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => removeCategory(sub.id)}
-                                  aria-label="Delete Subcategory"
-                                  className="p-1 rounded-lg text-zinc-400 hover:bg-red-50 hover:text-red-600 cursor-pointer"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
+                              {canEditMenu && (
+                                <div className="flex items-center gap-0.5 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => openNewItem(sub.id)}
+                                    title={isEn ? 'Add dish to this subcategory' : 'إضافة صنف هنا'}
+                                    className="p-1.5 rounded-lg text-amber-800 hover:bg-amber-50 cursor-pointer"
+                                  >
+                                    <Plus className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={subIdx === 0}
+                                    onClick={() => moveSubCategory(main.id, subIdx, -1)}
+                                    aria-label="Move Sub Up"
+                                    className="p-1 rounded-lg text-zinc-500 hover:bg-zinc-100 disabled:opacity-30 cursor-pointer"
+                                  >
+                                    <ArrowUp className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={subIdx === subs.length - 1}
+                                    onClick={() => moveSubCategory(main.id, subIdx, 1)}
+                                    aria-label="Move Sub Down"
+                                    className="p-1 rounded-lg text-zinc-500 hover:bg-zinc-100 disabled:opacity-30 cursor-pointer"
+                                  >
+                                    <ArrowDown className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => openEditCategory(sub)}
+                                    aria-label="Edit Subcategory"
+                                    className="p-1 rounded-lg text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 cursor-pointer"
+                                  >
+                                    <Edit3 className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeCategory(sub.id)}
+                                    aria-label="Delete Subcategory"
+                                    className="p-1 rounded-lg text-zinc-400 hover:bg-red-50 hover:text-red-600 cursor-pointer"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           );
                         })}
@@ -1143,7 +1162,7 @@ export function MenuBuilderTab({ restaurant, onOpenAddScreen }: MenuBuilderTabPr
               ))}
             </div>
 
-            {visibleItems.length > 1 && (
+            {canEditMenu && visibleItems.length > 1 && (
               <p className="text-[11px] text-zinc-500 flex items-center gap-1">
                 <GripVertical className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
                 <span>
@@ -1222,16 +1241,18 @@ export function MenuBuilderTab({ restaurant, onOpenAddScreen }: MenuBuilderTabPr
                       alt={loc(item.name, item.name_en)}
                       className="w-full h-full object-cover pointer-events-none"
                     />
-                    <button
-                      type="button"
-                      onPointerDown={(e) => startItemDrag(e, item.id)}
-                      aria-label={isEn ? 'Drag to reorder dish' : 'اسحب لإعادة ترتيب الطبق'}
-                      title={isEn ? 'Drag to reorder' : 'اسحب للترتيب'}
-                      className="absolute top-2.5 start-2.5 px-2 py-1.5 rounded-xl bg-white/95 backdrop-blur-sm border border-zinc-200/80 shadow-sm text-zinc-700 hover:text-zinc-950 hover:bg-white cursor-grab active:cursor-grabbing touch-none select-none flex items-center gap-1"
-                    >
-                      <GripVertical className="w-4 h-4" />
-                      <span className="text-[11px] font-mono-num font-extrabold">#{idx + 1}</span>
-                    </button>
+                    {canEditMenu && (
+                      <button
+                        type="button"
+                        onPointerDown={(e) => startItemDrag(e, item.id)}
+                        aria-label={isEn ? 'Drag to reorder dish' : 'اسحب لإعادة ترتيب الطبق'}
+                        title={isEn ? 'Drag to reorder' : 'اسحب للترتيب'}
+                        className="absolute top-2.5 start-2.5 px-2 py-1.5 rounded-xl bg-white/95 backdrop-blur-sm border border-zinc-200/80 shadow-sm text-zinc-700 hover:text-zinc-950 hover:bg-white cursor-grab active:cursor-grabbing touch-none select-none flex items-center gap-1"
+                      >
+                        <GripVertical className="w-4 h-4" />
+                        <span className="text-[11px] font-mono-num font-extrabold">#{idx + 1}</span>
+                      </button>
+                    )}
                     {(item.isBogo || (item.badge && item.badge !== 'none')) && (
                       <span className="absolute top-2.5 end-2.5 px-2 py-1 rounded-lg bg-zinc-950/90 text-white text-[10px] font-extrabold shadow-sm">
                         {item.isBogo || item.badge === 'bogo'
@@ -1302,37 +1323,55 @@ export function MenuBuilderTab({ restaurant, onOpenAddScreen }: MenuBuilderTabPr
                       </span>
 
                       <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            toggleMenuItemAvailability(item.id, !item.isAvailable)
-                          }
-                          className={`px-2.5 py-1 rounded-lg text-[11px] font-bold cursor-pointer ${
-                            item.isAvailable
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                              : 'bg-zinc-100 text-zinc-500 border border-zinc-200'
-                          }`}
-                        >
-                          {item.isAvailable
-                            ? t.admin.menu.availableBadge
-                            : t.admin.menu.unavailableBadge}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => openEditItem(item)}
-                          aria-label="Edit Dish"
-                          className="p-2 rounded-lg border border-zinc-200 text-zinc-700 hover:bg-zinc-50 cursor-pointer"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => removeMenuItem(item.id)}
-                          aria-label="Delete Dish"
-                          className="p-2 rounded-lg border border-zinc-200 text-red-600 hover:bg-red-50 cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {(canPauseItems || canEditMenu) ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              toggleMenuItemAvailability(item.id, !item.isAvailable)
+                            }
+                            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold cursor-pointer ${
+                              item.isAvailable
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : 'bg-zinc-100 text-zinc-500 border border-zinc-200'
+                            }`}
+                          >
+                            {item.isAvailable
+                              ? t.admin.menu.availableBadge
+                              : t.admin.menu.unavailableBadge}
+                          </button>
+                        ) : (
+                          <span
+                            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold ${
+                              item.isAvailable
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : 'bg-zinc-100 text-zinc-500 border border-zinc-200'
+                            }`}
+                          >
+                            {item.isAvailable
+                              ? t.admin.menu.availableBadge
+                              : t.admin.menu.unavailableBadge}
+                          </span>
+                        )}
+                        {canEditMenu && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => openEditItem(item)}
+                              aria-label="Edit Dish"
+                              className="p-2 rounded-lg border border-zinc-200 text-zinc-700 hover:bg-zinc-50 cursor-pointer"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeMenuItem(item.id)}
+                              aria-label="Delete Dish"
+                              className="p-2 rounded-lg border border-zinc-200 text-red-600 hover:bg-red-50 cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>

@@ -43,10 +43,15 @@ import {
   updateServiceCallStatus,
 } from '../../lib/firestoreService';
 import {
+  getCurrentShiftSlot,
   getResolvedOperationsConfig,
   getTimestampMillis,
   updateRestaurantOperationsConfig,
 } from '../../lib/operationsService';
+import {
+  computeCaptainEffectiveScope,
+  subscribeCaptainHallAssignments,
+} from '../../lib/hallAssignmentsService';
 import { playOrderAlertChime, unlockAudioContext } from '../../lib/sound';
 import { subscribeRestaurantStations } from '../../lib/stationsService';
 import {
@@ -63,10 +68,13 @@ import {
   getSavedPrinterProfile,
   tryAutoReconnectSavedPrinter,
 } from '../../lib/thermalPrinterService';
+import { OWNER_FULL_PERMISSIONS, resolveEffectiveStaffPermissions } from '../../lib/staffAuthUtils';
 import {
   Category,
   CustomerProfile,
+  EffectiveStaffPermissions,
   Hall,
+  HallCaptainAssignment,
   ItemAddon,
   ItemPrepState,
   ItemSize,
@@ -81,6 +89,7 @@ import {
   ServiceCallStatus,
   ServiceCallType,
   StaffActorInfo,
+  StaffRole,
   TableGridColors,
 } from '../../types/menu';
 import { SplitCheckPrintModal } from './SplitCheckPrintModal';
@@ -90,8 +99,11 @@ interface CaptainWaiterTabProps {
   restaurant: Restaurant;
   defaultHallName?: string;
   captainScreenMeta?: StationMeta;
+  captainUid?: string;
+  staffRole?: StaffRole;
   staffMode?: boolean;
   actor?: StaffActorInfo;
+  effectivePermissions?: EffectiveStaffPermissions;
   onRestaurantUpdated?: (updated: Restaurant) => void;
 }
 
@@ -116,8 +128,11 @@ export function CaptainWaiterTab({
   restaurant,
   defaultHallName,
   captainScreenMeta,
+  captainUid,
+  staffRole,
   staffMode = false,
   actor,
+  effectivePermissions,
   onRestaurantUpdated,
 }: CaptainWaiterTabProps) {
   const { lang, dir, loc, formatCurrency } = useLanguage();
@@ -126,6 +141,19 @@ export function CaptainWaiterTab({
   const currencyLabel = formatCurrency(restaurant.currency);
 
   const opsConfig = useMemo(() => getResolvedOperationsConfig(restaurant), [restaurant]);
+  const isOwnerActor = !staffMode || actor?.role === 'owner';
+  const resolvedPerms = useMemo(() => {
+    if (effectivePermissions) return effectivePermissions;
+    if (!actor || isOwnerActor || actor.role === 'owner' || actor.role === 'superadmin') {
+      return OWNER_FULL_PERMISSIONS;
+    }
+    return resolveEffectiveStaffPermissions({ role: actor.role }, opsConfig.managerPermissions);
+  }, [effectivePermissions, isOwnerActor, actor, opsConfig.managerPermissions]);
+  const canAddEditTableOrders = isOwnerActor || resolvedPerms.canAddEditTableOrders;
+  const canUpdatePrepProgress = isOwnerActor || resolvedPerms.canUpdatePrepProgress;
+  const canManageServiceCalls = isOwnerActor || resolvedPerms.canManageServiceCalls;
+  const canConfigureOperations = isOwnerActor || resolvedPerms.canConfigureOperations;
+
   const showCaptainPrices =
     !staffMode || actor?.role === 'owner'
       ? true
@@ -149,6 +177,7 @@ export function CaptainWaiterTab({
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [customers, setCustomers] = useState<CustomerProfile[]>([]);
   const [dynamicStations, setDynamicStations] = useState<RestaurantStation[]>([]);
+  const [captainAssignments, setCaptainAssignments] = useState<HallCaptainAssignment[]>([]);
   const [selectedHall, setSelectedHall] = useState<string>(() => defaultHallName?.trim() || 'all');
   const [soundEnabled, setSoundEnabled] = useState(() =>
     captainScreenMeta ? captainScreenMeta.soundAlertEnabled : true
@@ -234,6 +263,12 @@ export function CaptainWaiterTab({
     return () => window.removeEventListener('pointerdown', unlock);
   }, []);
 
+  const scopedCaptainUid = useMemo(() => {
+    if (!staffMode) return '';
+    if (actor?.role === 'owner' || staffRole === 'manager' || staffRole === 'hall_manager') return '';
+    return (captainUid || actor?.uid || '').trim();
+  }, [staffMode, staffRole, captainUid, actor?.uid, actor?.role]);
+
   useEffect(() => {
     const unsubCats = subscribeCategories(restaurant.id, setCategories);
     const unsubItems = subscribeMenuItems(restaurant.id, setMenuItems);
@@ -249,14 +284,26 @@ export function CaptainWaiterTab({
       setCustomers,
       () => {}
     );
+    const unsubAssignments = scopedCaptainUid
+      ? subscribeCaptainHallAssignments(
+          restaurant.id,
+          scopedCaptainUid,
+          setCaptainAssignments,
+          () => {}
+        )
+      : (() => {
+          setCaptainAssignments([]);
+          return () => {};
+        })();
     return () => {
       unsubCats();
       unsubItems();
       unsubStations();
       unsubHalls();
       unsubCustomers();
+      unsubAssignments();
     };
-  }, [restaurant.id, restaurant.ownerId]);
+  }, [restaurant.id, restaurant.ownerId, scopedCaptainUid]);
 
   useEffect(() => {
     if (defaultHallName?.trim()) {
@@ -410,39 +457,29 @@ export function CaptainWaiterTab({
     [menuItems]
   );
 
-  const assignedHallIdSet = useMemo(
-    () => new Set(captainScreenMeta?.assignedHallIds || []),
-    [captainScreenMeta]
-  );
-  const assignedTableSet = useMemo(
-    () => new Set((captainScreenMeta?.assignedTableNumbers || []).map((t) => String(t).trim()).filter(Boolean)),
-    [captainScreenMeta]
-  );
-  const hasExplicitAssignment = assignedHallIdSet.size > 0 || assignedTableSet.size > 0;
-  const isAssignedOnlyScope = Boolean(
-    captainScreenMeta && captainScreenMeta.tableVisibilityScope === 'assigned_only' && hasExplicitAssignment
+  const currentShiftSlot = useMemo(() => getCurrentShiftSlot(opsConfig), [opsConfig, nowTick]);
+
+  const activeShiftAssignment = useMemo(() => {
+    if (!scopedCaptainUid) return null;
+    return captainAssignments.find((a) => a.shiftSlotId === currentShiftSlot.id) || null;
+  }, [scopedCaptainUid, captainAssignments, currentShiftSlot.id]);
+
+  const effectiveScope = useMemo(
+    () =>
+      computeCaptainEffectiveScope({
+        captainScreenMeta,
+        shiftAssignment: activeShiftAssignment,
+        halls,
+        isEn,
+      }),
+    [captainScreenMeta, activeShiftAssignment, halls, isEn]
   );
 
-  const assignedHallNameSet = useMemo(() => {
-    const s = new Set<string>();
-    if (assignedHallIdSet.size === 0) return s;
-    halls.forEach((h) => {
-      if (assignedHallIdSet.has(h.id)) {
-        if (h.name?.trim()) s.add(h.name.trim().toLowerCase());
-        if (h.name_en?.trim()) s.add(h.name_en.trim().toLowerCase());
-      }
-    });
-    assignedHallIdSet.forEach((id) => s.add(id.trim().toLowerCase()));
-    return s;
-  }, [assignedHallIdSet, halls]);
+  const isAssignedOnlyScope = effectiveScope.hasDynamicAssignment || effectiveScope.hasStaticBounds;
 
   const isHallAssigned = (hall: Hall): boolean => {
-    if (assignedHallIdSet.size === 0) return true;
-    return (
-      assignedHallIdSet.has(hall.id) ||
-      assignedHallNameSet.has((hall.name || '').trim().toLowerCase()) ||
-      assignedHallNameSet.has((hall.name_en || '').trim().toLowerCase())
-    );
+    if (!isAssignedOnlyScope) return true;
+    return effectiveScope.isHallAllowed(hall.id, hall.name);
   };
 
   const isRecordAssigned = (
@@ -458,33 +495,24 @@ export function CaptainWaiterTab({
     ) {
       return false;
     }
-    if (!hasExplicitAssignment) return true;
-    const cleanH = (itemHallName || '').trim().toLowerCase();
+    if (!isAssignedOnlyScope) return true;
+    const cleanH = (itemHallName || '').trim();
     const cleanT = (itemTableNumber || '').trim();
-    if (assignedHallIdSet.size > 0) {
-      if (cleanH) {
-        if (!assignedHallNameSet.has(cleanH)) return false;
-      } else if (assignedTableSet.size === 0) {
-        return false;
-      }
+    if (!cleanH && !cleanT) return false;
+    if (cleanT) {
+      return effectiveScope.isTableAllowed('', cleanH || undefined, cleanT);
     }
-    if (assignedTableSet.size > 0) {
-      if (!cleanT || !assignedTableSet.has(cleanT)) return false;
-    }
-    return true;
+    return effectiveScope.isHallAllowed('', cleanH || undefined);
   };
 
   const scopedHalls = useMemo(() => {
     if (!isAssignedOnlyScope) return halls;
     return halls.filter((h) => {
-      if (!isHallAssigned(h)) return false;
-      if (assignedTableSet.size > 0) {
-        const nums = getHallTableNumbers(h);
-        return nums.some((tbl) => assignedTableSet.has(tbl.trim()));
-      }
-      return true;
+      if (!effectiveScope.isHallAllowed(h.id, h.name)) return false;
+      const nums = getHallTableNumbers(h);
+      return nums.some((tbl) => effectiveScope.isTableAllowed(h.id, h.name, tbl));
     });
-  }, [halls, isAssignedOnlyScope, assignedHallIdSet, assignedHallNameSet, assignedTableSet]);
+  }, [halls, isAssignedOnlyScope, effectiveScope]);
 
   useEffect(() => {
     if (scopedHalls.length > 0 && isAssignedOnlyScope) {
@@ -523,7 +551,7 @@ export function CaptainWaiterTab({
       if (selectedHall !== 'all' && (c.hallName || '').trim() !== selectedHall) return false;
       return true;
     });
-  }, [serviceCalls, selectedHall, isAssignedOnlyScope, assignedHallIdSet, assignedHallNameSet, assignedTableSet]);
+  }, [serviceCalls, selectedHall, isAssignedOnlyScope, effectiveScope, captainScreenMeta]);
 
   const readyDishes = useMemo<ReadyDishEntry[]>(() => {
     const list: ReadyDishEntry[] = [];
@@ -574,9 +602,7 @@ export function CaptainWaiterTab({
     effectiveStations,
     isAssignedOnlyScope,
     captainScreenMeta,
-    assignedHallIdSet,
-    assignedHallNameSet,
-    assignedTableSet,
+    effectiveScope,
   ]);
 
   const readyGroupedByOrder = useMemo(() => {
@@ -661,7 +687,7 @@ export function CaptainWaiterTab({
   const getCallMeta = (type: ServiceCallType) => {
     if (type === 'call_waiter') {
       return {
-        label: isEn ? 'Call Captain / Waiter' : 'نداء الكابتن / الويتر',
+        label: isEn ? 'Call Captain' : 'نداء الكابتن',
         badgeClass: 'bg-amber-100 text-amber-900 border-amber-300',
         Icon: BellRing,
       };
@@ -689,7 +715,7 @@ export function CaptainWaiterTab({
 
   const formatMoney = (val: number) => `${val.toFixed(2).replace(/\.00$/, '')} ${currencyLabel}`;
 
-  // Build Floor Grid Hall sections (honors captainScreenMeta scoping)
+  // Build Floor Grid Hall sections (honors captainScreenMeta & live shift assignments)
   const gridHalls = useMemo(() => {
     const filtered =
       selectedHall === 'all'
@@ -697,17 +723,16 @@ export function CaptainWaiterTab({
         : scopedHalls.filter((h) => h.name.trim() === selectedHall);
     return filtered.map((h) => {
       const rawTables = getHallTableNumbers(h);
-      const tableNumbers =
-        isAssignedOnlyScope && assignedTableSet.size > 0
-          ? rawTables.filter((tbl) => assignedTableSet.has(tbl.trim()))
-          : rawTables;
+      const tableNumbers = isAssignedOnlyScope
+        ? rawTables.filter((tbl) => effectiveScope.isTableAllowed(h.id, h.name, tbl))
+        : rawTables;
       return {
         hall: h,
         tableNumbers,
-        isHighlightedHall: hasExplicitAssignment && isHallAssigned(h),
+        isHighlightedHall: isAssignedOnlyScope && isHallAssigned(h),
       };
     });
-  }, [scopedHalls, selectedHall, isAssignedOnlyScope, assignedTableSet, hasExplicitAssignment, assignedHallIdSet, assignedHallNameSet]);
+  }, [scopedHalls, selectedHall, isAssignedOnlyScope, effectiveScope]);
 
   const getTableSnapshot = (hallName: string, tableNumber: string) => {
     const cleanTbl = tableNumber.trim();
@@ -1023,25 +1048,16 @@ export function CaptainWaiterTab({
                     ? captainScreenMeta.shortLabel_en
                     : captainScreenMeta.shortLabel
                   : isEn
-                    ? 'Captain & Waiter Floor Screen'
-                    : 'شاشة الكابتن (الويتر) وخدمة الصالة'}
+                    ? 'Captain Floor Screen'
+                    : 'شاشة الكابتن وخدمة الصالة'}
               </h2>
-              {captainScreenMeta && (
+              {isAssignedOnlyScope && (
                 <span
-                  className="px-2 py-0.5 rounded-md border text-[10px] font-extrabold"
-                  style={{
-                    backgroundColor: ui.theme.surfaceSubtleBg,
-                    borderColor: ui.theme.surfaceBorder,
-                    color: captainScreenMeta.color || ui.theme.accentHex,
-                  }}
+                  className="px-2.5 py-0.5 rounded-md border text-[11px] font-extrabold bg-teal-50 text-teal-900 border-teal-200"
                 >
-                  {isAssignedOnlyScope
-                    ? isEn
-                      ? 'Assigned Zone Only'
-                      : 'نطاق مخصص فقط'
-                    : isEn
-                      ? 'Full Floor View'
-                      : 'عرض كل الصالات'}
+                  {isEn
+                    ? `Assigned to: ${effectiveScope.summaryLabelEn}`
+                    : `أنت مسؤول عن: ${effectiveScope.summaryLabelAr}`}
                 </span>
               )}
             </div>
@@ -1050,6 +1066,13 @@ export function CaptainWaiterTab({
                 ? 'Live table calls paired with ready dishes & drinks waiting for table delivery.'
                 : 'تنبيهات نداء الطاولات لحظياً مع قائمة الأصناف الجاهزة للاستلام من المحطات.'}
             </p>
+            {scopedCaptainUid && !isAssignedOnlyScope && halls.length > 0 && (
+              <p className="text-[11px] font-bold text-amber-700 mt-1">
+                {isEn
+                  ? `No specific halls assigned to you for "${currentShiftSlot.nameEn}" shift yet — showing all halls.`
+                  : `لم يتم تخصيص صالات لك في وردية "${currentShiftSlot.name}" بعد — يتم عرض جميع الصالات حالياً.`}
+              </p>
+            )}
           </div>
         </div>
 
@@ -1195,9 +1218,14 @@ export function CaptainWaiterTab({
               },
             };
             const orderedIds = ui.orderedButtonIds.filter(
-              (id): id is 'grid' | 'pos' | 'calls' => id === 'grid' || id === 'pos' || id === 'calls'
+              (id): id is 'grid' | 'pos' | 'calls' =>
+                (id === 'grid' || id === 'pos' || id === 'calls') &&
+                (id !== 'pos' || canAddEditTableOrders)
             );
-            const list = (orderedIds.length > 0 ? orderedIds : (['grid', 'pos', 'calls'] as const)).map(
+            const fallbackIds = (['grid', 'pos', 'calls'] as const).filter(
+              (id) => id !== 'pos' || canAddEditTableOrders
+            );
+            const list = (orderedIds.length > 0 ? orderedIds : fallbackIds).map(
               (id) => tabMap[id]
             );
             return list.map((tItem) => {
@@ -1242,7 +1270,7 @@ export function CaptainWaiterTab({
           })()}
         </div>
 
-        {captainMode === 'grid' && (
+        {captainMode === 'grid' && canConfigureOperations && (
           <button
             type="button"
             onClick={() => setGridSettingsOpen(true)}
@@ -1385,10 +1413,9 @@ export function CaptainWaiterTab({
                     const snap = getTableSnapshot(hall.name, tblNum);
                     const tileColor = opsConfig.tableColors[snap.state];
                     const isTableInAssignedZone =
-                      hasExplicitAssignment &&
-                      !isAssignedOnlyScope &&
+                      isAssignedOnlyScope &&
                       isHallAssigned(hall) &&
-                      (assignedTableSet.size === 0 || assignedTableSet.has(tblNum.trim()));
+                      effectiveScope.isTableAllowed(hall.id, hall.name, tblNum);
                     return (
                       <button
                         key={`${hall.id}_${tblNum}`}
@@ -1976,7 +2003,7 @@ export function CaptainWaiterTab({
             }}
           >
             {isEn
-              ? 'No pending waiter calls right now.'
+              ? 'No pending captain calls right now.'
               : 'لا توجد نداءات معلّقة من الترابيزات حالياً.'}
           </div>
         ) : (
@@ -2034,27 +2061,29 @@ export function CaptainWaiterTab({
                     </p>
                   )}
 
-                  <div className="flex items-center gap-2 pt-1">
-                    {!isAck && (
+                  {canManageServiceCalls && (
+                    <div className="flex items-center gap-2 pt-1">
+                      {!isAck && (
+                        <button
+                          type="button"
+                          disabled={updatingCallId === call.id}
+                          onClick={() => handleCallStatus(call, 'acknowledged')}
+                          className="flex-1 min-h-[40px] py-2 px-3 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 cursor-pointer disabled:opacity-50"
+                        >
+                          {isEn ? 'On My Way' : 'جاري التوجه'}
+                        </button>
+                      )}
                       <button
                         type="button"
                         disabled={updatingCallId === call.id}
-                        onClick={() => handleCallStatus(call, 'acknowledged')}
-                        className="flex-1 min-h-[40px] py-2 px-3 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 cursor-pointer disabled:opacity-50"
+                        onClick={() => handleCallStatus(call, 'resolved')}
+                        className="flex-1 min-h-[40px] py-2 px-3 rounded-xl bg-emerald-600 text-white text-xs font-extrabold hover:bg-emerald-700 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
                       >
-                        {isEn ? 'On My Way' : 'جاري التوجه'}
+                        <CheckCheck className="w-4 h-4" />
+                        <span>{isEn ? 'Fulfilled' : 'تمت التلبية'}</span>
                       </button>
-                    )}
-                    <button
-                      type="button"
-                      disabled={updatingCallId === call.id}
-                      onClick={() => handleCallStatus(call, 'resolved')}
-                      className="flex-1 min-h-[40px] py-2 px-3 rounded-xl bg-emerald-600 text-white text-xs font-extrabold hover:bg-emerald-700 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
-                    >
-                      <CheckCheck className="w-4 h-4" />
-                      <span>{isEn ? 'Fulfilled' : 'تمت التلبية'}</span>
-                    </button>
-                  </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -2144,7 +2173,7 @@ export function CaptainWaiterTab({
                         );
                       })()}
 
-                      {group.entries.length > 1 && (
+                      {canUpdatePrepProgress && group.entries.length > 1 && (
                         <button
                           type="button"
                           disabled={servingKey === batchKey}
@@ -2199,19 +2228,21 @@ export function CaptainWaiterTab({
                             )}
                           </div>
 
-                          <button
-                            type="button"
-                            disabled={servingKey === singleKey}
-                            onClick={() => handleMarkItemServed(dish.orderId, dish.orderNumber, [dish.itemIndex])}
-                            className={`min-h-[42px] px-3 py-2 text-xs font-extrabold flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-50 ${ui.radiusClasses.button}`}
-                            style={{
-                              backgroundColor: ui.theme.accentHex,
-                              color: ui.theme.accentTextHex,
-                            }}
-                          >
-                            <CheckCheck className="w-3.5 h-3.5 text-emerald-400" />
-                            <span>{isEn ? 'Served' : 'تم التقديم'}</span>
-                          </button>
+                          {canUpdatePrepProgress && (
+                            <button
+                              type="button"
+                              disabled={servingKey === singleKey}
+                              onClick={() => handleMarkItemServed(dish.orderId, dish.orderNumber, [dish.itemIndex])}
+                              className={`min-h-[42px] px-3 py-2 text-xs font-extrabold flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-50 ${ui.radiusClasses.button}`}
+                              style={{
+                                backgroundColor: ui.theme.accentHex,
+                                color: ui.theme.accentTextHex,
+                              }}
+                            >
+                              <CheckCheck className="w-3.5 h-3.5 text-emerald-400" />
+                              <span>{isEn ? 'Served' : 'تم التقديم'}</span>
+                            </button>
+                          )}
                         </div>
                       );
                     })}
@@ -2337,24 +2368,26 @@ export function CaptainWaiterTab({
                 className="p-5 border-t space-y-2"
                 style={{ backgroundColor: ui.theme.surfaceSubtleBg, borderColor: ui.theme.surfaceBorder }}
               >
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPosOrderType('dine_in');
-                    setPosHallName(selectedTableDrawer.hallName);
-                    setPosTableNumber(selectedTableDrawer.tableNumber);
-                    setSelectedTableDrawer(null);
-                    setCaptainMode('pos');
-                  }}
-                  className={`w-full min-h-[44px] text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
-                  style={{
-                    backgroundColor: ui.theme.accentHex,
-                    color: ui.theme.accentTextHex,
-                  }}
-                >
-                  <Plus className="w-4 h-4" style={{ color: ui.theme.highlightHex || '#E8833A' }} />
-                  <span>{isEn ? 'Add Items to Table' : 'إضافة أصناف على الترابيزة'}</span>
-                </button>
+                {canAddEditTableOrders && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPosOrderType('dine_in');
+                      setPosHallName(selectedTableDrawer.hallName);
+                      setPosTableNumber(selectedTableDrawer.tableNumber);
+                      setSelectedTableDrawer(null);
+                      setCaptainMode('pos');
+                    }}
+                    className={`w-full min-h-[44px] text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
+                    style={{
+                      backgroundColor: ui.theme.accentHex,
+                      color: ui.theme.accentTextHex,
+                    }}
+                  >
+                    <Plus className="w-4 h-4" style={{ color: ui.theme.highlightHex || '#E8833A' }} />
+                    <span>{isEn ? 'Add Items to Table' : 'إضافة أصناف على الترابيزة'}</span>
+                  </button>
+                )}
 
                 {snap.tblOrders.length > 0 && (
                   <div className="grid grid-cols-2 gap-2">

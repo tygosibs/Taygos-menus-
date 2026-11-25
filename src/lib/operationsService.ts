@@ -28,6 +28,7 @@ import {
   ShowPricesByRole,
   StaffActorInfo,
   StaffAuditEventType,
+  StaffMember,
   StaffShift,
   TableGridColors,
   TreasuryState,
@@ -35,6 +36,7 @@ import {
 } from '../types/menu';
 import { getActiveLang } from '../data/translations';
 import { db, handleFirestoreError, OperationType } from './firebase';
+import { resolveEffectiveStaffPermissions } from './staffAuthUtils';
 import { startStaffShift } from './shiftsService';
 
 function makeOpId(prefix: string): string {
@@ -75,6 +77,7 @@ export const DEFAULT_MANAGER_PERMISSIONS: ManagerPermissions = {
   canEditDrawerFloat: true,
   canManageStaff: true,
   canManageHalls: true,
+  canManageHallAssignments: true,
   canManageStations: true,
   canConfigureOperations: true,
   canToggleScreenPrices: true,
@@ -633,8 +636,12 @@ export async function modifyOrderWithAudit(params: {
   const { order, restaurant, updates, reason, actor } = params;
   const isEn = getActiveLang() === 'en';
   const cleanReason = reason.trim().slice(0, 300);
-  if (!cleanReason) {
-    throw new Error(isEn ? 'An adjustment or cancellation reason is required.' : 'يجب كتابة سبب التعديل أو الإلغاء.');
+  if (cleanReason.length < 2) {
+    throw new Error(
+      isEn
+        ? 'An adjustment or cancellation reason (at least 2 characters) is required.'
+        : 'يجب كتابة سبب واضح للتعديل أو الخصم أو الإلغاء (حرفين على الأقل).'
+    );
   }
 
   const nextItems = (updates.items ?? order.items).filter((it) => it.quantity > 0);
@@ -645,6 +652,14 @@ export async function modifyOrderWithAudit(params: {
         : 'لا يمكن إفراغ الطلب بالكامل بدون إلغاء الطلب.'
     );
   }
+
+  const itemsModified = updates.items !== undefined;
+  const notesModified =
+    updates.notes !== undefined && updates.notes.trim().slice(0, 400) !== (order.notes || '');
+  const tableNotesModified =
+    updates.tableNotes !== undefined && updates.tableNotes.trim().slice(0, 400) !== (order.tableNotes || '');
+  const discountRequested =
+    updates.manualDiscountAmount !== undefined || updates.manualDiscountPercent !== undefined;
 
   const nextSubtotal = Number(
     nextItems.reduce((sum, it) => sum + Number(it.lineTotal || it.unitPrice * it.quantity), 0).toFixed(2)
@@ -669,11 +684,13 @@ export async function modifyOrderWithAudit(params: {
 
   const actionType: OrderAdjustmentEntry['action'] = updates.cancelOrder
     ? 'order_cancelled'
-    : updates.manualDiscountAmount !== undefined || updates.manualDiscountPercent !== undefined
-    ? 'discount_applied'
-    : updates.items
-    ? 'items_modified'
-    : 'notes_updated';
+    : discountRequested && !itemsModified && !notesModified && !tableNotesModified
+      ? 'discount_applied'
+      : itemsModified || discountRequested
+        ? itemsModified
+          ? 'items_modified'
+          : 'discount_applied'
+        : 'notes_updated';
 
   const nextHistory: OrderAdjustmentEntry[] = [
     ...(order.adjustmentHistory || []).slice(-48),
@@ -689,24 +706,12 @@ export async function modifyOrderWithAudit(params: {
           ? `Order cancelled: ${cleanReason}`
           : `إلغاء الطلب: ${cleanReason}`
         : isEn
-        ? `Updated total: ${nextTotal}`
-        : `الإجمالي بعد التعديل: ${nextTotal}`,
+          ? `Updated total: ${nextTotal}`
+          : `الإجمالي بعد التعديل: ${nextTotal}`,
     },
   ];
 
   const payload: Record<string, unknown> = {
-    items: nextItems.length > 0 ? nextItems : order.items,
-    subtotal: nextSubtotal,
-    serviceCharge: nextService,
-    deliveryFee,
-    discountAmount: promoDiscount,
-    manualDiscountAmount: manualDiscountAmt,
-    manualDiscountPercent: Math.max(0, Math.min(100, manualDiscountPct)),
-    manualDiscountReason: (updates.manualDiscountReason ?? order.manualDiscountReason ?? cleanReason).slice(0, 300),
-    taxAmount: nextTax,
-    total: nextTotal,
-    notes: (updates.notes ?? order.notes ?? '').slice(0, 400),
-    tableNotes: (updates.tableNotes ?? order.tableNotes ?? '').slice(0, 400),
     adjustmentHistory: nextHistory,
     lastUpdatedByUid: actor.uid,
     lastUpdatedByName: actor.name.slice(0, 100),
@@ -715,12 +720,50 @@ export async function modifyOrderWithAudit(params: {
   };
 
   if (updates.cancelOrder) {
+    const cancelReason = (updates.cancelReason || cleanReason).trim().slice(0, 300);
+    if (cancelReason.length < 2) {
+      throw new Error(isEn ? 'Cancellation reason is required.' : 'يجب كتابة سبب الإلغاء.');
+    }
     payload.status = 'cancelled';
-    payload.cancelReason = (updates.cancelReason || cleanReason).slice(0, 300);
+    payload.cancelReason = cancelReason;
     payload.closedAt = serverTimestamp();
     payload.closedByUid = actor.uid;
     payload.closedByName = actor.name.slice(0, 100);
     payload.closedByRole = actor.role;
+  } else if (discountRequested && !itemsModified && !notesModified && !tableNotesModified) {
+    const discountReason = (updates.manualDiscountReason || cleanReason).trim().slice(0, 300);
+    if (discountReason.length < 2) {
+      throw new Error(isEn ? 'Discount reason is required.' : 'يجب كتابة سبب الخصم الفوري.');
+    }
+    payload.serviceCharge = nextService;
+    payload.manualDiscountAmount = manualDiscountAmt;
+    payload.manualDiscountPercent = Math.max(0, Math.min(100, manualDiscountPct));
+    payload.manualDiscountReason = discountReason;
+    payload.taxAmount = nextTax;
+    payload.total = nextTotal;
+  } else {
+    payload.items = nextItems.length > 0 ? nextItems : order.items;
+    payload.subtotal = nextSubtotal;
+    payload.serviceCharge = nextService;
+    payload.deliveryFee = deliveryFee;
+    payload.discountAmount = promoDiscount;
+    if (discountRequested) {
+      const discountReason = (updates.manualDiscountReason || cleanReason).trim().slice(0, 300);
+      if (discountReason.length < 2) {
+        throw new Error(isEn ? 'Discount reason is required.' : 'يجب كتابة سبب الخصم الفوري.');
+      }
+      payload.manualDiscountAmount = manualDiscountAmt;
+      payload.manualDiscountPercent = Math.max(0, Math.min(100, manualDiscountPct));
+      payload.manualDiscountReason = discountReason;
+    }
+    payload.taxAmount = nextTax;
+    payload.total = nextTotal;
+    if (notesModified && updates.notes !== undefined) {
+      payload.notes = updates.notes.trim().slice(0, 400);
+    }
+    if (tableNotesModified && updates.tableNotes !== undefined) {
+      payload.tableNotes = updates.tableNotes.trim().slice(0, 400);
+    }
   }
 
   try {
@@ -1114,12 +1157,51 @@ export async function updateRestaurantOperationsConfig(params: {
   config: OperationsConfig;
   actor?: StaffActorInfo;
 }): Promise<void> {
-  const { restaurantId, config } = params;
+  const { restaurantId, config, actor } = params;
   try {
     await updateDoc(doc(db, 'restaurants', restaurantId), {
       operationsConfig: config,
       updatedAt: serverTimestamp(),
     });
+
+    // When owner/superadmin updates legacy managerPermissions, sync active legacy managers without custom jobTitleIds
+    if (actor?.role === 'owner' || actor?.role === 'superadmin') {
+      try {
+        const staffSnap = await getDocs(
+          query(collection(db, 'restaurants', restaurantId, 'staff'), where('role', '==', 'manager'))
+        );
+        const legacyManagers = staffSnap.docs
+          .map((d) => ({ ...(d.data() as StaffMember), uid: d.id }))
+          .filter((m) => !m.jobTitleIds || m.jobTitleIds.length === 0);
+        for (let i = 0; i < legacyManagers.length; i += 4) {
+          const chunk = legacyManagers.slice(i, i + 4);
+          const batch = writeBatch(db);
+          chunk.forEach((mgr) => {
+            const nextPerms = resolveEffectiveStaffPermissions(
+              {
+                role: 'manager',
+                allowedScreens: mgr.allowedScreens,
+                allowedStations: mgr.allowedStations,
+                permissionOverrides: mgr.permissionOverrides,
+                revokedPermissions: mgr.revokedPermissions,
+              },
+              config.managerPermissions
+            );
+            batch.update(doc(db, 'restaurants', restaurantId, 'staff', mgr.uid), {
+              effectivePermissions: nextPerms,
+              updatedAt: serverTimestamp(),
+            });
+            batch.update(doc(db, 'staff_access', mgr.uid), {
+              effectivePermissions: nextPerms,
+              updatedAt: serverTimestamp(),
+            });
+          });
+          await batch.commit();
+        }
+      } catch {
+        // Non-fatal legacy manager permission sync
+      }
+    }
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `restaurants/${restaurantId}`);
   }

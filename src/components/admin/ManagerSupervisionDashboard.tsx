@@ -17,6 +17,7 @@ import {
   ShieldCheck,
   Sliders,
   UserCheck,
+  Users,
   Utensils,
   Wallet,
 } from 'lucide-react';
@@ -44,8 +45,10 @@ import {
   getStationIconComponent,
   stationIdToScreen,
 } from '../../lib/stationUtils';
+import { OWNER_FULL_PERMISSIONS, resolveEffectiveStaffPermissions } from '../../lib/staffAuthUtils';
 import {
   Category,
+  EffectiveStaffPermissions,
   MenuItem,
   OperationsConfig,
   Restaurant,
@@ -63,11 +66,13 @@ interface ManagerSupervisionDashboardProps {
   activeShifts: StaffShift[];
   dynamicStations: RestaurantStation[];
   treasuryTransfers: TreasuryTransfer[];
+  effectivePermissions?: EffectiveStaffPermissions;
   onNavigateScreen: (
     screen: StaffScreen,
     opts?: { supervisory?: boolean; coveringStaffName?: string; captainScreenId?: string }
   ) => void;
   onOpenStations?: () => void;
+  onOpenAssignments?: () => void;
   onRestaurantUpdated?: (updated: Restaurant) => void;
 }
 
@@ -88,8 +93,10 @@ export function ManagerSupervisionDashboard({
   activeShifts,
   dynamicStations,
   treasuryTransfers,
+  effectivePermissions,
   onNavigateScreen,
   onOpenStations,
+  onOpenAssignments,
   onRestaurantUpdated,
 }: ManagerSupervisionDashboardProps) {
   const { lang, dir, formatCurrency, loc } = useLanguage();
@@ -101,6 +108,11 @@ export function ManagerSupervisionDashboard({
   const treasury = useMemo(() => getResolvedTreasuryState(restaurant), [restaurant]);
   const managerPerms = opsConfig.managerPermissions;
   const isOwner = actor.role === 'owner';
+  const resolvedPerms = useMemo(() => {
+    if (effectivePermissions) return effectivePermissions;
+    if (actor.role === 'owner' || actor.role === 'superadmin') return OWNER_FULL_PERMISSIONS;
+    return resolveEffectiveStaffPermissions({ role: actor.role }, managerPerms);
+  }, [effectivePermissions, actor.role, managerPerms]);
 
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -249,11 +261,11 @@ export function ManagerSupervisionDashboard({
   const formatMoney = (val: number) => `${Number(val || 0).toFixed(2).replace(/\.00$/, '')} ${currencyLabel}`;
 
   const handleToggleItemAvailability = async (item: MenuItem, nextAvailable: boolean) => {
-    if (!isOwner && !managerPerms.canPauseItems && !managerPerms.canEditMenu) {
+    if (!isOwner && !resolvedPerms.canPauseItems && !resolvedPerms.canEditMenu) {
       setErrorMsg(
         isEn
-          ? 'Pausing/resuming items is not enabled for manager accounts by the owner.'
-          : 'صلاحية إيقاف وتفعيل الأصناف غير مفعّلة لحساب المدير من المالك.'
+          ? 'Pausing/resuming items is not enabled for your account.'
+          : 'صلاحية إيقاف وتفعيل الأصناف غير مفعّلة لصلاحيات حسابك.'
       );
       return;
     }
@@ -341,13 +353,19 @@ export function ManagerSupervisionDashboard({
     setSavingSettings(true);
     setErrorMsg(null);
     try {
+      const payloadToSave: OperationsConfig = isOwner
+        ? draftConfig
+        : {
+            ...draftConfig,
+            managerPermissions: opsConfig.managerPermissions,
+          };
       await updateRestaurantOperationsConfig({
         restaurantId: restaurant.id,
         ownerId: restaurant.ownerId,
-        config: draftConfig,
+        config: payloadToSave,
         actor,
       });
-      onRestaurantUpdated?.({ ...restaurant, operationsConfig: draftConfig });
+      onRestaurantUpdated?.({ ...restaurant, operationsConfig: payloadToSave });
       setSettingsOpen(false);
       setFeedback(
         isEn
@@ -374,8 +392,9 @@ export function ManagerSupervisionDashboard({
     });
   };
 
-  const canModifyOperations = isOwner || managerPerms.canConfigureOperations || managerPerms.canToggleScreenPrices;
-  const canPauseOrEditMenu = isOwner || managerPerms.canPauseItems || managerPerms.canEditMenu;
+  const canModifyOperations = isOwner || resolvedPerms.canConfigureOperations;
+  const canPauseOrEditMenu = isOwner || resolvedPerms.canPauseItems || resolvedPerms.canEditMenu;
+  const canTransferCustody = isOwner || resolvedPerms.canEditDrawerFloat;
 
   return (
     <div dir={dir} className="space-y-6">
@@ -416,7 +435,7 @@ export function ManagerSupervisionDashboard({
             {isEn ? 'Active Shifts:' : 'الورديات النشطة:'}{' '}
             <strong className="ms-1" style={{ color: theme.surfaceText }}>{activeShifts.length}</strong>
           </div>
-          {(isOwner || managerPerms.canManageStations !== false) && onOpenStations && (
+          {(isOwner || resolvedPerms.canManageStations) && onOpenStations && (
             <button
               type="button"
               onClick={onOpenStations}
@@ -431,7 +450,22 @@ export function ManagerSupervisionDashboard({
               <span>{isEn ? 'Screens & Stations' : 'الشاشات والمحطات'}</span>
             </button>
           )}
-          {(isOwner || managerPerms.canManageHalls) && (
+          {(isOwner || resolvedPerms.canManageHallAssignments) && onOpenAssignments && (
+            <button
+              type="button"
+              onClick={onOpenAssignments}
+              className={`min-h-[42px] px-4 py-2 border text-xs font-extrabold inline-flex items-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
+              style={{
+                backgroundColor: theme.surfaceSubtleBg,
+                borderColor: theme.surfaceBorder,
+                color: theme.surfaceText,
+              }}
+            >
+              <Users className="w-4 h-4" style={{ color: theme.accentHex }} />
+              <span>{isEn ? 'Captain Assignments' : 'توزيع الكباتن'}</span>
+            </button>
+          )}
+          {(isOwner || resolvedPerms.canManageHalls) && (
             <button
               type="button"
               onClick={() => onNavigateScreen('halls')}
@@ -787,7 +821,7 @@ export function ManagerSupervisionDashboard({
             </>
           )}
 
-          {(isOwner || managerPerms.canToggleScreenPrices) && (
+          {(isOwner || resolvedPerms.canConfigureOperations) && (
             <div className="space-y-2 pt-2 border-t border-zinc-100">
               <p className="text-xs font-extrabold text-zinc-800">
                 {isEn
@@ -1049,11 +1083,12 @@ export function ManagerSupervisionDashboard({
           </div>
         </div>
 
-        <form
-          onSubmit={handleTransferCustody}
-          className="lg:col-span-7 space-y-3 border rounded-xl p-4"
-          style={{ backgroundColor: theme.surfaceSubtleBg, borderColor: theme.surfaceBorder }}
-        >
+        {canTransferCustody ? (
+          <form
+            onSubmit={handleTransferCustody}
+            className="lg:col-span-7 space-y-3 border rounded-xl p-4"
+            style={{ backgroundColor: theme.surfaceSubtleBg, borderColor: theme.surfaceBorder }}
+          >
           <p className="text-xs font-extrabold flex items-center gap-1.5" style={{ color: theme.surfaceText }}>
             <ArrowRightLeft className="w-4 h-4 text-emerald-600" />
             <span>
@@ -1128,6 +1163,20 @@ export function ManagerSupervisionDashboard({
             </div>
           )}
         </form>
+        ) : (
+          <div
+            className="lg:col-span-7 border rounded-xl p-4 text-xs font-bold"
+            style={{
+              backgroundColor: theme.surfaceSubtleBg,
+              borderColor: theme.surfaceBorder,
+              color: theme.mutedText,
+            }}
+          >
+            {isEn
+              ? 'Treasury transfer to the owner vault requires cash custody adjustment permission.'
+              : 'توريد العهدة إلى خزنة المالك يتطلب صلاحية تعديل العهدة والخزنة.'}
+          </div>
+        )}
       </section>
     </div>
   );

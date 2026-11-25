@@ -45,12 +45,12 @@ export function TableServiceBar({
 
   const labelForType = (type: ServiceCallType) => {
     if (isEn) {
-      if (type === 'call_waiter') return 'Call Captain / Waiter';
+      if (type === 'call_waiter') return 'Call Captain';
       if (type === 'request_bill_cash') return 'Bill Request (Cash)';
       if (type === 'request_bill_card') return 'Bill Request (Visa / Card)';
       return 'Cutlery & Water';
     }
-    if (type === 'call_waiter') return 'نداء الكابتن / الويتر';
+    if (type === 'call_waiter') return 'نداء الكابتن';
     if (type === 'request_bill_cash') return 'طلب الفاتورة (كاش)';
     if (type === 'request_bill_card') return 'طلب الفاتورة (فيزا)';
     return 'أدوات طعام / مياه';

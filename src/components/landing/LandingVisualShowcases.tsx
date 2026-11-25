@@ -233,8 +233,8 @@ const ROLE_TABS: Array<{
   },
   {
     id: 'captain',
-    labelAr: 'الكابتن / الويتر',
-    labelEn: 'Captain / Waiter',
+    labelAr: 'الكابتن',
+    labelEn: 'Captain',
     subtitleAr: 'إدارة الصالة والطلبات المباشرة ونداءات الضيوف',
     subtitleEn: 'Floor management, tableside ordering, and guest calls',
     bulletsAr: [

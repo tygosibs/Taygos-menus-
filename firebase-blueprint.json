@@ -517,10 +517,18 @@
         "email": { "type": "string", "maxLength": 254 },
         "authEmail": { "type": "string", "minLength": 3, "maxLength": 254 },
         "jobTitle": { "type": "string", "maxLength": 80 },
-        "role": { "type": "string", "enum": ["manager", "cashier", "kitchen", "bar", "pastry", "captain", "station_staff", "custom"] },
+        "jobTitleIds": { "type": "array" },
+        "jobTitleNames": { "type": "array" },
+        "role": { "type": "string", "enum": ["manager", "hall_manager", "cashier", "kitchen", "bar", "pastry", "captain", "station_staff", "custom"] },
         "allowedScreens": { "type": "array" },
         "allowedStations": { "type": "array" },
         "allowedCaptainScreens": { "type": "array" },
+        "screenOverrides": { "type": "array" },
+        "revokedScreens": { "type": "array" },
+        "hallManagerPermissions": { "type": "object" },
+        "permissionOverrides": { "type": "object" },
+        "revokedPermissions": { "type": "array" },
+        "effectivePermissions": { "type": "object" },
         "defaultScreen": { "type": "string", "minLength": 2, "maxLength": 72 },
         "defaultStationId": { "type": "string", "maxLength": 64 },
         "hallId": { "type": "string", "maxLength": 128 },
@@ -576,13 +584,21 @@
         "staffUsername": { "type": "string", "minLength": 2, "maxLength": 64 },
         "staffPhone": { "type": "string", "maxLength": 24 },
         "staffEmail": { "type": "string", "maxLength": 254 },
-        "staffRole": { "type": "string", "enum": ["manager", "cashier", "kitchen", "bar", "pastry", "captain", "station_staff", "custom"] },
+        "staffRole": { "type": "string", "enum": ["manager", "hall_manager", "cashier", "kitchen", "bar", "pastry", "captain", "station_staff", "custom"] },
         "staffJobTitle": { "type": "string", "maxLength": 80 },
+        "jobTitleIds": { "type": "array" },
+        "jobTitleNames": { "type": "array" },
         "staffHallId": { "type": "string", "maxLength": 128 },
         "staffHallName": { "type": "string", "maxLength": 80 },
         "allowedScreens": { "type": "array" },
         "allowedStations": { "type": "array" },
         "allowedCaptainScreens": { "type": "array" },
+        "screenOverrides": { "type": "array" },
+        "revokedScreens": { "type": "array" },
+        "hallManagerPermissions": { "type": "object" },
+        "permissionOverrides": { "type": "object" },
+        "revokedPermissions": { "type": "array" },
+        "effectivePermissions": { "type": "object" },
         "defaultScreen": { "type": "string", "minLength": 2, "maxLength": 72 },
         "defaultStationId": { "type": "string", "maxLength": 64 },
         "expiresAt": { "type": "string", "format": "date-time" },
@@ -636,10 +652,13 @@
         "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
         "restaurantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
         "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
-        "role": { "type": "string", "enum": ["manager", "cashier", "kitchen", "bar", "pastry", "captain", "station_staff", "custom"] },
+        "role": { "type": "string", "enum": ["manager", "hall_manager", "cashier", "kitchen", "bar", "pastry", "captain", "station_staff", "custom"] },
+        "jobTitleIds": { "type": "array" },
         "allowedScreens": { "type": "array" },
         "allowedStations": { "type": "array" },
         "allowedCaptainScreens": { "type": "array" },
+        "hallManagerPermissions": { "type": "object" },
+        "effectivePermissions": { "type": "object" },
         "defaultScreen": { "type": "string", "minLength": 2, "maxLength": 72 },
         "defaultStationId": { "type": "string", "maxLength": 64 },
         "hallId": { "type": "string", "maxLength": 128 },
@@ -692,6 +711,11 @@
             "float_adjusted",
             "superadmin_shift_unlocked",
             "station_uncovered_alert",
+            "hall_assignment_updated",
+            "job_title_created",
+            "job_title_updated",
+            "job_title_deleted",
+            "staff_permissions_updated",
             "domain_verified"
           ]
         },
@@ -864,6 +888,59 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "version", "publishedBy", "refreshNoticeAr", "refreshNoticeEn", "screens", "updatedAt"]
+    },
+    "HallCaptainAssignment": {
+      "title": "HallCaptainAssignment",
+      "description": "Shift-based assignment mapping a floor captain to specific dining halls and optional tables.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "restaurantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "shiftSlotId": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "shiftSlotName": { "type": "string", "maxLength": 80 },
+        "captainUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "captainName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "hallIds": { "type": "array" },
+        "hallNames": { "type": "array" },
+        "tableNumbersByHall": { "type": "object" },
+        "tableNumbers": { "type": "array" },
+        "assignedByUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "assignedByName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "assignedByRole": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "restaurantId", "ownerId", "shiftSlotId", "captainUid", "captainName", "hallIds", "assignedByUid", "assignedByName", "assignedByRole", "createdAt", "updatedAt"]
+    },
+    "JobTitle": {
+      "title": "JobTitle",
+      "description": "Custom bilingual restaurant Job Title bundling screens, prep stations, and 21 database-enforced boolean permissions.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "restaurantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "nameAr": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "nameEn": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "descriptionAr": { "type": "string", "maxLength": 240 },
+        "descriptionEn": { "type": "string", "maxLength": 240 },
+        "color": { "type": "string", "minLength": 4, "maxLength": 16, "pattern": "^#[0-9a-fA-F]{6}$" },
+        "baseRoleHint": { "type": "string", "enum": ["manager", "hall_manager", "cashier", "kitchen", "bar", "pastry", "captain", "station_staff", "custom"] },
+        "allowedScreens": { "type": "array" },
+        "allowedStations": { "type": "array" },
+        "allowedCaptainScreens": { "type": "array" },
+        "defaultScreen": { "type": "string", "minLength": 2, "maxLength": 72 },
+        "defaultStationId": { "type": "string", "maxLength": 64 },
+        "permissions": { "type": "object" },
+        "isSystemDefault": { "type": "boolean" },
+        "isActive": { "type": "boolean" },
+        "sortOrder": { "type": "number" },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "restaurantId", "ownerId", "nameAr", "nameEn", "color", "allowedScreens", "defaultScreen", "permissions", "isActive", "sortOrder", "createdBy", "createdAt", "updatedAt"]
     }
   },
   "firestore": {
@@ -958,6 +1035,14 @@
     "/restaurants/{restaurantId}/treasury_transfers/{transferId}": {
       "schema": { "$ref": "#/entities/TreasuryTransfer" },
       "description": "Immutable cash custody handovers and treasury transfers between Cashier, Manager, and Owner Vault."
+    },
+    "/restaurants/{restaurantId}/hall_assignments/{assignmentId}": {
+      "schema": { "$ref": "#/entities/HallCaptainAssignment" },
+      "description": "Per-shift captain hall and table assignments managed by Owner, General Manager, or Hall Manager."
+    },
+    "/restaurants/{restaurantId}/job_titles/{titleId}": {
+      "schema": { "$ref": "#/entities/JobTitle" },
+      "description": "Restaurant custom Job Titles and bundled RBAC permission sets."
     }
   }
 }

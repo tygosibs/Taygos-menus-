@@ -149,6 +149,48 @@ export function handleFirestoreError(
   throw new Error(JSON.stringify(errInfo));
 }
 
+export function formatFirestoreErrorMessage(error: unknown, isEn = false): string {
+  const fallback = isEn
+    ? 'An unexpected error occurred while saving.'
+    : 'حدث خطأ غير متوقع أثناء الحفظ.';
+  if (!error) return fallback;
+
+  const rawMsg = error instanceof Error ? error.message : String(error);
+  let parsedCode: string | null =
+    error && typeof error === 'object' && 'code' in error && typeof (error as { code?: unknown }).code === 'string'
+      ? (error as { code: string }).code
+      : null;
+  let parsedMsg = rawMsg;
+
+  if (rawMsg.startsWith('{') && rawMsg.includes('"error"')) {
+    try {
+      const parsed = JSON.parse(rawMsg) as Partial<FirestoreErrorInfo>;
+      if (parsed.errorCode) parsedCode = parsed.errorCode;
+      if (parsed.error) parsedMsg = parsed.error;
+    } catch {
+      // ignore JSON parse failure
+    }
+  }
+
+  const lower = `${parsedCode || ''} ${parsedMsg}`.toLowerCase();
+  if (lower.includes('permission-denied') || lower.includes('insufficient permissions')) {
+    return isEn
+      ? 'You do not have database permission to perform this action. Contact the restaurant owner or manager.'
+      : 'لا تملك صلاحية تنفيذ هذا الإجراء في قاعدة البيانات. تواصل مع صاحب المطعم أو المدير.';
+  }
+  if (lower.includes('failed-precondition')) {
+    return isEn
+      ? 'This operation cannot be completed right now due to missing prerequisites.'
+      : 'تعذر تنفيذ العملية لعدم استيفاء الشروط المطلوبة.';
+  }
+  if (lower.includes('unavailable') || lower.includes('network')) {
+    return isEn
+      ? 'Network issue while reaching the database. Check your connection and try again.'
+      : 'تعذر الاتصال بقاعدة البيانات. تحقق من الشبكة وحاول مرة أخرى.';
+  }
+  return parsedMsg || fallback;
+}
+
 export async function testConnection(): Promise<void> {
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));

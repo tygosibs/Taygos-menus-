@@ -76,6 +76,9 @@ interface CashierFloorPosPanelProps {
   canApplyInstantDiscount: boolean;
   canCancelOpenOrders: boolean;
   canConfigureGridColors: boolean;
+  canAddEditTableOrders?: boolean;
+  canSettleChecks?: boolean;
+  canManageServiceCalls?: boolean;
   mode: 'tables' | 'pos';
   prefillPosTable: { hallName: string; tableNumber: string } | null;
   onConsumePrefill: () => void;
@@ -104,6 +107,9 @@ export function CashierFloorPosPanel({
   canApplyInstantDiscount,
   canCancelOpenOrders,
   canConfigureGridColors,
+  canAddEditTableOrders = true,
+  canSettleChecks = true,
+  canManageServiceCalls = true,
   mode,
   prefillPosTable,
   onConsumePrefill,
@@ -467,6 +473,15 @@ export function CashierFloorPosPanel({
       });
       return;
     }
+    if (posTotals.discountAmount > 0 && posDiscountReason.trim().length < 2) {
+      setPosFeedback({
+        type: 'err',
+        text: isEn
+          ? 'Enter a discount reason (at least 2 characters).'
+          : 'يرجى كتابة سبب الخصم (حرفين على الأقل).',
+      });
+      return;
+    }
 
     const resolvedCustomerName =
       posOrderType === 'dine_in'
@@ -530,9 +545,7 @@ export function CashierFloorPosPanel({
         manualDiscountPercent:
           posTotals.manualDiscountPercent > 0 ? posTotals.manualDiscountPercent : undefined,
         manualDiscountReason:
-          posTotals.discountAmount > 0
-            ? posDiscountReason.trim() || (isEn ? 'Cashier POS Discount' : 'خصم من نقطة بيع الكاشير')
-            : undefined,
+          posTotals.discountAmount > 0 ? posDiscountReason.trim() : undefined,
         taxAmount: posTotals.taxAmount,
         total: posTotals.total,
         actor,
@@ -559,9 +572,7 @@ export function CashierFloorPosPanel({
         manualDiscountPercent:
           posTotals.manualDiscountPercent > 0 ? posTotals.manualDiscountPercent : undefined,
         manualDiscountReason:
-          posTotals.discountAmount > 0
-            ? posDiscountReason.trim() || (isEn ? 'Cashier POS Discount' : 'خصم من نقطة بيع الكاشير')
-            : undefined,
+          posTotals.discountAmount > 0 ? posDiscountReason.trim() : undefined,
         taxAmount: posTotals.taxAmount,
         total: posTotals.total,
         status: 'pending',
@@ -1300,43 +1311,47 @@ export function CashierFloorPosPanel({
               </div>
             )}
 
-            <div className="space-y-2">
-              <button
-                type="button"
-                disabled={posSubmitting !== null || posCart.length === 0}
-                onClick={() => handleSubmitCashierPos(false)}
-                className="w-full min-h-[42px] rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-extrabold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-              >
-                <Send className="w-4 h-4 text-amber-400" />
-                <span>
-                  {posSubmitting === 'send'
-                    ? isEn
-                      ? 'Sending to kitchen...'
-                      : 'جاري الإرسال للمطبخ...'
-                    : isEn
-                      ? 'Send to Kitchen & Stations (Open Check)'
-                      : 'إرسال للمطبخ والمحطات (حساب مفتوح)'}
-                </span>
-              </button>
+            {canAddEditTableOrders && (
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  disabled={posSubmitting !== null || posCart.length === 0}
+                  onClick={() => handleSubmitCashierPos(false)}
+                  className="w-full min-h-[42px] rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-extrabold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  <Send className="w-4 h-4 text-amber-400" />
+                  <span>
+                    {posSubmitting === 'send'
+                      ? isEn
+                        ? 'Sending to kitchen...'
+                        : 'جاري الإرسال للمطبخ...'
+                      : isEn
+                        ? 'Send to Kitchen & Stations (Open Check)'
+                        : 'إرسال للمطبخ والمحطات (حساب مفتوح)'}
+                  </span>
+                </button>
 
-              <button
-                type="button"
-                disabled={posSubmitting !== null || posCart.length === 0}
-                onClick={() => handleSubmitCashierPos(true)}
-                className="w-full min-h-[42px] rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-              >
-                <Banknote className="w-4 h-4" />
-                <span>
-                  {posSubmitting === 'settle'
-                    ? isEn
-                      ? 'Creating & opening settlement...'
-                      : 'جاري الإنشاء وفتح التحصيل...'
-                    : isEn
-                      ? 'Send + Instant Settle (Cash / Visa)'
-                      : 'إرسال + تحصيل فوري (كاش / فيزا)'}
-                </span>
-              </button>
-            </div>
+                {canSettleChecks && (
+                  <button
+                    type="button"
+                    disabled={posSubmitting !== null || posCart.length === 0}
+                    onClick={() => handleSubmitCashierPos(true)}
+                    className="w-full min-h-[42px] rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    <Banknote className="w-4 h-4" />
+                    <span>
+                      {posSubmitting === 'settle'
+                        ? isEn
+                          ? 'Creating & opening settlement...'
+                          : 'جاري الإنشاء وفتح التحصيل...'
+                        : isEn
+                          ? 'Send + Instant Settle (Cash / Visa)'
+                          : 'إرسال + تحصيل فوري (كاش / فيزا)'}
+                    </span>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1444,8 +1459,8 @@ export function CashierFloorPosPanel({
                                   : 'طلب الشيك (فيزا)'
                                 : call.callType === 'call_waiter'
                                   ? isEn
-                                    ? 'Call Captain / Waiter'
-                                    : 'نداء كابتن / ويتر'
+                                    ? 'Call Captain'
+                                    : 'نداء الكابتن'
                                   : isEn
                                     ? 'Cutlery & Water'
                                     : 'أدوات طعام / مياه'}
@@ -1454,22 +1469,24 @@ export function CashierFloorPosPanel({
                             {isEn ? `Guest: ${call.guestName}` : `باسم: ${call.guestName}`}
                           </p>
                         </div>
-                        <button
-                          type="button"
-                          disabled={callBusyId === call.id}
-                          onClick={async () => {
-                            setCallBusyId(call.id);
-                            try {
-                              await onResolveCall(call, 'resolved');
-                            } finally {
-                              setCallBusyId(null);
-                            }
-                          }}
-                          className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-extrabold flex items-center gap-1 shrink-0 cursor-pointer disabled:opacity-50"
-                        >
-                          <CheckCheck className="w-3.5 h-3.5" />
-                          <span>{isEn ? 'Done' : 'تم'}</span>
-                        </button>
+                        {canManageServiceCalls && (
+                          <button
+                            type="button"
+                            disabled={callBusyId === call.id}
+                            onClick={async () => {
+                              setCallBusyId(call.id);
+                              try {
+                                await onResolveCall(call, 'resolved');
+                              } finally {
+                                setCallBusyId(null);
+                              }
+                            }}
+                            className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-extrabold flex items-center gap-1 shrink-0 cursor-pointer disabled:opacity-50"
+                          >
+                            <CheckCheck className="w-3.5 h-3.5" />
+                            <span>{isEn ? 'Done' : 'تم'}</span>
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -1569,54 +1586,58 @@ export function CashierFloorPosPanel({
 
               {/* Drawer Action Footer */}
               <div className="p-5 border-t border-zinc-200 bg-zinc-50 space-y-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const { hallName, tableNumber } = selectedTableDrawer;
-                    setSelectedTableDrawer(null);
-                    onSelectTablePos(hallName, tableNumber);
-                  }}
-                  className="w-full min-h-[42px] rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <Plus className="w-4 h-4 text-amber-400" />
-                  <span>
-                    {snap.tblOrders.length > 0
-                      ? isEn
-                        ? 'Add Items to Table from Cashier'
-                        : 'إضافة أصناف للترابيزة من الكاشير'
-                      : isEn
-                        ? 'Open New Order on Table'
-                        : 'فتح طلب جديد على الترابيزة'}
-                  </span>
-                </button>
+                {canAddEditTableOrders && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const { hallName, tableNumber } = selectedTableDrawer;
+                      setSelectedTableDrawer(null);
+                      onSelectTablePos(hallName, tableNumber);
+                    }}
+                    className="w-full min-h-[42px] rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4 text-amber-400" />
+                    <span>
+                      {snap.tblOrders.length > 0
+                        ? isEn
+                          ? 'Add Items to Table from Cashier'
+                          : 'إضافة أصناف للترابيزة من الكاشير'
+                        : isEn
+                          ? 'Open New Order on Table'
+                          : 'فتح طلب جديد على الترابيزة'}
+                    </span>
+                  </button>
+                )}
 
                 {snap.tblOrders.length > 0 && matchedGroup && (
                   <>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedTableDrawer(null);
-                          onOpenSettlement({ type: 'table', group: matchedGroup }, 'cash');
-                        }}
-                        className="min-h-[40px] rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold flex items-center justify-center gap-1 cursor-pointer"
-                      >
-                        <Banknote className="w-3.5 h-3.5" />
-                        <span>{isEn ? 'Settle Cash/Mixed' : 'تحصيل كاش/مختلط'}</span>
-                      </button>
+                    {canSettleChecks && (
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedTableDrawer(null);
+                            onOpenSettlement({ type: 'table', group: matchedGroup }, 'cash');
+                          }}
+                          className="min-h-[40px] rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold flex items-center justify-center gap-1 cursor-pointer"
+                        >
+                          <Banknote className="w-3.5 h-3.5" />
+                          <span>{isEn ? 'Settle Cash/Mixed' : 'تحصيل كاش/مختلط'}</span>
+                        </button>
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedTableDrawer(null);
-                          onOpenSettlement({ type: 'table', group: matchedGroup }, 'visa');
-                        }}
-                        className="min-h-[40px] rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold flex items-center justify-center gap-1 cursor-pointer"
-                      >
-                        <CreditCard className="w-3.5 h-3.5" />
-                        <span>{isEn ? 'Settle Visa' : 'تحصيل فيزا'}</span>
-                      </button>
-                    </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedTableDrawer(null);
+                            onOpenSettlement({ type: 'table', group: matchedGroup }, 'visa');
+                          }}
+                          className="min-h-[40px] rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold flex items-center justify-center gap-1 cursor-pointer"
+                        >
+                          <CreditCard className="w-3.5 h-3.5" />
+                          <span>{isEn ? 'Settle Visa' : 'تحصيل فيزا'}</span>
+                        </button>
+                      </div>
+                    )}
 
                     <div className="flex flex-wrap items-center gap-2">
                       <button

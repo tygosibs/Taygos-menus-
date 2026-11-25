@@ -29,8 +29,10 @@ import {
 } from 'lucide-react';
 import { ConfirmSignOutModal } from '../components/ConfirmSignOutModal';
 import { LanguageToggleButton } from '../components/LanguageToggleButton';
+import { CaptainAssignmentsTab } from '../components/admin/CaptainAssignmentsTab';
 import { CaptainWaiterTab } from '../components/admin/CaptainWaiterTab';
 import { CustomersCrmTab } from '../components/admin/CustomersCrmTab';
+import { JobTitlesTab } from '../components/admin/JobTitlesTab';
 import { LiveOrdersTab } from '../components/admin/LiveOrdersTab';
 import { MenuBuilderTab } from '../components/admin/MenuBuilderTab';
 import { OffersPromosTab } from '../components/admin/OffersPromosTab';
@@ -61,6 +63,7 @@ import {
   subscribeRestaurantCustomers,
 } from '../lib/firestoreService';
 import { playOrderAlertChime, unlockAudioContext } from '../lib/sound';
+import { OWNER_FULL_PERMISSIONS } from '../lib/staffAuthUtils';
 import { fetchRestaurantSlugById, getStaffAccessForUid } from '../lib/staffService';
 import { CustomerProfile, Restaurant, StationScreenType } from '../types/menu';
 
@@ -71,8 +74,10 @@ interface AdminPortalProps {
 type AdminTab =
   | 'orders'
   | 'captain'
+  | 'hall_assignments'
   | 'stations'
   | 'staff'
+  | 'job_titles'
   | 'reports'
   | 'customers'
   | 'menu'
@@ -99,7 +104,20 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
     const saved = window.sessionStorage.getItem(OWNER_TAB_STORAGE_KEY) as AdminTab | null;
     if (
       saved &&
-      ['orders', 'captain', 'stations', 'staff', 'reports', 'customers', 'menu', 'offers', 'theme', 'qr'].includes(saved)
+      [
+        'orders',
+        'captain',
+        'hall_assignments',
+        'stations',
+        'staff',
+        'job_titles',
+        'reports',
+        'customers',
+        'menu',
+        'offers',
+        'theme',
+        'qr',
+      ].includes(saved)
     ) {
       return saved;
     }
@@ -584,10 +602,16 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
     },
     captain: {
       id: 'captain',
-      label: ui.getButtonLabel('captain', lang, isEn ? 'Captain / Waiter Screen' : 'شاشة الكابتن (الويتر)'),
+      label: ui.getButtonLabel('captain', lang, isEn ? 'Captain Screen' : 'شاشة الكابتن'),
       shortLabel: ui.getButtonLabel('captain', lang, isEn ? 'Captain Screen' : 'شاشة الكابتن'),
       icon: UserCheck,
       badge: pendingCallsCount > 0 ? pendingCallsCount : undefined,
+    },
+    hall_assignments: {
+      id: 'hall_assignments',
+      label: ui.getButtonLabel('hall_assignments', lang, isEn ? 'Captain Assignments' : 'توزيع الكباتن'),
+      shortLabel: ui.getButtonLabel('hall_assignments', lang, isEn ? 'Assignments' : 'توزيع الكباتن'),
+      icon: Users,
     },
     stations: {
       id: 'stations',
@@ -599,6 +623,12 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
       id: 'staff',
       label: ui.getButtonLabel('staff', lang, isEn ? 'Manager & Staff RBAC' : 'المدير والكادر والصلاحيات'),
       shortLabel: ui.getButtonLabel('staff', lang, isEn ? 'Staff & Roles' : 'الكادر والصلاحيات'),
+      icon: ShieldCheck,
+    },
+    job_titles: {
+      id: 'job_titles',
+      label: ui.getButtonLabel('job_titles', lang, isEn ? 'Job Titles & Permissions' : 'المسميات الوظيفية والصلاحيات'),
+      shortLabel: ui.getButtonLabel('job_titles', lang, isEn ? 'Job Titles' : 'المسميات الوظيفية'),
       icon: ShieldCheck,
     },
     reports: {
@@ -1268,6 +1298,18 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
               onRestaurantUpdated={(updated) => setRestaurant(updated)}
             />
           )}
+          {activeTab === 'hall_assignments' && (
+            <CaptainAssignmentsTab
+              restaurant={restaurant}
+              actor={{
+                uid: user.uid,
+                name: user.displayName || restaurant.name,
+                role: 'owner',
+              }}
+              onBack={() => setActiveTab('captain')}
+              onGoHome={() => setActiveTab('orders')}
+            />
+          )}
           {activeTab === 'stations' && (
             <StationsManagerTab
               restaurant={restaurant}
@@ -1304,6 +1346,27 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
               }}
               onRestaurantUpdated={(updated) => setRestaurant(updated)}
               onOpenAddScreen={(screenType) => openAddScreenFrom('staff', screenType)}
+              onOpenJobTitles={() => setActiveTab('job_titles')}
+            />
+          )}
+          {activeTab === 'job_titles' && (
+            <JobTitlesTab
+              restaurant={restaurant}
+              mode="owner"
+              actor={{
+                uid: user.uid,
+                name: user.displayName || restaurant.name,
+                role: 'owner',
+              }}
+              actorCeiling={{
+                isUnbounded: true,
+                permissions: OWNER_FULL_PERMISSIONS,
+                allowedScreens: [],
+                allowedStations: [],
+                allowedCaptainScreens: [],
+              }}
+              onBack={() => setActiveTab('staff')}
+              onGoHome={() => setActiveTab('orders')}
             />
           )}
           {activeTab === 'reports' && (

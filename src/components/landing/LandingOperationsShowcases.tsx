@@ -601,7 +601,7 @@ export function LandingOperationsShowcases({
                     <span className="text-[#14285A]">
                       {isAr
                         ? 'حساب كابتن صالة · أحمد علي (مثال)'
-                        : 'Captain / Waiter · Ahmed Ali (Example)'}
+                        : 'Captain · Ahmed Ali (Example)'}
                     </span>
                     <span
                       className={`px-2 py-0.5 rounded-md ${

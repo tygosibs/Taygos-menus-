@@ -500,7 +500,7 @@ export const StationEditorFullPage: React.FC<StationEditorFullPageProps> = ({
               >
                 <div className="flex items-center gap-2 font-extrabold text-sm">
                   <UserCheck className="w-4 h-4 shrink-0" />
-                  <span>{isEn ? 'Captain / Waiter Screen' : 'شاشة كابتن / ويتر'}</span>
+                  <span>{isEn ? 'Captain Screen' : 'شاشة كابتن صالة'}</span>
                 </div>
                 <p
                   className={`text-[11px] mt-1 leading-relaxed ${

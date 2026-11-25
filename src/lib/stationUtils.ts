@@ -80,7 +80,7 @@ export const STATION_ICON_OPTIONS: Array<{
   { id: 'wind', labelAr: 'شيشة / لاونج', labelEn: 'Shisha / Lounge' },
   { id: 'utensils', labelAr: 'شاورما / سريع', labelEn: 'Shawarma / Fast' },
   { id: 'sparkles', labelAr: 'قسم خاص مميز', labelEn: 'Custom / VIP' },
-  { id: 'user-check', labelAr: 'كابتن صالة / ويتر', labelEn: 'Captain / Waiter' },
+  { id: 'user-check', labelAr: 'كابتن صالة', labelEn: 'Captain' },
   { id: 'bell-ring', labelAr: 'استقبال نداءات الصالة', labelEn: 'Service Desk' },
 ];
 

@@ -1201,7 +1201,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
               <span className="text-xs font-bold text-[#14285A] flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-[#E8833A]" />
                 <span className="font-mono-num">
-                  {isAr ? '02 · الصالة والكابتن' : '02 · Dine-in & Captain / Waiter'}
+                  {isAr ? '02 · الصالة والكابتن' : '02 · Dine-in & Captain'}
                 </span>
               </span>
               <h2 className="landing-cairo-heading text-3xl sm:text-4xl text-[#14285A]">
