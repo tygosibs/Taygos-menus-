@@ -79,9 +79,13 @@ export const AuthorizedDomainsCard: React.FC<AuthorizedDomainsCardProps> = ({
         eventType: 'domain_verified',
         actor,
         screen: 'staff_management',
-        details: `تم فحص وتوثيق الدومين النشط: ${currentHost} (${
-          isDevLocal ? 'بيئة تطوير محلية فقط' : 'نطاق تشغيل معتمد'
-        })`,
+        details: isEn
+          ? `Verified active domain: ${currentHost} (${
+              isDevLocal ? 'local development environment only' : 'authorized production domain'
+            })`
+          : `تم فحص وتوثيق الدومين النشط: ${currentHost} (${
+              isDevLocal ? 'بيئة تطوير محلية فقط' : 'نطاق تشغيل معتمد'
+            })`,
       });
       setStatusMessage(
         isEn

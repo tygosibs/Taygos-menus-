@@ -18,6 +18,7 @@ import {
   Loader2,
   Lock,
   LogOut,
+  Menu,
   Percent,
   QrCode,
   Receipt,
@@ -27,6 +28,7 @@ import {
   Users,
   Utensils,
   Wallet,
+  X,
   XCircle,
 } from 'lucide-react';
 import { ConfirmSignOutModal } from '../components/ConfirmSignOutModal';
@@ -261,6 +263,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
     coveringStaffName?: string;
   } | null>(null);
   const [showUserGuide, setShowUserGuide] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
 
   const [dynamicStations, setDynamicStations] = useState<RestaurantStation[]>([]);
@@ -1287,6 +1290,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
 
   const navigateStaffNavId = (navId: string) => {
     setShowUserGuide(false);
+    setMobileSidebarOpen(false);
     if (isManager && navId === 'supervision') {
       setStationCreateIntent(null);
       setManagerMode('supervision');
@@ -1337,6 +1341,8 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
           pathEn,
           stepsAr: 'شاهد كل الورديات المفتوحة حالياً وادخل لأي شاشة تشغيل للمتابعة أو التغطية.',
           stepsEn: 'View all active shifts in real time and open any operational screen in supervisory mode.',
+          keywordsAr: 'اشراف ورديات مفتوحة شاشات متابعة تغطية مدير عام',
+          keywordsEn: 'supervision active shifts live coverage manager screens',
           onGo: () => navigateStaffNavId('supervision'),
         },
         {
@@ -1348,6 +1354,8 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
           pathEn,
           stepsAr: 'سلّم العهدة النقدية لخزنة المالك وأعد تفعيل أي صنف تم إيقافه مؤقتاً.',
           stepsEn: 'Transfer custody cash to the Owner vault and reactivate temporarily paused dishes.',
+          keywordsAr: 'عهدة خزنة المالك تسليم اصناف موقوفة تفعيل كاش',
+          keywordsEn: 'custody cash transfer owner safe paused items reactivate',
           onGo: () => navigateStaffNavId('supervision'),
         }
       );
@@ -1361,6 +1369,8 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
           pathEn,
           stepsAr: 'عدّل فترات الورديات ونسبة الخدمة والضرائب من زر إعدادات التشغيل داخل الإشراف.',
           stepsEn: 'Configure shift slots, service charge, and tax settings inside Supervision.',
+          keywordsAr: 'اعدادات التشغيل ورديات خدمة ضريبة الوان طاولات',
+          keywordsEn: 'operations shift slots service charge tax table colors',
           onGo: () => navigateStaffNavId('supervision'),
         });
       }
@@ -1377,6 +1387,8 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
         pathEn,
         stepsAr: 'راقب حالة كل طاولة في الصالات وتغطية الكباتن والأصناف الجاهزة للتقديم.',
         stepsEn: 'Monitor table statuses across halls, captain coverage, and ready-to-serve dishes.',
+        keywordsAr: 'مدير الصالات طاولات خريطة تغطية كباتن جاهز للتقديم',
+        keywordsEn: 'hall manager floor tables coverage captains ready dishes',
         onGo: () => navigateStaffNavId('hall_manager'),
       });
       if (effectivePerms.canManageServiceCalls) {
@@ -1387,8 +1399,10 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
           titleEn: `${navMeta.labelEn} — Table Service Calls`,
           pathAr,
           pathEn,
-          stepsAr: 'استقبل نداءات النزلاء (طلب كابتن أو فاتورة) وأكد تلبية النداء.',
+          stepsAr: 'استقبل نداءات النزلاء (طلب كابتن أو شيك) وأكد تلبية النداء.',
           stepsEn: 'Receive guest service and check calls and mark them resolved once handled.',
+          keywordsAr: 'نداءات طاولات كابتن طلب شيك فاتورة استلام',
+          keywordsEn: 'service calls check request resolve captain',
           onGo: () => navigateStaffNavId('hall_manager'),
         });
       }
@@ -1402,6 +1416,8 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
           pathEn,
           stepsAr: 'اضغط على أي طاولة لإضافة أصناف جديدة وإرسالها لمحطات التحضير مباشرة.',
           stepsEn: 'Tap any table to add menu items and send them straight to prep stations.',
+          keywordsAr: 'طلب طاولة اضافة اصناف مطبخ ارسال طلب',
+          keywordsEn: 'table order add items send to prep kitchen',
           onGo: () => navigateStaffNavId('hall_manager'),
         });
       }
@@ -1419,6 +1435,8 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
           pathEn,
           stepsAr: 'افتح ورديتك أو سلّمها من الشريط العلوي للشاشة، واضبط الطابعة الحرارية.',
           stepsEn: 'Start or hand over your shift from the top shift bar and configure the thermal printer.',
+          keywordsAr: 'كاشير وردية فتح تسليم درج طابعة حرارية عهدة افتتاحية',
+          keywordsEn: 'cashier shift start handover drawer float thermal printer',
           onGo: () => navigateStaffNavId('cashier'),
         },
         {
@@ -1430,6 +1448,8 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
           pathEn,
           stepsAr: 'راجع طلبات الصالة والتييك أواي والدليفري وتابع حالة تحضير كل صنف.',
           stepsEn: 'Review dine-in, takeaway, and delivery orders and track item preparation state.',
+          keywordsAr: 'كاشير طلبات حية صالة تيك اواي دليفري متابعة تحضير',
+          keywordsEn: 'cashier live orders dine-in takeaway delivery prep queue',
           onGo: () => navigateStaffNavId('cashier'),
         }
       );
@@ -1442,7 +1462,9 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
           pathAr,
           pathEn,
           stepsAr: 'اختر وسيلة الدفع (كاش / فيزا / مقسّم) ثم أقفل الشيك واطبع الإيصال.',
-          stepsEn: 'Choose payment method (Cash / Card / Split), settle the check, and print receipt.',
+          stepsEn: 'Choose payment method (Cash / Card / Split), close check, and print receipt.',
+          keywordsAr: 'كاشير تقفيل شيك فاتورة تحصيل كاش فيزا تقسيم طباعة ريسيت',
+          keywordsEn: 'cashier settle close check payment cash card split receipt',
           onGo: () => navigateStaffNavId('cashier'),
         });
       }
@@ -1456,6 +1478,8 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
           pathEn,
           stepsAr: 'افتح أي طلب قائم لإضافة أصناف أو تعديل الكميات والملاحظات.',
           stepsEn: 'Open any active order to add items or adjust quantities and notes.',
+          keywordsAr: 'تعديل طلب مفتوح اضافة كمية ملاحظات',
+          keywordsEn: 'edit open order items quantities notes',
           onGo: () => navigateStaffNavId('cashier'),
         });
       }
@@ -1467,8 +1491,10 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
           titleEn: `${navMeta.labelEn} — Apply Instant Discount`,
           pathAr,
           pathEn,
-          stepsAr: 'أضف خصماً فورياً على الطلب المفتوح قبل إغلاق الفاتورة.',
-          stepsEn: 'Apply an instant discount to an open order before settling the check.',
+          stepsAr: 'أضف خصماً فورياً على الطلب المفتوح قبل إغلاق الشيك.',
+          stepsEn: 'Apply an instant discount to an open order before closing the check.',
+          keywordsAr: 'خصم فوري كاشير تخفيض شيك',
+          keywordsEn: 'instant discount cashier check promo',
           onGo: () => navigateStaffNavId('cashier'),
         });
       }
@@ -1482,6 +1508,8 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
           pathEn,
           stepsAr: 'ألغِ الطلب المفتوح عند الحاجة مع تسجيل سبب الإلغاء في السجل.',
           stepsEn: 'Cancel an open order when needed with a required audit reason.',
+          keywordsAr: 'الغاء طلب مفتوح سبب تدقيق',
+          keywordsEn: 'cancel open order audit reason',
           onGo: () => navigateStaffNavId('cashier'),
         });
       }
@@ -1495,6 +1523,8 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
           pathEn,
           stepsAr: 'سجّل أي مصروفات نقدية خارجة من الدرج خلال الوردية ليُحسب الصافي بدقة.',
           stepsEn: 'Log petty-cash payouts from the drawer during your shift for accurate closing totals.',
+          keywordsAr: 'مصروفات درج عجز صافي كاش وردية',
+          keywordsEn: 'drawer expenses payouts variance shift cash',
           onGo: () => navigateStaffNavId('cashier'),
         });
       }
@@ -1517,6 +1547,8 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
           allowedCaptainScreenList.length > 1
             ? 'Check free, occupied, and ready tables and switch Captain screens from the top bar.'
             : 'See free, occupied, and ready-to-serve tables across the dining floor.',
+        keywordsAr: 'كابتن صالات طاولات خريطة متاحة مشغولة متاخرة',
+        keywordsEn: 'captain floor map tables available occupied overdue screens',
         onGo: () => navigateStaffNavId('captain'),
       });
       if (effectivePerms.canAddEditTableOrders) {
@@ -1529,6 +1561,8 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
           pathEn,
           stepsAr: 'اضغط على الطاولة لفتح نقطة الطلب السريعة وإرسال الأصناف لمحطات التحضير.',
           stepsEn: 'Tap a table to open the fast order pad and fire items to prep stations.',
+          keywordsAr: 'كابتن طلب طاولة سريع اصناف مطبخ',
+          keywordsEn: 'captain table order fast pad items prep stations',
           onGo: () => navigateStaffNavId('captain'),
         });
       }
@@ -1542,6 +1576,8 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
           pathEn,
           stepsAr: 'لبِّ نداءات النزلاء واستلم الأصناف الجاهزة من المطبخ والبار لتسليمها للطاولة.',
           stepsEn: 'Respond to guest service calls and pick up ready dishes from prep stations.',
+          keywordsAr: 'كابتن نداءات طاولة اصناف جاهزة تقديم مطبخ بار',
+          keywordsEn: 'captain service calls ready items serve kitchen bar',
           onGo: () => navigateStaffNavId('captain'),
         });
       }
@@ -1553,8 +1589,10 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
           titleEn: `${navMeta.labelEn} — Settle Table Check`,
           pathAr,
           pathEn,
-          stepsAr: 'حصّل قيمة الفاتورة وأغلق حساب الطاولة مباشرة من تفاصيل الطاولة.',
+          stepsAr: 'حصّل قيمة الشيك وأغلق حساب الطاولة مباشرة من تفاصيل الطاولة.',
           stepsEn: 'Collect payment and close out the table check directly from table details.',
+          keywordsAr: 'كابتن تقفيل شيك تحصيل طاولة دفع',
+          keywordsEn: 'captain settle close check collect payment table',
           onGo: () => navigateStaffNavId('captain'),
         });
       }
@@ -1573,6 +1611,8 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
           pathEn,
           stepsAr: `تابع الأصناف الموجهة لمحطة «${navMeta.labelAr}» وحدّث حالة الصنف (قيد التحضير ← جاهز).`,
           stepsEn: `Track items routed to "${navMeta.labelEn}" and update prep progress (Preparing → Ready).`,
+          keywordsAr: `مطبخ بار مخبز محطة تحضير تذاكر جاهز kds ${navMeta.labelAr}`,
+          keywordsEn: `kds kitchen bar bakery station prep queue ready ${navMeta.labelEn}`,
           onGo: () => navigateStaffNavId(navId),
         },
         {
@@ -1584,6 +1624,8 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
           pathEn,
           stepsAr: 'ابدأ أو أنهِ وردية المحطة واضبط طابعة تذاكر المطبخ من الشريط أعلى الشاشة.',
           stepsEn: 'Start or end your station shift and configure the ticket printer from the top bar.',
+          keywordsAr: `وردية محطة طابعة تذاكر حرارية ${navMeta.labelAr}`,
+          keywordsEn: `station shift ticket thermal printer ${navMeta.labelEn}`,
           onGo: () => navigateStaffNavId(navId),
         }
       );
@@ -1597,6 +1639,8 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
           pathEn,
           stepsAr: 'أوقف أي صنف غير متوفر مؤقتاً ليختفي من طلبات العملاء والكابتن فوراً.',
           stepsEn: 'Pause out-of-stock items temporarily so guests and Captains cannot order them.',
+          keywordsAr: 'ايقاف صنف غير متوفر منتهي مطبخ منيو',
+          keywordsEn: 'paused item out of stock unavailable disable dish',
           onGo: () => navigateStaffNavId(navId),
         });
       }
@@ -1613,6 +1657,8 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
         pathEn,
         stepsAr: 'وزّع الكباتن على الصالات والطاولات لكل وردية وتابع التغطية الفعلية.',
         stepsEn: 'Assign Captains to halls and tables per shift and manage live coverage.',
+        keywordsAr: 'توزيع كباتن صالات طاولات وردية تغطية',
+        keywordsEn: 'captain assignments halls tables shift coverage',
         onGo: () => navigateStaffNavId('hall_assignments'),
       });
     } else if (navId === 'halls' && effectivePerms.canManageHalls) {
@@ -1625,6 +1671,8 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
         pathEn,
         stepsAr: 'أضف الصالات والطاولات واطبع أكواد QR الخاصة بكل طاولة.',
         stepsEn: 'Create dining halls and tables and print table QR codes.',
+        keywordsAr: 'صالات طاولات باركود qr طباعة',
+        keywordsEn: 'halls tables qr code printable',
         onGo: () => navigateStaffNavId('halls'),
       });
     } else if (navId === 'stations' && canManageStations) {
@@ -1637,6 +1685,8 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
         pathEn,
         stepsAr: 'أضف شاشات كابتن أو محطات تحضير جديدة وعدّل اسمها أو أرشفها.',
         stepsEn: 'Add new Captain screens or prep stations, rename them, or archive unused ones.',
+        keywordsAr: 'شاشات محطات كابتن مطبخ ارشفة اضافة',
+        keywordsEn: 'screens stations captain prep kitchen archive',
         onGo: () => navigateStaffNavId('stations'),
       });
     } else if (navId === 'menu_editor' && (effectivePerms.canEditMenu || effectivePerms.canPauseItems)) {
@@ -1653,6 +1703,8 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
         stepsEn: effectivePerms.canEditMenu
           ? 'Edit categories, items, prices, station routing, and toggle item availability.'
           : 'Temporarily pause out-of-stock items or re-enable them for ordering.',
+        keywordsAr: 'منيو اقسام اصناف اسعار ايقاف صنف توجيه محطات',
+        keywordsEn: 'menu categories items prices paused item station routing',
         onGo: () => navigateStaffNavId('menu_editor'),
       });
     } else if (navId === 'shift_reports' && effectivePerms.canViewShiftReports) {
@@ -1665,6 +1717,8 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
         pathEn,
         stepsAr: 'راجع تقارير الورديات المغلقة، المصروفات، العهدة، وسجل العمليات.',
         stepsEn: 'Review closed shift reports, drawer expenses, custody transfers, and audit logs.',
+        keywordsAr: 'تقارير ورديات مصروفات عهدة خزنة عجز سجل تدقيق',
+        keywordsEn: 'shift reports expenses custody vault variance audit log',
         onGo: () => navigateStaffNavId('shift_reports'),
       });
     } else if (navId === 'staff_management' && effectivePerms.canManageStaff) {
@@ -1677,6 +1731,8 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
         pathEn,
         stepsAr: 'أضف حسابات الموظفين، فعّلها أو أوقفها، وأنشئ دعوات QR ضمن صلاحياتك.',
         stepsEn: 'Create staff accounts, activate/suspend access, and generate QR invites.',
+        keywordsAr: 'كادر موظفين دعوة qr صلاحيات حسابات',
+        keywordsEn: 'staff management invite qr permissions accounts',
         onGo: () => navigateStaffNavId('staff_management'),
       });
     } else if (navId === 'job_titles' && effectivePerms.canManageStaff) {
@@ -1689,6 +1745,8 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
         pathEn,
         stepsAr: 'أنشئ وعدّل المسميات الوظيفية وحدد الشاشات والصلاحيات المسموحة لكل مسمى.',
         stepsEn: 'Create and edit Job Titles with custom screen access and permissions.',
+        keywordsAr: 'مسميات وظيفية ادوار صلاحيات',
+        keywordsEn: 'job titles roles permissions',
         onGo: () => navigateStaffNavId('job_titles'),
       });
     } else if (navId === 'customers' && effectivePerms.canManageCustomers) {
@@ -1701,6 +1759,8 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
         pathEn,
         stepsAr: 'تصفح ملفات العملاء ونقاط الولاء وأعياد الميلاد وسجل الطلبات.',
         stepsEn: 'Browse customer profiles, loyalty points, upcoming birthdays, and order history.',
+        keywordsAr: 'عملاء ولاء بطاقة نقاط اعياد ميلاد crm',
+        keywordsEn: 'customers crm loyalty punch card birthdays',
         onGo: () => navigateStaffNavId('customers'),
       });
     }
@@ -1924,8 +1984,113 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
 
               <div className="flex items-center gap-1.5 shrink-0">
                 <LanguageToggleButton variant={portalTheme.isDarkShell ? 'dark' : 'light'} compact />
+                <button
+                  type="button"
+                  onClick={() => setMobileSidebarOpen((v) => !v)}
+                  aria-label={isEn ? 'Open Sidebar Menu' : 'فتح القائمة الجانبية'}
+                  className={`lg:hidden min-h-[44px] px-3 py-2 border text-xs font-extrabold inline-flex items-center gap-1.5 cursor-pointer ${activePortalUi.radiusClasses.button}`}
+                  style={{
+                    backgroundColor: mobileSidebarOpen ? portalTheme.accentHex : portalTheme.surfaceSubtleBg,
+                    borderColor: mobileSidebarOpen ? portalTheme.accentHex : portalTheme.surfaceBorder,
+                    color: mobileSidebarOpen ? portalTheme.accentTextHex : portalTheme.headerText,
+                  }}
+                >
+                  {mobileSidebarOpen ? <X className="w-4 h-4 shrink-0" /> : <Menu className="w-4 h-4 shrink-0" />}
+                  <span>{isEn ? 'Menu' : 'القائمة'}</span>
+                </button>
               </div>
             </div>
+
+            {/* Mobile Full Sidebar Drawer (< lg) */}
+            {mobileSidebarOpen && (
+              <div
+                className={`lg:hidden border p-3.5 space-y-3 ${activePortalUi.radiusClasses.card}`}
+                style={{
+                  backgroundColor: portalTheme.sidebarBg,
+                  borderColor: portalTheme.sidebarBorder,
+                  color: portalTheme.sidebarText,
+                }}
+              >
+                <div
+                  className={`p-3 border space-y-0.5 ${activePortalUi.radiusClasses.card}`}
+                  style={{
+                    backgroundColor: portalTheme.isDarkShell
+                      ? 'rgba(255,255,255,0.06)'
+                      : portalTheme.surfaceSubtleBg,
+                    borderColor: portalTheme.sidebarBorder,
+                  }}
+                >
+                  <p className="text-xs font-extrabold" style={{ color: getSidebarHighlightHex(portalTheme) }}>
+                    {isEn ? staffRoleDisplayEn : staffRoleDisplayAr}
+                  </p>
+                  <p className="text-xs font-semibold" style={{ color: portalTheme.sidebarText }}>
+                    {staff.name}
+                    {staff.hallName ? ` · ${isEn ? 'Hall:' : 'الصالة:'} ${staff.hallName}` : ''}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {orderedManagerNavIds.map((navId) => {
+                    const navMeta = getStaffNavMeta(navId);
+                    const Icon = navMeta.icon;
+                    const isActive = !showUserGuide && activeNavId === navId;
+                    return (
+                      <button
+                        key={`drawer_${navId}`}
+                        type="button"
+                        onClick={() => navigateStaffNavId(navId)}
+                        className={`min-h-[44px] flex items-center justify-start gap-2 px-3 py-2 text-xs font-bold leading-snug text-start cursor-pointer ${activePortalUi.radiusClasses.button}`}
+                        style={
+                          isActive
+                            ? {
+                                backgroundColor: portalTheme.sidebarActiveBg,
+                                color: portalTheme.sidebarActiveText,
+                              }
+                            : {
+                                backgroundColor: portalTheme.isDarkShell
+                                  ? 'rgba(255,255,255,0.04)'
+                                  : portalTheme.surfaceSubtleBg,
+                                color: portalTheme.sidebarText,
+                              }
+                        }
+                      >
+                        <Icon className="w-4 h-4 shrink-0" />
+                        <span className="whitespace-normal break-words leading-snug">
+                          {isEn ? navMeta.labelEn : navMeta.labelAr}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowUserGuide(true);
+                    setMobileSidebarOpen(false);
+                  }}
+                  className={`w-full min-h-[44px] flex items-center justify-start gap-2 px-3 py-2 text-xs font-extrabold text-start cursor-pointer border ${activePortalUi.radiusClasses.button}`}
+                  style={
+                    showUserGuide
+                      ? {
+                          backgroundColor: portalTheme.sidebarActiveBg,
+                          borderColor: portalTheme.sidebarActiveBg,
+                          color: portalTheme.sidebarActiveText,
+                        }
+                      : {
+                          backgroundColor: portalTheme.isDarkShell
+                            ? 'rgba(255,255,255,0.06)'
+                            : portalTheme.surfaceSubtleBg,
+                          borderColor: portalTheme.sidebarBorder,
+                          color: portalTheme.sidebarText,
+                        }
+                  }
+                >
+                  <BookOpen className="w-4 h-4 shrink-0" />
+                  <span>{isEn ? 'Smart User Guide' : 'دليل الاستخدام الذكي'}</span>
+                </button>
+              </div>
+            )}
 
             {/* Mobile Navigation Strip (includes screens + User Guide) */}
             <div className="flex lg:hidden items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 max-w-full">
@@ -1961,7 +2126,10 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
 
               <button
                 type="button"
-                onClick={() => setShowUserGuide(true)}
+                onClick={() => {
+                  setShowUserGuide(true);
+                  setMobileSidebarOpen(false);
+                }}
                 className={`min-h-[44px] px-3.5 py-2 text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors border ${activePortalUi.radiusClasses.button}`}
                 style={
                   showUserGuide

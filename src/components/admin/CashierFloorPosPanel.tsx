@@ -655,7 +655,7 @@ export function CashierFloorPosPanel({
               <div className="p-3 rounded-xl border border-zinc-200 bg-zinc-50 flex items-center justify-between gap-2">
                 <div>
                   <p className="text-[11px] font-bold text-zinc-500">
-                    {isEn ? 'Bill Requested' : 'طلب الشيك'}
+                    {isEn ? 'Check Requested' : 'طلب الشيك'}
                   </p>
                   <p className="text-lg font-extrabold font-mono-num text-zinc-950">{floorSummary.billRequested}</p>
                 </div>
@@ -785,7 +785,7 @@ export function CashierFloorPosPanel({
                                 : 'شاغرة'
                               : snap.state === 'billRequested'
                                 ? isEn
-                                  ? 'Bill'
+                                  ? 'Check'
                                   : 'شيك'
                                 : snap.state === 'overdue'
                                   ? isEn
@@ -844,7 +844,7 @@ export function CashierFloorPosPanel({
                 className="w-3.5 h-3.5 rounded-sm inline-block"
                 style={{ backgroundColor: opsConfig.tableColors.billRequested }}
               />
-              <span>{isEn ? 'Bill Requested' : 'طلب الشيك'}</span>
+              <span>{isEn ? 'Check Requested' : 'طلب الشيك'}</span>
             </span>
             <span className="flex items-center gap-1.5">
               <span
@@ -1400,7 +1400,7 @@ export function CashierFloorPosPanel({
                             : 'شاغرة'
                           : snap.state === 'billRequested'
                             ? isEn
-                              ? 'Bill Requested'
+                              ? 'Check Requested'
                               : 'طلب شيك'
                             : snap.state === 'overdue'
                               ? isEn
@@ -1451,11 +1451,11 @@ export function CashierFloorPosPanel({
                           <p className="font-extrabold text-zinc-900">
                             {call.callType === 'request_bill_cash'
                               ? isEn
-                                ? 'Bill Request (Cash)'
+                                ? 'Check Request (Cash)'
                                 : 'طلب الشيك (كاش)'
                               : call.callType === 'request_bill_card'
                                 ? isEn
-                                  ? 'Bill Request (Visa)'
+                                  ? 'Check Request (Visa)'
                                   : 'طلب الشيك (فيزا)'
                                 : call.callType === 'call_waiter'
                                   ? isEn
@@ -1740,7 +1740,7 @@ export function CashierFloorPosPanel({
                 [
                   { key: 'empty' as const, label: isEn ? 'Available Table' : 'ترابيزة شاغرة' },
                   { key: 'occupied' as const, label: isEn ? 'Occupied Table' : 'ترابيزة مشغولة' },
-                  { key: 'billRequested' as const, label: isEn ? 'Bill Requested' : 'طلب الشيك' },
+                  { key: 'billRequested' as const, label: isEn ? 'Check Requested' : 'طلب الشيك' },
                   { key: 'overdue' as const, label: isEn ? 'Overdue Table' : 'ترابيزة متأخرة' },
                 ] as const
               ).map((entry) => (

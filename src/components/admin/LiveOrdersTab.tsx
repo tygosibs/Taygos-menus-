@@ -34,6 +34,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { getActiveLang } from '../../data/translations';
 import { useScreenUi } from '../../contexts/PlatformUiContext';
 import { showOperationalNotification } from '../../lib/fcmNotificationService';
 import {
@@ -520,13 +521,15 @@ export function LiveOrdersTab({
                     ).includes(curStation)
                   );
                   if (stItems.length > 0) {
+                    const activeLang = getActiveLang();
                     const job = buildStationTicketJob({
                       restaurant,
                       order: ord,
                       station: curMeta,
                       stationItems: stItems,
+                      lang: activeLang,
                     });
-                    void printThermalJobsSequentially([job]).catch(() => {});
+                    void printThermalJobsSequentially([job], { lang: activeLang }).catch(() => {});
                   }
                 });
               }
@@ -888,8 +891,9 @@ export function LiveOrdersTab({
         order,
         station: stationMeta,
         stationItems,
+        lang,
       });
-      const res = await printThermalJobsSequentially([job]);
+      const res = await printThermalJobsSequentially([job], { lang });
       setPrintFeedback(
         res.mode === 'hardware'
           ? isEn
@@ -1275,14 +1279,14 @@ export function LiveOrdersTab({
     }
     if (type === 'request_bill_cash') {
       return {
-        label: isEn ? 'Bill Request (Cash)' : 'طلب الفاتورة (كاش)',
+        label: isEn ? 'Check Request (Cash)' : 'طلب الفاتورة (كاش)',
         badgeClass: 'bg-emerald-100 text-emerald-900 border-emerald-300',
         Icon: Banknote,
       };
     }
     if (type === 'request_bill_card') {
       return {
-        label: isEn ? 'Bill Request (Visa / Card)' : 'طلب الفاتورة (فيزا)',
+        label: isEn ? 'Check Request (Visa / Card)' : 'طلب الفاتورة (فيزا)',
         badgeClass: 'bg-blue-100 text-blue-900 border-blue-300',
         Icon: CreditCard,
       };

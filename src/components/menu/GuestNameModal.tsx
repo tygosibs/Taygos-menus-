@@ -259,7 +259,7 @@ export function GuestNameModal({
               <Sparkles className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-500" />
               <span>
                 {isEn
-                  ? 'Your name tags every dish you add so the shared table cart splits the bill automatically by person.'
+                  ? 'Your name tags every dish you add so the shared table cart splits the check automatically by person.'
                   : 'سيتم ربط أصنافك باسمك في السلة المشتركة لتقسيم الفاتورة تلقائياً حسب اسم كل شخص على الترابيزة.'}
               </span>
             </p>

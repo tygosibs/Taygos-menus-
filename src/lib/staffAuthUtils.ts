@@ -814,7 +814,7 @@ export const PERMISSION_CATALOG: PermissionCatalogItem[] = [
     labelAr: 'استلام وإنهاء نداءات الطاولات',
     labelEn: 'Handle Table Service Calls',
     descriptionAr: 'عرض نداءات الكابتن وطلب الفاتورة وتغيير حالتها إلى تم التعامل.',
-    descriptionEn: 'Read, acknowledge, and resolve guest service & bill calls.',
+    descriptionEn: 'Read, acknowledge, and resolve guest service & check calls.',
   },
   {
     key: 'canManageHalls',

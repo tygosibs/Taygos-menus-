@@ -694,14 +694,14 @@ export function CaptainWaiterTab({
     }
     if (type === 'request_bill_cash') {
       return {
-        label: isEn ? 'Bill Request (Cash)' : 'طلب الشيك (كاش)',
+        label: isEn ? 'Check Request (Cash)' : 'طلب الشيك (كاش)',
         badgeClass: 'bg-emerald-100 text-emerald-900 border-emerald-300',
         Icon: Banknote,
       };
     }
     if (type === 'request_bill_card') {
       return {
-        label: isEn ? 'Bill Request (Visa / Card)' : 'طلب الشيك (فيزا)',
+        label: isEn ? 'Check Request (Visa / Card)' : 'طلب الشيك (فيزا)',
         badgeClass: 'bg-blue-100 text-blue-900 border-blue-300',
         Icon: CreditCard,
       };
@@ -820,10 +820,10 @@ export function CaptainWaiterTab({
       setDrawerNotice(
         type === 'request_bill_cash'
           ? isEn
-            ? 'Bill request (Cash) sent to cashier.'
+            ? 'Check request (Cash) sent to cashier.'
             : 'تم إرسال طلب الشيك (كاش) للكاشير.'
           : isEn
-            ? 'Bill request (Visa / Card) sent to cashier.'
+            ? 'Check request (Visa / Card) sent to cashier.'
             : 'تم إرسال طلب الشيك (فيزا) للكاشير.'
       );
     } finally {
@@ -1437,7 +1437,7 @@ export function CaptainWaiterTab({
                                 : 'شاغرة'
                               : snap.state === 'billRequested'
                                 ? isEn
-                                  ? 'Bill'
+                                  ? 'Check'
                                   : 'شيك'
                                 : snap.state === 'overdue'
                                   ? isEn
@@ -1507,7 +1507,7 @@ export function CaptainWaiterTab({
                 className="w-3.5 h-3.5 rounded-sm inline-block"
                 style={{ backgroundColor: opsConfig.tableColors.billRequested }}
               />
-              <span>{isEn ? 'Bill Requested' : 'طلب الشيك'}</span>
+              <span>{isEn ? 'Check Requested' : 'طلب الشيك'}</span>
             </span>
             <span className="flex items-center gap-1.5">
               <span
@@ -2404,7 +2404,7 @@ export function CaptainWaiterTab({
                       className="min-h-[42px] rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50"
                     >
                       <Banknote className="w-3.5 h-3.5" />
-                      <span>{isEn ? 'Request Bill (Cash)' : 'طلب الشيك كاش'}</span>
+                      <span>{isEn ? 'Request Check (Cash)' : 'طلب الشيك كاش'}</span>
                     </button>
                     <button
                       type="button"
@@ -2419,7 +2419,7 @@ export function CaptainWaiterTab({
                       className="min-h-[42px] rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50"
                     >
                       <CreditCard className="w-3.5 h-3.5" />
-                      <span>{isEn ? 'Request Bill (Visa)' : 'طلب الشيك فيزا'}</span>
+                      <span>{isEn ? 'Request Check (Visa)' : 'طلب الشيك فيزا'}</span>
                     </button>
                   </div>
                 )}
@@ -2466,7 +2466,7 @@ export function CaptainWaiterTab({
                 [
                   { key: 'empty' as const, label: isEn ? 'Available Table' : 'ترابيزة شاغرة' },
                   { key: 'occupied' as const, label: isEn ? 'Occupied Table' : 'ترابيزة مشغولة' },
-                  { key: 'billRequested' as const, label: isEn ? 'Bill Requested' : 'طلب الشيك' },
+                  { key: 'billRequested' as const, label: isEn ? 'Check Requested' : 'طلب الشيك' },
                   { key: 'overdue' as const, label: isEn ? 'Overdue Table' : 'ترابيزة متأخرة' },
                 ] as const
               ).map((entry) => (

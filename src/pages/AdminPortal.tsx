@@ -297,9 +297,9 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
                 ? c.callType === 'call_waiter'
                   ? 'Call Captain'
                   : c.callType === 'request_bill_cash'
-                    ? 'Bill (Cash)'
+                    ? 'Check (Cash)'
                     : c.callType === 'request_bill_card'
-                      ? 'Bill (Card)'
+                      ? 'Check (Card)'
                       : 'Cutlery / Water'
                 : c.callType === 'call_waiter'
                   ? 'نداء كابتن'
@@ -690,79 +690,103 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
 
   const ownerTabGuides: Record<
     OwnerNavTab,
-    { fallbackAr: string; fallbackEn: string; stepsAr: string; stepsEn: string }
+    { fallbackAr: string; fallbackEn: string; stepsAr: string; stepsEn: string; keywordsAr: string; keywordsEn: string }
   > = {
     orders: {
       fallbackAr: 'شاشات الكاشير والمطبخ',
       fallbackEn: 'Cashier & Multi-KDS',
       stepsAr: 'استلم الطلبات الحية، افتح الوردية والدرج، قفّل الفواتير، وتابع تنفيذ الأصناف في المحطات.',
       stepsEn: 'Receive live orders, manage shifts & cash drawer, settle checks, and monitor KDS prep.',
+      keywordsAr: 'كاشير مطبخ طلبات شيك فاتورة درج وردية خصم تقفيل طابعة حرارية kds',
+      keywordsEn: 'cashier kds kitchen pos live orders check drawer shift discount settle printer',
     },
     captain: {
       fallbackAr: 'شاشة الكابتن',
       fallbackEn: 'Captain Screen',
       stepsAr: 'تابع خريطة الصالات والطاولات، أضف طلبات الطاولات، واستجب لنداءات العملاء والأصناف الجاهزة.',
       stepsEn: 'View floor & table map, place table orders, and respond to service calls and ready items.',
+      keywordsAr: 'كابتن صالة طاولات نداءات خريطة طلب طاولة',
+      keywordsEn: 'captain floor tables map calls dine-in ready items',
     },
     hall_assignments: {
       fallbackAr: 'توزيع الكباتن',
       fallbackEn: 'Captain Assignments',
       stepsAr: 'وزّع الكباتن على الصالات والطاولات لكل وردية وتابع التغطية الفورية.',
       stepsEn: 'Assign Captains to dining halls and tables per shift and monitor live coverage.',
+      keywordsAr: 'توزيع كباتن صالات طاولات وردية مدير الصالات تغطية',
+      keywordsEn: 'captain assignments halls tables shift hall manager coverage',
     },
     stations: {
       fallbackAr: 'الشاشات والمحطات',
       fallbackEn: 'Screens & Stations',
       stepsAr: 'أضف شاشات كابتن أو محطات تحضير (مطبخ، بار، مخبز...) وعدّل اسمها أو أرشفها.',
       stepsEn: 'Create Captain screens or prep stations (Kitchen, Bar, Bakery...), rename, or archive them.',
+      keywordsAr: 'شاشات محطات مطبخ بار مخبز كابتن ارشفة اضافة شاشة',
+      keywordsEn: 'screens stations prep kitchen bar bakery pastry captain archive',
     },
     staff: {
       fallbackAr: 'المدير والكادر والصلاحيات',
       fallbackEn: 'Manager & Staff RBAC',
       stepsAr: 'أضف المدير العام، مدير الصالات، الكاشير، الكباتن، ومسؤولي المحطات، وأنشئ دعوات QR.',
       stepsEn: 'Add Managers, Hall Managers, Cashiers, Captains, and Station Staff with QR invites.',
+      keywordsAr: 'كادر موظفين مدير عام مدير صالات دعوة qr صلاحيات ايقاف حسابات',
+      keywordsEn: 'staff team manager hall manager cashier captain invite qr rbac suspend',
     },
     job_titles: {
       fallbackAr: 'المسميات الوظيفية والصلاحيات',
       fallbackEn: 'Job Titles & Permissions',
       stepsAr: 'أنشئ مسميات وظيفية مخصصة وحدد الشاشات والصلاحيات المفروضة على قاعدة البيانات.',
       stepsEn: 'Create custom Job Titles with exact allowed screens and database-enforced permissions.',
+      keywordsAr: 'مسميات وظيفية صلاحيات ادوار وظائف تحكم',
+      keywordsEn: 'job titles roles permissions rbac security custom role',
     },
     reports: {
       fallbackAr: 'تقرير الورديات والحسابات',
       fallbackEn: 'Shifts, Treasury & Reports',
       stepsAr: 'راجع الورديات المغلقة، المصروفات، تسليم العهدة لخزنة المالك، وسجل التدقيق.',
       stepsEn: 'Review closed shifts, drawer expenses, treasury custody handovers, and audit logs.',
+      keywordsAr: 'تقارير ورديات حسابات خزنة المالك عهدة مصروفات عجز سجل تدقيق',
+      keywordsEn: 'reports shifts treasury safe vault float variance expenses handover audit log',
     },
     customers: {
       fallbackAr: 'عملائي والتسويق الذكي',
       fallbackEn: 'Customer CRM',
       stepsAr: 'تصفح قائمة العملاء ونقاط الولاء وأعياد الميلاد وأرسل عروضاً عبر واتساب.',
       stepsEn: 'Manage customer profiles, loyalty points, upcoming birthdays, and WhatsApp outreach.',
+      keywordsAr: 'عملاء ولاء بطاقة نقاط اعياد ميلاد واتساب تسويق crm',
+      keywordsEn: 'customers crm loyalty punch card birthdays whatsapp marketing',
     },
     menu: {
       fallbackAr: 'الأقسام والصور والأصناف',
       fallbackEn: 'Menu, Sections & Photos',
       stepsAr: 'أضف الأقسام والأصناف وارفع الصور وحدد المحطة التي يتوجه إليها كل قسم أو صنف.',
       stepsEn: 'Build categories and menu items with photos and route each to its prep stations.',
+      keywordsAr: 'منيو اقسام اصناف وجبات اسعار صور توجيه محطات ايقاف صنف',
+      keywordsEn: 'menu categories items dishes photos prices station routing paused item',
     },
     offers: {
       fallbackAr: 'العروض وأكواد الخصم',
       fallbackEn: 'Offers & Promo Codes',
       stepsAr: 'أنشئ العروض الترويجية وأكواد الخصم لعملاء المنيو وتابع حالة تفعيلها.',
       stepsEn: 'Create promotional offers and discount codes for public menu orders.',
+      keywordsAr: 'عروض بانر خصم كوبون كود 1+1 ترويج',
+      keywordsEn: 'offers banners promo codes coupons bogo discounts',
     },
     theme: {
       fallbackAr: 'الثيم واللوجو والإعدادات',
       fallbackEn: 'Themes, Logo & Info',
       stepsAr: 'اختر ثيم المنيو العام وارفع اللوجو وعدّل بيانات المطعم وساعات العمل.',
       stepsEn: 'Customize public menu theme, logo, restaurant details, and opening hours.',
+      keywordsAr: 'ثيم مظهر لوجو شعار الوان ضريبة خدمة مواعيد اعدادات المطعم',
+      keywordsEn: 'theme appearance logo branding tax service charge hours settings',
     },
     qr: {
       fallbackAr: 'الصالات وأكواد QR',
       fallbackEn: 'Halls & Table QRs',
       stepsAr: 'أنشئ الصالات والطاولات واطبع أكواد QR الخاصة بكل طاولة أو بالمنيو العام.',
       stepsEn: 'Set up halls and tables, and generate printable table QR codes.',
+      keywordsAr: 'صالات طاولات باركود qr طباعة بطاقات رقم الطاولة',
+      keywordsEn: 'halls tables qr code printable cards table number',
     },
   };
 
@@ -784,6 +808,8 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
         pathEn: `From your menu: ${card.titleEn} → ${labelEn}`,
         stepsAr: guide.stepsAr,
         stepsEn: guide.stepsEn,
+        keywordsAr: `${guide.keywordsAr} ${card.titleAr}`,
+        keywordsEn: `${guide.keywordsEn} ${card.titleEn}`,
         onGo: () => handleSelectOwnerTab(tabId),
       });
     }
@@ -797,6 +823,8 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
     pathEn: isOwnerTopDeck ? 'Top bar → Preview Menu' : 'Sidebar footer → View Public Menu',
     stepsAr: 'افتح المنيو الرقمي العام لمطعمك كما يظهر للعملاء عند مسح كود QR.',
     stepsEn: 'Open your live customer-facing digital menu exactly as guests see it via QR.',
+    keywordsAr: 'معاينة منيو رقمي عام عملاء qr تجربة',
+    keywordsEn: 'preview public digital menu customer qr view',
     onGo: () => onNavigate(`/menu/${restaurant.slug}?preview=1`),
   });
 

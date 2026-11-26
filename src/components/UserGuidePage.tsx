@@ -1,4 +1,5 @@
-import { ArrowLeft, ArrowRight, BookOpen, Home, LucideIcon } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { ArrowLeft, ArrowRight, BookOpen, Home, LucideIcon, Search, Sparkles, X } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { getContrastRatio, getReadableTextOnBg } from '../lib/platformUiDefaults';
 import { ScreenThemeTokens } from '../types/uiStudio';
@@ -12,6 +13,8 @@ export interface UserGuideEntry {
   pathEn: string;
   stepsAr: string;
   stepsEn: string;
+  keywordsAr?: string;
+  keywordsEn?: string;
   onGo: () => void;
   goLabelAr?: string;
   goLabelEn?: string;
@@ -45,6 +48,7 @@ export function UserGuidePage({
   const { lang, isRtl } = useLanguage();
   const isEn = lang === 'en';
   const GoArrow = isRtl ? ArrowLeft : ArrowRight;
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Ensure icon tint inside light surface cards has >= 4.5:1 contrast against surfaceSubtleBg
   const iconTintColor =
@@ -57,6 +61,36 @@ export function UserGuidePage({
     getContrastRatio(btnBgColor, theme.accentTextHex) >= 4.5
       ? theme.accentTextHex
       : getReadableTextOnBg(btnBgColor, '#0E1B3D', '#FFFFFF');
+
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+
+  const filteredEntries = useMemo(() => {
+    if (!normalizedQuery) return entries;
+    const tokens = normalizedQuery.split(/\s+/).filter(Boolean);
+    return entries.filter((entry) => {
+      const haystack = [
+        entry.titleAr,
+        entry.titleEn,
+        entry.pathAr,
+        entry.pathEn,
+        entry.stepsAr,
+        entry.stepsEn,
+        entry.keywordsAr || '',
+        entry.keywordsEn || '',
+      ]
+        .join(' ')
+        .toLowerCase();
+      return tokens.every((tok) => haystack.includes(tok));
+    });
+  }, [entries, normalizedQuery]);
+
+  // Quick interactive topic chips derived strictly from this user's actual entries
+  const quickChips = useMemo(() => {
+    return entries.slice(0, 6).map((e) => ({
+      id: e.id,
+      label: isEn ? e.titleEn.split('—')[0].trim() : e.titleAr.split('—')[0].trim(),
+    }));
+  }, [entries, isEn]);
 
   return (
     <div className="space-y-4">
@@ -86,7 +120,7 @@ export function UserGuidePage({
                 className="text-base sm:text-xl font-extrabold leading-snug"
                 style={{ color: theme.surfaceText }}
               >
-                {isEn ? 'User Guide' : 'دليل الاستخدام'}
+                {isEn ? 'Smart User Guide' : 'دليل الاستخدام الذكي'}
               </h1>
               <span
                 className={`px-2.5 py-0.5 border text-xs font-extrabold ${radiusClasses.pill}`}
@@ -122,18 +156,106 @@ export function UserGuidePage({
         </button>
       </div>
 
-      {/* Quick Tip Strip */}
+      {/* Interactive Keyword Search & Quick Filter Bar */}
       <div
-        className={`border px-4 py-3 text-xs sm:text-[13px] font-semibold leading-relaxed ${radiusClasses.card}`}
+        className={`border p-4 space-y-3 ${radiusClasses.card}`}
         style={{
-          backgroundColor: theme.surfaceSubtleBg,
+          backgroundColor: theme.surfaceBg,
           borderColor: theme.surfaceBorder,
-          color: theme.surfaceText,
+          boxShadow: theme.cardShadow,
         }}
       >
-        {isEn
-          ? 'Each line below shows a feature available to your account, how to reach it from your menu, and a direct button to open it immediately.'
-          : 'كل سطر أدناه يوضح ميزة متاحة لدورك الحالي، ومسار الوصول إليها من قائمتك، مع زر مباشر ينقلك إلى الصفحة فوراً.'}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2.5">
+          <div className="relative flex-1 min-w-0">
+            <Search
+              className={`w-4 h-4 absolute top-1/2 -translate-y-1/2 pointer-events-none ${
+                isRtl ? 'right-3.5' : 'left-3.5'
+              }`}
+              style={{ color: theme.mutedText }}
+            />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={
+                isEn
+                  ? 'Search by keyword (e.g. Cashier, Check, Discount, Tables, QR, Shift)...'
+                  : 'ابحث بكلمة مفتاحية (مثلاً: كاشير، فاتورة، خصم، طاولات، QR، وردية)...'
+              }
+              aria-label={isEn ? 'Search user guide' : 'ابحث في دليل الاستخدام'}
+              className={`w-full min-h-[44px] border text-xs sm:text-sm font-semibold focus:outline-none ${
+                isRtl ? 'pr-10 pl-10' : 'pl-10 pr-10'
+              } ${radiusClasses.button}`}
+              style={{
+                backgroundColor: theme.surfaceSubtleBg,
+                borderColor: theme.surfaceBorder,
+                color: theme.surfaceText,
+              }}
+            />
+            {searchQuery.trim() && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                aria-label={isEn ? 'Clear search' : 'مسح البحث'}
+                className={`absolute top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-lg cursor-pointer ${
+                  isRtl ? 'left-1.5' : 'right-1.5'
+                }`}
+                style={{ color: theme.mutedText }}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          <div
+            className={`min-h-[44px] px-3.5 py-2 border text-xs font-extrabold inline-flex items-center justify-center gap-1.5 shrink-0 ${radiusClasses.button}`}
+            style={{
+              backgroundColor: theme.surfaceSubtleBg,
+              borderColor: theme.surfaceBorder,
+              color: theme.surfaceText,
+            }}
+          >
+            <Sparkles className="w-3.5 h-3.5 shrink-0" style={{ color: iconTintColor }} />
+            <span className="font-mono-num">
+              {filteredEntries.length} / {entries.length}
+            </span>
+            <span>{isEn ? 'features' : 'ميزة'}</span>
+          </div>
+        </div>
+
+        {quickChips.length > 1 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-xs font-bold me-1" style={{ color: theme.mutedText }}>
+              {isEn ? 'Quick jump:' : 'بحث سريع:'}
+            </span>
+            {quickChips.map((chip) => {
+              const active = searchQuery.trim().toLowerCase() === chip.label.toLowerCase();
+              return (
+                <button
+                  key={chip.id}
+                  type="button"
+                  onClick={() => setSearchQuery(active ? '' : chip.label)}
+                  className={`min-h-[36px] px-3 py-1.5 border text-xs font-bold cursor-pointer transition-colors ${radiusClasses.pill}`}
+                  style={
+                    active
+                      ? {
+                          backgroundColor: btnBgColor,
+                          borderColor: btnBgColor,
+                          color: btnTextColor,
+                        }
+                      : {
+                          backgroundColor: theme.surfaceSubtleBg,
+                          borderColor: theme.surfaceBorder,
+                          color: theme.surfaceText,
+                        }
+                  }
+                >
+                  {chip.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Feature Rows List */}
@@ -145,14 +267,30 @@ export function UserGuidePage({
           boxShadow: theme.cardShadow,
         }}
       >
-        {entries.length === 0 ? (
-          <div className="p-6 text-center text-xs sm:text-sm" style={{ color: theme.mutedText }}>
-            {isEn
-              ? 'No active screens are currently assigned to this account.'
-              : 'لا توجد شاشات مفعّلة لهذا الحساب حالياً.'}
+        {filteredEntries.length === 0 ? (
+          <div className="p-6 text-center space-y-3">
+            <p className="text-xs sm:text-sm font-semibold" style={{ color: theme.mutedText }}>
+              {entries.length === 0
+                ? isEn
+                  ? 'No active screens are currently assigned to this account.'
+                  : 'لا توجد شاشات مفعّلة لهذا الحساب حالياً.'
+                : isEn
+                  ? `No guide entries matched "${searchQuery}". Try another keyword.`
+                  : `لم يتم العثور على ميزة مطابقة لـ «${searchQuery}». جرّب كلمة أخرى.`}
+            </p>
+            {searchQuery.trim() && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className={`min-h-[44px] px-4 py-2 text-xs font-extrabold cursor-pointer ${radiusClasses.button}`}
+                style={{ backgroundColor: btnBgColor, color: btnTextColor }}
+              >
+                {isEn ? 'Show all features' : 'عرض كل الميزات'}
+              </button>
+            )}
           </div>
         ) : (
-          entries.map((entry, idx) => {
+          filteredEntries.map((entry, idx) => {
             const Icon = entry.icon;
             return (
               <div
@@ -215,7 +353,7 @@ export function UserGuidePage({
                   }}
                 >
                   <span className="whitespace-normal break-words">
-                    {isEn ? entry.goLabelEn || 'Go to page' : entry.goLabelAr || 'اذهب إليها'}
+                    {isEn ? entry.goLabelEn || 'Click to open' : entry.goLabelAr || 'اضغط هنا للانتقال'}
                   </span>
                   <GoArrow className="w-4 h-4 shrink-0" />
                 </button>

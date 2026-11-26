@@ -164,7 +164,7 @@ const TABLE_STATUS_META: Record<
   },
   bill: {
     ar: 'طلب فاتورة',
-    en: 'Bill Requested',
+    en: 'Check Requested',
     bg: '#F3EBDD',
     border: '#E8833A',
     text: '#14285A',
@@ -1330,7 +1330,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                 <span>
                   {isAr
                     ? 'ألوان فورية تميز الطاولة المتاحة والمشغولة وطلب الفاتورة والمتأخرة.'
-                    : 'Instant color states distinguish Available, Occupied, Bill Requested, and Overdue tables.'}
+                    : 'Instant color states distinguish Available, Occupied, Check Requested, and Overdue tables.'}
                 </span>
               </li>
               <li className="bg-[#FBF7EF] border border-[#E6D9C3] rounded-2xl p-4 flex items-start gap-2.5">

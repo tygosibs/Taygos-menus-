@@ -243,7 +243,7 @@ const ROLE_TABS: Array<{
       'يضيف أصنافاً للطاولة من لوحة الطلب السريع ويساعد في تقسيم الشيك بين الضيوف.',
     ],
     bulletsEn: [
-      'Live floor grid with customizable table colors (Available, Occupied, Bill Requested, Overdue).',
+      'Live floor grid with customizable table colors (Available, Occupied, Check Requested, Overdue).',
       'Receives guest table calls and instant alerts when Kitchen or Bar items are Ready.',
       'Adds items tableside via quick-entry POS and assists guests with Split Check totals.',
     ],
@@ -880,7 +880,7 @@ export function LandingVisualShowcases({
                         className="min-h-[40px] px-2.5 py-2 rounded-xl border border-[#14285A]/30 bg-[#FBF7EF] text-[#14285A] text-[11px] font-bold flex items-center justify-center gap-1.5 cursor-pointer"
                       >
                         <Receipt className="w-3.5 h-3.5 text-[#E8833A]" />
-                        <span>{menuLang === 'ar' ? 'طلب الفاتورة' : 'Request Bill'}</span>
+                        <span>{menuLang === 'ar' ? 'طلب الفاتورة' : 'Request Check'}</span>
                       </button>
                     </div>
                   </div>
@@ -894,7 +894,7 @@ export function LandingVisualShowcases({
                         : 'Captain notified for Table 7 (Example)'
                       : menuLang === 'ar'
                         ? 'تم إرسال طلب الفاتورة للكاشير (مثال)'
-                        : 'Bill request sent to Cashier (Example)'}
+                        : 'Check request sent to Cashier (Example)'}
                   </p>
                 )}
               </div>
@@ -1317,7 +1317,7 @@ export function LandingVisualShowcases({
                       {[
                         { num: '1', labelAr: 'متاحة', labelEn: 'Available', bg: '#FBF7EF', border: '#2F8F5B', text: '#14285A' },
                         { num: '2', labelAr: 'مشغولة', labelEn: 'Occupied', bg: '#14285A', border: '#14285A', text: '#FBF7EF' },
-                        { num: '3', labelAr: 'طلب فاتورة', labelEn: 'Bill Requested', bg: '#F3EBDD', border: '#E8833A', text: '#14285A' },
+                        { num: '3', labelAr: 'طلب فاتورة', labelEn: 'Check Requested', bg: '#F3EBDD', border: '#E8833A', text: '#14285A' },
                         { num: '4', labelAr: 'متأخرة', labelEn: 'Overdue', bg: '#FFF3E8', border: '#E8833A', text: '#0E1B3D' },
                       ].map((t) => (
                         <div
@@ -1342,7 +1342,7 @@ export function LandingVisualShowcases({
                         <span className="text-[#E8833A]">{isAr ? 'الآن' : 'Now'}</span>
                       </div>
                       <div className="bg-[#F3EBDD] border border-[#E6D9C3] rounded-xl px-3 py-2 text-xs font-semibold flex items-center justify-between">
-                        <span>{isAr ? 'طاولة 3 · طلب فاتورة' : 'Table 3 · Bill Requested'}</span>
+                        <span>{isAr ? 'طاولة 3 · طلب فاتورة' : 'Table 3 · Check Requested'}</span>
                         <span className="text-[#E8833A] font-bold">
                           {isAr ? 'استلام' : 'Acknowledge'}
                         </span>

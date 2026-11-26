@@ -110,7 +110,7 @@ export const SplitCheckPrintModal: React.FC<SplitCheckPrintModalProps> = ({
     setToastMsg('');
     setErrorMsg('');
     try {
-      const res = await printThermalJobsSequentially(jobs);
+      const res = await printThermalJobsSequentially(jobs, { lang });
       setToastMsg(
         res.mode === 'hardware'
           ? isEn
@@ -140,8 +140,9 @@ export const SplitCheckPrintModal: React.FC<SplitCheckPrintModalProps> = ({
       currencyLabel,
       includePrices: includePricesOnCombined,
       includeSeparateChecks: true,
+      lang,
     });
-    void runPrint('combined', [combinedJob], isEn ? 'Combined Order Only' : 'الأوردر المجمع فقط');
+    void runPrint('combined', [combinedJob], isEn ? 'Consolidated Check Only' : 'الأوردر المجمع فقط');
   };
 
   const handlePrintSingleStation = (bucket: { meta: StationMeta; items: OrderItemPayload[] }) => {
@@ -151,6 +152,7 @@ export const SplitCheckPrintModal: React.FC<SplitCheckPrintModalProps> = ({
       order,
       station: bucket.meta,
       stationItems: bucket.items,
+      lang,
     });
     void runPrint(
       bucket.meta.stationId,
@@ -166,6 +168,7 @@ export const SplitCheckPrintModal: React.FC<SplitCheckPrintModalProps> = ({
       currencyLabel,
       includePrices: includePricesOnCombined,
       includeSeparateChecks: true,
+      lang,
     });
     const stationJobs = stationBuckets.map((b) =>
       buildStationTicketJob({
@@ -173,12 +176,13 @@ export const SplitCheckPrintModal: React.FC<SplitCheckPrintModalProps> = ({
         order,
         station: b.meta,
         stationItems: b.items,
+        lang,
       })
     );
     void runPrint(
       'all',
       [combinedJob, ...stationJobs],
-      isEn ? 'Combined Order + All Stations' : 'الطلب المجمع + جميع الأقسام'
+      isEn ? 'Consolidated Check + All Stations' : 'الطلب المجمع + جميع الأقسام'
     );
   };
 
@@ -236,7 +240,7 @@ export const SplitCheckPrintModal: React.FC<SplitCheckPrintModalProps> = ({
                 className="h-4 w-4 rounded accent-zinc-900"
               />
               {isEn
-                ? 'Show prices and bill breakdown on the "Combined Master Order" ticket'
+                ? 'Show prices and check breakdown on the "Consolidated Check" ticket'
                 : 'إظهار الأسعار وتفاصيل الفاتورة في تذكرة "الأوردر الأساسي المجمع"'}
             </label>
 
@@ -252,7 +256,7 @@ export const SplitCheckPrintModal: React.FC<SplitCheckPrintModalProps> = ({
                 ) : (
                   <Printer className="h-4 w-4" />
                 )}
-                {isEn ? 'Print Combined Ticket Only' : 'طباعة الأوردر المجمع فقط'}
+                {isEn ? 'Print Consolidated Check Only' : 'طباعة الأوردر المجمع فقط'}
               </button>
 
               <button

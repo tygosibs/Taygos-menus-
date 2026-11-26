@@ -36,11 +36,41 @@ interface GeneratedTableQr {
   dataUrl: string;
 }
 
-const HALL_PRESETS: Array<{ name: string; name_en: string; hallType: string; tableCount: number }> = [
-  { name: 'الصالة الرئيسية', name_en: 'Main Hall', hallType: 'صالة داخلية', tableCount: 12 },
-  { name: 'الدور الثاني', name_en: 'Second Floor', hallType: 'دور علوي', tableCount: 10 },
-  { name: 'التراس الخارجي', name_en: 'Outdoor Terrace', hallType: 'تراس خارجي', tableCount: 8 },
-  { name: 'قسم العائلات VIP', name_en: 'VIP Family Section', hallType: 'قسم عائلات VIP', tableCount: 6 },
+const HALL_PRESETS: Array<{
+  name: string;
+  name_en: string;
+  hallType: string;
+  hallType_en: string;
+  tableCount: number;
+}> = [
+  {
+    name: 'الصالة الرئيسية',
+    name_en: 'Main Hall',
+    hallType: 'صالة داخلية',
+    hallType_en: 'Indoor Hall',
+    tableCount: 12,
+  },
+  {
+    name: 'الدور الثاني',
+    name_en: 'Second Floor',
+    hallType: 'دور علوي',
+    hallType_en: 'Upper Floor',
+    tableCount: 10,
+  },
+  {
+    name: 'التراس الخارجي',
+    name_en: 'Outdoor Terrace',
+    hallType: 'تراس خارجي',
+    hallType_en: 'Outdoor Terrace',
+    tableCount: 8,
+  },
+  {
+    name: 'قسم العائلات VIP',
+    name_en: 'VIP Family Section',
+    hallType: 'قسم عائلات VIP',
+    hallType_en: 'VIP Family Section',
+    tableCount: 6,
+  },
 ];
 
 function buildRangeCsv(count: number, skip13 = false): string {
@@ -926,7 +956,7 @@ export function QrGeneratorTab({ restaurant }: QrGeneratorTabProps) {
                       onClick={() => {
                         setHallNameInput(p.name);
                         setHallNameEnInput(p.name_en);
-                        setHallTypeInput(p.hallType);
+                        setHallTypeInput(isEn ? p.hallType_en : p.hallType);
                         setHallTablesInput(p.tableCount);
                         setTableNumbersText(buildRangeCsv(p.tableCount, false));
                       }}

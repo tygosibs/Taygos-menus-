@@ -1439,7 +1439,7 @@ export async function closeTableOrdersAndSession(params: {
         screen: 'cashier',
         details:
           getActiveLang() === 'en'
-            ? `Closed bill for ${params.hallName ? `${params.hallName} - ` : ''}Table ${params.tableNumber || ''}`
+            ? `Closed check for ${params.hallName ? `${params.hallName} - ` : ''}Table ${params.tableNumber || ''}`
             : `إقفال حساب ${params.hallName ? `${params.hallName} - ` : ''}طاولة ${params.tableNumber || ''}`,
       });
     }

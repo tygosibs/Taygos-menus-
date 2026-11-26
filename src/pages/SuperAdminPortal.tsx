@@ -310,31 +310,43 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
 
   const superTabGuides: Record<
     Exclude<SuperAdminTab, 'user_guide'>,
-    { stepsAr: string; stepsEn: string }
+    { stepsAr: string; stepsEn: string; keywordsAr: string; keywordsEn: string }
   > = {
     tenants: {
       stepsAr: 'أنشئ مطعماً جديداً، فعّل أو أوقف الحسابات، وادخل لمعاينة أي مطعم أو منيو عام.',
       stepsEn: 'Create new restaurants, enable or suspend accounts, and preview any restaurant or public menu.',
+      keywordsAr: 'مطاعم مشتركين حسابات تفعيل ايقاف تعليق منيو باقة اعياد ميلاد',
+      keywordsEn: 'restaurants tenants accounts activate suspend digital menu plans birthdays',
     },
     promos: {
       stepsAr: 'أنشئ أكواد خصم المنصة وحدد نسبة الخصم وعدد الاستخدامات وتابع تفعيلها.',
       stepsEn: 'Create SaaS promo codes, set discount rates and usage limits, and monitor redemptions.',
+      keywordsAr: 'اكواد خصم هدايا اشتراك كوبون تفعيل',
+      keywordsEn: 'promo codes discounts coupons gifts subscription saas',
     },
     ui_studio: {
       stepsAr: 'خصّص الثيم وتخطيط البطاقات وأسماء الأزرار لكل شاشة ثم انشر التحديث للجميع.',
       stepsEn: 'Customize screen themes, card groups, and button labels, then publish live for all users.',
+      keywordsAr: 'استوديو واجهات الوان ثيم بطاقات ازرار تخطيط نشر',
+      keywordsEn: 'ui studio themes colors cards buttons layout labels publish',
     },
     themes: {
       stepsAr: 'أدر الثيمات المخصصة وشفرات الألوان المتقدمة على مستوى المنصة.',
       stepsEn: 'Manage custom platform color themes and advanced styling tokens.',
+      keywordsAr: 'حقن ثيمات اكواد مخصصة مظهر منيو html css',
+      keywordsEn: 'theme injector custom html css js templates styling',
     },
     landing: {
       stepsAr: 'عدّل نصوص صفحة الهبوط الرئيسية، الباقات، الأسعار، وأرقام الدعم الفني.',
       stepsEn: 'Edit landing page headlines, subscription plans, pricing, and support contacts.',
+      keywordsAr: 'صفحة الهبوط باقات اسعار واتساب دعم رئيسية',
+      keywordsEn: 'landing page cms headlines pricing plans whatsapp support',
     },
     domain: {
       stepsAr: 'افحص اتصال قاعدة بيانات Firestore وانسخ النطاقات المصرح بها في Firebase.',
       stepsEn: 'Test Firestore connectivity and copy authorized domains for Firebase Authentication.',
+      keywordsAr: 'دومين نطاق فايربيس قاعدة بيانات اتصال مصادقة',
+      keywordsEn: 'domain firebase firestore connection authorized auth vercel',
     },
   };
 
@@ -355,6 +367,8 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
         pathEn: `From your menu: ${card.titleEn} → ${labelEn}`,
         stepsAr: guide.stepsAr,
         stepsEn: guide.stepsEn,
+        keywordsAr: `${guide.keywordsAr} ${card.titleAr}`,
+        keywordsEn: `${guide.keywordsEn} ${card.titleEn}`,
         onGo: () => setActiveTab(item.id),
       });
     }
@@ -369,6 +383,8 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
       pathEn: isTopDeck ? 'Top bar → Test Restaurant' : 'Sidebar footer → Open Test Restaurant',
       stepsAr: 'انتقل مباشرة إلى لوحة إدارة المطعم لتجربة شاشات المالك والمنيو.',
       stepsEn: 'Jump straight to the Owner dashboard to test restaurant and menu operations.',
+      keywordsAr: 'مطعم تجريبي لوحة المالك معاينة كاشير كابتن',
+      keywordsEn: 'test restaurant owner dashboard preview cashier captain',
       onGo: () => onNavigate('/admin'),
     },
     {
@@ -380,6 +396,8 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
       pathEn: isTopDeck ? 'Top bar → Landing Preview' : 'Sidebar footer → Preview Landing Page',
       stepsAr: 'افتح الصفحة الرئيسية العامة للمنصة كما يراها الزوار وأصحاب المطاعم.',
       stepsEn: 'Open the public SaaS landing page as seen by visitors and restaurant owners.',
+      keywordsAr: 'صفحة الهبوط رئيسية زوار عرض عام',
+      keywordsEn: 'landing page public preview home visitors',
       onGo: () => onNavigate('/?view=landing'),
     }
   );

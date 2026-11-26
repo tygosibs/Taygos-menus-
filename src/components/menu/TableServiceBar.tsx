@@ -46,8 +46,8 @@ export function TableServiceBar({
   const labelForType = (type: ServiceCallType) => {
     if (isEn) {
       if (type === 'call_waiter') return 'Call Captain';
-      if (type === 'request_bill_cash') return 'Bill Request (Cash)';
-      if (type === 'request_bill_card') return 'Bill Request (Visa / Card)';
+      if (type === 'request_bill_cash') return 'Check Request (Cash)';
+      if (type === 'request_bill_card') return 'Check Request (Visa / Card)';
       return 'Cutlery & Water';
     }
     if (type === 'call_waiter') return 'نداء الكابتن';
@@ -207,7 +207,7 @@ export function TableServiceBar({
           >
             <Receipt className={`w-3.5 h-3.5 shrink-0 ${billMenuOpen ? 'text-white' : 'text-emerald-600'}`} />
             <span className="truncate">
-              {isEn ? 'Request Bill' : 'اطلب الفاتورة'}
+              {isEn ? 'Request Check' : 'اطلب الفاتورة'}
             </span>
           </button>
 
