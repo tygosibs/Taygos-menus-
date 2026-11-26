@@ -114,6 +114,8 @@ export function ThemeRenderer({
         headingColor: restaurant.headingColor,
         descriptionColor: restaurant.descriptionColor,
         priceColor: restaurant.priceColor,
+        lightThemeColors: restaurant.lightThemeColors,
+        darkThemeColors: restaurant.darkThemeColors,
       }),
     [
       themeDefaultIsDark,
@@ -124,6 +126,8 @@ export function ThemeRenderer({
       restaurant.headingColor,
       restaurant.descriptionColor,
       restaurant.priceColor,
+      restaurant.lightThemeColors,
+      restaurant.darkThemeColors,
     ]
   );
 
@@ -223,6 +227,7 @@ export function ThemeRenderer({
         items={availableItems}
         cartCount={cartCount}
         cartTotal={cartTotal}
+        colorModeOverride={activeColorMode}
         onSelectItem={onSelectItem}
         onAddToCart={onAddToCart}
         onOpenCart={onOpenCart}

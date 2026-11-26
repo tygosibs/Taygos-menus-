@@ -708,11 +708,17 @@ export function normalizeScreenConfig(
       ? raw.accentColorOverride
       : undefined;
 
+  const defaultPageId =
+    typeof raw?.defaultPageId === 'string' && validIds.has(raw.defaultPageId)
+      ? raw.defaultPageId
+      : undefined;
+
   return {
     themeId,
     layoutStyle,
     cardRadius,
     ...(accentColorOverride ? { accentColorOverride } : {}),
+    ...(defaultPageId ? { defaultPageId } : {}),
     cards: cleanCards,
     buttonOverrides,
   };

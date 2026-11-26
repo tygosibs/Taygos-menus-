@@ -103,6 +103,8 @@ export function WhatsAppChatTheme({
         headingColor: restaurant.headingColor,
         descriptionColor: restaurant.descriptionColor,
         priceColor: restaurant.priceColor,
+        lightThemeColors: restaurant.lightThemeColors,
+        darkThemeColors: restaurant.darkThemeColors,
       }),
     [
       activeColorMode,
@@ -112,6 +114,8 @@ export function WhatsAppChatTheme({
       restaurant.headingColor,
       restaurant.descriptionColor,
       restaurant.priceColor,
+      restaurant.lightThemeColors,
+      restaurant.darkThemeColors,
     ]
   );
 
@@ -123,7 +127,9 @@ export function WhatsAppChatTheme({
         restaurant.menuCardBgColor ||
         restaurant.headingColor ||
         restaurant.descriptionColor ||
-        restaurant.priceColor
+        restaurant.priceColor ||
+        restaurant.lightThemeColors ||
+        restaurant.darkThemeColors
     );
 
   const handleToggleContrast = () => {

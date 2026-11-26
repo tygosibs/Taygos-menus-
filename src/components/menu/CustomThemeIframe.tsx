@@ -2,8 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ShoppingBag } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { buildCustomThemeSrcDoc } from '../../lib/customThemeEngine';
-import { CartItem, Category, CustomTheme, MenuItem, Restaurant } from '../../types/menu';
-import { LanguageToggleButton } from '../LanguageToggleButton';
+import { CartItem, Category, CustomTheme, MenuColorMode, MenuItem, Restaurant } from '../../types/menu';
 
 interface CustomThemeIframeProps {
   customTheme: CustomTheme;
@@ -12,6 +11,7 @@ interface CustomThemeIframeProps {
   items: MenuItem[];
   cartCount: number;
   cartTotal: number;
+  colorModeOverride?: MenuColorMode;
   onSelectItem: (item: MenuItem) => void;
   onAddToCart: (cartItem: CartItem) => void;
   onOpenCart: () => void;
@@ -30,11 +30,12 @@ export function CustomThemeIframe({
   items,
   cartCount,
   cartTotal,
+  colorModeOverride,
   onSelectItem,
   onAddToCart,
   onOpenCart,
 }: CustomThemeIframeProps) {
-  const { lang, dir, t, loc, formatCurrency } = useLanguage();
+  const { lang, dir, t, loc, formatCurrency, setLang, toggleLang } = useLanguage();
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [iframeHeight, setIframeHeight] = useState<number | null>(null);
@@ -49,13 +50,14 @@ export function CustomThemeIframe({
         categories,
         items,
         currentLang: lang,
+        colorModeOverride,
       }),
-    [customTheme, restaurant, categories, items, lang]
+    [customTheme, restaurant, categories, items, lang, colorModeOverride]
   );
 
   useEffect(() => {
     setIframeHeight(null);
-  }, [customTheme.id, lang]);
+  }, [customTheme.id, lang, colorModeOverride]);
 
   const resolveMenuItemFromMessage = useCallback(
     (data: Record<string, unknown>): MenuItem | null => {
@@ -192,6 +194,19 @@ export function CustomThemeIframe({
         return;
       }
 
+      if (type === 'TOGGLE_LANG' || type === 'TOGGLE_LANGUAGE') {
+        toggleLang();
+        return;
+      }
+
+      if (type === 'SET_LANG' || type === 'SET_LANGUAGE') {
+        const nextLang = String(data.lang || data.language || '').trim().toLowerCase();
+        if (nextLang === 'ar' || nextLang === 'en') {
+          setLang(nextLang);
+        }
+        return;
+      }
+
       if (
         type === 'OPEN_ITEM_MODAL' ||
         type === 'OPEN_ITEM' ||
@@ -271,7 +286,7 @@ export function CustomThemeIframe({
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [resolveMenuItemFromMessage, onSelectItem, onAddToCart, onOpenCart, t.menu.addedToCart, loc]);
+  }, [resolveMenuItemFromMessage, onSelectItem, onAddToCart, onOpenCart, t.menu.addedToCart, loc, setLang, toggleLang]);
 
   const accent = restaurant.primaryColor || '#A61C1C';
   const currencyLabel = formatCurrency(restaurant.currency);
@@ -279,12 +294,8 @@ export function CustomThemeIframe({
 
   return (
     <div dir={dir} className="relative w-full min-h-screen bg-zinc-950 overflow-x-clip max-w-full">
-      <div className="fixed top-3 end-3 z-40">
-        <LanguageToggleButton variant="glass" compact />
-      </div>
-
       <iframe
-        key={`${customTheme.id}_${lang}`}
+        key={`${customTheme.id}_${lang}_${colorModeOverride || restaurant.colorMode || 'auto'}`}
         ref={iframeRef}
         title={loc(customTheme.name, customTheme.name_en)}
         sandbox="allow-scripts"

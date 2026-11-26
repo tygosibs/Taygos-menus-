@@ -77,6 +77,7 @@ export interface UiScreenConfig {
   layoutStyle: ScreenLayoutStyle;
   cardRadius: CardRadiusStyle;
   accentColorOverride?: string;
+  defaultPageId?: string;
   cards: UiScreenCard[];
   buttonOverrides: Record<string, UiButtonOverride>;
 }

@@ -1,5 +1,6 @@
 import { AppLang } from '../data/translations';
-import { Category, MenuItem, Restaurant } from '../types/menu';
+import { resolveMenuSurfacePalette } from './contrastUtils';
+import { Category, MenuColorMode, MenuItem, Restaurant } from '../types/menu';
 
 function safeJsonForInlineScript(data: unknown): string {
   return JSON.stringify(data)
@@ -447,10 +448,27 @@ export function buildCustomThemeSrcDoc(params: {
   categories: Category[];
   items: MenuItem[];
   currentLang?: AppLang;
+  colorModeOverride?: MenuColorMode;
 }): string {
   const currentLang: AppLang = params.currentLang || 'ar';
   const dir = currentLang === 'ar' ? 'rtl' : 'ltr';
   const availableItems = params.items.filter((i) => i.isAvailable !== false);
+  const effectiveColorMode: MenuColorMode =
+    params.colorModeOverride && params.colorModeOverride !== 'auto'
+      ? params.colorModeOverride
+      : params.restaurant.colorMode || 'auto';
+  const resolvedPalette = resolveMenuSurfacePalette({
+    themeIsDark: true,
+    colorMode: effectiveColorMode,
+    primaryColor: params.restaurant.primaryColor,
+    menuBgColor: params.restaurant.menuBgColor,
+    menuCardBgColor: params.restaurant.menuCardBgColor,
+    headingColor: params.restaurant.headingColor,
+    descriptionColor: params.restaurant.descriptionColor,
+    priceColor: params.restaurant.priceColor,
+    lightThemeColors: params.restaurant.lightThemeColors,
+    darkThemeColors: params.restaurant.darkThemeColors,
+  });
   const restJson = safeJsonForInlineScript(params.restaurant);
   const catsJson = safeJsonForInlineScript(params.categories);
   const itemsJson = safeJsonForInlineScript(availableItems);
@@ -482,10 +500,15 @@ export function buildCustomThemeSrcDoc(params: {
         -webkit-tap-highlight-color: transparent;
       }
       :root {
-        --menu-accent: ${params.restaurant.primaryColor || '#A61C1C'};
-        --menu-heading: ${params.restaurant.headingColor || ''};
-        --menu-desc: ${params.restaurant.descriptionColor || ''};
-        --menu-price: ${params.restaurant.priceColor || ''};
+        --menu-bg: ${resolvedPalette.pageBg};
+        --menu-card-bg: ${resolvedPalette.cardBg};
+        --menu-subtle-bg: ${resolvedPalette.subtleBg};
+        --menu-border: ${resolvedPalette.borderColor};
+        --menu-accent: ${resolvedPalette.accentColor};
+        --menu-accent-text: ${resolvedPalette.accentTextColor};
+        --menu-heading: ${resolvedPalette.headingColor};
+        --menu-desc: ${resolvedPalette.descriptionColor};
+        --menu-price: ${resolvedPalette.priceColor};
         --menu-cols: ${params.restaurant.menuColumns || 2};
       }
       .sufra-interactive-dish {

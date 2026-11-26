@@ -39,6 +39,15 @@ export interface ItemAddon {
 }
 
 export type MenuColorMode = 'auto' | 'light' | 'dark';
+
+export interface ThemeModeColorSet {
+  menuBgColor?: string;
+  menuCardBgColor?: string;
+  headingColor?: string;
+  descriptionColor?: string;
+  priceColor?: string;
+}
+
 export type OfferAnimation = 'static' | 'marquee' | 'orbit' | 'bounce' | 'fade';
 export type OfferPlacement = 'top' | 'above_grid' | 'below_grid' | 'floating';
 export type PromoType = 'percent' | 'fixed' | 'free_delivery' | 'waive_service';
@@ -177,12 +186,33 @@ export interface CustomerProfile {
   birthYear: number;
   preferredOrderType: OrderType;
   address?: string;
+  avatarUrl?: string;
   totalOrders: number;
   loyaltyCycleOrders: number;
   firstOrderDiscountUsed: boolean;
   lastVisitAt?: unknown;
   favoriteItems: CustomerFavoriteItem[];
   lastOrderItems: CustomerLastOrderItem[];
+  createdAt?: unknown;
+  updatedAt?: unknown;
+}
+
+export interface CustomerVisitRecord {
+  id: string;
+  restaurantId: string;
+  ownerId: string;
+  customerPhone: string;
+  customerName: string;
+  hallName?: string;
+  tableNumber?: string;
+  orderType: OrderType;
+  source: 'menu' | 'pos';
+  orderId?: string;
+  orderNumber?: string;
+  startedAt: number;
+  endedAt?: number;
+  durationMinutes?: number;
+  status: 'active' | 'completed';
   createdAt?: unknown;
   updatedAt?: unknown;
 }
@@ -279,6 +309,8 @@ export interface Restaurant {
   priceColor?: string;
   menuBgColor?: string;
   menuCardBgColor?: string;
+  lightThemeColors?: ThemeModeColorSet;
+  darkThemeColors?: ThemeModeColorSet;
   menuColumns?: 1 | 2 | 3;
   taxRate: number;
   serviceCharge: number;

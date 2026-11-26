@@ -94,6 +94,8 @@ export function Flipbook3DTheme({
         headingColor: restaurant.headingColor,
         descriptionColor: restaurant.descriptionColor,
         priceColor: restaurant.priceColor,
+        lightThemeColors: restaurant.lightThemeColors,
+        darkThemeColors: restaurant.darkThemeColors,
       }),
     [
       activeColorOverride,
@@ -103,6 +105,8 @@ export function Flipbook3DTheme({
       restaurant.headingColor,
       restaurant.descriptionColor,
       restaurant.priceColor,
+      restaurant.lightThemeColors,
+      restaurant.darkThemeColors,
     ]
   );
 

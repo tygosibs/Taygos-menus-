@@ -1,4 +1,4 @@
-import { MenuColorMode } from '../types/menu';
+import { MenuColorMode, ThemeModeColorSet } from '../types/menu';
 
 export interface ResolvedMenuPalette {
   isDarkSurface: boolean;
@@ -132,6 +132,57 @@ export const CONTRAST_TYPOGRAPHY_PRESETS: TypographyPreset[] = [
   },
 ];
 
+export interface QuickColorFamily {
+  id: string;
+  labelAr: string;
+  labelEn: string;
+  shades: string[];
+}
+
+export const QUICK_COLOR_SHADES: QuickColorFamily[] = [
+  {
+    id: 'light_neutrals',
+    labelAr: 'فاتح وكريمي',
+    labelEn: 'Ivory & Light',
+    shades: ['#FFFFFF', '#FAF9F6', '#F5EFE6', '#E5E7EB', '#CBD5E1'],
+  },
+  {
+    id: 'dark_neutrals',
+    labelAr: 'داكن وليلي',
+    labelEn: 'Obsidian & Dark',
+    shades: ['#090D16', '#131A29', '#1E293B', '#334155', '#475569'],
+  },
+  {
+    id: 'gold_amber',
+    labelAr: 'ذهبي وعنبري',
+    labelEn: 'Gold & Amber',
+    shades: ['#FEF3C7', '#FDE68A', '#FBBF24', '#D97706', '#92400E'],
+  },
+  {
+    id: 'crimson_rose',
+    labelAr: 'أحمر وعنابي',
+    labelEn: 'Crimson & Berry',
+    shades: ['#FFE4E6', '#FB7185', '#DC2626', '#A61C1C', '#7F1D1D'],
+  },
+  {
+    id: 'emerald_mint',
+    labelAr: 'زمردي ونعناع',
+    labelEn: 'Emerald & Mint',
+    shades: ['#D1FAE5', '#34D399', '#10B981', '#047857', '#064E3B'],
+  },
+  {
+    id: 'sapphire_indigo',
+    labelAr: 'ياقوتي وكحلي',
+    labelEn: 'Sapphire & Navy',
+    shades: ['#DBEAFE', '#60A5FA', '#2563EB', '#1D4ED8', '#0F172A'],
+  },
+];
+
+function isDarkHexSurface(hex: string): boolean {
+  const rgb = normalizeHex(hex);
+  return Boolean(rgb && relativeLuminance(rgb) < 0.32);
+}
+
 export function resolveMenuSurfacePalette(params: {
   themeIsDark: boolean;
   colorMode?: MenuColorMode;
@@ -141,31 +192,47 @@ export function resolveMenuSurfacePalette(params: {
   priceColor?: string;
   menuBgColor?: string;
   menuCardBgColor?: string;
+  lightThemeColors?: ThemeModeColorSet;
+  darkThemeColors?: ThemeModeColorSet;
 }): ResolvedMenuPalette {
   const mode = params.colorMode || 'auto';
-  const customPageBg = isValidHexColor(params.menuBgColor) ? params.menuBgColor!.trim() : '';
-  const customCardBg = isValidHexColor(params.menuCardBgColor) ? params.menuCardBgColor!.trim() : '';
-
   const baseIsDark =
     mode === 'dark' ? true : mode === 'light' ? false : params.themeIsDark;
+
+  const modeColors = baseIsDark ? params.darkThemeColors : params.lightThemeColors;
+
+  const flatPageBg = isValidHexColor(params.menuBgColor) ? params.menuBgColor!.trim() : '';
+  const flatCardBg = isValidHexColor(params.menuCardBgColor) ? params.menuCardBgColor!.trim() : '';
+  const modePageBg = isValidHexColor(modeColors?.menuBgColor) ? modeColors!.menuBgColor!.trim() : '';
+  const modeCardBg = isValidHexColor(modeColors?.menuCardBgColor) ? modeColors!.menuCardBgColor!.trim() : '';
+
+  // When an explicit mode ('light' | 'dark') is active without mode-specific surfaces,
+  // only inherit a flat base surface color if its brightness actually matches the requested mode.
+  const compatibleFlatPageBg =
+    flatPageBg && (mode === 'auto' || isDarkHexSurface(flatPageBg) === baseIsDark)
+      ? flatPageBg
+      : '';
+  const compatibleFlatCardBg =
+    flatCardBg && (mode === 'auto' || isDarkHexSurface(flatCardBg) === baseIsDark)
+      ? flatCardBg
+      : '';
+
+  const customPageBg = modePageBg || compatibleFlatPageBg;
+  const customCardBg = modeCardBg || compatibleFlatCardBg;
 
   const pageBg = customPageBg || (baseIsDark ? '#090D16' : '#FAF9F6');
   const cardBg =
     customCardBg ||
     (customPageBg
-      ? (() => {
-          const rgb = normalizeHex(customPageBg);
-          return rgb && relativeLuminance(rgb) < 0.32 ? '#1E2534' : '#FFFFFF';
-        })()
+      ? isDarkHexSurface(customPageBg)
+        ? '#1E2534'
+        : '#FFFFFF'
       : baseIsDark
         ? '#131A29'
         : '#FFFFFF');
 
-  const cardRgb = normalizeHex(cardBg);
   const isDarkSurface =
-    customCardBg || customPageBg
-      ? Boolean(cardRgb && relativeLuminance(cardRgb) < 0.32)
-      : baseIsDark;
+    customCardBg || customPageBg ? isDarkHexSurface(customCardBg || customPageBg) : baseIsDark;
 
   const subtleBg = isDarkSurface ? 'rgba(255,255,255,0.08)' : '#F1F5F9';
   const borderColor = isDarkSurface ? 'rgba(255,255,255,0.14)' : 'rgba(15,23,42,0.12)';
@@ -180,17 +247,29 @@ export function resolveMenuSurfacePalette(params: {
     safeAccent = isDarkSurface ? '#FBBF24' : '#991B1B';
   }
 
-  const pickColor = (custom: string | undefined, fallback: string, minContrast: number) => {
-    if (!isValidHexColor(custom)) return fallback;
-    if (getContrastRatio(custom!, cardBg) < minContrast) {
-      return fallback;
+  const pickColor = (
+    modeCustom: string | undefined,
+    flatCustom: string | undefined,
+    fallback: string,
+    minContrast: number
+  ) => {
+    if (isValidHexColor(modeCustom) && getContrastRatio(modeCustom!, cardBg) >= minContrast) {
+      return modeCustom!.trim();
     }
-    return custom!.trim();
+    if (isValidHexColor(flatCustom) && getContrastRatio(flatCustom!, cardBg) >= minContrast) {
+      return flatCustom!.trim();
+    }
+    return fallback;
   };
 
-  const headingColor = pickColor(params.headingColor, defaultHeading, 4.5);
-  const descriptionColor = pickColor(params.descriptionColor, defaultDesc, 4.0);
-  const priceColor = pickColor(params.priceColor, safeAccent, 3.8);
+  const headingColor = pickColor(modeColors?.headingColor, params.headingColor, defaultHeading, 4.2);
+  const descriptionColor = pickColor(
+    modeColors?.descriptionColor,
+    params.descriptionColor,
+    defaultDesc,
+    3.6
+  );
+  const priceColor = pickColor(modeColors?.priceColor, params.priceColor, safeAccent, 3.5);
 
   return {
     isDarkSurface,

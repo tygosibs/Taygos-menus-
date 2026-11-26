@@ -22,6 +22,7 @@ import {
   ActiveTheme,
   Category,
   CustomerProfile,
+  CustomerVisitRecord,
   CustomTheme,
   GuestCheckSummary,
   Hall,
@@ -53,6 +54,7 @@ import {
   StaffAuditEventType,
   TableSession,
   TableSessionItem,
+  ThemeModeColorSet,
   UserProfile,
 } from '../types/menu';
 import {
@@ -249,6 +251,24 @@ export async function updateRestaurantActiveTheme(
   }
 }
 
+function sanitizeThemeModeColorSet(input?: ThemeModeColorSet): ThemeModeColorSet {
+  const cleanHex = (val?: string) =>
+    val && /^#[0-9a-fA-F]{6}$/.test(val.trim()) ? val.trim() : '';
+  const out: ThemeModeColorSet = {};
+  if (!input) return out;
+  const bg = cleanHex(input.menuBgColor);
+  const card = cleanHex(input.menuCardBgColor);
+  const heading = cleanHex(input.headingColor);
+  const desc = cleanHex(input.descriptionColor);
+  const price = cleanHex(input.priceColor);
+  if (bg) out.menuBgColor = bg;
+  if (card) out.menuCardBgColor = card;
+  if (heading) out.headingColor = heading;
+  if (desc) out.descriptionColor = desc;
+  if (price) out.priceColor = price;
+  return out;
+}
+
 export async function updateRestaurantThemeAndTaxes(
   restaurantId: string,
   updates: {
@@ -262,6 +282,8 @@ export async function updateRestaurantThemeAndTaxes(
     priceColor?: string;
     menuBgColor?: string;
     menuCardBgColor?: string;
+    lightThemeColors?: ThemeModeColorSet;
+    darkThemeColors?: ThemeModeColorSet;
     menuColumns?: 1 | 2 | 3;
   }
 ): Promise<void> {
@@ -292,6 +314,12 @@ export async function updateRestaurantThemeAndTaxes(
   }
   if (updates.menuCardBgColor !== undefined) {
     payload.menuCardBgColor = cleanHex(updates.menuCardBgColor);
+  }
+  if (updates.lightThemeColors !== undefined) {
+    payload.lightThemeColors = sanitizeThemeModeColorSet(updates.lightThemeColors);
+  }
+  if (updates.darkThemeColors !== undefined) {
+    payload.darkThemeColors = sanitizeThemeModeColorSet(updates.darkThemeColors);
   }
   if (updates.menuColumns !== undefined) {
     payload.menuColumns = [1, 2, 3].includes(updates.menuColumns) ? updates.menuColumns : 2;
@@ -468,6 +496,8 @@ export async function updateRestaurantSettings(
     priceColor?: string;
     menuBgColor?: string;
     menuCardBgColor?: string;
+    lightThemeColors?: ThemeModeColorSet;
+    darkThemeColors?: ThemeModeColorSet;
     menuColumns?: 1 | 2 | 3;
   }
 ): Promise<Restaurant> {
@@ -495,6 +525,14 @@ export async function updateRestaurantSettings(
     updates.menuBgColor !== undefined ? cleanHex(updates.menuBgColor) : cleanHex(restaurant.menuBgColor);
   const safeMenuCardBgColor =
     updates.menuCardBgColor !== undefined ? cleanHex(updates.menuCardBgColor) : cleanHex(restaurant.menuCardBgColor);
+  const safeLightThemeColors =
+    updates.lightThemeColors !== undefined
+      ? sanitizeThemeModeColorSet(updates.lightThemeColors)
+      : sanitizeThemeModeColorSet(restaurant.lightThemeColors);
+  const safeDarkThemeColors =
+    updates.darkThemeColors !== undefined
+      ? sanitizeThemeModeColorSet(updates.darkThemeColors)
+      : sanitizeThemeModeColorSet(restaurant.darkThemeColors);
   const cleanOwnerBirthday =
     updates.ownerBirthday !== undefined
       ? normalizeIsoBirthday(updates.ownerBirthday)
@@ -544,6 +582,8 @@ export async function updateRestaurantSettings(
       priceColor: safePriceColor,
       menuBgColor: safeMenuBgColor,
       menuCardBgColor: safeMenuCardBgColor,
+      lightThemeColors: safeLightThemeColors,
+      darkThemeColors: safeDarkThemeColors,
       menuColumns: safeMenuColumns,
       updatedAt: serverTimestamp(),
     });
@@ -567,6 +607,8 @@ export async function updateRestaurantSettings(
       priceColor: safePriceColor,
       menuBgColor: safeMenuBgColor,
       menuCardBgColor: safeMenuCardBgColor,
+      lightThemeColors: safeLightThemeColors,
+      darkThemeColors: safeDarkThemeColors,
       menuColumns: safeMenuColumns,
     };
   } catch (error) {
@@ -1231,27 +1273,31 @@ export async function updateOrderStatus(
     await updateDoc(doc(db, 'orders', orderId), payload);
 
     if (meta?.actor && meta.restaurantId && meta.ownerId) {
-      await writeStaffAuditLog({
-        restaurantId: meta.restaurantId,
-        ownerId: meta.ownerId,
-        eventType: 'order_status_updated',
-        actor: meta.actor,
-        targetUid: orderId,
-        targetName: meta.orderNumber || orderId,
-        screen: 'cashier',
-        details:
-          getActiveLang() === 'en'
-            ? `Updated order ${meta.orderNumber || ''} status to ${status}`
-            : `تحديث حالة الطلب ${meta.orderNumber || ''} إلى ${status}`,
-      });
-      if (meta.actor.role !== 'owner' && status === 'completed') {
-        void incrementActiveShiftMetric({
+      try {
+        await writeStaffAuditLog({
           restaurantId: meta.restaurantId,
-          staffUid: meta.actor.uid,
-          stationId: 'cashier',
-          field: 'ordersHandled',
-          delta: 1,
+          ownerId: meta.ownerId,
+          eventType: 'order_status_updated',
+          actor: meta.actor,
+          targetUid: orderId,
+          targetName: meta.orderNumber || orderId,
+          screen: 'cashier',
+          details:
+            getActiveLang() === 'en'
+              ? `Updated order ${meta.orderNumber || ''} status to ${status}`
+              : `تحديث حالة الطلب ${meta.orderNumber || ''} إلى ${status}`,
         });
+        if (meta.actor.role !== 'owner' && status === 'completed') {
+          void incrementActiveShiftMetric({
+            restaurantId: meta.restaurantId,
+            staffUid: meta.actor.uid,
+            stationId: 'cashier',
+            field: 'ordersHandled',
+            delta: 1,
+          });
+        }
+      } catch (auditErr) {
+        console.warn('Non-fatal order status audit warning:', auditErr);
       }
     }
   } catch (error) {
@@ -1373,30 +1419,34 @@ export async function updateOrderItemProgress(
     });
 
     if (meta?.actor && meta.restaurantId && meta.ownerId) {
-      await writeStaffAuditLog({
-        restaurantId: meta.restaurantId,
-        ownerId: meta.ownerId,
-        eventType: 'kds_item_updated',
-        actor: meta.actor,
-        targetUid: orderId,
-        targetName: meta.orderNumber || orderId,
-        screen: meta.station || 'kitchen',
-        details:
-          getActiveLang() === 'en'
-            ? `Updated item prep status in order ${meta.orderNumber || ''}`
-            : `تحديث حالة تجهيز أصناف في الطلب ${meta.orderNumber || ''}`,
-      });
-      if (meta.actor.role !== 'owner') {
-        const readyCount = Object.values(itemUpdates).filter((st) => st === 'ready').length;
-        if (readyCount > 0) {
-          void incrementActiveShiftMetric({
-            restaurantId: meta.restaurantId,
-            staffUid: meta.actor.uid,
-            stationId: meta.station,
-            field: 'itemsMarkedReady',
-            delta: readyCount,
-          });
+      try {
+        await writeStaffAuditLog({
+          restaurantId: meta.restaurantId,
+          ownerId: meta.ownerId,
+          eventType: 'kds_item_updated',
+          actor: meta.actor,
+          targetUid: orderId,
+          targetName: meta.orderNumber || orderId,
+          screen: meta.station || 'kitchen',
+          details:
+            getActiveLang() === 'en'
+              ? `Updated item prep status in order ${meta.orderNumber || ''}`
+              : `تحديث حالة تجهيز أصناف في الطلب ${meta.orderNumber || ''}`,
+        });
+        if (meta.actor.role !== 'owner') {
+          const readyCount = Object.values(itemUpdates).filter((st) => st === 'ready').length;
+          if (readyCount > 0) {
+            void incrementActiveShiftMetric({
+              restaurantId: meta.restaurantId,
+              staffUid: meta.actor.uid,
+              stationId: meta.station,
+              field: 'itemsMarkedReady',
+              delta: readyCount,
+            });
+          }
         }
+      } catch (auditErr) {
+        console.warn('Non-fatal KDS audit warning:', auditErr);
       }
     }
   } catch (error) {
@@ -1441,25 +1491,29 @@ export async function closeTableOrdersAndSession(params: {
     await batch.commit();
 
     if (params.actor && params.ownerId) {
-      await writeStaffAuditLog({
-        restaurantId: params.restaurantId,
-        ownerId: params.ownerId,
-        eventType: 'table_closed',
-        actor: params.actor,
-        targetUid: params.sessionId || '',
-        targetName: params.tableNumber
-          ? getActiveLang() === 'en'
-            ? `Table ${params.tableNumber}`
-            : `طاولة ${params.tableNumber}`
-          : getActiveLang() === 'en'
-            ? 'Table'
-            : 'طاولة',
-        screen: 'cashier',
-        details:
-          getActiveLang() === 'en'
-            ? `Closed check for ${params.hallName ? `${params.hallName} - ` : ''}Table ${params.tableNumber || ''}`
-            : `إقفال حساب ${params.hallName ? `${params.hallName} - ` : ''}طاولة ${params.tableNumber || ''}`,
-      });
+      try {
+        await writeStaffAuditLog({
+          restaurantId: params.restaurantId,
+          ownerId: params.ownerId,
+          eventType: 'table_closed',
+          actor: params.actor,
+          targetUid: params.sessionId || '',
+          targetName: params.tableNumber
+            ? getActiveLang() === 'en'
+              ? `Table ${params.tableNumber}`
+              : `طاولة ${params.tableNumber}`
+            : getActiveLang() === 'en'
+              ? 'Table'
+              : 'طاولة',
+          screen: 'cashier',
+          details:
+            getActiveLang() === 'en'
+              ? `Closed check for ${params.hallName ? `${params.hallName} - ` : ''}Table ${params.tableNumber || ''}`
+              : `إقفال حساب ${params.hallName ? `${params.hallName} - ` : ''}طاولة ${params.tableNumber || ''}`,
+        });
+      } catch (auditErr) {
+        console.warn('Non-fatal table close audit warning:', auditErr);
+      }
     }
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
@@ -1624,6 +1678,7 @@ export async function deleteRestaurantAccountCompletely(
       hallsSnap,
       sessionsSnap,
       customersSnap,
+      customerVisitsSnap,
       stationsSnap,
       staffSnap,
       invitesSnap,
@@ -1640,6 +1695,7 @@ export async function deleteRestaurantAccountCompletely(
       getDocs(query(collection(db, 'halls'), where('restaurantId', '==', restaurant.id))),
       getDocs(collection(db, 'restaurants', restaurant.id, 'table_sessions')),
       getDocs(collection(db, 'restaurants', restaurant.id, 'customers')),
+      getDocs(collection(db, 'restaurants', restaurant.id, 'customer_visits')),
       getDocs(collection(db, 'restaurants', restaurant.id, 'stations')),
       getDocs(collection(db, 'restaurants', restaurant.id, 'staff')),
       getDocs(collection(db, 'restaurants', restaurant.id, 'staff_invites')),
@@ -1658,6 +1714,7 @@ export async function deleteRestaurantAccountCompletely(
       ...hallsSnap.docs.map((d) => d.ref),
       ...sessionsSnap.docs.map((d) => d.ref),
       ...customersSnap.docs.map((d) => d.ref),
+      ...customerVisitsSnap.docs.map((d) => d.ref),
       ...stationsSnap.docs.map((d) => d.ref),
       ...staffSnap.docs.map((d) => d.ref),
       ...invitesSnap.docs.map((d) => d.ref),
@@ -2581,27 +2638,31 @@ export async function updateServiceCallStatus(
     await updateDoc(doc(db, 'service_calls', callId), payload);
 
     if (meta?.actor && meta.restaurantId && meta.ownerId) {
-      await writeStaffAuditLog({
-        restaurantId: meta.restaurantId,
-        ownerId: meta.ownerId,
-        eventType: 'service_call_handled',
-        actor: meta.actor,
-        targetUid: callId,
-        targetName: meta.tableLabel || (getActiveLang() === 'en' ? 'Table' : 'طاولة'),
-        screen: 'captain',
-        details:
-          getActiveLang() === 'en'
-            ? `Service call (${status}) — ${meta.tableLabel || ''}`
-            : `استجابة لطلب خدمة (${status}) — ${meta.tableLabel || ''}`,
-      });
-      if (meta.actor.role !== 'owner' && (status === 'acknowledged' || status === 'resolved')) {
-        void incrementActiveShiftMetric({
+      try {
+        await writeStaffAuditLog({
           restaurantId: meta.restaurantId,
-          staffUid: meta.actor.uid,
-          stationId: 'captain',
-          field: 'serviceCallsHandled',
-          delta: 1,
+          ownerId: meta.ownerId,
+          eventType: 'service_call_handled',
+          actor: meta.actor,
+          targetUid: callId,
+          targetName: meta.tableLabel || (getActiveLang() === 'en' ? 'Table' : 'طاولة'),
+          screen: 'captain',
+          details:
+            getActiveLang() === 'en'
+              ? `Service call (${status}) — ${meta.tableLabel || ''}`
+              : `استجابة لطلب خدمة (${status}) — ${meta.tableLabel || ''}`,
         });
+        if (meta.actor.role !== 'owner' && (status === 'acknowledged' || status === 'resolved')) {
+          void incrementActiveShiftMetric({
+            restaurantId: meta.restaurantId,
+            staffUid: meta.actor.uid,
+            stationId: 'captain',
+            field: 'serviceCallsHandled',
+            delta: 1,
+          });
+        }
+      } catch (auditErr) {
+        console.warn('Non-fatal service call audit warning:', auditErr);
       }
     }
   } catch (error) {
@@ -2775,6 +2836,7 @@ export async function registerOrUpdateCustomerProfile(input: {
   birthYear: number;
   preferredOrderType: OrderType;
   address?: string;
+  avatarUrl?: string;
 }): Promise<CustomerProfile> {
   const isEn = getActiveLang() === 'en';
   const cleanPhone = normalizeCustomerPhone(input.phone);
@@ -2795,6 +2857,8 @@ export async function registerOrUpdateCustomerProfile(input: {
       ? input.preferredOrderType
       : 'dine_in';
   const cleanAddress = (input.address || '').trim().slice(0, 300);
+  const cleanAvatarUrl =
+    input.avatarUrl !== undefined ? input.avatarUrl.trim().slice(0, 300000) : undefined;
   const path = `restaurants/${input.restaurantId}/customers/${cleanPhone}`;
 
   try {
@@ -2823,9 +2887,12 @@ export async function registerOrUpdateCustomerProfile(input: {
         if (cleanAddress) {
           createPayload.address = cleanAddress;
         }
+        if (cleanAvatarUrl) {
+          createPayload.avatarUrl = cleanAvatarUrl;
+        }
         tx.set(ref, createPayload);
       } else {
-        tx.update(ref, {
+        const updatePayload: Record<string, unknown> = {
           fullName: cleanName,
           birthDay: safeDay,
           birthMonth: safeMonth,
@@ -2833,7 +2900,11 @@ export async function registerOrUpdateCustomerProfile(input: {
           preferredOrderType: safeOrderType,
           address: cleanAddress,
           updatedAt: serverTimestamp(),
-        });
+        };
+        if (cleanAvatarUrl !== undefined) {
+          updatePayload.avatarUrl = cleanAvatarUrl;
+        }
+        tx.update(ref, updatePayload);
       }
     });
 
@@ -2853,6 +2924,7 @@ export async function registerOrUpdateCustomerProfile(input: {
       birthYear: safeYear,
       preferredOrderType: safeOrderType,
       ...(cleanAddress ? { address: cleanAddress } : {}),
+      ...(cleanAvatarUrl ? { avatarUrl: cleanAvatarUrl } : {}),
       totalOrders: 0,
       loyaltyCycleOrders: 0,
       firstOrderDiscountUsed: false,
@@ -2980,6 +3052,198 @@ export function subscribeRestaurantCustomers(
         );
       } else {
         handleFirestoreError(error, OperationType.LIST, path);
+      }
+    }
+  );
+}
+
+export async function updateCustomerAvatar(input: {
+  restaurantId: string;
+  phone: string;
+  avatarUrl: string;
+}): Promise<string> {
+  const cleanPhone = normalizeCustomerPhone(input.phone);
+  if (cleanPhone.length < 6 || cleanPhone.length > 24) {
+    throw new Error(getActiveLang() === 'en' ? 'Invalid phone number.' : 'رقم الهاتف غير صالح.');
+  }
+  const cleanAvatar = input.avatarUrl.trim().slice(0, 300000);
+  const path = `restaurants/${input.restaurantId}/customers/${cleanPhone}`;
+  try {
+    await updateDoc(doc(db, 'restaurants', input.restaurantId, 'customers', cleanPhone), {
+      avatarUrl: cleanAvatar,
+      updatedAt: serverTimestamp(),
+    });
+    return cleanAvatar;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function startOrSyncCustomerVisit(input: {
+  restaurantId: string;
+  ownerId: string;
+  visitId?: string;
+  customerPhone?: string;
+  customerName: string;
+  hallName?: string;
+  tableNumber?: string;
+  orderType: OrderType;
+  source: 'menu' | 'pos';
+  orderId?: string;
+  orderNumber?: string;
+  status?: 'active' | 'completed';
+}): Promise<string> {
+  const visitId = (input.visitId || makeId('visit')).slice(0, 64);
+  const cleanPhone = normalizeCustomerPhone(input.customerPhone || '').slice(0, 24);
+  const cleanName = (input.customerName || (getActiveLang() === 'en' ? 'Guest' : 'زائر')).trim().slice(0, 100);
+  const cleanHall = (input.hallName || '').trim().slice(0, 80);
+  const cleanTable = (input.tableNumber || '').trim().slice(0, 20);
+  const safeOrderType: OrderType =
+    input.orderType === 'delivery' || input.orderType === 'pickup' ? input.orderType : 'dine_in';
+  const safeSource: 'menu' | 'pos' = input.source === 'pos' ? 'pos' : 'menu';
+  const safeStatus: 'active' | 'completed' = input.status === 'completed' ? 'completed' : 'active';
+  const nowMs = Date.now();
+  const ref = doc(db, 'restaurants', input.restaurantId, 'customer_visits', visitId);
+  const path = `restaurants/${input.restaurantId}/customer_visits/${visitId}`;
+
+  try {
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists()) {
+        const payload: Record<string, unknown> = {
+          id: visitId,
+          restaurantId: input.restaurantId,
+          ownerId: input.ownerId,
+          customerPhone: cleanPhone,
+          customerName: cleanName,
+          hallName: cleanHall,
+          tableNumber: cleanTable,
+          orderType: safeOrderType,
+          source: safeSource,
+          orderId: (input.orderId || '').slice(0, 64),
+          orderNumber: (input.orderNumber || '').slice(0, 40),
+          startedAt: nowMs,
+          durationMinutes: safeStatus === 'completed' ? 1 : 0,
+          status: safeStatus,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        };
+        if (safeStatus === 'completed') {
+          payload.endedAt = nowMs;
+        }
+        tx.set(ref, payload);
+      } else {
+        const existing = snap.data() as CustomerVisitRecord;
+        const startedAt = Number(existing.startedAt) || nowMs;
+        const durationMinutes = Math.max(0, Math.round((nowMs - startedAt) / 60000));
+        const updatePayload: Record<string, unknown> = {
+          customerPhone: cleanPhone || existing.customerPhone || '',
+          customerName: cleanName || existing.customerName || 'Guest',
+          hallName: cleanHall,
+          tableNumber: cleanTable,
+          orderType: safeOrderType,
+          durationMinutes,
+          status: safeStatus,
+          updatedAt: serverTimestamp(),
+        };
+        if (input.orderId) updatePayload.orderId = input.orderId.slice(0, 64);
+        if (input.orderNumber) updatePayload.orderNumber = input.orderNumber.slice(0, 40);
+        if (safeStatus === 'completed') {
+          updatePayload.endedAt = nowMs;
+        }
+        tx.update(ref, updatePayload);
+      }
+    });
+    return visitId;
+  } catch (error) {
+    console.warn('Customer visit sync warning:', path, error);
+    return visitId;
+  }
+}
+
+export async function endCustomerVisit(input: {
+  restaurantId: string;
+  visitId: string;
+  startedAt?: number;
+}): Promise<void> {
+  if (!input.visitId.trim()) return;
+  const nowMs = Date.now();
+  const ref = doc(db, 'restaurants', input.restaurantId, 'customer_visits', input.visitId.trim());
+  try {
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists()) return;
+      const existing = snap.data() as CustomerVisitRecord;
+      const startedAt = Number(existing.startedAt || input.startedAt) || nowMs;
+      const durationMinutes = Math.max(1, Math.round((nowMs - startedAt) / 60000));
+      tx.update(ref, {
+        endedAt: nowMs,
+        durationMinutes,
+        status: 'completed',
+        updatedAt: serverTimestamp(),
+      });
+    });
+  } catch (error) {
+    console.warn('End customer visit warning:', error);
+  }
+}
+
+export function subscribeCustomerVisitsByPhone(
+  restaurantId: string,
+  rawPhone: string,
+  onData: (visits: CustomerVisitRecord[]) => void
+): () => void {
+  const cleanPhone = normalizeCustomerPhone(rawPhone);
+  if (cleanPhone.length < 6 || cleanPhone.length > 24) {
+    onData([]);
+    return () => {};
+  }
+  const q = query(
+    collection(db, 'restaurants', restaurantId, 'customer_visits'),
+    where('customerPhone', '==', cleanPhone)
+  );
+  return onSnapshot(
+    q,
+    (snap) => {
+      const list = snap.docs
+        .map((d) => ({ ...(d.data() as CustomerVisitRecord), id: d.id }))
+        .sort((a, b) => (Number(b.startedAt) || 0) - (Number(a.startedAt) || 0));
+      onData(list);
+    },
+    () => {
+      onData([]);
+    }
+  );
+}
+
+export function subscribeRestaurantCustomerVisits(
+  restaurantId: string,
+  ownerId: string,
+  onData: (visits: CustomerVisitRecord[]) => void,
+  onError?: (err: Error) => void
+): () => void {
+  const path = `restaurants/${restaurantId}/customer_visits`;
+  const q = query(
+    collection(db, 'restaurants', restaurantId, 'customer_visits'),
+    where('ownerId', '==', ownerId)
+  );
+  return onSnapshot(
+    q,
+    (snap) => {
+      const list = snap.docs
+        .map((d) => ({ ...(d.data() as CustomerVisitRecord), id: d.id }))
+        .sort((a, b) => (Number(b.startedAt) || 0) - (Number(a.startedAt) || 0));
+      onData(list);
+    },
+    (error) => {
+      if (onError) {
+        onError(
+          error instanceof Error
+            ? error
+            : new Error(getActiveLang() === 'en' ? 'Failed to load customer visits' : 'تعذر تحميل سجل الزيارات')
+        );
+      } else {
+        console.warn('Customer visits list warning:', path, error);
       }
     }
   );
