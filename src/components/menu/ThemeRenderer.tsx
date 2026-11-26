@@ -109,6 +109,8 @@ export function ThemeRenderer({
         themeIsDark: themeDefaultIsDark,
         colorMode: activeColorMode,
         primaryColor: restaurant.primaryColor,
+        menuBgColor: restaurant.menuBgColor,
+        menuCardBgColor: restaurant.menuCardBgColor,
         headingColor: restaurant.headingColor,
         descriptionColor: restaurant.descriptionColor,
         priceColor: restaurant.priceColor,
@@ -117,6 +119,8 @@ export function ThemeRenderer({
       themeDefaultIsDark,
       activeColorMode,
       restaurant.primaryColor,
+      restaurant.menuBgColor,
+      restaurant.menuCardBgColor,
       restaurant.headingColor,
       restaurant.descriptionColor,
       restaurant.priceColor,
@@ -125,7 +129,13 @@ export function ThemeRenderer({
 
   const hasCustomSurfaceOverride =
     activeColorMode !== 'auto' ||
-    Boolean(restaurant.headingColor || restaurant.descriptionColor || restaurant.priceColor);
+    Boolean(
+      restaurant.menuBgColor ||
+        restaurant.menuCardBgColor ||
+        restaurant.headingColor ||
+        restaurant.descriptionColor ||
+        restaurant.priceColor
+    );
 
   const handleToggleContrast = () => {
     const next = cycleColorMode(activeColorMode, themeDefaultIsDark);

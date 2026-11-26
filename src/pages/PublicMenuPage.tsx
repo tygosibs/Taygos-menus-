@@ -1149,17 +1149,32 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
         </div>
       )}
 
-      <TableServiceBar
-        restaurant={restaurant}
-        hallName={hallName}
-        tableNumber={tableNumber}
-        guestName={guestName}
-        activeGuests={tableSession?.guests || (guestName ? [guestName] : [])}
-        isDarkSurface={isDarkSurface}
-        isDemoMode={isDemoMode}
-        onEditGuestOrTable={() => setGuestModalOpen(true)}
-        onSendServiceCall={handleSendServiceCall}
-      />
+      {(() => {
+        const guestSet = new Map<string, string>();
+        const pushG = (raw?: string) => {
+          const clean = (raw || '').trim();
+          if (clean && !guestSet.has(clean.toLowerCase())) {
+            guestSet.set(clean.toLowerCase(), clean);
+          }
+        };
+        (tableSession?.guests || []).forEach(pushG);
+        (tableSession?.items || []).forEach((it) => pushG(it.guestName));
+        if (guestName) pushG(guestName);
+        const resolvedActiveGuests = Array.from(guestSet.values());
+        return (
+          <TableServiceBar
+            restaurant={restaurant}
+            hallName={hallName}
+            tableNumber={tableNumber}
+            guestName={guestName}
+            activeGuests={resolvedActiveGuests}
+            isDarkSurface={isDarkSurface}
+            isDemoMode={isDemoMode}
+            onEditGuestOrTable={() => setGuestModalOpen(true)}
+            onSendServiceCall={handleSendServiceCall}
+          />
+        );
+      })()}
 
       <LoyaltyBar
         restaurant={restaurant}
@@ -1241,6 +1256,7 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
         categories={categories}
         stations={effectiveStations}
         allItems={items}
+        halls={halls}
         isDemoMode={isDemoMode}
         prefillPromoCode={prefillPromoCode}
         customerProfile={customerProfile}
@@ -1254,7 +1270,19 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
         tableNumber={tableNumber}
         sessionId={sessionId}
         guestName={guestName}
-        activeGuests={tableSession?.guests || (guestName ? [guestName] : [])}
+        activeGuests={(() => {
+          const guestSet = new Map<string, string>();
+          const pushG = (raw?: string) => {
+            const clean = (raw || '').trim();
+            if (clean && !guestSet.has(clean.toLowerCase())) {
+              guestSet.set(clean.toLowerCase(), clean);
+            }
+          };
+          (tableSession?.guests || []).forEach(pushG);
+          (tableSession?.items || []).forEach((it) => pushG(it.guestName));
+          if (guestName) pushG(guestName);
+          return Array.from(guestSet.values());
+        })()}
         onRequestGuestOrTable={() => setGuestModalOpen(true)}
         onTableOrderSubmitted={handleTableOrderSubmitted}
         onClose={() => setCartOpen(false)}

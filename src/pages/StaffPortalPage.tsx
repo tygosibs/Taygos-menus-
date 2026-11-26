@@ -3,6 +3,8 @@ import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
 import {
   AlertCircle,
+  ArrowLeft,
+  ArrowRight,
   BellRing,
   BookOpen,
   Briefcase,
@@ -12,6 +14,7 @@ import {
   EyeOff,
   FileSpreadsheet,
   HeartHandshake,
+  Home,
   KeyRound,
   Layers,
   LayoutGrid,
@@ -264,7 +267,17 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
   } | null>(null);
   const [showUserGuide, setShowUserGuide] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [navHistory, setNavHistory] = useState<Array<{ navId: string; showGuide: boolean }>>([]);
   const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
+
+  const scrollStaffTop = () => {
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+      window.requestAnimationFrame(() =>
+        window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior })
+      );
+    }
+  };
 
   const [dynamicStations, setDynamicStations] = useState<RestaurantStation[]>([]);
   const [myActiveShifts, setMyActiveShifts] = useState<StaffShift[]>([]);
@@ -608,20 +621,21 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
 
   const handleScreenChange = (
     scr: StaffScreen,
-    opts?: { supervisory?: boolean; coveringStaffName?: string; captainScreenId?: string }
+    opts?: { supervisory?: boolean; coveringStaffName?: string; captainScreenId?: string; skipScroll?: boolean }
   ) => {
     if (!restaurant || !staff) return;
     const effPerms = resolveEffectiveStaffPermissions(staff, managerPerms);
     const effective = computeEffectiveStaffScreens(staff, effPerms, effectiveStations);
     if (!effective.includes(scr)) return;
     setShowUserGuide(false);
+    setMobileSidebarOpen(false);
     setActiveScreen(scr);
     if (opts?.captainScreenId) {
       setActiveCaptainScreenId(opts.captainScreenId);
     }
     setStationCreateIntent(null);
     setManagerMode('screen');
-    if (opts) {
+    if (opts && (opts.supervisory !== undefined || opts.coveringStaffName)) {
       setSupervisoryOverride({
         screen: scr,
         supervisory: opts.supervisory,
@@ -631,6 +645,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
       setSupervisoryOverride(null);
     }
     saveStaffScreen(restaurant.id, staff.uid, scr);
+    if (!opts?.skipScroll) scrollStaffTop();
   };
 
   const openManagerAddScreen = (
@@ -665,6 +680,8 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
       setActiveScreen('stations');
       setManagerMode('screen');
     }
+    setMobileSidebarOpen(false);
+    scrollStaffTop();
   };
 
   const handleForcedPasswordSubmit = async (e: FormEvent) => {
@@ -1288,13 +1305,24 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
     };
   };
 
-  const navigateStaffNavId = (navId: string) => {
+  const activeNavId =
+    isManager && managerMode !== 'screen' ? managerMode : safeCurrentScreen;
+  const defaultHomeNavId = isManager
+    ? 'supervision'
+    : orderedManagerNavIds[0] || safeCurrentScreen;
+
+  const navigateStaffNavId = (navId: string, opts?: { pushHistory?: boolean }) => {
+    const pushHistory = opts?.pushHistory ?? true;
+    if (pushHistory && (showUserGuide || navId !== activeNavId)) {
+      setNavHistory((prev) => [...prev.slice(-14), { navId: activeNavId, showGuide: showUserGuide }]);
+    }
     setShowUserGuide(false);
     setMobileSidebarOpen(false);
     if (isManager && navId === 'supervision') {
       setStationCreateIntent(null);
       setManagerMode('supervision');
       setSupervisoryOverride(null);
+      scrollStaffTop();
       return;
     }
     const scr = navId as StaffScreen;
@@ -1306,13 +1334,42 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
       setManagerMode(scr);
       setSupervisoryOverride(null);
       setActiveScreen(scr);
+      scrollStaffTop();
     } else {
       handleScreenChange(scr);
     }
   };
 
-  const activeNavId =
-    isManager && managerMode !== 'screen' ? managerMode : safeCurrentScreen;
+  const openStaffUserGuide = () => {
+    if (!showUserGuide) {
+      setNavHistory((prev) => [...prev.slice(-14), { navId: activeNavId, showGuide: false }]);
+    }
+    setShowUserGuide(true);
+    setMobileSidebarOpen(false);
+    scrollStaffTop();
+  };
+
+  const handleBackStaffNav = () => {
+    setMobileSidebarOpen(false);
+    if (navHistory.length > 0) {
+      const prev = navHistory[navHistory.length - 1];
+      setNavHistory((arr) => arr.slice(0, -1));
+      if (prev.showGuide) {
+        setShowUserGuide(true);
+        scrollStaffTop();
+      } else {
+        navigateStaffNavId(prev.navId, { pushHistory: false });
+      }
+    } else if (showUserGuide || activeNavId !== defaultHomeNavId) {
+      navigateStaffNavId(defaultHomeNavId, { pushHistory: false });
+    }
+  };
+
+  const handleGoStaffHome = () => {
+    setNavHistory([]);
+    navigateStaffNavId(defaultHomeNavId, { pushHistory: false });
+  };
+
   const activeNavMeta = getStaffNavMeta(activeNavId);
 
   const staffRoleDisplayAr =
@@ -1983,53 +2040,99 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
               </div>
 
               <div className="flex items-center gap-1.5 shrink-0">
-                <LanguageToggleButton variant={portalTheme.isDarkShell ? 'dark' : 'light'} compact />
+                {(navHistory.length > 0 || showUserGuide || activeNavId !== defaultHomeNavId) && (
+                  <button
+                    type="button"
+                    onClick={handleBackStaffNav}
+                    className={`min-h-[40px] px-2.5 py-1.5 border text-xs font-bold inline-flex items-center gap-1 cursor-pointer ${activePortalUi.radiusClasses.button}`}
+                    style={{
+                      backgroundColor: portalTheme.surfaceSubtleBg,
+                      borderColor: portalTheme.surfaceBorder,
+                      color: portalTheme.headerText,
+                    }}
+                  >
+                    {dir === 'rtl' ? <ArrowRight className="w-3.5 h-3.5 shrink-0" /> : <ArrowLeft className="w-3.5 h-3.5 shrink-0" />}
+                    <span>{isEn ? 'Back' : 'رجوع'}</span>
+                  </button>
+                )}
+                {(showUserGuide || activeNavId !== defaultHomeNavId) && (
+                  <button
+                    type="button"
+                    onClick={handleGoStaffHome}
+                    className={`min-h-[40px] px-2.5 py-1.5 border text-xs font-bold inline-flex items-center gap-1 cursor-pointer ${activePortalUi.radiusClasses.button}`}
+                    style={{
+                      backgroundColor: portalTheme.surfaceSubtleBg,
+                      borderColor: portalTheme.surfaceBorder,
+                      color: portalTheme.headerText,
+                    }}
+                  >
+                    <Home className="w-3.5 h-3.5 shrink-0" />
+                    <span className="hidden sm:inline">{t.nav.home}</span>
+                  </button>
+                )}
+                <div className="hidden lg:block">
+                  <LanguageToggleButton variant={portalTheme.isDarkShell ? 'dark' : 'light'} compact />
+                </div>
                 <button
                   type="button"
-                  onClick={() => setMobileSidebarOpen((v) => !v)}
+                  onClick={() => setMobileSidebarOpen(true)}
                   aria-label={isEn ? 'Open Sidebar Menu' : 'فتح القائمة الجانبية'}
-                  className={`lg:hidden min-h-[44px] px-3 py-2 border text-xs font-extrabold inline-flex items-center gap-1.5 cursor-pointer ${activePortalUi.radiusClasses.button}`}
+                  className={`lg:hidden min-h-[42px] px-3 py-2 border text-xs font-extrabold inline-flex items-center gap-1.5 cursor-pointer ${activePortalUi.radiusClasses.button}`}
                   style={{
-                    backgroundColor: mobileSidebarOpen ? portalTheme.accentHex : portalTheme.surfaceSubtleBg,
-                    borderColor: mobileSidebarOpen ? portalTheme.accentHex : portalTheme.surfaceBorder,
-                    color: mobileSidebarOpen ? portalTheme.accentTextHex : portalTheme.headerText,
+                    backgroundColor: portalTheme.accentHex,
+                    borderColor: portalTheme.accentHex,
+                    color: portalTheme.accentTextHex,
                   }}
                 >
-                  {mobileSidebarOpen ? <X className="w-4 h-4 shrink-0" /> : <Menu className="w-4 h-4 shrink-0" />}
+                  <Menu className="w-4 h-4 shrink-0" />
                   <span>{isEn ? 'Menu' : 'القائمة'}</span>
                 </button>
               </div>
             </div>
+          </div>
+        </header>
 
-            {/* Mobile Full Sidebar Drawer (< lg) */}
-            {mobileSidebarOpen && (
-              <div
-                className={`lg:hidden border p-3.5 space-y-3 ${activePortalUi.radiusClasses.card}`}
-                style={{
-                  backgroundColor: portalTheme.sidebarBg,
-                  borderColor: portalTheme.sidebarBorder,
-                  color: portalTheme.sidebarText,
-                }}
-              >
-                <div
-                  className={`p-3 border space-y-0.5 ${activePortalUi.radiusClasses.card}`}
-                  style={{
-                    backgroundColor: portalTheme.isDarkShell
-                      ? 'rgba(255,255,255,0.06)'
-                      : portalTheme.surfaceSubtleBg,
-                    borderColor: portalTheme.sidebarBorder,
-                  }}
-                >
-                  <p className="text-xs font-extrabold" style={{ color: getSidebarHighlightHex(portalTheme) }}>
-                    {isEn ? staffRoleDisplayEn : staffRoleDisplayAr}
-                  </p>
-                  <p className="text-xs font-semibold" style={{ color: portalTheme.sidebarText }}>
-                    {staff.name}
-                    {staff.hallName ? ` · ${isEn ? 'Hall:' : 'الصالة:'} ${staff.hallName}` : ''}
-                  </p>
+        {/* Mobile Slide-Over Sidebar Drawer (< lg) */}
+        {mobileSidebarOpen && (
+          <div
+            className="print:hidden fixed inset-0 z-50 lg:hidden flex"
+            onClick={() => setMobileSidebarOpen(false)}
+          >
+            <div className="fixed inset-0 bg-black/55 backdrop-blur-xs" />
+            <div
+              dir={dir}
+              onClick={(e) => e.stopPropagation()}
+              className="relative z-10 w-[86%] max-w-xs h-full overflow-y-auto shadow-2xl flex flex-col justify-between p-4 space-y-4"
+              style={{
+                backgroundColor: portalTheme.sidebarBg,
+                color: portalTheme.sidebarText,
+              }}
+            >
+              <div className="space-y-4">
+                <div className="flex items-center justify-between gap-2 pb-2 border-b" style={{ borderColor: portalTheme.sidebarBorder }}>
+                  <div className="min-w-0">
+                    <p className="text-xs font-extrabold truncate" style={{ color: getSidebarHighlightHex(portalTheme) }}>
+                      {isEn ? staffRoleDisplayEn : staffRoleDisplayAr}
+                    </p>
+                    <p className="text-xs font-bold truncate" style={{ color: portalTheme.sidebarText }}>
+                      {staff.name}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <LanguageToggleButton variant={portalTheme.isDarkShell ? 'dark' : 'light'} compact />
+                    <button
+                      type="button"
+                      onClick={() => setMobileSidebarOpen(false)}
+                      aria-label={isEn ? 'Close Menu' : 'إغلاق القائمة'}
+                      className={`w-10 h-10 border flex items-center justify-center cursor-pointer ${activePortalUi.radiusClasses.button}`}
+                      style={{ borderColor: portalTheme.sidebarBorder, color: portalTheme.sidebarText }}
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <div className="flex flex-col gap-1.5">
                   {orderedManagerNavIds.map((navId) => {
                     const navMeta = getStaffNavMeta(navId);
                     const Icon = navMeta.icon;
@@ -2039,7 +2142,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
                         key={`drawer_${navId}`}
                         type="button"
                         onClick={() => navigateStaffNavId(navId)}
-                        className={`min-h-[44px] flex items-center justify-start gap-2 px-3 py-2 text-xs font-bold leading-snug text-start cursor-pointer ${activePortalUi.radiusClasses.button}`}
+                        className={`min-h-[44px] flex items-center justify-start gap-2.5 px-3 py-2 text-xs font-bold leading-snug text-start cursor-pointer ${activePortalUi.radiusClasses.button}`}
                         style={
                           isActive
                             ? {
@@ -2061,96 +2164,48 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
                       </button>
                     );
                   })}
-                </div>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowUserGuide(true);
-                    setMobileSidebarOpen(false);
-                  }}
-                  className={`w-full min-h-[44px] flex items-center justify-start gap-2 px-3 py-2 text-xs font-extrabold text-start cursor-pointer border ${activePortalUi.radiusClasses.button}`}
-                  style={
-                    showUserGuide
-                      ? {
-                          backgroundColor: portalTheme.sidebarActiveBg,
-                          borderColor: portalTheme.sidebarActiveBg,
-                          color: portalTheme.sidebarActiveText,
-                        }
-                      : {
-                          backgroundColor: portalTheme.isDarkShell
-                            ? 'rgba(255,255,255,0.06)'
-                            : portalTheme.surfaceSubtleBg,
-                          borderColor: portalTheme.sidebarBorder,
-                          color: portalTheme.sidebarText,
-                        }
-                  }
-                >
-                  <BookOpen className="w-4 h-4 shrink-0" />
-                  <span>{isEn ? 'Smart User Guide' : 'دليل الاستخدام الذكي'}</span>
-                </button>
-              </div>
-            )}
-
-            {/* Mobile Navigation Strip (includes screens + User Guide) */}
-            <div className="flex lg:hidden items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 max-w-full">
-              {orderedManagerNavIds.map((navId) => {
-                const navMeta = getStaffNavMeta(navId);
-                const Icon = navMeta.icon;
-                const isActive = !showUserGuide && activeNavId === navId;
-                return (
                   <button
-                    key={navId}
                     type="button"
-                    onClick={() => navigateStaffNavId(navId)}
-                    className={`min-h-[44px] px-3.5 py-2 text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors border ${activePortalUi.radiusClasses.button}`}
+                    onClick={openStaffUserGuide}
+                    className={`w-full min-h-[44px] flex items-center justify-start gap-2.5 px-3 py-2 text-xs font-extrabold text-start cursor-pointer border ${activePortalUi.radiusClasses.button}`}
                     style={
-                      isActive
+                      showUserGuide
                         ? {
-                            backgroundColor: portalTheme.accentHex,
-                            borderColor: portalTheme.accentHex,
-                            color: portalTheme.accentTextHex,
+                            backgroundColor: portalTheme.sidebarActiveBg,
+                            borderColor: portalTheme.sidebarActiveBg,
+                            color: portalTheme.sidebarActiveText,
                           }
                         : {
-                            backgroundColor: portalTheme.surfaceSubtleBg,
-                            borderColor: portalTheme.surfaceBorder,
-                            color: portalTheme.surfaceText,
+                            backgroundColor: portalTheme.isDarkShell
+                              ? 'rgba(255,255,255,0.06)'
+                              : portalTheme.surfaceSubtleBg,
+                            borderColor: portalTheme.sidebarBorder,
+                            color: portalTheme.sidebarText,
                           }
                     }
                   >
-                    <Icon className="w-3.5 h-3.5 shrink-0" />
-                    <span>{isEn ? navMeta.labelEn : navMeta.labelAr}</span>
+                    <BookOpen className="w-4 h-4 shrink-0" />
+                    <span>{isEn ? 'Smart User Guide' : 'دليل الاستخدام الذكي'}</span>
                   </button>
-                );
-              })}
+                </div>
+              </div>
 
               <button
                 type="button"
                 onClick={() => {
-                  setShowUserGuide(true);
                   setMobileSidebarOpen(false);
+                  setSignOutConfirmOpen(true);
                 }}
-                className={`min-h-[44px] px-3.5 py-2 text-xs font-extrabold inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors border ${activePortalUi.radiusClasses.button}`}
-                style={
-                  showUserGuide
-                    ? {
-                        backgroundColor: portalTheme.accentHex,
-                        borderColor: portalTheme.accentHex,
-                        color: portalTheme.accentTextHex,
-                      }
-                    : {
-                        backgroundColor: portalTheme.surfaceSubtleBg,
-                        borderColor: portalTheme.surfaceBorder,
-                        color: portalTheme.surfaceText,
-                      }
-                }
+                className={`w-full min-h-[44px] py-2 px-3 border text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer ${activePortalUi.radiusClasses.button}`}
+                style={{ borderColor: portalTheme.sidebarBorder, color: portalTheme.sidebarText }}
               >
-                <BookOpen className="w-3.5 h-3.5 shrink-0" />
-                <span>{isEn ? 'User Guide' : 'دليل الاستخدام'}</span>
+                <LogOut className="w-4 h-4 shrink-0" />
+                <span>{t.admin.signOut}</span>
               </button>
             </div>
           </div>
-        </header>
+        )}
 
         {/* Isolated Screen Body */}
         <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 space-y-4">

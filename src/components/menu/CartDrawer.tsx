@@ -30,13 +30,23 @@ import {
   saveCustomerPhone,
   saveDemoCustomerProfile,
 } from '../../lib/customerLoyaltyUtils';
-import { recordCustomerOrderLoyalty, submitPublicOrder } from '../../lib/firestoreService';
+import {
+  recordCustomerOrderLoyalty,
+  registerGuestInTableSession,
+  submitPublicOrder,
+} from '../../lib/firestoreService';
 import { getDefaultFallbackStationId, resolveMenuItemStations, StationMeta } from '../../lib/stationUtils';
-import { computeSeparateChecks } from '../../lib/tableSessionUtils';
+import {
+  buildTableSessionId,
+  computeSeparateChecks,
+  normalizeHallName,
+  normalizeTableNumber,
+} from '../../lib/tableSessionUtils';
 import {
   CartItem,
   Category,
   CustomerProfile,
+  Hall,
   LoyaltyConfig,
   MenuItem,
   OrderItemPayload,
@@ -53,6 +63,7 @@ interface CartDrawerProps {
   categories?: Category[];
   stations?: StationMeta[];
   allItems?: MenuItem[];
+  halls?: Hall[];
   isDemoMode: boolean;
   prefillPromoCode?: string | null;
   customerProfile?: CustomerProfile | null;
@@ -138,6 +149,7 @@ export function CartDrawer({
   categories,
   allItems,
   stations = [],
+  halls = [],
   isDemoMode,
   prefillPromoCode,
   customerProfile = null,
@@ -158,6 +170,7 @@ export function CartDrawer({
   onQuickAddItem,
 }: CartDrawerProps) {
   const { lang, dir, isRtl, t, loc, formatCurrency } = useLanguage();
+  const isEn = lang === 'en';
   const initialTable =
     activeTableNumber ||
     (typeof window !== 'undefined'
@@ -172,6 +185,7 @@ export function CartDrawer({
   const [customerName, setCustomerName] = useState(draft.customerName);
   const [customerPhone, setCustomerPhone] = useState(draft.customerPhone);
   const [orderType, setOrderType] = useState<OrderType>(draft.orderType);
+  const [manualHallName, setManualHallName] = useState<string>(() => hallName || halls[0]?.name || '');
   const [tableNumber, setTableNumber] = useState(draft.tableNumber);
   const [deliveryAddress, setDeliveryAddress] = useState(draft.deliveryAddress);
   const [notes, setNotes] = useState(draft.notes);
@@ -710,18 +724,42 @@ export function CartDrawer({
             : undefined;
 
       if (!isDemoMode) {
+        const normalizedTbl =
+          orderType === 'dine_in' ? normalizeTableNumber(tableNumber) : '';
+        const resolvedHall =
+          orderType === 'dine_in'
+            ? normalizeHallName(hallName || manualHallName || halls[0]?.name || '')
+            : '';
+        const effectiveSessionId =
+          orderType === 'dine_in' && (sessionId || normalizedTbl)
+            ? sessionId || buildTableSessionId(resolvedHall, normalizedTbl)
+            : undefined;
+        const resolvedIsGroup =
+          orderType === 'dine_in' && Boolean(effectiveSessionId || isGroupTableMode);
+
+        if (orderType === 'dine_in' && effectiveSessionId && normalizedTbl && !sessionId) {
+          await registerGuestInTableSession({
+            restaurantId: restaurant.id,
+            ownerId: restaurant.ownerId,
+            sessionId: effectiveSessionId,
+            hallName: resolvedHall,
+            tableNumber: normalizedTbl,
+            guestName: customerName.trim() || guestName.trim() || (isEn ? 'Guest' : 'ضيف'),
+          }).catch(() => {});
+        }
+
         const res = await submitPublicOrder({
           restaurantId: restaurant.id,
           ownerId: restaurant.ownerId,
           customerName: resolvedName,
           customerPhone: customerPhone.trim(),
           orderType,
-          hallName: orderType === 'dine_in' && hallName.trim() ? hallName.trim() : undefined,
+          hallName: orderType === 'dine_in' && resolvedHall ? resolvedHall : undefined,
           tableNumber:
-            orderType === 'dine_in' && tableNumber.trim() ? tableNumber.trim() : undefined,
-          sessionId: isGroupTableMode && sessionId ? sessionId : undefined,
-          isGroupOrder: isGroupTableMode,
-          guestChecks: isGroupTableMode ? separateChecks.groups.map((g) => g.summary) : undefined,
+            orderType === 'dine_in' && normalizedTbl ? normalizedTbl : undefined,
+          sessionId: effectiveSessionId,
+          isGroupOrder: resolvedIsGroup,
+          guestChecks: resolvedIsGroup ? separateChecks.groups.map((g) => g.summary) : undefined,
           deliveryAddress:
             orderType === 'delivery' && deliveryAddress.trim()
               ? deliveryAddress.trim()
@@ -1400,17 +1438,37 @@ export function CartDrawer({
                 </div>
 
                 {orderType === 'dine_in' && (
-                  <div>
-                    <label className="block text-xs font-semibold text-stone-600 mb-1">
-                      {lang === 'en' ? 'Table Number (optional)' : 'رقم الطاولة (اختياري)'}
-                    </label>
-                    <input
-                      type="text"
-                      value={tableNumber}
-                      onChange={(e) => setTableNumber(e.target.value)}
-                      placeholder={lang === 'en' ? 'e.g. 7' : 'مثال: 7'}
-                      className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-sm focus:outline-none focus:border-stone-400"
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {!hallName && halls.length > 0 && (
+                      <div>
+                        <label className="block text-xs font-semibold text-stone-600 mb-1">
+                          {lang === 'en' ? 'Hall / Zone' : 'الصالة'}
+                        </label>
+                        <select
+                          value={manualHallName || halls[0]?.name || ''}
+                          onChange={(e) => setManualHallName(e.target.value)}
+                          className="w-full px-3 py-2.5 rounded-xl border border-stone-200 bg-white text-sm font-semibold focus:outline-none focus:border-stone-400"
+                        >
+                          {halls.map((h) => (
+                            <option key={h.id} value={h.name}>
+                              {loc(h.name, h.name_en)}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                    <div className={!hallName && halls.length > 0 ? '' : 'sm:col-span-2'}>
+                      <label className="block text-xs font-semibold text-stone-600 mb-1">
+                        {lang === 'en' ? 'Table Number (optional)' : 'رقم الطاولة (اختياري)'}
+                      </label>
+                      <input
+                        type="text"
+                        value={tableNumber}
+                        onChange={(e) => setTableNumber(e.target.value)}
+                        placeholder={lang === 'en' ? 'e.g. 7' : 'مثال: 7'}
+                        className="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-sm focus:outline-none focus:border-stone-400"
+                      />
+                    </div>
                   </div>
                 )}
 

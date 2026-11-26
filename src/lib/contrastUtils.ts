@@ -56,6 +56,8 @@ export interface TypographyPreset {
   labelAr: string;
   labelEn: string;
   mode: 'light' | 'dark';
+  menuBgColor?: string;
+  menuCardBgColor?: string;
   headingColor: string;
   descriptionColor: string;
   priceColor: string;
@@ -64,36 +66,66 @@ export interface TypographyPreset {
 export const CONTRAST_TYPOGRAPHY_PRESETS: TypographyPreset[] = [
   {
     id: 'light-ink',
-    labelAr: 'حبر داكن كلاسيكي (فاتح)',
-    labelEn: 'Classic Deep Ink (Light)',
+    labelAr: 'كلاسيكي فاتح + حبر داكن',
+    labelEn: 'Classic Ivory + Deep Ink',
     mode: 'light',
+    menuBgColor: '#FAF9F6',
+    menuCardBgColor: '#FFFFFF',
     headingColor: '#0B132B',
     descriptionColor: '#334155',
     priceColor: '#991B1B',
   },
   {
-    id: 'light-espresso',
-    labelAr: 'إسبريسو دافئ (فاتح)',
-    labelEn: 'Warm Espresso (Light)',
+    id: 'slate-gold',
+    labelAr: 'رمادي داكن + ذهبي أنيق',
+    labelEn: 'Charcoal Slate + Gold',
+    mode: 'dark',
+    menuBgColor: '#2B303B',
+    menuCardBgColor: '#363C49',
+    headingColor: '#FDE68A',
+    descriptionColor: '#E5E7EB',
+    priceColor: '#FBBF24',
+  },
+  {
+    id: 'soft-gray-ink',
+    labelAr: 'رمادي هادئ + كروت ناصعة',
+    labelEn: 'Soft Gray + Crisp Cards',
     mode: 'light',
+    menuBgColor: '#E5E7EB',
+    menuCardBgColor: '#FFFFFF',
+    headingColor: '#0F172A',
+    descriptionColor: '#334155',
+    priceColor: '#B45309',
+  },
+  {
+    id: 'light-espresso',
+    labelAr: 'بيج دافئ + إسبريسو',
+    labelEn: 'Warm Sand + Espresso',
+    mode: 'light',
+    menuBgColor: '#F5EFE6',
+    menuCardBgColor: '#FFFDF9',
     headingColor: '#231710',
     descriptionColor: '#5C4033',
     priceColor: '#9A3412',
   },
   {
     id: 'dark-crisp',
-    labelAr: 'أبيض ناصع + ذهبي (داكن)',
-    labelEn: 'Crisp Ivory & Gold (Dark)',
+    labelAr: 'ليلي عميق + أبيض وذهبي',
+    labelEn: 'Midnight + Ivory & Gold',
     mode: 'dark',
+    menuBgColor: '#090D16',
+    menuCardBgColor: '#131A29',
     headingColor: '#F8FAFC',
     descriptionColor: '#CBD5E1',
     priceColor: '#FBBF24',
   },
   {
     id: 'dark-mint',
-    labelAr: 'ثلجي + زمردي (داكن)',
-    labelEn: 'Frost & Emerald (Dark)',
+    labelAr: 'كحلي ليلي + ثلجي وزمردي',
+    labelEn: 'Deep Navy + Frost & Emerald',
     mode: 'dark',
+    menuBgColor: '#0B1120',
+    menuCardBgColor: '#151E32',
     headingColor: '#FFFFFF',
     descriptionColor: '#E2E8F0',
     priceColor: '#34D399',
@@ -107,21 +139,42 @@ export function resolveMenuSurfacePalette(params: {
   headingColor?: string;
   descriptionColor?: string;
   priceColor?: string;
+  menuBgColor?: string;
+  menuCardBgColor?: string;
 }): ResolvedMenuPalette {
   const mode = params.colorMode || 'auto';
-  const isDarkSurface =
+  const customPageBg = isValidHexColor(params.menuBgColor) ? params.menuBgColor!.trim() : '';
+  const customCardBg = isValidHexColor(params.menuCardBgColor) ? params.menuCardBgColor!.trim() : '';
+
+  const baseIsDark =
     mode === 'dark' ? true : mode === 'light' ? false : params.themeIsDark;
 
-  const pageBg = isDarkSurface ? '#090D16' : '#FAF9F6';
-  const cardBg = isDarkSurface ? '#131A29' : '#FFFFFF';
-  const subtleBg = isDarkSurface ? '#1B2438' : '#F1F5F9';
-  const borderColor = isDarkSurface ? 'rgba(255,255,255,0.12)' : 'rgba(15,23,42,0.11)';
+  const pageBg = customPageBg || (baseIsDark ? '#090D16' : '#FAF9F6');
+  const cardBg =
+    customCardBg ||
+    (customPageBg
+      ? (() => {
+          const rgb = normalizeHex(customPageBg);
+          return rgb && relativeLuminance(rgb) < 0.32 ? '#1E2534' : '#FFFFFF';
+        })()
+      : baseIsDark
+        ? '#131A29'
+        : '#FFFFFF');
+
+  const cardRgb = normalizeHex(cardBg);
+  const isDarkSurface =
+    customCardBg || customPageBg
+      ? Boolean(cardRgb && relativeLuminance(cardRgb) < 0.32)
+      : baseIsDark;
+
+  const subtleBg = isDarkSurface ? 'rgba(255,255,255,0.08)' : '#F1F5F9';
+  const borderColor = isDarkSurface ? 'rgba(255,255,255,0.14)' : 'rgba(15,23,42,0.12)';
 
   const defaultHeading = isDarkSurface ? '#F8FAFC' : '#0B132B';
   const defaultDesc = isDarkSurface ? '#CBD5E1' : '#334155';
   const rawAccent = isValidHexColor(params.primaryColor) ? params.primaryColor! : '#A61C1C';
 
-  // Ensure accent & price keep >= 4.5 contrast on surface when using defaults
+  // Ensure accent & price keep >= 3.6 contrast on surface when using defaults
   let safeAccent = rawAccent;
   if (getContrastRatio(safeAccent, cardBg) < 3.6) {
     safeAccent = isDarkSurface ? '#FBBF24' : '#991B1B';

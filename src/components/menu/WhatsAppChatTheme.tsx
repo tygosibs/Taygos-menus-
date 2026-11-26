@@ -98,6 +98,8 @@ export function WhatsAppChatTheme({
         themeIsDark: false,
         colorMode: activeColorMode,
         primaryColor: restaurant.primaryColor,
+        menuBgColor: restaurant.menuBgColor,
+        menuCardBgColor: restaurant.menuCardBgColor,
         headingColor: restaurant.headingColor,
         descriptionColor: restaurant.descriptionColor,
         priceColor: restaurant.priceColor,
@@ -105,6 +107,8 @@ export function WhatsAppChatTheme({
     [
       activeColorMode,
       restaurant.primaryColor,
+      restaurant.menuBgColor,
+      restaurant.menuCardBgColor,
       restaurant.headingColor,
       restaurant.descriptionColor,
       restaurant.priceColor,
@@ -112,9 +116,15 @@ export function WhatsAppChatTheme({
   );
 
   const isDark = palette.isDarkSurface;
-  const hasCustomTextOverride = Boolean(
-    restaurant.headingColor || restaurant.descriptionColor || restaurant.priceColor
-  );
+  const hasCustomSurfaceOverride =
+    activeColorMode !== 'auto' ||
+    Boolean(
+      restaurant.menuBgColor ||
+        restaurant.menuCardBgColor ||
+        restaurant.headingColor ||
+        restaurant.descriptionColor ||
+        restaurant.priceColor
+    );
 
   const handleToggleContrast = () => {
     const next = cycleColorMode(activeColorMode, false);
@@ -262,9 +272,17 @@ export function WhatsAppChatTheme({
     }
   };
 
-  const wallpaperBg = isDark ? '#0B141A' : '#EFEAE2';
+  const wallpaperBg = restaurant.menuBgColor
+    ? palette.pageBg
+    : isDark
+      ? '#0B141A'
+      : '#EFEAE2';
   const headerBg = isDark ? '#202C33' : '#075E54';
-  const incomingBubbleBg = isDark ? '#202C33' : '#FFFFFF';
+  const incomingBubbleBg = restaurant.menuCardBgColor
+    ? palette.cardBg
+    : isDark
+      ? '#202C33'
+      : '#FFFFFF';
   const outgoingBubbleBg = isDark ? '#005C4B' : '#D9FDD3';
   const composerBg = isDark ? '#202C33' : '#F0F2F5';
 
@@ -273,7 +291,9 @@ export function WhatsAppChatTheme({
       dir={dir}
       style={{
         backgroundColor: wallpaperBg,
-        backgroundImage: `url("data:image/svg+xml,${WHATSAPP_WALLPAPER_SVG}")`,
+        backgroundImage: restaurant.menuBgColor
+          ? undefined
+          : `url("data:image/svg+xml,${WHATSAPP_WALLPAPER_SVG}")`,
       }}
       className={`min-h-screen flex flex-col overflow-x-clip max-w-full pb-28 ${
         isDark ? 'text-[#E9EDEF]' : 'text-[#111B21]'
@@ -634,6 +654,11 @@ export function WhatsAppChatTheme({
                 return (
                   <article
                     key={item.id}
+                    style={
+                      hasCustomSurfaceOverride
+                        ? { backgroundColor: palette.cardBg, borderColor: palette.borderColor }
+                        : undefined
+                    }
                     className={`rounded-2xl border overflow-hidden flex flex-col justify-between transition-shadow hover:shadow-md ${
                       isDark
                         ? 'bg-[#111B21] border-white/10'
@@ -669,9 +694,7 @@ export function WhatsAppChatTheme({
                         <div className="flex items-start justify-between gap-2">
                           <h3
                             style={
-                              hasCustomTextOverride && restaurant.headingColor
-                                ? { color: restaurant.headingColor }
-                                : undefined
+                              hasCustomSurfaceOverride ? { color: palette.headingColor } : undefined
                             }
                             className="text-sm font-extrabold line-clamp-1 flex items-center gap-1"
                           >
@@ -683,8 +706,8 @@ export function WhatsAppChatTheme({
                         {itemDesc && (
                           <p
                             style={
-                              hasCustomTextOverride && restaurant.descriptionColor
-                                ? { color: restaurant.descriptionColor }
+                              hasCustomSurfaceOverride
+                                ? { color: palette.descriptionColor }
                                 : undefined
                             }
                             className={`text-xs line-clamp-2 leading-relaxed ${
@@ -698,9 +721,7 @@ export function WhatsAppChatTheme({
                         <div className="flex items-center justify-between pt-1">
                           <span
                             style={
-                              hasCustomTextOverride && restaurant.priceColor
-                                ? { color: restaurant.priceColor }
-                                : undefined
+                              hasCustomSurfaceOverride ? { color: palette.priceColor } : undefined
                             }
                             className={`font-mono-num tabular-nums text-sm font-extrabold ${
                               isDark ? 'text-[#25D366]' : 'text-[#008069]'

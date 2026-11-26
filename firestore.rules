@@ -403,7 +403,7 @@ service cloud.firestore {
           'id', 'ownerId', 'slug', 'name', 'name_en', 'tagline', 'tagline_en',
           'whatsappNumber', 'logoUrl', 'shareTitle', 'shareTitle_en',
           'shareDescription', 'shareDescription_en', 'activeTheme', 'primaryColor',
-          'colorMode', 'headingColor', 'descriptionColor', 'priceColor', 'menuColumns',
+          'colorMode', 'headingColor', 'descriptionColor', 'priceColor', 'menuBgColor', 'menuCardBgColor', 'menuColumns',
           'taxRate', 'serviceCharge', 'deliveryFee', 'currency',
           'isOpen', 'isSuspended', 'ownerBirthday',
           'appliedPlatformPromoCode', 'appliedPlatformPromoSummary', 'appliedPlatformPromoSummary_en',
@@ -429,6 +429,8 @@ service cloud.firestore {
         (!('headingColor' in data) || isValidHexOrEmpty(data.headingColor)) &&
         (!('descriptionColor' in data) || isValidHexOrEmpty(data.descriptionColor)) &&
         (!('priceColor' in data) || isValidHexOrEmpty(data.priceColor)) &&
+        (!('menuBgColor' in data) || isValidHexOrEmpty(data.menuBgColor)) &&
+        (!('menuCardBgColor' in data) || isValidHexOrEmpty(data.menuCardBgColor)) &&
         (!('menuColumns' in data) || (data.menuColumns in [1, 2, 3])) &&
         data.taxRate is number && data.taxRate >= 0 && data.taxRate <= 100 &&
         data.serviceCharge is number && data.serviceCharge >= 0 && data.serviceCharge <= 100 &&
@@ -1447,14 +1449,14 @@ service cloud.firestore {
               incoming().diff(existing()).affectedKeys().hasOnly(['offers', 'promoCodes', 'loyaltyConfig', 'updatedAt']) ||
               incoming().diff(existing()).affectedKeys().hasOnly([
                 'activeTheme', 'primaryColor', 'taxRate', 'serviceCharge',
-                'colorMode', 'headingColor', 'descriptionColor', 'priceColor', 'menuColumns',
+                'colorMode', 'headingColor', 'descriptionColor', 'priceColor', 'menuBgColor', 'menuCardBgColor', 'menuColumns',
                 'updatedAt'
               ]) ||
               incoming().diff(existing()).affectedKeys().hasOnly([
                 'name', 'name_en', 'tagline', 'tagline_en', 'slug', 'whatsappNumber', 'logoUrl',
                 'shareTitle', 'shareTitle_en', 'shareDescription', 'shareDescription_en',
                 'currency', 'isOpen', 'ownerBirthday', 'activeTheme', 'taxRate', 'serviceCharge', 'deliveryFee',
-                'primaryColor', 'colorMode', 'headingColor', 'descriptionColor', 'priceColor',
+                'primaryColor', 'colorMode', 'headingColor', 'descriptionColor', 'priceColor', 'menuBgColor', 'menuCardBgColor',
                 'menuColumns', 'updatedAt'
               ]) ||
               (
@@ -1494,14 +1496,14 @@ service cloud.firestore {
               incoming().diff(existing()).affectedKeys().hasOnly(['offers', 'promoCodes', 'loyaltyConfig', 'updatedAt']) ||
               incoming().diff(existing()).affectedKeys().hasOnly([
                 'activeTheme', 'primaryColor', 'taxRate', 'serviceCharge',
-                'colorMode', 'headingColor', 'descriptionColor', 'priceColor', 'menuColumns',
+                'colorMode', 'headingColor', 'descriptionColor', 'priceColor', 'menuBgColor', 'menuCardBgColor', 'menuColumns',
                 'updatedAt'
               ]) ||
               incoming().diff(existing()).affectedKeys().hasOnly([
                 'name', 'name_en', 'tagline', 'tagline_en', 'slug', 'whatsappNumber', 'logoUrl',
                 'shareTitle', 'shareTitle_en', 'shareDescription', 'shareDescription_en',
                 'currency', 'isOpen', 'isSuspended', 'ownerBirthday', 'activeTheme', 'taxRate', 'serviceCharge', 'deliveryFee',
-                'primaryColor', 'colorMode', 'headingColor', 'descriptionColor', 'priceColor',
+                'primaryColor', 'colorMode', 'headingColor', 'descriptionColor', 'priceColor', 'menuBgColor', 'menuCardBgColor',
                 'menuColumns', 'updatedAt'
               ]) ||
               incoming().diff(existing()).affectedKeys().hasOnly([
@@ -1522,6 +1524,8 @@ service cloud.firestore {
           exists(/databases/$(database)/documents/restaurants/$(restaurantId));
         allow list: if isValidId(restaurantId) && (
           isSuperAdmin() ||
+          isOwnerOfRestaurant(restaurantId) ||
+          isActiveStaffForRestaurant(restaurantId) ||
           (isVerifiedAccount() && resource.data.ownerId == request.auth.uid)
         );
         allow create: if isValidId(restaurantId) &&
@@ -1986,6 +1990,7 @@ service cloud.firestore {
           (isSignedIn() && existing().staffId == request.auth.uid)
         );
         allow list: if isSuperAdmin() ||
+          isOwnerOfRestaurant(restaurantId) ||
           (isVerifiedAccount() && resource.data.ownerId == request.auth.uid) ||
           isActiveStaffForRestaurant(restaurantId) ||
           (isSignedIn() && resource.data.staffId == request.auth.uid);
@@ -2049,6 +2054,16 @@ service cloud.firestore {
                   ])
                 )
               )
+            ) || (
+              // Owner or Super Admin settling checks or updating active shift operational/financial counters
+              existing().status == 'active' &&
+              incoming().status == 'active' &&
+              (isSuperAdmin() || isOwnerOfRestaurant(restaurantId)) &&
+              incoming().diff(existing()).affectedKeys().hasOnly([
+                'ordersHandled', 'itemsMarkedReady', 'serviceCallsHandled',
+                'cashSales', 'visaSales', 'drawerExpensesTotal', 'drawerVarianceTotal', 'expectedCashHandover',
+                'extendedHours', 'shiftSlotId', 'shiftSlotName', 'openingFloat', 'updatedAt'
+              ])
             ) || (
               // Active shift operational & financial counters
               existing().status == 'active' &&
@@ -2115,6 +2130,7 @@ service cloud.firestore {
           (isSignedIn() && existing().staffId == request.auth.uid)
         );
         allow list: if isSuperAdmin() ||
+          isOwnerOfRestaurant(restaurantId) ||
           (isVerifiedAccount() && resource.data.ownerId == request.auth.uid) ||
           staffHasPermission(restaurantId, 'canManageStaff') ||
           (isSignedIn() && resource.data.staffId == request.auth.uid);
@@ -2217,6 +2233,7 @@ service cloud.firestore {
         );
         allow list: if isValidId(restaurantId) && (
           isSuperAdmin() ||
+          isOwnerOfRestaurant(restaurantId) ||
           (isVerifiedAccount() && resource.data.ownerId == request.auth.uid) ||
           staffHasPermission(restaurantId, 'canManageHallAssignments') ||
           staffHasPermission(restaurantId, 'canManageStaff') ||

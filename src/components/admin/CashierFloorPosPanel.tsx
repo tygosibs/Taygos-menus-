@@ -41,6 +41,11 @@ import {
   StationMeta,
 } from '../../lib/stationUtils';
 import {
+  doesHallMatch,
+  doTableNumbersMatch,
+  normalizeTableNumber,
+} from '../../lib/tableSessionUtils';
+import {
   Category,
   CustomerProfile,
   Hall,
@@ -57,6 +62,7 @@ import {
   ServiceCallStatus,
   StaffActorInfo,
   TableGridColors,
+  TableSession,
 } from '../../types/menu';
 import type { SettleTarget, TableMasterGroup } from './LiveOrdersTab';
 
@@ -65,6 +71,7 @@ interface CashierFloorPosPanelProps {
   halls: Hall[];
   orders: Order[];
   serviceCalls: ServiceCall[];
+  tableSessions?: TableSession[];
   categories: Category[];
   menuItems: MenuItem[];
   customers: CustomerProfile[];
@@ -96,6 +103,7 @@ export function CashierFloorPosPanel({
   halls,
   orders,
   serviceCalls,
+  tableSessions = [],
   categories,
   menuItems,
   customers,
@@ -229,20 +237,54 @@ export function CashierFloorPosPanel({
   const getTableSnapshot = (hallName: string, tableNumber: string) => {
     const cleanTbl = tableNumber.trim();
     const cleanHall = hallName.trim();
+    const allowEmptyHallFallback = halls.length <= 1 || halls[0]?.name.trim() === cleanHall;
     const tblOrders = orders.filter(
       (o) =>
         o.status !== 'completed' &&
         o.status !== 'cancelled' &&
         o.orderType === 'dine_in' &&
-        (o.tableNumber || '').trim() === cleanTbl &&
-        (!o.hallName || o.hallName.trim() === cleanHall)
+        doTableNumbersMatch(o.tableNumber, cleanTbl) &&
+        doesHallMatch(cleanHall, o.hallName, allowEmptyHallFallback)
     );
     const tblCalls = serviceCalls.filter(
       (c) =>
         c.status !== 'resolved' &&
-        (c.tableNumber || '').trim() === cleanTbl &&
-        (!c.hallName || c.hallName.trim() === cleanHall)
+        doTableNumbersMatch(c.tableNumber, cleanTbl) &&
+        doesHallMatch(cleanHall, c.hallName, allowEmptyHallFallback)
     );
+    const tblSessions = tableSessions.filter(
+      (s) =>
+        s.status === 'active' &&
+        doTableNumbersMatch(s.tableNumber, cleanTbl) &&
+        doesHallMatch(cleanHall, s.hallName, allowEmptyHallFallback)
+    );
+
+    const guestMap = new Map<string, string>();
+    const addGuest = (raw?: string) => {
+      const g = (raw || '').trim();
+      if (g && !guestMap.has(g.toLowerCase())) {
+        guestMap.set(g.toLowerCase(), g);
+      }
+    };
+    tblSessions.forEach((s) => {
+      (s.guests || []).forEach(addGuest);
+      (s.items || []).forEach((it) => addGuest(it.guestName));
+    });
+    tblOrders.forEach((o) => {
+      if (Array.isArray(o.guestChecks) && o.guestChecks.length > 0) {
+        o.guestChecks.forEach((gc) => addGuest(gc.guestName));
+      } else {
+        addGuest(o.customerName);
+      }
+      (o.items || []).forEach((it) => addGuest(it.guestName));
+    });
+    const seatedGuests = Array.from(guestMap.values());
+    const sessionItemsCount = tblSessions.reduce(
+      (sum, s) => sum + (s.items || []).reduce((isum, it) => isum + (it.quantity || 0), 0),
+      0
+    );
+    const sessionPendingItems = tblSessions.flatMap((s) => s.items || []);
+
     const hasBillRequest = tblCalls.some(
       (c) => c.callType === 'request_bill_cash' || c.callType === 'request_bill_card'
     );
@@ -252,14 +294,21 @@ export function CashierFloorPosPanel({
       const ms = getTimestampMillis(o.createdAt);
       if (ms > 0 && (oldestMs === 0 || ms < oldestMs)) oldestMs = ms;
     });
+    if (oldestMs === 0) {
+      tblSessions.forEach((s) => {
+        const ms = getTimestampMillis(s.updatedAt || s.createdAt);
+        if (ms > 0 && (oldestMs === 0 || ms < oldestMs)) oldestMs = ms;
+      });
+    }
     const elapsedMins = oldestMs > 0 ? Math.max(0, Math.floor((nowTick - oldestMs) / 60000)) : 0;
     const isOverdue = tblOrders.length > 0 && elapsedMins >= opsConfig.tableOverdueMinutes;
+    const isOccupied = tblOrders.length > 0 || seatedGuests.length > 0 || sessionItemsCount > 0;
 
     const state: 'empty' | 'occupied' | 'billRequested' | 'overdue' = isOverdue
       ? 'overdue'
       : hasBillRequest
         ? 'billRequested'
-        : tblOrders.length > 0
+        : isOccupied
           ? 'occupied'
           : 'empty';
 
@@ -269,7 +318,18 @@ export function CashierFloorPosPanel({
       0
     );
 
-    return { tblOrders, tblCalls, elapsedMins, state, total, itemsCount };
+    return {
+      tblOrders,
+      tblCalls,
+      tblSessions,
+      seatedGuests,
+      sessionItemsCount,
+      sessionPendingItems,
+      elapsedMins,
+      state,
+      total,
+      itemsCount,
+    };
   };
 
   const floorSummary = useMemo(() => {
@@ -291,16 +351,17 @@ export function CashierFloorPosPanel({
     });
 
     return { empty, occupied, billRequested, overdue, activeRevenue };
-  }, [gridHalls, orders, serviceCalls, nowTick, opsConfig.tableOverdueMinutes]);
+  }, [gridHalls, orders, serviceCalls, tableSessions, nowTick, opsConfig.tableOverdueMinutes]);
 
   const findTableGroupForDrawer = (hallName: string, tableNumber: string): TableMasterGroup | null => {
     const cleanTbl = tableNumber.trim();
     const cleanHall = hallName.trim();
+    const allowEmptyHallFallback = halls.length <= 1 || halls[0]?.name.trim() === cleanHall;
     return (
       openTableGroups.find(
         (g) =>
-          g.tableNumber.trim() === cleanTbl &&
-          (!g.hallName || !cleanHall || g.hallName.trim() === cleanHall)
+          doTableNumbersMatch(g.tableNumber, cleanTbl) &&
+          doesHallMatch(cleanHall, g.hallName, allowEmptyHallFallback)
       ) || null
     );
   };
@@ -526,6 +587,8 @@ export function CashierFloorPosPanel({
         };
       });
 
+      const normalizedPosTbl =
+        posOrderType === 'dine_in' ? normalizeTableNumber(posTableNumber) : '';
       const res = await submitPublicOrder({
         restaurantId: restaurant.id,
         ownerId: restaurant.ownerId,
@@ -533,7 +596,7 @@ export function CashierFloorPosPanel({
         customerPhone: posCustomerPhone.trim() || '000000',
         orderType: posOrderType,
         hallName: posOrderType === 'dine_in' ? posHallName.trim() : undefined,
-        tableNumber: posOrderType === 'dine_in' ? posTableNumber.trim() : undefined,
+        tableNumber: posOrderType === 'dine_in' ? normalizedPosTbl : undefined,
         deliveryAddress: posOrderType === 'delivery' ? posDeliveryAddress.trim() : undefined,
         notes: posOrderNotes.trim() || undefined,
         items: orderItems,
@@ -560,7 +623,7 @@ export function CashierFloorPosPanel({
         customerPhone: posCustomerPhone.trim() || '000000',
         orderType: posOrderType,
         hallName: posOrderType === 'dine_in' ? posHallName.trim() : undefined,
-        tableNumber: posOrderType === 'dine_in' ? posTableNumber.trim() : undefined,
+        tableNumber: posOrderType === 'dine_in' ? normalizedPosTbl : undefined,
         deliveryAddress: posOrderType === 'delivery' ? posDeliveryAddress.trim() : undefined,
         notes: posOrderNotes.trim() || undefined,
         items: orderItems,
@@ -808,9 +871,11 @@ export function CashierFloorPosPanel({
                         <div className="text-[10px] font-bold opacity-95 truncate w-full text-center font-mono-num">
                           {snap.itemsCount > 0
                             ? `${snap.itemsCount} ${isEn ? 'items' : 'صنف'} · ${formatMoney(snap.total)}`
-                            : isEn
-                              ? 'Ready for guests'
-                              : 'جاهزة للجلوس'}
+                            : snap.seatedGuests.length > 0
+                              ? `${snap.seatedGuests.length} ${isEn ? 'guests' : 'ضيوف'} · ${snap.seatedGuests[0]}`
+                              : isEn
+                                ? 'Ready for guests'
+                                : 'جاهزة للجلوس'}
                         </div>
                       </button>
                     );
@@ -1492,10 +1557,58 @@ export function CashierFloorPosPanel({
                   </div>
                 )}
 
+                {/* Seated Guests & Pending Shared Table Cart */}
+                {snap.seatedGuests.length > 0 && (
+                  <div className="p-3 rounded-2xl bg-sky-50 border border-sky-200 space-y-2">
+                    <p className="text-xs font-extrabold text-sky-950 flex items-center gap-1.5">
+                      <Users className="w-3.5 h-3.5 text-sky-700" />
+                      <span>
+                        {isEn
+                          ? `Seated Guests (${snap.seatedGuests.length})`
+                          : `الضيوف المسجلون على الطاولة (${snap.seatedGuests.length})`}
+                      </span>
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {snap.seatedGuests.map((gName) => (
+                        <span
+                          key={gName}
+                          className="px-2.5 py-1 rounded-lg bg-white border border-sky-200 text-[11px] font-extrabold text-sky-950"
+                        >
+                          {gName}
+                        </span>
+                      ))}
+                    </div>
+                    {snap.sessionPendingItems.length > 0 && (
+                      <div className="pt-2 border-t border-sky-200/80 space-y-1">
+                        <p className="text-[11px] font-extrabold text-sky-900">
+                          {isEn ? 'Pending in Guest Shared Cart (Not sent yet):' : 'في سلة الطاولة المشتركة (لم يُرسل للمطبخ بعد):'}
+                        </p>
+                        {snap.sessionPendingItems.map((it) => (
+                          <div key={it.cartKey} className="flex items-center justify-between gap-2 text-[11px] text-sky-950">
+                            <span className="truncate font-bold">
+                              {it.quantity}× {loc(it.name, it.name_en)}
+                              {it.guestName ? ` [${it.guestName}]` : ''}
+                            </span>
+                            <span className="font-mono-num font-bold shrink-0">
+                              {formatMoney(it.unitPrice * it.quantity)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {snap.tblOrders.length === 0 ? (
                   <div className="p-5 rounded-2xl bg-zinc-50 border border-zinc-200 text-center space-y-1.5">
                     <p className="text-xs font-extrabold text-zinc-800">
-                      {isEn ? 'Table is currently available' : 'الترابيزة شاغرة حالياً'}
+                      {snap.seatedGuests.length > 0
+                        ? isEn
+                          ? 'Guests are seated — awaiting first order'
+                          : 'الضيوف جالسون على الطاولة ولم يرسلوا طلبهم بعد'
+                        : isEn
+                          ? 'Table is currently available'
+                          : 'الترابيزة شاغرة حالياً'}
                     </p>
                     <p className="text-[11px] text-zinc-500">
                       {isEn

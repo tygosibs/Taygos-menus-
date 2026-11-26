@@ -77,6 +77,8 @@ export function ThemeCustomizerTab({
   );
   const [primaryColor, setPrimaryColor] = useState(restaurant.primaryColor);
   const [colorMode, setColorMode] = useState<MenuColorMode>(restaurant.colorMode || 'auto');
+  const [menuBgColor, setMenuBgColor] = useState(restaurant.menuBgColor || '');
+  const [menuCardBgColor, setMenuCardBgColor] = useState(restaurant.menuCardBgColor || '');
   const [headingColor, setHeadingColor] = useState(restaurant.headingColor || '');
   const [descriptionColor, setDescriptionColor] = useState(restaurant.descriptionColor || '');
   const [priceColor, setPriceColor] = useState(restaurant.priceColor || '');
@@ -146,6 +148,8 @@ export function ThemeCustomizerTab({
     setSelectedPreviewTheme(restaurant.activeTheme);
     setPrimaryColor(restaurant.primaryColor);
     setColorMode(restaurant.colorMode || 'auto');
+    setMenuBgColor(restaurant.menuBgColor || '');
+    setMenuCardBgColor(restaurant.menuCardBgColor || '');
     setHeadingColor(restaurant.headingColor || '');
     setDescriptionColor(restaurant.descriptionColor || '');
     setPriceColor(restaurant.priceColor || '');
@@ -179,6 +183,8 @@ export function ThemeCustomizerTab({
     restaurant.activeTheme,
     restaurant.primaryColor,
     restaurant.colorMode,
+    restaurant.menuBgColor,
+    restaurant.menuCardBgColor,
     restaurant.headingColor,
     restaurant.descriptionColor,
     restaurant.priceColor,
@@ -228,6 +234,8 @@ export function ThemeCustomizerTab({
       activeTheme: selectedPreviewTheme,
       primaryColor,
       colorMode,
+      menuBgColor,
+      menuCardBgColor,
       headingColor,
       descriptionColor,
       priceColor,
@@ -248,6 +256,8 @@ export function ThemeCustomizerTab({
       selectedPreviewTheme,
       primaryColor,
       colorMode,
+      menuBgColor,
+      menuCardBgColor,
       headingColor,
       descriptionColor,
       priceColor,
@@ -282,6 +292,8 @@ export function ThemeCustomizerTab({
     restaurant.primaryColor.toLowerCase() === primaryColor.toLowerCase() &&
     (restaurant.colorMode || 'auto') === colorMode &&
     (restaurant.menuColumns || 2) === menuColumns &&
+    (restaurant.menuBgColor || '').toLowerCase() === menuBgColor.toLowerCase() &&
+    (restaurant.menuCardBgColor || '').toLowerCase() === menuCardBgColor.toLowerCase() &&
     (restaurant.headingColor || '').toLowerCase() === headingColor.toLowerCase() &&
     (restaurant.descriptionColor || '').toLowerCase() === descriptionColor.toLowerCase() &&
     (restaurant.priceColor || '').toLowerCase() === priceColor.toLowerCase();
@@ -306,6 +318,8 @@ export function ThemeCustomizerTab({
         taxRate,
         serviceCharge,
         colorMode,
+        menuBgColor,
+        menuCardBgColor,
         headingColor,
         descriptionColor,
         priceColor,
@@ -318,6 +332,8 @@ export function ThemeCustomizerTab({
         taxRate,
         serviceCharge,
         colorMode,
+        menuBgColor,
+        menuCardBgColor,
         headingColor,
         descriptionColor,
         priceColor,
@@ -457,6 +473,8 @@ export function ThemeCustomizerTab({
         deliveryFee,
         primaryColor,
         colorMode,
+        menuBgColor,
+        menuCardBgColor,
         headingColor,
         descriptionColor,
         priceColor,
@@ -899,15 +917,17 @@ export function ThemeCustomizerTab({
               <span className="text-xs font-extrabold text-zinc-900">
                 {t.admin.themes.customTypographyTitle}
               </span>
-              {(headingColor || descriptionColor || priceColor) && (
+              {(menuBgColor || menuCardBgColor || headingColor || descriptionColor || priceColor) && (
                 <button
                   type="button"
                   onClick={() => {
+                    setMenuBgColor('');
+                    setMenuCardBgColor('');
                     setHeadingColor('');
                     setDescriptionColor('');
                     setPriceColor('');
                   }}
-                  className="text-[11px] font-bold text-zinc-600 hover:text-zinc-950 flex items-center gap-1 cursor-pointer"
+                  className="text-[11px] font-bold text-zinc-700 hover:text-zinc-950 bg-zinc-100 hover:bg-zinc-200 px-2.5 py-1 rounded-lg flex items-center gap-1 cursor-pointer transition-colors"
                 >
                   <RotateCcw className="w-3 h-3" />
                   <span>{t.admin.themes.resetColorsBtn}</span>
@@ -915,55 +935,134 @@ export function ThemeCustomizerTab({
               )}
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              {CONTRAST_TYPOGRAPHY_PRESETS.map((preset) => (
-                <button
-                  key={preset.id}
-                  type="button"
-                  onClick={() => {
-                    setColorMode(preset.mode);
-                    setHeadingColor(preset.headingColor);
-                    setDescriptionColor(preset.descriptionColor);
-                    setPriceColor(preset.priceColor);
-                  }}
-                  className="px-3 py-1.5 rounded-xl border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-[11px] font-bold flex items-center gap-2 cursor-pointer"
-                >
-                  <span
-                    className="w-3.5 h-3.5 rounded-full border border-black/15"
-                    style={{
-                      backgroundColor: preset.mode === 'dark' ? '#090D16' : '#FAF9F6',
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {CONTRAST_TYPOGRAPHY_PRESETS.map((preset) => {
+                const isPresetActive =
+                  menuBgColor.toLowerCase() === (preset.menuBgColor || '').toLowerCase() &&
+                  menuCardBgColor.toLowerCase() === (preset.menuCardBgColor || '').toLowerCase() &&
+                  headingColor.toLowerCase() === preset.headingColor.toLowerCase() &&
+                  priceColor.toLowerCase() === preset.priceColor.toLowerCase();
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => {
+                      setColorMode(preset.mode);
+                      setMenuBgColor(preset.menuBgColor || '');
+                      setMenuCardBgColor(preset.menuCardBgColor || '');
+                      setHeadingColor(preset.headingColor);
+                      setDescriptionColor(preset.descriptionColor);
+                      setPriceColor(preset.priceColor);
                     }}
-                  />
-                  <span
-                    className="w-3.5 h-3.5 rounded-full border border-black/15 -ms-3"
-                    style={{ backgroundColor: preset.priceColor }}
-                  />
-                  <span>{isEn ? preset.labelEn : preset.labelAr}</span>
-                </button>
-              ))}
+                    className={`min-h-[42px] px-3 py-2 rounded-xl border text-xs font-bold flex items-center justify-between gap-2.5 cursor-pointer transition-colors ${
+                      isPresetActive
+                        ? 'bg-zinc-950 text-white border-zinc-950 shadow-xs'
+                        : 'bg-zinc-50 text-zinc-800 border-zinc-200 hover:bg-zinc-100'
+                    }`}
+                  >
+                    <span className="truncate text-start">
+                      {isEn ? preset.labelEn : preset.labelAr}
+                    </span>
+                    <span
+                      aria-hidden="true"
+                      className="flex items-center gap-1 shrink-0 p-1 rounded-lg bg-white/90 border border-black/10"
+                    >
+                      <span
+                        className="w-4 h-4 rounded-md border border-black/15"
+                        style={{
+                          backgroundColor:
+                            preset.menuBgColor || (preset.mode === 'dark' ? '#090D16' : '#FAF9F6'),
+                        }}
+                      />
+                      <span
+                        className="w-4 h-4 rounded-md border border-black/15"
+                        style={{
+                          backgroundColor:
+                            preset.menuCardBgColor ||
+                            (preset.mode === 'dark' ? '#131A29' : '#FFFFFF'),
+                        }}
+                      />
+                      <span
+                        className="w-4 h-4 rounded-md border border-black/15"
+                        style={{ backgroundColor: preset.priceColor }}
+                      />
+                    </span>
+                  </button>
+                );
+              })}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-zinc-200 bg-zinc-50/70 text-xs font-bold">
+                <label className="flex items-center justify-between gap-2 flex-1 min-w-0 cursor-pointer">
+                  <span className="truncate text-zinc-800">
+                    {isEn ? 'Menu Page Background' : 'خلفية صفحة المنيو'}
+                  </span>
+                  <input
+                    type="color"
+                    value={menuBgColor || (colorMode === 'dark' ? '#090D16' : '#FAF9F6')}
+                    onChange={(e) => setMenuBgColor(e.target.value)}
+                    className="w-7 h-7 rounded cursor-pointer border-0 bg-transparent shrink-0"
+                  />
+                </label>
+                {menuBgColor && (
+                  <button
+                    type="button"
+                    onClick={() => setMenuBgColor('')}
+                    aria-label={isEn ? 'Reset page background' : 'إعادة تعيين خلفية الصفحة'}
+                    className="w-6 h-6 rounded-md bg-zinc-200 hover:bg-zinc-300 text-zinc-800 flex items-center justify-center shrink-0 cursor-pointer"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-zinc-200 bg-zinc-50/70 text-xs font-bold">
+                <label className="flex items-center justify-between gap-2 flex-1 min-w-0 cursor-pointer">
+                  <span className="truncate text-zinc-800">
+                    {isEn ? 'Dish Card Background' : 'خلفية كروت الأصناف'}
+                  </span>
+                  <input
+                    type="color"
+                    value={menuCardBgColor || (colorMode === 'dark' ? '#131A29' : '#FFFFFF')}
+                    onChange={(e) => setMenuCardBgColor(e.target.value)}
+                    className="w-7 h-7 rounded cursor-pointer border-0 bg-transparent shrink-0"
+                  />
+                </label>
+                {menuCardBgColor && (
+                  <button
+                    type="button"
+                    onClick={() => setMenuCardBgColor('')}
+                    aria-label={isEn ? 'Reset card background' : 'إعادة تعيين خلفية الكارت'}
+                    className="w-6 h-6 rounded-md bg-zinc-200 hover:bg-zinc-300 text-zinc-800 flex items-center justify-center shrink-0 cursor-pointer"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+
               <label className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-zinc-200 bg-zinc-50/70 text-xs font-bold cursor-pointer">
-                <span className="truncate">{t.admin.themes.headingColorLabel}</span>
+                <span className="truncate text-zinc-800">{t.admin.themes.headingColorLabel}</span>
                 <input
                   type="color"
-                  value={headingColor || '#0B132B'}
+                  value={headingColor || (colorMode === 'dark' ? '#F8FAFC' : '#0B132B')}
                   onChange={(e) => setHeadingColor(e.target.value)}
                   className="w-7 h-7 rounded cursor-pointer border-0 bg-transparent shrink-0"
                 />
               </label>
+
               <label className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-zinc-200 bg-zinc-50/70 text-xs font-bold cursor-pointer">
-                <span className="truncate">{t.admin.themes.descColorLabel}</span>
+                <span className="truncate text-zinc-800">{t.admin.themes.descColorLabel}</span>
                 <input
                   type="color"
-                  value={descriptionColor || '#334155'}
+                  value={descriptionColor || (colorMode === 'dark' ? '#CBD5E1' : '#334155')}
                   onChange={(e) => setDescriptionColor(e.target.value)}
                   className="w-7 h-7 rounded cursor-pointer border-0 bg-transparent shrink-0"
                 />
               </label>
+
               <label className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-zinc-200 bg-zinc-50/70 text-xs font-bold cursor-pointer">
-                <span className="truncate">{t.admin.themes.priceColorLabel}</span>
+                <span className="truncate text-zinc-800">{t.admin.themes.priceColorLabel}</span>
                 <input
                   type="color"
                   value={priceColor || primaryColor}
@@ -987,7 +1086,7 @@ export function ThemeCustomizerTab({
           >
             <div className="w-full h-full overflow-y-auto overflow-x-clip">
               <ThemeRenderer
-                key={`${selectedPreviewTheme}_${primaryColor}_${colorMode}_${menuColumns}`}
+                key={`${selectedPreviewTheme}_${primaryColor}_${colorMode}_${menuColumns}_${menuBgColor}_${menuCardBgColor}`}
                 restaurant={previewRestaurant}
                 categories={previewCategories}
                 items={previewItems}

@@ -33,6 +33,7 @@ import {
   getHallTableNumbers,
   sendServiceCall,
   submitPublicOrder,
+  subscribeActiveTableSessions,
   subscribeCategories,
   subscribeHalls,
   subscribeMenuItems,
@@ -64,6 +65,11 @@ import {
   StationMeta,
 } from '../../lib/stationUtils';
 import {
+  doesHallMatch,
+  doTableNumbersMatch,
+  normalizeTableNumber,
+} from '../../lib/tableSessionUtils';
+import {
   getActivePrinterConnection,
   getSavedPrinterProfile,
   tryAutoReconnectSavedPrinter,
@@ -91,6 +97,7 @@ import {
   StaffActorInfo,
   StaffRole,
   TableGridColors,
+  TableSession,
 } from '../../types/menu';
 import { SplitCheckPrintModal } from './SplitCheckPrintModal';
 import { ThermalPrinterSettingsModal } from './ThermalPrinterSettingsModal';
@@ -172,6 +179,7 @@ export function CaptainWaiterTab({
   const [captainMode, setCaptainMode] = useState<'grid' | 'pos' | 'calls'>('grid');
   const [serviceCalls, setServiceCalls] = useState<ServiceCall[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [tableSessions, setTableSessions] = useState<TableSession[]>([]);
   const [halls, setHalls] = useState<Hall[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -416,9 +424,16 @@ export function CaptainWaiterTab({
       { staffMode }
     );
 
+    const unsubSessions = subscribeActiveTableSessions(
+      restaurant.id,
+      setTableSessions,
+      () => {}
+    );
+
     return () => {
       unsubCalls();
       unsubOrders();
+      unsubSessions();
     };
   }, [restaurant.id, restaurant.ownerId, restaurant.slug, effectiveSoundEnabled, staffMode, isEn]);
 
@@ -497,7 +512,7 @@ export function CaptainWaiterTab({
     }
     if (!isAssignedOnlyScope) return true;
     const cleanH = (itemHallName || '').trim();
-    const cleanT = (itemTableNumber || '').trim();
+    const cleanT = normalizeTableNumber(itemTableNumber || '');
     if (!cleanH && !cleanT) return false;
     if (cleanT) {
       return effectiveScope.isTableAllowed('', cleanH || undefined, cleanT);
@@ -737,20 +752,54 @@ export function CaptainWaiterTab({
   const getTableSnapshot = (hallName: string, tableNumber: string) => {
     const cleanTbl = tableNumber.trim();
     const cleanHall = hallName.trim();
+    const allowEmptyHallFallback = halls.length <= 1 || halls[0]?.name.trim() === cleanHall;
     const tblOrders = orders.filter(
       (o) =>
         o.status !== 'completed' &&
         o.status !== 'cancelled' &&
         o.orderType === 'dine_in' &&
-        (o.tableNumber || '').trim() === cleanTbl &&
-        (!o.hallName || o.hallName.trim() === cleanHall)
+        doTableNumbersMatch(o.tableNumber, cleanTbl) &&
+        doesHallMatch(cleanHall, o.hallName, allowEmptyHallFallback)
     );
     const tblCalls = serviceCalls.filter(
       (c) =>
         c.status !== 'resolved' &&
-        (c.tableNumber || '').trim() === cleanTbl &&
-        (!c.hallName || c.hallName.trim() === cleanHall)
+        doTableNumbersMatch(c.tableNumber, cleanTbl) &&
+        doesHallMatch(cleanHall, c.hallName, allowEmptyHallFallback)
     );
+    const tblSessions = tableSessions.filter(
+      (s) =>
+        s.status === 'active' &&
+        doTableNumbersMatch(s.tableNumber, cleanTbl) &&
+        doesHallMatch(cleanHall, s.hallName, allowEmptyHallFallback)
+    );
+
+    const guestMap = new Map<string, string>();
+    const addGuest = (raw?: string) => {
+      const g = (raw || '').trim();
+      if (g && !guestMap.has(g.toLowerCase())) {
+        guestMap.set(g.toLowerCase(), g);
+      }
+    };
+    tblSessions.forEach((s) => {
+      (s.guests || []).forEach(addGuest);
+      (s.items || []).forEach((it) => addGuest(it.guestName));
+    });
+    tblOrders.forEach((o) => {
+      if (Array.isArray(o.guestChecks) && o.guestChecks.length > 0) {
+        o.guestChecks.forEach((gc) => addGuest(gc.guestName));
+      } else {
+        addGuest(o.customerName);
+      }
+      (o.items || []).forEach((it) => addGuest(it.guestName));
+    });
+    const seatedGuests = Array.from(guestMap.values());
+    const sessionItemsCount = tblSessions.reduce(
+      (sum, s) => sum + (s.items || []).reduce((isum, it) => isum + (it.quantity || 0), 0),
+      0
+    );
+    const sessionPendingItems = tblSessions.flatMap((s) => s.items || []);
+
     const hasBillRequest = tblCalls.some(
       (c) => c.callType === 'request_bill_cash' || c.callType === 'request_bill_card'
     );
@@ -760,14 +809,21 @@ export function CaptainWaiterTab({
       const ms = getTimestampMillis(o.createdAt);
       if (ms > 0 && (oldestMs === 0 || ms < oldestMs)) oldestMs = ms;
     });
+    if (oldestMs === 0) {
+      tblSessions.forEach((s) => {
+        const ms = getTimestampMillis(s.updatedAt || s.createdAt);
+        if (ms > 0 && (oldestMs === 0 || ms < oldestMs)) oldestMs = ms;
+      });
+    }
     const elapsedMins = oldestMs > 0 ? Math.max(0, Math.floor((nowTick - oldestMs) / 60000)) : 0;
     const isOverdue = tblOrders.length > 0 && elapsedMins >= opsConfig.tableOverdueMinutes;
+    const isOccupied = tblOrders.length > 0 || seatedGuests.length > 0 || sessionItemsCount > 0;
 
     const state: 'empty' | 'occupied' | 'billRequested' | 'overdue' = isOverdue
       ? 'overdue'
       : hasBillRequest
         ? 'billRequested'
-        : tblOrders.length > 0
+        : isOccupied
           ? 'occupied'
           : 'empty';
 
@@ -777,7 +833,18 @@ export function CaptainWaiterTab({
       0
     );
 
-    return { tblOrders, tblCalls, elapsedMins, state, total, itemsCount };
+    return {
+      tblOrders,
+      tblCalls,
+      tblSessions,
+      seatedGuests,
+      sessionItemsCount,
+      sessionPendingItems,
+      elapsedMins,
+      state,
+      total,
+      itemsCount,
+    };
   };
 
   const handleSaveGridSettings = async () => {
@@ -967,6 +1034,8 @@ export function CaptainWaiterTab({
         };
       });
 
+      const normalizedPosTbl =
+        posOrderType === 'dine_in' ? normalizeTableNumber(posTableNumber) : '';
       const res = await submitPublicOrder({
         restaurantId: restaurant.id,
         ownerId: restaurant.ownerId,
@@ -977,7 +1046,7 @@ export function CaptainWaiterTab({
         customerPhone: posCustomerPhone.trim() || '000000',
         orderType: posOrderType,
         hallName: posOrderType === 'dine_in' ? posHallName.trim() : undefined,
-        tableNumber: posOrderType === 'dine_in' ? posTableNumber.trim() : undefined,
+        tableNumber: posOrderType === 'dine_in' ? normalizedPosTbl : undefined,
         deliveryAddress: posOrderType === 'delivery' ? posDeliveryAddress.trim() : undefined,
         notes: posOrderNotes.trim() || undefined,
         items: orderItems,
@@ -1464,9 +1533,11 @@ export function CaptainWaiterTab({
                             ? showCaptainPrices
                               ? `${snap.itemsCount} ${isEn ? 'items' : 'صنف'} · ${formatMoney(snap.total)}`
                               : `${snap.itemsCount} ${isEn ? 'items' : 'صنف'}`
-                            : isEn
-                              ? 'Ready for guests'
-                              : 'جاهزة للجلوس'}
+                            : snap.seatedGuests.length > 0
+                              ? `${snap.seatedGuests.length} ${isEn ? 'guests' : 'ضيوف'} · ${snap.seatedGuests[0]}`
+                              : isEn
+                                ? 'Ready for guests'
+                                : 'جاهزة للجلوس'}
                         </div>
                       </button>
                     );
@@ -2304,13 +2375,52 @@ export function CaptainWaiterTab({
                   </div>
                 )}
 
+                {snap.seatedGuests.length > 0 && (
+                  <div className="p-3 rounded-2xl bg-sky-50 border border-sky-200 space-y-2">
+                    <p className="text-xs font-extrabold text-sky-950">
+                      {isEn
+                        ? `Seated Guests (${snap.seatedGuests.length})`
+                        : `الضيوف المسجلون على الطاولة (${snap.seatedGuests.length})`}
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {snap.seatedGuests.map((gName) => (
+                        <span
+                          key={gName}
+                          className="px-2.5 py-1 rounded-lg bg-white border border-sky-200 text-[11px] font-extrabold text-sky-950"
+                        >
+                          {gName}
+                        </span>
+                      ))}
+                    </div>
+                    {snap.sessionPendingItems.length > 0 && (
+                      <div className="pt-2 border-t border-sky-200/80 space-y-1">
+                        <p className="text-[11px] font-extrabold text-sky-900">
+                          {isEn ? 'In Guest Shared Cart:' : 'في السلة المشتركة للطاولة:'}
+                        </p>
+                        {snap.sessionPendingItems.map((it) => (
+                          <div key={it.cartKey} className="text-[11px] font-bold text-sky-950 truncate">
+                            {it.quantity}× {loc(it.name, it.name_en)}
+                            {it.guestName ? ` [${it.guestName}]` : ''}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {snap.tblOrders.length === 0 ? (
                   <div
                     className="p-5 rounded-2xl border text-center space-y-2"
                     style={{ backgroundColor: ui.theme.surfaceSubtleBg, borderColor: ui.theme.surfaceBorder }}
                   >
                     <p className="text-xs font-bold" style={{ color: ui.theme.mutedText }}>
-                      {isEn ? 'Table is currently available' : 'الترابيزة شاغرة حالياً'}
+                      {snap.seatedGuests.length > 0
+                        ? isEn
+                          ? 'Guests seated — awaiting first order'
+                          : 'الضيوف جالسون على الطاولة ولم يرسلوا طلبهم بعد'
+                        : isEn
+                          ? 'Table is currently available'
+                          : 'الترابيزة شاغرة حالياً'}
                     </p>
                   </div>
                 ) : (
@@ -2334,6 +2444,7 @@ export function CaptainWaiterTab({
                             <div key={idx} className="flex items-center justify-between gap-2">
                               <span className="font-bold" style={{ color: ui.theme.surfaceText }}>
                                 {it.quantity}× {it.name} {it.sizeName ? `(${it.sizeName})` : ''}
+                                {it.guestName ? ` [${it.guestName}]` : ''}
                               </span>
                               <span
                                 className="text-[10px] px-1.5 py-0.5 rounded border font-bold"

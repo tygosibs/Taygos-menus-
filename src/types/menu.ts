@@ -277,6 +277,8 @@ export interface Restaurant {
   headingColor?: string;
   descriptionColor?: string;
   priceColor?: string;
+  menuBgColor?: string;
+  menuCardBgColor?: string;
   menuColumns?: 1 | 2 | 3;
   taxRate: number;
   serviceCharge: number;

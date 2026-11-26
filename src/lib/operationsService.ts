@@ -38,6 +38,11 @@ import { getActiveLang } from '../data/translations';
 import { db, handleFirestoreError, OperationType } from './firebase';
 import { resolveEffectiveStaffPermissions } from './staffAuthUtils';
 import { startStaffShift } from './shiftsService';
+import {
+  buildTableSessionId,
+  doesHallMatch,
+  doTableNumbersMatch,
+} from './tableSessionUtils';
 
 function makeOpId(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -489,11 +494,15 @@ export async function settleOrdersCheck(params: {
 
   const groupTotal = openOrders.reduce((acc, o) => acc + (Number(o.total) || 0), 0);
   const safeShiftId = activeShift?.status === 'active' ? activeShift.id : '';
+  let currentOpPath = `orders/${openOrders[0].id}`;
+  let currentOpType: OperationType = OperationType.UPDATE;
 
   try {
     // Keep batches <= 4 writes per batch to respect Firestore rules 20-read limit safely
     for (let i = 0; i < openOrders.length; i += 3) {
       const chunk = openOrders.slice(i, i + 3);
+      currentOpPath = `orders/${chunk[0].id}`;
+      currentOpType = OperationType.UPDATE;
       const batch = writeBatch(db);
       chunk.forEach((order, chunkIdx) => {
         const isFirst = i === 0 && chunkIdx === 0;
@@ -529,8 +538,35 @@ export async function settleOrdersCheck(params: {
       await batch.commit();
     }
 
-    if (sessionId?.trim()) {
-      await updateDoc(doc(db, 'restaurants', restaurantId, 'table_sessions', sessionId.trim()), {
+    // Close matching live table_sessions (explicit sessionId + any active sessions for that table/hall)
+    const sessionIdsToClose = new Set<string>();
+    if (sessionId?.trim()) sessionIdsToClose.add(sessionId.trim());
+    if (tableNumber?.trim()) {
+      const deterministicId = buildTableSessionId(hallName || '', tableNumber.trim());
+      if (deterministicId) sessionIdsToClose.add(deterministicId);
+      try {
+        const sessSnap = await getDocs(
+          query(
+            collection(db, 'restaurants', restaurantId, 'table_sessions'),
+            where('status', '==', 'active')
+          )
+        );
+        sessSnap.docs.forEach((d) => {
+          const data = d.data() as { hallName?: string; tableNumber?: string };
+          if (
+            doTableNumbersMatch(data.tableNumber, tableNumber) &&
+            doesHallMatch(hallName || '', data.hallName, true)
+          ) {
+            sessionIdsToClose.add(d.id);
+          }
+        });
+      } catch {
+        // Non-fatal fallback
+      }
+    }
+
+    for (const sid of sessionIdsToClose) {
+      await updateDoc(doc(db, 'restaurants', restaurantId, 'table_sessions', sid), {
         status: 'closed',
         items: [],
         guests: [],
@@ -545,10 +581,17 @@ export async function settleOrdersCheck(params: {
           query(
             collection(db, 'service_calls'),
             where('restaurantId', '==', restaurantId),
-            where('tableNumber', '==', tableNumber.trim())
+            where('status', '!=', 'resolved')
           )
         );
-        const pendingCalls = callsSnap.docs.filter((d) => d.data().status !== 'resolved');
+        const pendingCalls = callsSnap.docs.filter((d) => {
+          const data = d.data() as { tableNumber?: string; hallName?: string; status?: string };
+          return (
+            data.status !== 'resolved' &&
+            doTableNumbersMatch(data.tableNumber, tableNumber) &&
+            doesHallMatch(hallName || '', data.hallName, true)
+          );
+        });
         if (pendingCalls.length > 0) {
           const callBatch = writeBatch(db);
           pendingCalls.slice(0, 4).forEach((d) => {
@@ -568,6 +611,8 @@ export async function settleOrdersCheck(params: {
     }
 
     if (activeShift && activeShift.status === 'active') {
+      currentOpPath = `restaurants/${restaurantId}/staff_shifts/${activeShift.id}`;
+      currentOpType = OperationType.UPDATE;
       const nextCashSales = Number(((activeShift.cashSales || 0) + cashPaidAmount).toFixed(2));
       const nextVisaSales = Number(((activeShift.visaSales || 0) + visaPaidAmount).toFixed(2));
       const nextVarianceTotal = Number(((activeShift.drawerVarianceTotal || 0) + drawerVariance).toFixed(2));
@@ -613,7 +658,7 @@ export async function settleOrdersCheck(params: {
       createdAt: serverTimestamp(),
     }).catch(() => {});
   } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, `orders/${openOrders[0].id}`);
+    handleFirestoreError(error, currentOpType, currentOpPath);
   }
 }
 

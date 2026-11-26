@@ -11,13 +11,16 @@ import {
   Copy,
   Gift,
   Globe,
+  Home,
   LayoutTemplate,
   Loader2,
   LogOut,
+  Menu,
   ShieldAlert,
   ShieldCheck,
   Sparkles,
   Store,
+  X,
 } from 'lucide-react';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { LanguageToggleButton } from '../components/LanguageToggleButton';
@@ -55,6 +58,8 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
   const theme = ui.theme;
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [tabHistory, setTabHistory] = useState<SuperAdminTab[]>([]);
   const [activeTab, setActiveTabState] = useState<SuperAdminTab>(() => {
     if (typeof window === 'undefined') return 'tenants';
     const saved = window.sessionStorage.getItem(SUPER_TAB_STORAGE_KEY) as SuperAdminTab | null;
@@ -66,11 +71,39 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
     }
     return 'tenants';
   });
-  const setActiveTab = (tab: SuperAdminTab) => {
+  const scrollPageTop = () => {
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+      window.requestAnimationFrame(() =>
+        window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior })
+      );
+    }
+  };
+  const setActiveTab = (tab: SuperAdminTab, opts?: { pushHistory?: boolean }) => {
+    const pushHistory = opts?.pushHistory ?? true;
+    if (pushHistory && tab !== activeTab) {
+      setTabHistory((prev) => [...prev.slice(-14), activeTab]);
+    }
     setActiveTabState(tab);
+    setMobileSidebarOpen(false);
     if (typeof window !== 'undefined') {
       window.sessionStorage.setItem(SUPER_TAB_STORAGE_KEY, tab);
     }
+    scrollPageTop();
+  };
+  const handleBackSuperTab = () => {
+    setMobileSidebarOpen(false);
+    if (tabHistory.length > 0) {
+      const prevTab = tabHistory[tabHistory.length - 1];
+      setTabHistory((prev) => prev.slice(0, -1));
+      setActiveTab(prevTab, { pushHistory: false });
+    } else if (activeTab !== 'tenants') {
+      setActiveTab('tenants', { pushHistory: false });
+    }
+  };
+  const handleGoSuperHome = () => {
+    setTabHistory([]);
+    setActiveTab('tenants', { pushHistory: false });
   };
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [testingConn, setTestingConn] = useState(false);
@@ -408,10 +441,10 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
       className={`min-h-screen flex flex-col ${isTopDeck ? '' : 'lg:flex-row'} overflow-x-clip max-w-full`}
       style={{ backgroundColor: theme.canvasBg, color: theme.canvasText }}
     >
-      {/* Sidebar (or compact rail) */}
+      {/* Desktop Sidebar (collapsed into drawer on mobile) */}
       {!isTopDeck && (
         <aside
-          className={`${isCompactRail ? 'lg:w-58' : 'lg:w-72'} shrink-0 flex flex-col justify-between border-b lg:border-b-0 lg:border-e`}
+          className={`hidden lg:flex ${isCompactRail ? 'lg:w-58' : 'lg:w-72'} shrink-0 flex-col justify-between lg:border-e`}
           style={{
             backgroundColor: theme.sidebarBg,
             borderColor: theme.sidebarBorder,
@@ -605,43 +638,244 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
         </aside>
       )}
 
+      {/* Mobile Slide-Over Sidebar Drawer (< lg) */}
+      {mobileSidebarOpen && (
+        <div
+          className="fixed inset-0 z-50 lg:hidden flex"
+          onClick={() => setMobileSidebarOpen(false)}
+        >
+          <div className="fixed inset-0 bg-black/55 backdrop-blur-xs" />
+          <div
+            dir={dir}
+            onClick={(e) => e.stopPropagation()}
+            className="relative z-10 w-[86%] max-w-xs h-full overflow-y-auto shadow-2xl flex flex-col justify-between"
+            style={{
+              backgroundColor: theme.sidebarBg,
+              color: theme.sidebarText,
+            }}
+          >
+            <div className="p-4 space-y-4">
+              <div className="flex items-center justify-between gap-2 pb-2 border-b" style={{ borderColor: theme.sidebarBorder }}>
+                <button
+                  type="button"
+                  onClick={handleGoSuperHome}
+                  className="text-base font-extrabold cursor-pointer flex items-center gap-2 min-w-0"
+                  style={{ color: theme.sidebarText }}
+                >
+                  <ShieldCheck className="w-5 h-5 shrink-0" style={{ color: getSidebarHighlightHex(theme) }} />
+                  <span className="truncate">{t.nav.superAdmin}</span>
+                </button>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <LanguageToggleButton variant={theme.isDarkShell ? 'dark' : 'light'} compact />
+                  <button
+                    type="button"
+                    onClick={() => setMobileSidebarOpen(false)}
+                    aria-label={isEn ? 'Close Menu' : 'إغلاق القائمة'}
+                    className={`w-10 h-10 border flex items-center justify-center cursor-pointer ${ui.radiusClasses.button}`}
+                    style={{ borderColor: theme.sidebarBorder, color: theme.sidebarText }}
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              <div
+                className={`p-3 border space-y-1 ${ui.radiusClasses.card}`}
+                style={{
+                  backgroundColor: theme.isDarkShell ? 'rgba(255,255,255,0.06)' : theme.surfaceSubtleBg,
+                  borderColor: theme.sidebarBorder,
+                }}
+              >
+                <p className="text-xs font-extrabold" style={{ color: getSidebarHighlightHex(theme) }}>
+                  {isEn ? 'Super Admin' : 'المدير العام للمنصة'}
+                </p>
+                <p className="text-xs font-mono-num truncate font-semibold" dir="ltr" style={{ color: theme.sidebarText }}>
+                  {user.email}
+                </p>
+              </div>
+
+              <nav className="space-y-3">
+                {ui.visibleCards.map((card) => (
+                  <div
+                    key={`mob_sup_${card.id}`}
+                    className={`p-2.5 border space-y-1.5 ${ui.radiusClasses.card}`}
+                    style={{
+                      backgroundColor: theme.isDarkShell
+                        ? 'rgba(255,255,255,0.035)'
+                        : theme.surfaceSubtleBg,
+                      borderColor: theme.sidebarBorder,
+                    }}
+                  >
+                    <p className="text-xs font-bold px-1.5" style={{ color: theme.sidebarMuted }}>
+                      {isEn ? card.titleEn : card.titleAr}
+                    </p>
+                    <div className="flex flex-col gap-1.5">
+                      {card.buttonIds.map((bid) => {
+                        const item = getSuperItem(bid);
+                        if (!item) return null;
+                        const Icon = item.icon;
+                        const active = activeTab === item.id;
+                        return (
+                          <button
+                            key={`mobsup_${item.id}`}
+                            type="button"
+                            onClick={() => setActiveTab(item.id)}
+                            className={`min-h-[44px] flex items-center justify-start gap-2 px-3 py-2 text-xs font-bold leading-snug text-start cursor-pointer ${ui.radiusClasses.button}`}
+                            style={
+                              active
+                                ? {
+                                    backgroundColor: theme.sidebarActiveBg,
+                                    color: theme.sidebarActiveText,
+                                  }
+                                : {
+                                    color: theme.sidebarText,
+                                  }
+                            }
+                          >
+                            <Icon className="w-4 h-4 shrink-0" />
+                            <span className="whitespace-normal break-words leading-snug">{item.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('user_guide')}
+                  className={`w-full min-h-[44px] flex items-center justify-start gap-2 px-3 py-2 text-xs font-bold text-start cursor-pointer border ${ui.radiusClasses.button}`}
+                  style={
+                    activeTab === 'user_guide'
+                      ? {
+                          backgroundColor: theme.sidebarActiveBg,
+                          borderColor: theme.sidebarActiveBg,
+                          color: theme.sidebarActiveText,
+                        }
+                      : {
+                          backgroundColor: theme.isDarkShell
+                            ? 'rgba(255,255,255,0.04)'
+                            : theme.surfaceSubtleBg,
+                          borderColor: theme.sidebarBorder,
+                          color: theme.sidebarText,
+                        }
+                  }
+                >
+                  <BookOpen className="w-4 h-4 shrink-0" />
+                  <span>{isEn ? 'Smart User Guide' : 'دليل الاستخدام الذكي'}</span>
+                </button>
+              </nav>
+            </div>
+
+            <div className="p-4 border-t space-y-2" style={{ borderColor: theme.sidebarBorder }}>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileSidebarOpen(false);
+                    onNavigate('/admin');
+                  }}
+                  className={`min-h-[44px] py-2 px-3 border text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
+                  style={{ borderColor: theme.sidebarBorder, color: theme.sidebarText }}
+                >
+                  <Store className="w-4 h-4 shrink-0" />
+                  <span>{isEn ? 'Test Store' : 'المطعم التجريبي'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileSidebarOpen(false);
+                    onNavigate('/?view=landing');
+                  }}
+                  className={`min-h-[44px] py-2 px-3 border text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
+                  style={{ borderColor: theme.sidebarBorder, color: theme.sidebarText }}
+                >
+                  <Globe className="w-4 h-4 shrink-0" />
+                  <span>{isEn ? 'Landing' : 'الهبوط'}</span>
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileSidebarOpen(false);
+                  setSignOutConfirmOpen(true);
+                }}
+                className={`w-full min-h-[44px] py-2 px-3 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer ${
+                  theme.isDarkShell
+                    ? 'text-rose-200 hover:bg-rose-500/20 border border-rose-300/30'
+                    : 'text-rose-700 hover:bg-rose-50 border border-rose-200'
+                } ${ui.radiusClasses.button}`}
+              >
+                <LogOut className="w-4 h-4 shrink-0" />
+                <span>{t.admin.signOut}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main Content */}
       <div className="flex-1 min-w-0 flex flex-col">
         <header
-          className="border-b px-3 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-2.5"
+          className="sticky top-0 z-30 border-b px-3 sm:px-6 py-2.5 sm:py-3 flex flex-wrap items-center justify-between gap-2"
           style={{
             backgroundColor: theme.headerBg,
             borderColor: theme.headerBorder,
             color: theme.headerText,
           }}
         >
-          <div className="text-xs flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1" style={{ color: theme.mutedText }}>
+          <div className="text-xs flex items-center gap-2 min-w-0 flex-1" style={{ color: theme.mutedText }}>
             <button
               type="button"
-              onClick={() => setActiveTab('tenants')}
-              className="font-extrabold cursor-pointer whitespace-nowrap shrink-0 hover:opacity-80"
+              onClick={() => setMobileSidebarOpen(true)}
+              aria-label={isEn ? 'Open Menu' : 'فتح القائمة'}
+              className={`lg:hidden min-h-[42px] px-3 py-2 border text-xs font-extrabold inline-flex items-center gap-1.5 shrink-0 cursor-pointer ${ui.radiusClasses.button}`}
+              style={{
+                backgroundColor: theme.accentHex,
+                borderColor: theme.accentHex,
+                color: theme.accentTextHex,
+              }}
+            >
+              <Menu className="w-4 h-4 shrink-0" />
+              <span>{isEn ? 'Menu' : 'القائمة'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleGoSuperHome}
+              className="hidden sm:inline font-extrabold cursor-pointer whitespace-nowrap shrink-0 hover:opacity-80"
               style={{ color: theme.headerText }}
             >
               {t.brandName}
             </button>
-            <span className="shrink-0">/</span>
+            <span className="hidden sm:inline shrink-0">/</span>
             <span className="hidden sm:inline shrink-0">{t.nav.superAdmin}</span>
             <span className="hidden sm:inline shrink-0">/</span>
-            <span className="font-bold whitespace-normal break-words leading-snug" style={{ color: theme.headerText }}>
+            <span className="font-extrabold whitespace-normal break-words leading-snug" style={{ color: theme.headerText }}>
               {getSuperItem(activeTab)?.label}
             </span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0">
+            {(tabHistory.length > 0 || activeTab !== 'tenants') && (
+              <button
+                type="button"
+                onClick={handleBackSuperTab}
+                className={`min-h-[40px] sm:min-h-[38px] px-2.5 sm:px-3 py-1.5 border text-xs font-bold cursor-pointer flex items-center gap-1 whitespace-nowrap ${ui.radiusClasses.button}`}
+                style={{ borderColor: theme.surfaceBorder, color: theme.headerText }}
+              >
+                {isRtl ? <ArrowRight className="w-3.5 h-3.5 shrink-0" /> : <ArrowLeft className="w-3.5 h-3.5 shrink-0" />}
+                <span>{isEn ? 'Back' : 'رجوع'}</span>
+              </button>
+            )}
             {activeTab !== 'tenants' && (
               <button
                 type="button"
-                onClick={() => setActiveTab('tenants')}
-                className={`min-h-[44px] sm:min-h-[38px] px-3 py-1.5 text-xs font-extrabold cursor-pointer flex items-center gap-1 whitespace-nowrap ${ui.radiusClasses.button}`}
+                onClick={handleGoSuperHome}
+                className={`min-h-[40px] sm:min-h-[38px] px-2.5 sm:px-3 py-1.5 text-xs font-extrabold cursor-pointer flex items-center gap-1 whitespace-nowrap ${ui.radiusClasses.button}`}
                 style={{ backgroundColor: theme.accentHex, color: theme.accentTextHex }}
               >
-                <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
-                <span>{isEn ? 'Super Admin Home' : 'الرئيسية'}</span>
+                <Home className="w-3.5 h-3.5 shrink-0" />
+                <span>{isEn ? 'Home' : 'الرئيسية'}</span>
               </button>
             )}
             {isTopDeck && (
@@ -649,7 +883,7 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
                 <button
                   type="button"
                   onClick={() => setActiveTab('user_guide')}
-                  className={`min-h-[44px] sm:min-h-[38px] px-3 py-1.5 border text-xs font-bold flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${ui.radiusClasses.button}`}
+                  className={`hidden lg:flex min-h-[38px] px-3 py-1.5 border text-xs font-bold items-center gap-1.5 cursor-pointer whitespace-nowrap ${ui.radiusClasses.button}`}
                   style={
                     activeTab === 'user_guide'
                       ? {
@@ -669,31 +903,30 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
                 <button
                   type="button"
                   onClick={() => onNavigate('/admin')}
-                  className={`min-h-[44px] sm:min-h-[38px] px-3 py-1.5 border text-xs font-bold cursor-pointer whitespace-nowrap ${ui.radiusClasses.button}`}
+                  className={`hidden lg:flex min-h-[38px] px-3 py-1.5 border text-xs font-bold cursor-pointer whitespace-nowrap ${ui.radiusClasses.button}`}
                   style={{ borderColor: theme.surfaceBorder, color: theme.headerText }}
                 >
                   {isEn ? 'Test Restaurant' : 'المطعم التجريبي'}
                 </button>
               </>
             )}
-            <div className={isTopDeck ? 'block' : 'hidden lg:block'}>
+            <div className="hidden lg:block">
               <LanguageToggleButton />
             </div>
             <button
               type="button"
               onClick={() => onNavigate('/?view=landing')}
-              className={`min-h-[44px] sm:min-h-[38px] px-3 py-1.5 border text-xs font-bold flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${ui.radiusClasses.button}`}
+              className={`hidden sm:flex min-h-[38px] px-3 py-1.5 border text-xs font-bold items-center gap-1.5 cursor-pointer whitespace-nowrap ${ui.radiusClasses.button}`}
               style={{ borderColor: theme.surfaceBorder, color: theme.headerText }}
             >
               <Globe className="w-3.5 h-3.5 shrink-0" />
-              <span className="sm:hidden">{isEn ? 'Landing' : 'معاينة الهبوط'}</span>
-              <span className="hidden sm:inline">{isEn ? 'Landing Preview' : 'معاينة صفحة الهبوط'}</span>
+              <span>{isEn ? 'Landing Preview' : 'معاينة صفحة الهبوط'}</span>
             </button>
             {isTopDeck && (
               <button
                 type="button"
                 onClick={() => setSignOutConfirmOpen(true)}
-                className={`min-h-[44px] sm:min-h-[38px] px-3 py-1.5 border border-rose-200 text-rose-700 text-xs font-bold cursor-pointer whitespace-nowrap ${ui.radiusClasses.button}`}
+                className={`hidden lg:flex min-h-[38px] px-3 py-1.5 border border-rose-200 text-rose-700 text-xs font-bold cursor-pointer whitespace-nowrap ${ui.radiusClasses.button}`}
               >
                 {t.admin.signOut}
               </button>
@@ -701,9 +934,9 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
           </div>
         </header>
 
-        {/* Top-Deck Mode Card Grid */}
+        {/* Top-Deck Mode Card Grid (Desktop Only) */}
         {isTopDeck && (
-          <div className="px-4 sm:px-6 pt-4 max-w-6xl w-full mx-auto">
+          <div className="hidden lg:block px-4 sm:px-6 pt-4 max-w-6xl w-full mx-auto">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {ui.visibleCards.map((card) => (
                 <div

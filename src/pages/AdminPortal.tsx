@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { User, onAuthStateChanged, signOut } from 'firebase/auth';
 import {
+  ArrowLeft,
+  ArrowRight,
   ArrowUpRight,
   BellRing,
   BookOpen,
@@ -16,6 +18,7 @@ import {
   LayoutGrid,
   Loader2,
   LogOut,
+  Menu,
   MessageCircle,
   PackageCheck,
   Palette,
@@ -107,6 +110,9 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [staffPortalSlug, setStaffPortalSlug] = useState<string | null>(null);
   const [loadingRestaurant, setLoadingRestaurant] = useState(false);
+  const isRtl = dir === 'rtl';
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [tabHistory, setTabHistory] = useState<AdminTab[]>([]);
   const [activeTab, setActiveTabState] = useState<AdminTab>(() => {
     if (typeof window === 'undefined') return 'orders';
     const saved = window.sessionStorage.getItem(OWNER_TAB_STORAGE_KEY) as AdminTab | null;
@@ -132,11 +138,25 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
     }
     return 'orders';
   });
-  const setActiveTab = (tab: AdminTab) => {
+  const scrollPageTop = () => {
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+      window.requestAnimationFrame(() =>
+        window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior })
+      );
+    }
+  };
+  const setActiveTab = (tab: AdminTab, opts?: { pushHistory?: boolean }) => {
+    const pushHistory = opts?.pushHistory ?? true;
+    if (pushHistory && tab !== activeTab) {
+      setTabHistory((prev) => [...prev.slice(-14), activeTab]);
+    }
     setActiveTabState(tab);
+    setMobileSidebarOpen(false);
     if (typeof window !== 'undefined') {
       window.sessionStorage.setItem(OWNER_TAB_STORAGE_KEY, tab);
     }
+    scrollPageTop();
   };
   const [stationCreateIntent, setStationCreateIntent] = useState<{
     key: number;
@@ -844,6 +864,24 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
     if (tabId === 'captain') setNewCallToast(null);
   };
 
+  const handleBackOwnerTab = () => {
+    setStationCreateIntent(null);
+    setMobileSidebarOpen(false);
+    if (tabHistory.length > 0) {
+      const prevTab = tabHistory[tabHistory.length - 1];
+      setTabHistory((prev) => prev.slice(0, -1));
+      setActiveTab(prevTab, { pushHistory: false });
+    } else if (activeTab !== 'orders') {
+      setActiveTab('orders', { pushHistory: false });
+    }
+  };
+
+  const handleGoOwnerHome = () => {
+    setStationCreateIntent(null);
+    setTabHistory([]);
+    setActiveTab('orders', { pushHistory: false });
+  };
+
   const openAddScreenFrom = (returnTab: AdminTab, screenType?: StationScreenType) => {
     const returnLabel =
       returnTab === 'menu'
@@ -870,10 +908,10 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
       className={`min-h-screen flex flex-col ${isOwnerTopDeck ? '' : 'lg:flex-row'} overflow-x-clip max-w-full`}
       style={{ backgroundColor: ownerTheme.canvasBg, color: ownerTheme.canvasText }}
     >
-      {/* Sidebar */}
+      {/* Desktop Sidebar (collapsed into drawer on mobile) */}
       {!isOwnerTopDeck && (
         <aside
-          className={`print:hidden ${isOwnerCompactRail ? 'lg:w-58' : 'lg:w-72'} border-b lg:border-b-0 lg:border-e shrink-0 flex flex-col justify-between`}
+          className={`print:hidden hidden lg:flex ${isOwnerCompactRail ? 'lg:w-58' : 'lg:w-72'} lg:border-e shrink-0 flex-col justify-between`}
           style={{
             backgroundColor: ownerTheme.sidebarBg,
             borderColor: ownerTheme.sidebarBorder,
@@ -1144,11 +1182,230 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
         </aside>
       )}
 
+      {/* Mobile Slide-Over Sidebar Drawer (< lg) */}
+      {mobileSidebarOpen && (
+        <div
+          className="print:hidden fixed inset-0 z-50 lg:hidden flex"
+          onClick={() => setMobileSidebarOpen(false)}
+        >
+          <div className="fixed inset-0 bg-black/55 backdrop-blur-xs" />
+          <div
+            dir={dir}
+            onClick={(e) => e.stopPropagation()}
+            className="relative z-10 w-[86%] max-w-xs h-full overflow-y-auto shadow-2xl flex flex-col justify-between"
+            style={{
+              backgroundColor: ownerTheme.sidebarBg,
+              color: ownerTheme.sidebarText,
+            }}
+          >
+            <div className="p-4 space-y-4">
+              <div className="flex items-center justify-between gap-2 pb-2 border-b" style={{ borderColor: ownerTheme.sidebarBorder }}>
+                <button
+                  type="button"
+                  onClick={handleGoOwnerHome}
+                  className="text-base font-extrabold cursor-pointer flex items-center gap-1.5"
+                  style={{ color: ownerTheme.sidebarText }}
+                >
+                  <Home className="w-4 h-4 shrink-0" style={{ color: getSidebarHighlightHex(ownerTheme) }} />
+                  <span>{t.brandName}</span>
+                </button>
+                <div className="flex items-center gap-1.5">
+                  <LanguageToggleButton variant={ownerTheme.isDarkShell ? 'dark' : 'light'} compact />
+                  <button
+                    type="button"
+                    onClick={() => setMobileSidebarOpen(false)}
+                    aria-label={isEn ? 'Close Menu' : 'إغلاق القائمة'}
+                    className={`w-10 h-10 border flex items-center justify-center cursor-pointer ${ui.radiusClasses.button}`}
+                    style={{ borderColor: ownerTheme.sidebarBorder, color: ownerTheme.sidebarText }}
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              <div
+                className={`p-3 border space-y-1.5 ${ui.radiusClasses.card}`}
+                style={{
+                  backgroundColor: ownerTheme.isDarkShell
+                    ? 'rgba(255,255,255,0.05)'
+                    : ownerTheme.surfaceSubtleBg,
+                  borderColor: ownerTheme.sidebarBorder,
+                }}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-bold truncate" style={{ color: ownerTheme.sidebarText }}>
+                    {loc(restaurant.name, restaurant.name_en)}
+                  </p>
+                  <span
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-md shrink-0 ${
+                      restaurant.isOpen
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : 'bg-rose-100 text-rose-800'
+                    }`}
+                  >
+                    {restaurant.isOpen ? t.menu.openNow : t.menu.closedNow}
+                  </span>
+                </div>
+                <p className="text-[11px] font-mono-num truncate" dir="ltr" style={{ color: ownerTheme.sidebarMuted }}>
+                  /menu/{restaurant.slug}
+                </p>
+              </div>
+
+              {isSuperAdminEmail(user.email) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileSidebarOpen(false);
+                    onNavigate('/super-admin');
+                  }}
+                  className={`w-full min-h-[44px] py-2.5 px-3 border text-xs font-extrabold flex items-center justify-center gap-2 cursor-pointer shadow-xs ${ui.radiusClasses.button}`}
+                  style={getSidebarActionColors(ownerTheme)}
+                >
+                  <ShieldCheck className="w-4 h-4 shrink-0" />
+                  <span>{t.admin.superAdminBtn}</span>
+                </button>
+              )}
+
+              <nav className="space-y-3">
+                {ui.visibleCards.map((card) => (
+                  <div
+                    key={`mobile_${card.id}`}
+                    className={`p-2.5 border space-y-1.5 ${ui.radiusClasses.card}`}
+                    style={{
+                      backgroundColor: ownerTheme.isDarkShell
+                        ? 'rgba(255,255,255,0.035)'
+                        : ownerTheme.surfaceSubtleBg,
+                      borderColor: ownerTheme.sidebarBorder,
+                    }}
+                  >
+                    <p className="text-xs font-bold px-1.5" style={{ color: ownerTheme.sidebarMuted }}>
+                      {isEn ? card.titleEn : card.titleAr}
+                    </p>
+                    <div className="flex flex-col gap-1.5">
+                      {card.buttonIds.map((bid) => {
+                        const item = navMetaMap[bid as OwnerNavTab];
+                        if (!item) return null;
+                        const Icon = item.icon;
+                        const active = activeTab === item.id;
+                        return (
+                          <button
+                            key={`mob_${item.id}`}
+                            type="button"
+                            onClick={() => handleSelectOwnerTab(item.id)}
+                            className={`min-h-[44px] flex items-center justify-between gap-2 px-3 py-2 text-xs font-bold leading-snug text-start cursor-pointer ${ui.radiusClasses.button}`}
+                            style={
+                              active
+                                ? {
+                                    backgroundColor: ownerTheme.sidebarActiveBg,
+                                    color: ownerTheme.sidebarActiveText,
+                                  }
+                                : {
+                                    color: ownerTheme.sidebarText,
+                                  }
+                            }
+                          >
+                            <span className="flex items-center gap-2 min-w-0 flex-1">
+                              <Icon className="w-4 h-4 shrink-0" />
+                              <span className="whitespace-normal break-words leading-snug">
+                                {item.label}
+                              </span>
+                            </span>
+                            {item.badge !== undefined && (
+                              <span
+                                className="font-mono-num text-[11px] font-extrabold px-1.5 py-0.5 rounded-md shrink-0"
+                                style={{
+                                  backgroundColor: active ? ownerTheme.sidebarActiveText : ownerTheme.accentHex,
+                                  color: active ? ownerTheme.sidebarActiveBg : ownerTheme.accentTextHex,
+                                }}
+                              >
+                                {item.badge}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+
+                <button
+                  type="button"
+                  onClick={() => handleSelectOwnerTab('user_guide')}
+                  className={`w-full min-h-[44px] flex items-center justify-start gap-2 px-3 py-2 text-xs font-bold text-start cursor-pointer border ${ui.radiusClasses.button}`}
+                  style={
+                    activeTab === 'user_guide'
+                      ? {
+                          backgroundColor: ownerTheme.sidebarActiveBg,
+                          borderColor: ownerTheme.sidebarActiveBg,
+                          color: ownerTheme.sidebarActiveText,
+                        }
+                      : {
+                          backgroundColor: ownerTheme.isDarkShell
+                            ? 'rgba(255,255,255,0.04)'
+                            : ownerTheme.surfaceSubtleBg,
+                          borderColor: ownerTheme.sidebarBorder,
+                          color: ownerTheme.sidebarText,
+                        }
+                  }
+                >
+                  <BookOpen className="w-4 h-4 shrink-0" />
+                  <span>{isEn ? 'Smart User Guide' : 'دليل الاستخدام الذكي'}</span>
+                </button>
+              </nav>
+            </div>
+
+            <div className="p-4 border-t space-y-2" style={{ borderColor: ownerTheme.sidebarBorder }}>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileSidebarOpen(false);
+                    onNavigate(`/menu/${restaurant.slug}?preview=1`);
+                  }}
+                  className={`min-h-[44px] py-2 px-3 border text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
+                  style={{ borderColor: ownerTheme.sidebarBorder, color: ownerTheme.sidebarText }}
+                >
+                  <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                  <span>{isEn ? 'Menu' : 'المنيو'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileSidebarOpen(false);
+                    onNavigate('/?view=landing');
+                  }}
+                  className={`min-h-[44px] py-2 px-3 border text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
+                  style={{ borderColor: ownerTheme.sidebarBorder, color: ownerTheme.sidebarText }}
+                >
+                  <Globe className="w-3.5 h-3.5 shrink-0" />
+                  <span>{isEn ? 'Landing' : 'الهبوط'}</span>
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileSidebarOpen(false);
+                  setSignOutConfirmOpen(true);
+                }}
+                className={`w-full min-h-[44px] py-2 px-3 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer ${
+                  ownerTheme.isDarkShell
+                    ? 'text-rose-200 hover:bg-rose-500/20 border border-rose-300/30'
+                    : 'text-rose-700 hover:bg-rose-50 border border-rose-200'
+                } ${ui.radiusClasses.button}`}
+              >
+                <LogOut className="w-3.5 h-3.5 shrink-0" />
+                <span>{t.admin.signOut}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main Content Area */}
       <div className="flex-1 min-w-0 flex flex-col justify-between">
         <div>
           <header
-            className="print:hidden border-b px-3 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-2.5"
+            className="print:hidden sticky top-0 z-30 border-b px-3 sm:px-6 py-2.5 sm:py-3 flex flex-wrap items-center justify-between gap-2"
             style={{
               backgroundColor: ownerTheme.headerBg,
               borderColor: ownerTheme.headerBorder,
@@ -1156,9 +1413,23 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
             }}
           >
           <div className="text-xs flex items-center gap-2 min-w-0 flex-1" style={{ color: ownerTheme.mutedText }}>
+            <button
+              type="button"
+              onClick={() => setMobileSidebarOpen(true)}
+              aria-label={isEn ? 'Open Menu' : 'فتح القائمة'}
+              className={`lg:hidden min-h-[42px] px-3 py-2 border text-xs font-extrabold inline-flex items-center gap-1.5 shrink-0 cursor-pointer ${ui.radiusClasses.button}`}
+              style={{
+                backgroundColor: ownerTheme.accentHex,
+                borderColor: ownerTheme.accentHex,
+                color: ownerTheme.accentTextHex,
+              }}
+            >
+              <Menu className="w-4 h-4 shrink-0" />
+              <span>{isEn ? 'Menu' : 'القائمة'}</span>
+            </button>
             <span className="hidden sm:inline shrink-0">{t.admin.workspaceTitle}</span>
             <span className="hidden sm:inline shrink-0">/</span>
-            <span className="font-bold whitespace-normal break-words leading-snug" style={{ color: ownerTheme.headerText }}>
+            <span className="font-extrabold whitespace-normal break-words leading-snug" style={{ color: ownerTheme.headerText }}>
               {activeTab === 'user_guide'
                 ? isEn
                   ? 'User Guide'
@@ -1167,15 +1438,37 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
             </span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
-            <div className={isOwnerTopDeck ? 'block' : 'hidden lg:block'}>
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0">
+            {(tabHistory.length > 0 || activeTab !== 'orders') && (
+              <button
+                type="button"
+                onClick={handleBackOwnerTab}
+                className={`min-h-[40px] sm:min-h-[38px] flex px-2.5 sm:px-3 py-1.5 border text-xs font-bold items-center gap-1 cursor-pointer whitespace-nowrap ${ui.radiusClasses.button}`}
+                style={{ borderColor: ownerTheme.surfaceBorder, color: ownerTheme.headerText }}
+              >
+                {isRtl ? <ArrowRight className="w-3.5 h-3.5 shrink-0" /> : <ArrowLeft className="w-3.5 h-3.5 shrink-0" />}
+                <span>{isEn ? 'Back' : 'رجوع'}</span>
+              </button>
+            )}
+            {activeTab !== 'orders' && (
+              <button
+                type="button"
+                onClick={handleGoOwnerHome}
+                className={`min-h-[40px] sm:min-h-[38px] flex px-2.5 sm:px-3 py-1.5 border text-xs font-bold items-center gap-1 cursor-pointer whitespace-nowrap ${ui.radiusClasses.button}`}
+                style={{ borderColor: ownerTheme.surfaceBorder, color: ownerTheme.headerText }}
+              >
+                <Home className="w-3.5 h-3.5 shrink-0" />
+                <span>{t.nav.home}</span>
+              </button>
+            )}
+            <div className="hidden lg:block">
               <LanguageToggleButton />
             </div>
             {isOwnerTopDeck && (
               <button
                 type="button"
                 onClick={() => handleSelectOwnerTab('user_guide')}
-                className={`min-h-[44px] sm:min-h-[38px] flex px-3 py-1.5 border text-xs font-bold items-center gap-1.5 cursor-pointer whitespace-nowrap ${ui.radiusClasses.button}`}
+                className={`hidden lg:flex min-h-[38px] px-3 py-1.5 border text-xs font-bold items-center gap-1.5 cursor-pointer whitespace-nowrap ${ui.radiusClasses.button}`}
                 style={
                   activeTab === 'user_guide'
                     ? {
@@ -1194,28 +1487,17 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
               <button
                 type="button"
                 onClick={() => onNavigate('/super-admin')}
-                className={`min-h-[44px] sm:min-h-[38px] flex px-3 py-1.5 text-xs font-extrabold items-center gap-1.5 cursor-pointer shadow-xs whitespace-nowrap ${ui.radiusClasses.button}`}
+                className={`hidden sm:flex min-h-[38px] px-3 py-1.5 text-xs font-extrabold items-center gap-1.5 cursor-pointer shadow-xs whitespace-nowrap ${ui.radiusClasses.button}`}
                 style={{ backgroundColor: ownerTheme.accentHex, color: ownerTheme.accentTextHex }}
               >
                 <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
                 <span>{t.admin.superAdminBtn}</span>
               </button>
             )}
-            {activeTab !== 'orders' && (
-              <button
-                type="button"
-                onClick={() => setActiveTab('orders')}
-                className={`min-h-[44px] sm:min-h-[38px] flex px-3 py-1.5 border text-xs font-bold items-center gap-1 cursor-pointer whitespace-nowrap ${ui.radiusClasses.button}`}
-                style={{ borderColor: ownerTheme.surfaceBorder, color: ownerTheme.headerText }}
-              >
-                <Home className="w-3.5 h-3.5 shrink-0" />
-                <span>{t.nav.home}</span>
-              </button>
-            )}
             <button
               type="button"
               onClick={() => onNavigate('/?view=landing')}
-              className={`${isOwnerTopDeck ? 'flex' : 'hidden sm:flex'} min-h-[44px] sm:min-h-[38px] px-3 py-1.5 border text-xs font-bold items-center gap-1 cursor-pointer whitespace-nowrap ${ui.radiusClasses.button}`}
+              className="hidden sm:flex min-h-[38px] px-3 py-1.5 border text-xs font-bold items-center gap-1 cursor-pointer whitespace-nowrap rounded-xl"
               style={{ borderColor: ownerTheme.surfaceBorder, color: ownerTheme.headerText }}
             >
               <Globe className="w-3.5 h-3.5 shrink-0" />
@@ -1224,7 +1506,7 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
             <button
               type="button"
               onClick={() => onNavigate(`/menu/${restaurant.slug}?preview=1`)}
-              className={`hidden sm:flex min-h-[44px] sm:min-h-[38px] px-3.5 py-1.5 border text-xs font-bold items-center gap-1.5 cursor-pointer whitespace-nowrap ${ui.radiusClasses.button}`}
+              className={`hidden sm:flex min-h-[38px] px-3.5 py-1.5 border text-xs font-bold items-center gap-1.5 cursor-pointer whitespace-nowrap ${ui.radiusClasses.button}`}
               style={{ borderColor: ownerTheme.surfaceBorder, color: ownerTheme.headerText }}
             >
               <ExternalLink className="w-3.5 h-3.5 shrink-0" />
@@ -1234,7 +1516,7 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
               <button
                 type="button"
                 onClick={() => setSignOutConfirmOpen(true)}
-                className={`min-h-[44px] sm:min-h-[38px] px-3 py-1.5 border border-rose-200 text-rose-700 text-xs font-bold cursor-pointer whitespace-nowrap ${ui.radiusClasses.button}`}
+                className={`hidden lg:flex min-h-[38px] px-3 py-1.5 border border-rose-200 text-rose-700 text-xs font-bold cursor-pointer whitespace-nowrap ${ui.radiusClasses.button}`}
               >
                 {t.admin.signOut}
               </button>
@@ -1243,7 +1525,7 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
         </header>
 
         {isOwnerTopDeck && (
-          <div className="print:hidden px-3 sm:px-6 pt-4 max-w-6xl w-full mx-auto">
+          <div className="print:hidden hidden lg:block px-3 sm:px-6 pt-4 max-w-6xl w-full mx-auto">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {ui.visibleCards.map((card) => (
                 <div

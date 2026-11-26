@@ -38,6 +38,7 @@ import { getActiveLang } from '../../data/translations';
 import { useScreenUi } from '../../contexts/PlatformUiContext';
 import { showOperationalNotification } from '../../lib/fcmNotificationService';
 import {
+  subscribeActiveTableSessions,
   subscribeCategories,
   subscribeHalls,
   subscribeMenuItems,
@@ -74,6 +75,12 @@ import {
   StationMeta,
 } from '../../lib/stationUtils';
 import {
+  doesHallMatch,
+  doTableNumbersMatch,
+  normalizeHallName,
+  normalizeTableNumber,
+} from '../../lib/tableSessionUtils';
+import {
   buildStationTicketJob,
   getActivePrinterConnection,
   getSavedPrinterProfile,
@@ -103,6 +110,7 @@ import {
   StaffActorInfo,
   StaffMember,
   StaffShift,
+  TableSession,
 } from '../../types/menu';
 import { CashierFloorPosPanel } from './CashierFloorPosPanel';
 import { SplitCheckPrintModal } from './SplitCheckPrintModal';
@@ -223,6 +231,7 @@ export function LiveOrdersTab({
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [serviceCalls, setServiceCalls] = useState<ServiceCall[]>([]);
+  const [tableSessions, setTableSessions] = useState<TableSession[]>([]);
   const [halls, setHalls] = useState<Hall[]>([]);
   const [customers, setCustomers] = useState<CustomerProfile[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -409,6 +418,9 @@ export function LiveOrdersTab({
     const unsubCustomers = canUseCashierExtras
       ? subscribeRestaurantCustomers(restaurant.id, restaurant.ownerId, setCustomers, () => {})
       : () => {};
+    const unsubSessions = canUseCashierExtras
+      ? subscribeActiveTableSessions(restaurant.id, setTableSessions, () => {})
+      : () => {};
     const unsubShifts = allShifts
       ? () => {}
       : subscribeAllRestaurantShifts(restaurant.id, setInternalShifts, () => {});
@@ -421,6 +433,7 @@ export function LiveOrdersTab({
       unsubStations();
       unsubHalls();
       unsubCustomers();
+      unsubSessions();
       unsubShifts();
       unsubExpenses();
     };
@@ -747,8 +760,8 @@ export function LiveOrdersTab({
     const map = new Map<string, Order[]>();
     activeOrders.forEach((order) => {
       if (order.orderType !== 'dine_in') return;
-      const hall = (order.hallName || '').trim();
-      const tbl = (order.tableNumber || '').trim();
+      const hall = normalizeHallName(order.hallName);
+      const tbl = normalizeTableNumber(order.tableNumber);
       if (!tbl && !order.sessionId) return;
       const key = `${hall}::${tbl || order.sessionId || order.id}`;
       const list = map.get(key) || [];
@@ -759,9 +772,16 @@ export function LiveOrdersTab({
     const groups: TableMasterGroup[] = [];
     map.forEach((tblOrders, groupKey) => {
       const first = tblOrders[0];
-      const hallName = (first.hallName || '').trim();
-      const tableNumber = (first.tableNumber || '').trim();
-      const sessionId = tblOrders.find((o) => o.sessionId)?.sessionId;
+      const hallName = normalizeHallName(first.hallName);
+      const tableNumber = normalizeTableNumber(first.tableNumber);
+      const matchingSessions = tableSessions.filter(
+        (s) =>
+          s.status === 'active' &&
+          doTableNumbersMatch(s.tableNumber, tableNumber) &&
+          ((!hallName && halls.length <= 1) ||
+            doesHallMatch(hallName || halls[0]?.name || '', s.hallName, halls.length <= 1))
+      );
+      const sessionId = tblOrders.find((o) => o.sessionId)?.sessionId || matchingSessions[0]?.id;
 
       const guestMap = new Map<string, AggregatedGuestCheck>();
       let subtotal = 0;
@@ -825,6 +845,36 @@ export function LiveOrdersTab({
         }
       });
 
+      // Ensure seated session guests who haven't submitted a separate order yet still appear in table breakdown
+      matchingSessions.forEach((sess) => {
+        (sess.guests || []).forEach((g) => {
+          const cleanG = (g || '').trim();
+          if (cleanG && !guestMap.has(cleanG.toLowerCase())) {
+            guestMap.set(cleanG.toLowerCase(), {
+              guestName: cleanG,
+              itemsCount: 0,
+              subtotal: 0,
+              serviceCharge: 0,
+              taxAmount: 0,
+              total: 0,
+            });
+          }
+        });
+        (sess.items || []).forEach((it) => {
+          const cleanG = (it.guestName || '').trim();
+          if (cleanG && !guestMap.has(cleanG.toLowerCase())) {
+            guestMap.set(cleanG.toLowerCase(), {
+              guestName: cleanG,
+              itemsCount: 0,
+              subtotal: 0,
+              serviceCharge: 0,
+              taxAmount: 0,
+              total: 0,
+            });
+          }
+        });
+      });
+
       groups.push({
         groupKey,
         hallName,
@@ -843,7 +893,7 @@ export function LiveOrdersTab({
     });
 
     return groups;
-  }, [activeOrders, isEn]);
+  }, [activeOrders, tableSessions, halls, isEn]);
 
   const visibleLedgerOrders = activeOrders;
 
@@ -2146,6 +2196,7 @@ export function LiveOrdersTab({
               halls={halls}
               orders={activeOrders}
               serviceCalls={serviceCalls}
+              tableSessions={tableSessions}
               categories={categories}
               menuItems={menuItems}
               customers={customers}
@@ -2246,8 +2297,8 @@ export function LiveOrdersTab({
                           (() => {
                             const matchedGroup = openTableGroups.find(
                               (g) =>
-                                g.tableNumber.trim() === (call.tableNumber || '').trim() &&
-                                (!call.hallName || !g.hallName || g.hallName === call.hallName.trim())
+                                doTableNumbersMatch(g.tableNumber, call.tableNumber) &&
+                                doesHallMatch(g.hallName, call.hallName)
                             );
                             if (!matchedGroup) return null;
                             return (

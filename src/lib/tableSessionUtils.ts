@@ -10,14 +10,49 @@ import { getActiveLang } from '../data/translations';
 const GUEST_ID_STORAGE_KEY = 'sufra_guest_id_v1';
 const GUEST_NAME_STORAGE_KEY = 'sufra_guest_name_v1';
 
+export function toAsciiDigits(raw?: string | null): string {
+  if (!raw) return '';
+  return raw
+    .replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x0660))
+    .replace(/[\u06F0-\u06F9]/g, (d) => String(d.charCodeAt(0) - 0x06f0));
+}
+
 export function normalizeHallName(raw?: string | null): string {
   if (!raw) return '';
-  return raw.replace(/_/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
+  return toAsciiDigits(raw).replace(/_/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
 }
 
 export function normalizeTableNumber(raw?: string | null): string {
   if (!raw) return '';
-  return raw.replace(/\s+/g, ' ').trim().slice(0, 20);
+  const cleaned = toAsciiDigits(raw)
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^(?:طاولة|ترابيزة|ترابيزه|رقم|table|tbl|#)\s*[:.-]?\s*/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return cleaned.slice(0, 20);
+}
+
+export function doTableNumbersMatch(a?: string | null, b?: string | null): boolean {
+  const na = normalizeTableNumber(a).toLowerCase();
+  const nb = normalizeTableNumber(b).toLowerCase();
+  return Boolean(na && nb && na === nb);
+}
+
+export function doesHallMatch(
+  hallOrName: { name: string; name_en?: string } | string,
+  candidateHallName?: string | null,
+  allowEmptyFallback = true
+): boolean {
+  const cand = normalizeHallName(candidateHallName).toLowerCase();
+  if (!cand) return allowEmptyFallback;
+  if (typeof hallOrName === 'string') {
+    const target = normalizeHallName(hallOrName).toLowerCase();
+    return Boolean(target && target === cand);
+  }
+  const ar = normalizeHallName(hallOrName.name).toLowerCase();
+  const en = normalizeHallName(hallOrName.name_en).toLowerCase();
+  return cand === ar || (Boolean(en) && cand === en);
 }
 
 function fnv1aHex(input: string, seed = 0x811c9dc5): string {

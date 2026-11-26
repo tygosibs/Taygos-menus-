@@ -89,6 +89,8 @@ export function Flipbook3DTheme({
         themeIsDark: false,
         colorMode: activeColorOverride,
         primaryColor: restaurant.primaryColor,
+        menuBgColor: restaurant.menuBgColor,
+        menuCardBgColor: restaurant.menuCardBgColor,
         headingColor: restaurant.headingColor,
         descriptionColor: restaurant.descriptionColor,
         priceColor: restaurant.priceColor,
@@ -96,6 +98,8 @@ export function Flipbook3DTheme({
     [
       activeColorOverride,
       restaurant.primaryColor,
+      restaurant.menuBgColor,
+      restaurant.menuCardBgColor,
       restaurant.headingColor,
       restaurant.descriptionColor,
       restaurant.priceColor,
@@ -281,14 +285,43 @@ export function Flipbook3DTheme({
   const restName = loc(restaurant.name, restaurant.name_en);
   const restTagline = loc(restaurant.tagline, restaurant.tagline_en);
 
-  const pageSurfaceBg = isBookDarkPage ? '#141923' : '#FAF5EE';
-  const pageCardBg = isBookDarkPage ? '#1E2534' : '#FFFDF9';
-  const pageBorder = isBookDarkPage ? 'rgba(198,164,108,0.28)' : '#E2D4C0';
-  const pageHeadingColor =
-    restaurant.headingColor || (isBookDarkPage ? '#F8FAFC' : '#231911');
-  const pageDescColor =
-    restaurant.descriptionColor || (isBookDarkPage ? '#CBD5E1' : '#6B5848');
-  const pagePriceColor = restaurant.priceColor || accent;
+  const hasCustomSurfaceOverride =
+    activeColorOverride !== 'auto' ||
+    Boolean(
+      restaurant.menuBgColor ||
+        restaurant.menuCardBgColor ||
+        restaurant.headingColor ||
+        restaurant.descriptionColor ||
+        restaurant.priceColor
+    );
+
+  const pageSurfaceBg = restaurant.menuBgColor
+    ? palette.pageBg
+    : isBookDarkPage
+      ? '#141923'
+      : '#FAF5EE';
+  const pageCardBg =
+    restaurant.menuCardBgColor || restaurant.menuBgColor
+      ? palette.cardBg
+      : isBookDarkPage
+        ? '#1E2534'
+        : '#FFFDF9';
+  const pageBorder = hasCustomSurfaceOverride
+    ? palette.borderColor
+    : isBookDarkPage
+      ? 'rgba(198,164,108,0.28)'
+      : '#E2D4C0';
+  const pageHeadingColor = hasCustomSurfaceOverride
+    ? palette.headingColor
+    : isBookDarkPage
+      ? '#F8FAFC'
+      : '#231911';
+  const pageDescColor = hasCustomSurfaceOverride
+    ? palette.descriptionColor
+    : isBookDarkPage
+      ? '#CBD5E1'
+      : '#6B5848';
+  const pagePriceColor = hasCustomSurfaceOverride ? palette.priceColor : accent;
 
   const pageGridClass =
     restaurant.menuColumns === 1

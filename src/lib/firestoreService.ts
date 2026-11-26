@@ -260,6 +260,8 @@ export async function updateRestaurantThemeAndTaxes(
     headingColor?: string;
     descriptionColor?: string;
     priceColor?: string;
+    menuBgColor?: string;
+    menuCardBgColor?: string;
     menuColumns?: 1 | 2 | 3;
   }
 ): Promise<void> {
@@ -284,6 +286,12 @@ export async function updateRestaurantThemeAndTaxes(
   }
   if (updates.priceColor !== undefined) {
     payload.priceColor = cleanHex(updates.priceColor);
+  }
+  if (updates.menuBgColor !== undefined) {
+    payload.menuBgColor = cleanHex(updates.menuBgColor);
+  }
+  if (updates.menuCardBgColor !== undefined) {
+    payload.menuCardBgColor = cleanHex(updates.menuCardBgColor);
   }
   if (updates.menuColumns !== undefined) {
     payload.menuColumns = [1, 2, 3].includes(updates.menuColumns) ? updates.menuColumns : 2;
@@ -458,6 +466,8 @@ export async function updateRestaurantSettings(
     headingColor?: string;
     descriptionColor?: string;
     priceColor?: string;
+    menuBgColor?: string;
+    menuCardBgColor?: string;
     menuColumns?: 1 | 2 | 3;
   }
 ): Promise<Restaurant> {
@@ -481,6 +491,10 @@ export async function updateRestaurantSettings(
       : cleanHex(restaurant.descriptionColor);
   const safePriceColor =
     updates.priceColor !== undefined ? cleanHex(updates.priceColor) : cleanHex(restaurant.priceColor);
+  const safeMenuBgColor =
+    updates.menuBgColor !== undefined ? cleanHex(updates.menuBgColor) : cleanHex(restaurant.menuBgColor);
+  const safeMenuCardBgColor =
+    updates.menuCardBgColor !== undefined ? cleanHex(updates.menuCardBgColor) : cleanHex(restaurant.menuCardBgColor);
   const cleanOwnerBirthday =
     updates.ownerBirthday !== undefined
       ? normalizeIsoBirthday(updates.ownerBirthday)
@@ -528,6 +542,8 @@ export async function updateRestaurantSettings(
       headingColor: safeHeadingColor,
       descriptionColor: safeDescColor,
       priceColor: safePriceColor,
+      menuBgColor: safeMenuBgColor,
+      menuCardBgColor: safeMenuCardBgColor,
       menuColumns: safeMenuColumns,
       updatedAt: serverTimestamp(),
     });
@@ -549,6 +565,8 @@ export async function updateRestaurantSettings(
       headingColor: safeHeadingColor,
       descriptionColor: safeDescColor,
       priceColor: safePriceColor,
+      menuBgColor: safeMenuBgColor,
+      menuCardBgColor: safeMenuCardBgColor,
       menuColumns: safeMenuColumns,
     };
   } catch (error) {
@@ -2269,6 +2287,42 @@ export function subscribeTableSession(
         );
       } else {
         handleFirestoreError(error, OperationType.GET, path);
+      }
+    }
+  );
+}
+
+export function subscribeActiveTableSessions(
+  restaurantId: string,
+  onData: (sessions: TableSession[]) => void,
+  onError?: (err: Error) => void
+): () => void {
+  const path = `restaurants/${restaurantId}/table_sessions`;
+  const q = query(
+    collection(db, 'restaurants', restaurantId, 'table_sessions'),
+    where('status', '==', 'active')
+  );
+  return onSnapshot(
+    q,
+    (snap) => {
+      const list = snap.docs
+        .map((d) => ({ ...(d.data() as TableSession), id: d.id }))
+        .filter((s) => s.status === 'active');
+      onData(list);
+    },
+    (error) => {
+      if (onError) {
+        onError(
+          error instanceof Error
+            ? error
+            : new Error(
+                getActiveLang() === 'en'
+                  ? 'Failed to load active table sessions'
+                  : 'تعذر تحميل جلسات الترابيزات المفتوحة'
+              )
+        );
+      } else {
+        handleFirestoreError(error, OperationType.LIST, path);
       }
     }
   );

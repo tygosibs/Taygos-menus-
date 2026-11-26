@@ -48,6 +48,8 @@
         "headingColor": { "type": "string", "maxLength": 16 },
         "descriptionColor": { "type": "string", "maxLength": 16 },
         "priceColor": { "type": "string", "maxLength": 16 },
+        "menuBgColor": { "type": "string", "maxLength": 16 },
+        "menuCardBgColor": { "type": "string", "maxLength": 16 },
         "menuColumns": { "type": "number" },
         "taxRate": { "type": "number" },
         "serviceCharge": { "type": "number" },

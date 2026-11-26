@@ -28,6 +28,7 @@ import {
   getHallTableNumbers,
   sendServiceCall,
   submitPublicOrder,
+  subscribeActiveTableSessions,
   subscribeCategories,
   subscribeHalls,
   subscribeMenuItems,
@@ -52,6 +53,11 @@ import {
   resolveOrderItemStations,
 } from '../../lib/stationUtils';
 import {
+  doesHallMatch,
+  doTableNumbersMatch,
+  normalizeTableNumber,
+} from '../../lib/tableSessionUtils';
+import {
   Category,
   Hall,
   HallCaptainAssignment,
@@ -69,6 +75,7 @@ import {
   StaffActorInfo,
   StaffMember,
   StaffShift,
+  TableSession,
 } from '../../types/menu';
 
 import { EffectiveStaffPermissions } from '../../types/menu';
@@ -134,6 +141,7 @@ export function HallManagerConsole({
   const [halls, setHalls] = useState<Hall[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [serviceCalls, setServiceCalls] = useState<ServiceCall[]>([]);
+  const [tableSessions, setTableSessions] = useState<TableSession[]>([]);
   const [assignments, setAssignments] = useState<HallCaptainAssignment[]>([]);
   const [staffList, setStaffList] = useState<StaffMember[]>([]);
   const [localShifts, setLocalShifts] = useState<StaffShift[]>([]);
@@ -204,6 +212,11 @@ export function HallManagerConsole({
       () => {},
       { staffMode: true }
     );
+    const unsubSessions = subscribeActiveTableSessions(
+      restaurant.id,
+      setTableSessions,
+      () => {}
+    );
     const unsubAssign = subscribeHallAssignments(restaurant.id, setAssignments, () => {});
     const unsubStaff = subscribeRestaurantStaff(restaurant.id, setStaffList, () => {});
     const unsubCats = subscribeCategories(restaurant.id, setCategories);
@@ -218,6 +231,7 @@ export function HallManagerConsole({
       unsubHalls();
       unsubOrders();
       unsubCalls();
+      unsubSessions();
       unsubAssign();
       unsubStaff();
       unsubCats();
@@ -291,20 +305,54 @@ export function HallManagerConsole({
   const getTableSnapshot = (hallName: string, tableNumber: string) => {
     const cleanTbl = tableNumber.trim();
     const cleanHall = hallName.trim();
+    const allowEmptyHallFallback = halls.length <= 1 || halls[0]?.name.trim() === cleanHall;
     const tblOrders = orders.filter(
       (o) =>
         o.status !== 'completed' &&
         o.status !== 'cancelled' &&
         o.orderType === 'dine_in' &&
-        (o.tableNumber || '').trim() === cleanTbl &&
-        (!o.hallName || o.hallName.trim() === cleanHall)
+        doTableNumbersMatch(o.tableNumber, cleanTbl) &&
+        doesHallMatch(cleanHall, o.hallName, allowEmptyHallFallback)
     );
     const tblCalls = serviceCalls.filter(
       (c) =>
         c.status !== 'resolved' &&
-        (c.tableNumber || '').trim() === cleanTbl &&
-        (!c.hallName || c.hallName.trim() === cleanHall)
+        doTableNumbersMatch(c.tableNumber, cleanTbl) &&
+        doesHallMatch(cleanHall, c.hallName, allowEmptyHallFallback)
     );
+    const tblSessions = tableSessions.filter(
+      (s) =>
+        s.status === 'active' &&
+        doTableNumbersMatch(s.tableNumber, cleanTbl) &&
+        doesHallMatch(cleanHall, s.hallName, allowEmptyHallFallback)
+    );
+
+    const guestMap = new Map<string, string>();
+    const addGuest = (raw?: string) => {
+      const g = (raw || '').trim();
+      if (g && !guestMap.has(g.toLowerCase())) {
+        guestMap.set(g.toLowerCase(), g);
+      }
+    };
+    tblSessions.forEach((s) => {
+      (s.guests || []).forEach(addGuest);
+      (s.items || []).forEach((it) => addGuest(it.guestName));
+    });
+    tblOrders.forEach((o) => {
+      if (Array.isArray(o.guestChecks) && o.guestChecks.length > 0) {
+        o.guestChecks.forEach((gc) => addGuest(gc.guestName));
+      } else {
+        addGuest(o.customerName);
+      }
+      (o.items || []).forEach((it) => addGuest(it.guestName));
+    });
+    const seatedGuests = Array.from(guestMap.values());
+    const sessionItemsCount = tblSessions.reduce(
+      (sum, s) => sum + (s.items || []).reduce((isum, it) => isum + (it.quantity || 0), 0),
+      0
+    );
+    const sessionPendingItems = tblSessions.flatMap((s) => s.items || []);
+
     const hasBillRequest = tblCalls.some(
       (c) => c.callType === 'request_bill_cash' || c.callType === 'request_bill_card'
     );
@@ -314,14 +362,21 @@ export function HallManagerConsole({
       const ms = getTimestampMillis(o.createdAt);
       if (ms > 0 && (oldestMs === 0 || ms < oldestMs)) oldestMs = ms;
     });
+    if (oldestMs === 0) {
+      tblSessions.forEach((s) => {
+        const ms = getTimestampMillis(s.updatedAt || s.createdAt);
+        if (ms > 0 && (oldestMs === 0 || ms < oldestMs)) oldestMs = ms;
+      });
+    }
     const elapsedMins = oldestMs > 0 ? Math.max(0, Math.floor((nowTick - oldestMs) / 60000)) : 0;
     const isOverdue = tblOrders.length > 0 && elapsedMins >= opsConfig.tableOverdueMinutes;
+    const isOccupied = tblOrders.length > 0 || seatedGuests.length > 0 || sessionItemsCount > 0;
 
     const state: 'empty' | 'occupied' | 'billRequested' | 'overdue' = isOverdue
       ? 'overdue'
       : hasBillRequest
         ? 'billRequested'
-        : tblOrders.length > 0
+        : isOccupied
           ? 'occupied'
           : 'empty';
 
@@ -331,7 +386,18 @@ export function HallManagerConsole({
       0
     );
 
-    return { tblOrders, tblCalls, elapsedMins, state, total, itemsCount };
+    return {
+      tblOrders,
+      tblCalls,
+      tblSessions,
+      seatedGuests,
+      sessionItemsCount,
+      sessionPendingItems,
+      elapsedMins,
+      state,
+      total,
+      itemsCount,
+    };
   };
 
   // Floor KPI metrics
@@ -357,7 +423,7 @@ export function HallManagerConsole({
       onlineCaptainsCount,
       assignedCaptainsCount: shiftAssignments.length,
     };
-  }, [halls, orders, serviceCalls, captains, activeShiftByStaffUid, shiftAssignments, nowTick]);
+  }, [halls, orders, serviceCalls, tableSessions, captains, activeShiftByStaffUid, shiftAssignments, nowTick]);
 
   const visibleHalls = useMemo(() => {
     if (selectedHallFilter === 'all') return halls;
@@ -501,7 +567,7 @@ export function HallManagerConsole({
         customerPhone: '000000',
         orderType: 'dine_in',
         hallName: selectedTable.hall.name,
-        tableNumber: selectedTable.tableNumber,
+        tableNumber: normalizeTableNumber(selectedTable.tableNumber),
         items: orderItems,
         subtotal,
         serviceCharge,
@@ -831,7 +897,7 @@ export function HallManagerConsole({
               const CallIcon = meta.Icon;
               const isAck = call.status === 'acknowledged';
               const matchedHall = halls.find(
-                (h) => h.name.trim() === (call.hallName || '').trim()
+                (h) => doesHallMatch(h, call.hallName, halls.length <= 1)
               );
               const responsibleCaps = matchedHall
                 ? getCaptainsForTable(matchedHall.id, call.tableNumber || '')
@@ -1081,9 +1147,11 @@ export function HallManagerConsole({
                               ? perms.showPrices
                                 ? `${snap.itemsCount} · ${formatMoney(snap.total)}`
                                 : `${snap.itemsCount} ${isEn ? 'items' : 'صنف'}`
-                              : isEn
-                                ? 'Available'
-                                : 'متاحة'}
+                              : snap.seatedGuests.length > 0
+                                ? `${snap.seatedGuests.length} ${isEn ? 'guests' : 'ضيوف'} · ${snap.seatedGuests[0]}`
+                                : isEn
+                                  ? 'Available'
+                                  : 'متاحة'}
                           </div>
                           <div className="px-1.5 py-0.5 rounded bg-black/20 text-[9px] font-extrabold truncate">
                             {tblCaptains.length > 0
@@ -1160,13 +1228,55 @@ export function HallManagerConsole({
                   </div>
                 )}
 
+                {snap.seatedGuests.length > 0 && (
+                  <div className="p-3 rounded-2xl bg-sky-50 border border-sky-200 space-y-2">
+                    <p className="text-xs font-extrabold text-sky-950 flex items-center gap-1.5">
+                      <Users className="w-3.5 h-3.5 text-sky-700" />
+                      <span>
+                        {isEn
+                          ? `Seated Guests (${snap.seatedGuests.length})`
+                          : `الضيوف المسجلون على الطاولة (${snap.seatedGuests.length})`}
+                      </span>
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {snap.seatedGuests.map((gName) => (
+                        <span
+                          key={gName}
+                          className="px-2.5 py-1 rounded-lg bg-white border border-sky-200 text-[11px] font-extrabold text-sky-950"
+                        >
+                          {gName}
+                        </span>
+                      ))}
+                    </div>
+                    {snap.sessionPendingItems.length > 0 && (
+                      <div className="pt-2 border-t border-sky-200/80 space-y-1">
+                        <p className="text-[11px] font-extrabold text-sky-900">
+                          {isEn ? 'In Guest Shared Cart:' : 'في السلة المشتركة للطاولة:'}
+                        </p>
+                        {snap.sessionPendingItems.map((it) => (
+                          <div key={it.cartKey} className="text-[11px] font-bold text-sky-950 truncate">
+                            {it.quantity}× {loc(it.name, it.name_en)}
+                            {it.guestName ? ` [${it.guestName}]` : ''}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {snap.tblOrders.length === 0 ? (
                   <div
                     className="p-5 rounded-2xl border text-center space-y-1"
                     style={{ backgroundColor: ui.theme.surfaceSubtleBg, borderColor: ui.theme.surfaceBorder }}
                   >
                     <p className="text-xs font-bold" style={{ color: ui.theme.mutedText }}>
-                      {isEn ? 'Table currently has no open orders.' : 'لا توجد طلبات مفتوحة على هذه الترابيزة حالياً.'}
+                      {snap.seatedGuests.length > 0
+                        ? isEn
+                          ? 'Guests seated — awaiting first order.'
+                          : 'الضيوف جالسون على الطاولة ولم يرسلوا طلبهم بعد.'
+                        : isEn
+                          ? 'Table currently has no open orders.'
+                          : 'لا توجد طلبات مفتوحة على هذه الترابيزة حالياً.'}
                     </p>
                   </div>
                 ) : (
@@ -1191,6 +1301,7 @@ export function HallManagerConsole({
                               <div key={idx} className="flex items-center justify-between gap-2">
                                 <span className="font-bold">
                                   {it.quantity}× {it.name} {it.sizeName ? `(${it.sizeName})` : ''}
+                                  {it.guestName ? ` [${it.guestName}]` : ''}
                                 </span>
                                 <div className="flex items-center gap-1.5 shrink-0">
                                   {perms.canUpdatePrepProgress && stState === 'ready' && (
