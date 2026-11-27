@@ -87,6 +87,53 @@ function buildSyntheticStaffAuthEmail(username: string, restaurantId: string, su
   return `${userPart}.${restShort}${extra}@staff.sufra.local`;
 }
 
+function mapStaffAuthCreationError(err: unknown): Error {
+  const isEn = getActiveLang() === 'en';
+  const code =
+    typeof err === 'object' && err !== null && 'code' in err
+      ? String((err as { code?: string }).code)
+      : '';
+  const msg = err instanceof Error ? err.message : String(err || '');
+  const lower = `${code} ${msg}`.toLowerCase();
+
+  if (lower.includes('email-already-in-use')) {
+    return new Error(
+      isEn
+        ? 'This email is already used in Authentication. Leave email optional or use a one-time QR invite.'
+        : 'هذا البريد الإلكتروني مستخدم بالفعل. اترك البريد اختيارياً أو استخدم دعوة رمز الاستجابة لمرة واحدة.'
+    );
+  }
+  if (lower.includes('operation-not-allowed') || lower.includes('configuration-not-found')) {
+    return new Error(
+      isEn
+        ? 'Email/Password sign-in provider is disabled in Firebase Console. Enable Authentication → Sign-in method → Email/Password so staff accounts can be created.'
+        : 'مزوّد البريد الإلكتروني وكلمة المرور غير مفعّل في Firebase Console. يرجى تفعيله من Authentication ← Sign-in method ← Email/Password حتى يتم إنشاء حسابات الكادر.'
+    );
+  }
+  if (lower.includes('weak-password')) {
+    return new Error(
+      isEn
+        ? 'The password is too weak for Firebase Auth. Choose a stronger password (at least 8 characters with letters and numbers).'
+        : 'كلمة المرور ضعيفة حسب سياسة Firebase. اختر كلمة مرور أقوى (8 أحرف على الأقل بحروف وأرقام).'
+    );
+  }
+  if (lower.includes('network-request-failed')) {
+    return new Error(
+      isEn
+        ? 'Network connection failed while creating the staff Auth account. Please retry.'
+        : 'انقطع الاتصال بالشبكة أثناء إنشاء حساب الموظف في Firebase Auth. حاول مجدداً.'
+    );
+  }
+  if (lower.includes('too-many-requests')) {
+    return new Error(
+      isEn
+        ? 'Too many Auth requests in a short time. Please wait a minute and try again.'
+        : 'تم إرسال طلبات كثيرة لإنشاء الحسابات في وقت قصير. انتظر دقيقة وحاول مجدداً.'
+    );
+  }
+  return err instanceof Error ? err : new Error(msg || (isEn ? 'Failed to create staff account.' : 'تعذر إنشاء حساب الموظف.'));
+}
+
 export async function fetchRestaurantBySlugForStaff(slug: string): Promise<Restaurant | null> {
   const cleanSlug = (slug || '')
     .toLowerCase()
@@ -387,15 +434,7 @@ export async function createManagerOrStaffAccount(
     });
     staffUid = authUser.uid;
   } catch (err) {
-    const msg = err instanceof Error ? err.message : '';
-    if (msg.includes('email-already-in-use')) {
-      throw new Error(
-        isEn
-          ? 'This email is already used in Authentication. Leave email optional or use a one-time QR invite.'
-          : 'هذا البريد الإلكتروني مستخدم بالفعل. اترك البريد اختيارياً أو استخدم دعوة رمز الاستجابة لمرة واحدة.'
-      );
-    }
-    throw err;
+    throw mapStaffAuthCreationError(err);
   }
 
   const expiresAtMs = Date.now() + 24 * 60 * 60 * 1000;
@@ -658,12 +697,17 @@ export async function regenerateStaffInvite(params: {
     nonce
   );
 
-  const authUser = await createStaffSecondaryUser({
-    email: newAuthEmail,
-    password: bootstrapPassword,
-    displayName: existingStaff.name,
-  });
-  const newUid = authUser.uid;
+  let newUid: string;
+  try {
+    const authUser = await createStaffSecondaryUser({
+      email: newAuthEmail,
+      password: bootstrapPassword,
+      displayName: existingStaff.name,
+    });
+    newUid = authUser.uid;
+  } catch (err) {
+    throw mapStaffAuthCreationError(err);
+  }
   const expiresAtMs = Date.now() + 24 * 60 * 60 * 1000;
 
   const [uLookupId, pLookupId, eLookupId] = await Promise.all([

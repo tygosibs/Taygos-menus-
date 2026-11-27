@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { autoSuggestEnglish } from '../../data/translations';
+import { formatFirestoreErrorMessage } from '../../lib/firebase';
 import {
   removeCategory,
   removeMenuItem,
@@ -215,7 +216,7 @@ export function MenuBuilderTab({
       markSavedToast();
     } catch (err) {
       setOrderSyncStatus('idle');
-      setOrderError(err instanceof Error ? err.message : t.auth.errGeneric);
+      setOrderError(formatFirestoreErrorMessage(err, isEn));
     }
   };
 
@@ -230,7 +231,7 @@ export function MenuBuilderTab({
       markSavedToast();
     } catch (err) {
       setOrderSyncStatus('idle');
-      setOrderError(err instanceof Error ? err.message : t.auth.errGeneric);
+      setOrderError(formatFirestoreErrorMessage(err, isEn));
     }
   };
 
@@ -557,7 +558,7 @@ export function MenuBuilderTab({
       });
       setCatModalOpen(false);
     } catch (err) {
-      setCatError(err instanceof Error ? err.message : t.auth.errGeneric);
+      setCatError(formatFirestoreErrorMessage(err, isEn));
     } finally {
       setSavingCat(false);
     }
@@ -708,7 +709,7 @@ export function MenuBuilderTab({
       });
       setItemModalOpen(false);
     } catch (err) {
-      setItemError(err instanceof Error ? err.message : t.auth.errGeneric);
+      setItemError(formatFirestoreErrorMessage(err, isEn));
     } finally {
       setSavingItem(false);
     }
@@ -727,7 +728,7 @@ export function MenuBuilderTab({
       if (target === 'cat') setCatImageUrl(url);
       else setItemImageUrl(url);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : t.auth.errGeneric;
+      const msg = formatFirestoreErrorMessage(err, isEn);
       if (target === 'cat') setCatError(msg);
       else setItemError(msg);
     } finally {
@@ -737,8 +738,11 @@ export function MenuBuilderTab({
 
   const handleSeedStarter = async () => {
     setSeeding(true);
+    setOrderError(null);
     try {
       await seedStarterMenuForRestaurant(restaurant.id, restaurant.ownerId);
+    } catch (err) {
+      setOrderError(formatFirestoreErrorMessage(err, isEn));
     } finally {
       setSeeding(false);
     }

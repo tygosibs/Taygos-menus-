@@ -32,6 +32,10 @@
         "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
         "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
         "slug": { "type": "string", "minLength": 2, "maxLength": 64, "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+        "businessType": { "type": "string", "enum": ["restaurant", "restaurant_cafe", "cafe", "hotel", "lounge", "bakery", "tourist_facility"] },
+        "facilityPrefix": { "type": "string", "enum": ["RE", "RC", "CA", "HO", "LO", "BK", "TF"] },
+        "facilitySerial": { "type": "string", "minLength": 4, "maxLength": 8, "pattern": "^[0-9]{4,8}$" },
+        "facilityCode": { "type": "string", "minLength": 6, "maxLength": 20, "pattern": "^(RE|RC|CA|HO|LO|BK|TF)-[0-9]{4,8}$" },
         "name": { "type": "string", "minLength": 2, "maxLength": 120 },
         "name_en": { "type": "string", "maxLength": 120 },
         "tagline": { "type": "string", "maxLength": 500 },
@@ -50,6 +54,8 @@
         "priceColor": { "type": "string", "maxLength": 16 },
         "menuBgColor": { "type": "string", "maxLength": 16 },
         "menuCardBgColor": { "type": "string", "maxLength": 16 },
+        "lightThemeColors": { "type": "object" },
+        "darkThemeColors": { "type": "object" },
         "menuColumns": { "type": "number" },
         "taxRate": { "type": "number" },
         "serviceCharge": { "type": "number" },
@@ -439,6 +445,7 @@
         "birthYear": { "type": "number" },
         "preferredOrderType": { "type": "string", "enum": ["dine_in", "delivery", "pickup"] },
         "address": { "type": "string", "maxLength": 300 },
+        "avatarUrl": { "type": "string", "maxLength": 300000 },
         "totalOrders": { "type": "number" },
         "loyaltyCycleOrders": { "type": "number" },
         "firstOrderDiscountUsed": { "type": "boolean" },
@@ -943,6 +950,51 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "restaurantId", "ownerId", "nameAr", "nameEn", "color", "allowedScreens", "defaultScreen", "permissions", "isActive", "sortOrder", "createdBy", "createdAt", "updatedAt"]
+    },
+    "FacilityCode": {
+      "title": "FacilityCode",
+      "description": "Unique facility activity code mapping (prefix + serial) to restaurantId and slug for staff login.",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string", "minLength": 6, "maxLength": 20, "pattern": "^(RE|RC|CA|HO|LO|BK|TF)-[0-9]{4,8}$" },
+        "prefix": { "type": "string", "enum": ["RE", "RC", "CA", "HO", "LO", "BK", "TF"] },
+        "serial": { "type": "string", "minLength": 4, "maxLength": 8, "pattern": "^[0-9]{4,8}$" },
+        "businessType": { "type": "string", "enum": ["restaurant", "restaurant_cafe", "cafe", "hotel", "lounge", "bakery", "tourist_facility"] },
+        "restaurantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "slug": { "type": "string", "minLength": 2, "maxLength": 64, "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "name_en": { "type": "string", "maxLength": 120 },
+        "logoUrl": { "type": "string", "maxLength": 300000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["code", "prefix", "serial", "businessType", "restaurantId", "ownerId", "slug", "name", "createdAt", "updatedAt"]
+    },
+    "CustomerVisit": {
+      "title": "CustomerVisit",
+      "description": "Tracked customer visit and session duration log per restaurant.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "restaurantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "customerPhone": { "type": "string", "maxLength": 24 },
+        "customerName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "hallName": { "type": "string", "maxLength": 80 },
+        "tableNumber": { "type": "string", "maxLength": 20 },
+        "orderType": { "type": "string", "enum": ["dine_in", "delivery", "pickup"] },
+        "source": { "type": "string", "enum": ["menu", "pos"] },
+        "orderId": { "type": "string", "maxLength": 64 },
+        "orderNumber": { "type": "string", "maxLength": 40 },
+        "startedAt": { "type": "number" },
+        "endedAt": { "type": "number" },
+        "durationMinutes": { "type": "number" },
+        "status": { "type": "string", "enum": ["active", "completed"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "restaurantId", "ownerId", "customerName", "orderType", "source", "startedAt", "status", "createdAt", "updatedAt"]
     }
   },
   "firestore": {
@@ -953,6 +1005,10 @@
     "/slugs/{slug}": {
       "schema": { "$ref": "#/entities/SlugMapping" },
       "description": "Unique URL slug mapping to restaurantId."
+    },
+    "/facility_codes/{code}": {
+      "schema": { "$ref": "#/entities/FacilityCode" },
+      "description": "Unique facility activity code mapping (prefix-serial) to restaurantId for staff login."
     },
     "/restaurants/{restaurantId}": {
       "schema": { "$ref": "#/entities/Restaurant" },
@@ -1045,6 +1101,10 @@
     "/restaurants/{restaurantId}/job_titles/{titleId}": {
       "schema": { "$ref": "#/entities/JobTitle" },
       "description": "Restaurant custom Job Titles and bundled RBAC permission sets."
+    },
+    "/restaurants/{restaurantId}/customer_visits/{visitId}": {
+      "schema": { "$ref": "#/entities/CustomerVisit" },
+      "description": "Tracked customer visit and session duration log per restaurant."
     }
   }
 }

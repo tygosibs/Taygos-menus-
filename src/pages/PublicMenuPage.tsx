@@ -32,14 +32,17 @@ import {
 import { auth, isSuperAdminEmail } from '../lib/firebase';
 import {
   clearTableSessionAfterOrder,
+  endCustomerVisit,
   fetchActiveCustomThemes,
   fetchCustomerProfile,
+  fetchCustomerVisitsByIds,
   fetchCustomThemeById,
   fetchRestaurantBySlug,
   fetchRestaurantHalls,
   mutateTableSessionCart,
   registerGuestInTableSession,
   sendServiceCall,
+  startOrSyncCustomerVisit,
   subscribeTableSession,
 } from '../lib/firestoreService';
 import {
@@ -65,6 +68,7 @@ import {
   Category,
   CustomerLastOrderItem,
   CustomerProfile,
+  CustomerVisitRecord,
   CustomTheme,
   Hall,
   MenuColorMode,
@@ -108,6 +112,8 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
   const [colorModeOverride, setColorModeOverride] = useState<MenuColorMode>('auto');
   const [prefillPromoCode, setPrefillPromoCode] = useState<string | null>(null);
   const [customerProfile, setCustomerProfile] = useState<CustomerProfile | null>(null);
+  const [customerVisits, setCustomerVisits] = useState<CustomerVisitRecord[]>([]);
+  const [activeVisitId, setActiveVisitId] = useState<string | null>(null);
   const [loyaltyModalOpen, setLoyaltyModalOpen] = useState(false);
   const { isInstalled } = usePWAInstall();
 
@@ -126,11 +132,41 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
   const [guestModalOpen, setGuestModalOpen] = useState(false);
   const [tableSession, setTableSession] = useState<TableSession | null>(null);
   const registeredKeyRef = useRef<string>('');
+  const prevTableSessionStatusRef = useRef<string | null>(null);
   const pendingCartActionRef = useRef<
     | { type: 'add'; item: CartItem }
     | { type: 'quick'; item: MenuItem; delta: number }
     | null
   >(null);
+
+  const recordVisitIdAndRefresh = useCallback(
+    async (restaurantId: string, visitId: string) => {
+      if (!visitId || typeof window === 'undefined' || !slug) return;
+      setActiveVisitId(visitId);
+      const storageKey = `sufra_visit_ids_${slug}`;
+      let ids: string[] = [];
+      try {
+        const raw = window.localStorage.getItem(storageKey);
+        const parsed = raw ? JSON.parse(raw) : [];
+        if (Array.isArray(parsed)) {
+          ids = parsed.filter((x): x is string => typeof x === 'string');
+        }
+      } catch {
+        ids = [];
+      }
+      const nextIds = [visitId, ...ids.filter((id) => id !== visitId)].slice(0, 15);
+      try {
+        window.localStorage.setItem(storageKey, JSON.stringify(nextIds));
+      } catch {
+        // ignore storage quota errors
+      }
+      if (!isDemoMode) {
+        const list = await fetchCustomerVisitsByIds(restaurantId, nextIds).catch(() => []);
+        setCustomerVisits(list);
+      }
+    },
+    [slug, isDemoMode]
+  );
 
   const sessionId = useMemo(
     () => buildTableSessionId(hallName, tableNumber),
@@ -266,6 +302,23 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
         } else {
           setCustomerProfile(null);
         }
+        if (typeof window !== 'undefined') {
+          try {
+            const rawVisits = window.localStorage.getItem(`sufra_visit_ids_${slug}`);
+            const parsedVisits = rawVisits ? JSON.parse(rawVisits) : [];
+            if (Array.isArray(parsedVisits) && parsedVisits.length > 0) {
+              fetchCustomerVisitsByIds(res.restaurant.id, parsedVisits)
+                .then((list) => {
+                  if (active) setCustomerVisits(list);
+                })
+                .catch(() => {});
+            } else {
+              setCustomerVisits([]);
+            }
+          } catch {
+            setCustomerVisits([]);
+          }
+        }
         fetchRestaurantHalls(res.restaurant.id).then((loadedHalls) => {
           if (active) setHalls(loadedHalls);
         });
@@ -316,6 +369,20 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
         sessionId,
         (session) => {
           setTableSession(session);
+          const prevStatus = prevTableSessionStatusRef.current;
+          const nextStatus = session?.status || null;
+          prevTableSessionStatusRef.current = nextStatus;
+          if (
+            prevStatus === 'active' &&
+            (nextStatus === 'closed' || nextStatus === null) &&
+            activeVisitId
+          ) {
+            void endCustomerVisit({
+              restaurantId: restaurant.id,
+              visitId: activeVisitId,
+            }).then(() => recordVisitIdAndRefresh(restaurant.id, activeVisitId));
+            setActiveVisitId(null);
+          }
         },
         (err) => {
           console.warn('Table session sync warning:', err.message);
@@ -750,6 +817,22 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
           guestName: payload.guestName,
         });
       }
+
+      if (!isDemoMode) {
+        const syncedId = await startOrSyncCustomerVisit({
+          restaurantId: restaurant.id,
+          ownerId: restaurant.ownerId,
+          visitId: activeVisitId || undefined,
+          customerPhone: customerProfile?.phone,
+          customerName: payload.guestName || customerProfile?.fullName || (isEn ? 'Guest' : 'ضيف'),
+          hallName: payload.hallName,
+          tableNumber: payload.tableNumber,
+          orderType: 'dine_in',
+          source: 'menu',
+          status: 'active',
+        });
+        void recordVisitIdAndRefresh(restaurant.id, syncedId);
+      }
     }
   };
 
@@ -1180,6 +1263,7 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
         restaurant={restaurant}
         items={items}
         customer={customerProfile}
+        visits={customerVisits}
         loyaltyConfig={resolvedLoyaltyConfig}
         isDarkSurface={isDarkSurface}
         onOpenRegisterModal={() => setLoyaltyModalOpen(true)}
@@ -1246,7 +1330,13 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
         isDarkSurface={isDarkSurface}
         onClose={() => setLoyaltyModalOpen(false)}
         onSuccess={(saved) => setCustomerProfile(saved)}
-        onSignedOut={() => setCustomerProfile(null)}
+        onSignedOut={() => {
+          if (!isDemoMode && restaurant && activeVisitId) {
+            void endCustomerVisit({ restaurantId: restaurant.id, visitId: activeVisitId });
+            setActiveVisitId(null);
+          }
+          setCustomerProfile(null);
+        }}
       />
 
       <CartDrawer
@@ -1265,6 +1355,12 @@ export function PublicMenuPage({ slug, onNavigate }: PublicMenuPageProps) {
         onOpenLoyaltyModal={() => {
           setCartOpen(false);
           setLoyaltyModalOpen(true);
+        }}
+        activeVisitId={activeVisitId}
+        onVisitSynced={(vId) => {
+          if (restaurant) {
+            void recordVisitIdAndRefresh(restaurant.id, vId);
+          }
         }}
         hallName={hallName}
         tableNumber={tableNumber}

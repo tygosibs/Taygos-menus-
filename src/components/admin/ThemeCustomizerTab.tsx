@@ -24,7 +24,8 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import { DEMO_RESTAURANTS } from '../../data/demoRestaurants';
 import { COLOR_PRESETS, getThemeMeta, isCustomThemeId, MENU_THEMES } from '../../data/themes';
 import { autoSuggestEnglish } from '../../data/translations';
-import { CONTRAST_TYPOGRAPHY_PRESETS } from '../../lib/contrastUtils';
+import { CONTRAST_TYPOGRAPHY_PRESETS, QUICK_COLOR_SHADES } from '../../lib/contrastUtils';
+import { formatFirestoreErrorMessage } from '../../lib/firebase';
 import {
   fetchActiveCustomThemes,
   isSlugAvailable,
@@ -45,6 +46,7 @@ import {
   MenuColorMode,
   MenuItem,
   Restaurant,
+  ThemeModeColorSet,
 } from '../../types/menu';
 import { SafeImage } from '../SafeImage';
 import { SharePreviewCard } from '../SharePreviewCard';
@@ -77,11 +79,22 @@ export function ThemeCustomizerTab({
   );
   const [primaryColor, setPrimaryColor] = useState(restaurant.primaryColor);
   const [colorMode, setColorMode] = useState<MenuColorMode>(restaurant.colorMode || 'auto');
+  const [editingPaletteMode, setEditingPaletteMode] = useState<'light' | 'dark'>(() => {
+    if (restaurant.colorMode === 'dark') return 'dark';
+    if (restaurant.colorMode === 'light') return 'light';
+    return getThemeMeta(restaurant.activeTheme).isDark ? 'dark' : 'light';
+  });
   const [menuBgColor, setMenuBgColor] = useState(restaurant.menuBgColor || '');
   const [menuCardBgColor, setMenuCardBgColor] = useState(restaurant.menuCardBgColor || '');
   const [headingColor, setHeadingColor] = useState(restaurant.headingColor || '');
   const [descriptionColor, setDescriptionColor] = useState(restaurant.descriptionColor || '');
   const [priceColor, setPriceColor] = useState(restaurant.priceColor || '');
+  const [lightThemeColors, setLightThemeColors] = useState<ThemeModeColorSet>(
+    restaurant.lightThemeColors || {}
+  );
+  const [darkThemeColors, setDarkThemeColors] = useState<ThemeModeColorSet>(
+    restaurant.darkThemeColors || {}
+  );
   const [menuColumns, setMenuColumns] = useState<1 | 2 | 3>(restaurant.menuColumns || 2);
   const [taxRate, setTaxRate] = useState(restaurant.taxRate);
   const [serviceCharge, setServiceCharge] = useState(restaurant.serviceCharge);
@@ -147,12 +160,24 @@ export function ThemeCustomizerTab({
   useEffect(() => {
     setSelectedPreviewTheme(restaurant.activeTheme);
     setPrimaryColor(restaurant.primaryColor);
-    setColorMode(restaurant.colorMode || 'auto');
+    const nextColorMode = restaurant.colorMode || 'auto';
+    setColorMode(nextColorMode);
+    setEditingPaletteMode(
+      nextColorMode === 'dark'
+        ? 'dark'
+        : nextColorMode === 'light'
+          ? 'light'
+          : getThemeMeta(restaurant.activeTheme).isDark
+            ? 'dark'
+            : 'light'
+    );
     setMenuBgColor(restaurant.menuBgColor || '');
     setMenuCardBgColor(restaurant.menuCardBgColor || '');
     setHeadingColor(restaurant.headingColor || '');
     setDescriptionColor(restaurant.descriptionColor || '');
     setPriceColor(restaurant.priceColor || '');
+    setLightThemeColors(restaurant.lightThemeColors || {});
+    setDarkThemeColors(restaurant.darkThemeColors || {});
     setMenuColumns(restaurant.menuColumns || 2);
     setTaxRate(restaurant.taxRate);
     setServiceCharge(restaurant.serviceCharge);
@@ -188,6 +213,8 @@ export function ThemeCustomizerTab({
     restaurant.headingColor,
     restaurant.descriptionColor,
     restaurant.priceColor,
+    restaurant.lightThemeColors,
+    restaurant.darkThemeColors,
     restaurant.menuColumns,
     restaurant.taxRate,
     restaurant.serviceCharge,
@@ -233,12 +260,14 @@ export function ThemeCustomizerTab({
       deliveryFee,
       activeTheme: selectedPreviewTheme,
       primaryColor,
-      colorMode,
+      colorMode: colorMode === 'auto' ? editingPaletteMode : colorMode,
       menuBgColor,
       menuCardBgColor,
       headingColor,
       descriptionColor,
       priceColor,
+      lightThemeColors,
+      darkThemeColors,
       menuColumns,
     }),
     [
@@ -256,11 +285,14 @@ export function ThemeCustomizerTab({
       selectedPreviewTheme,
       primaryColor,
       colorMode,
+      editingPaletteMode,
       menuBgColor,
       menuCardBgColor,
       headingColor,
       descriptionColor,
       priceColor,
+      lightThemeColors,
+      darkThemeColors,
       menuColumns,
     ]
   );
@@ -287,6 +319,15 @@ export function ThemeCustomizerTab({
       loc(selectedThemeMeta.description, selectedThemeMeta.description_en)
     : loc(selectedThemeMeta.description, selectedThemeMeta.description_en);
 
+  const serializeModeColors = (c?: ThemeModeColorSet) =>
+    JSON.stringify({
+      menuBgColor: (c?.menuBgColor || '').toLowerCase(),
+      menuCardBgColor: (c?.menuCardBgColor || '').toLowerCase(),
+      headingColor: (c?.headingColor || '').toLowerCase(),
+      descriptionColor: (c?.descriptionColor || '').toLowerCase(),
+      priceColor: (c?.priceColor || '').toLowerCase(),
+    });
+
   const isSelectedAlreadyActive =
     restaurant.activeTheme === selectedPreviewTheme &&
     restaurant.primaryColor.toLowerCase() === primaryColor.toLowerCase() &&
@@ -296,10 +337,15 @@ export function ThemeCustomizerTab({
     (restaurant.menuCardBgColor || '').toLowerCase() === menuCardBgColor.toLowerCase() &&
     (restaurant.headingColor || '').toLowerCase() === headingColor.toLowerCase() &&
     (restaurant.descriptionColor || '').toLowerCase() === descriptionColor.toLowerCase() &&
-    (restaurant.priceColor || '').toLowerCase() === priceColor.toLowerCase();
+    (restaurant.priceColor || '').toLowerCase() === priceColor.toLowerCase() &&
+    serializeModeColors(restaurant.lightThemeColors) === serializeModeColors(lightThemeColors) &&
+    serializeModeColors(restaurant.darkThemeColors) === serializeModeColors(darkThemeColors);
 
   const handleSelectIconForPreview = (nextThemeId: ActiveTheme) => {
     setSelectedPreviewTheme(nextThemeId);
+    if (colorMode === 'auto') {
+      setEditingPaletteMode(getThemeMeta(nextThemeId).isDark ? 'dark' : 'light');
+    }
     setThemeSavedMsg(null);
     setThemeErrorMsg(null);
     setPreviewSelectedItem(null);
@@ -323,6 +369,8 @@ export function ThemeCustomizerTab({
         headingColor,
         descriptionColor,
         priceColor,
+        lightThemeColors,
+        darkThemeColors,
         menuColumns,
       });
       onRestaurantUpdated({
@@ -337,6 +385,8 @@ export function ThemeCustomizerTab({
         headingColor,
         descriptionColor,
         priceColor,
+        lightThemeColors,
+        darkThemeColors,
         menuColumns,
       });
       setThemeSavedMsg(
@@ -346,13 +396,7 @@ export function ThemeCustomizerTab({
       );
       setTimeout(() => setThemeSavedMsg(null), 4000);
     } catch (err) {
-      setThemeErrorMsg(
-        err instanceof Error
-          ? err.message
-          : isEn
-            ? 'Could not activate theme. Please try again.'
-            : 'تعذر حفظ وتفعيل الثيم، يرجى المحاولة مرة أخرى.'
-      );
+      setThemeErrorMsg(formatFirestoreErrorMessage(err, isEn));
     } finally {
       setActivatingTheme(false);
     }
@@ -478,6 +522,8 @@ export function ThemeCustomizerTab({
         headingColor,
         descriptionColor,
         priceColor,
+        lightThemeColors,
+        darkThemeColors,
         menuColumns,
       });
       onRestaurantUpdated(updated);
@@ -485,9 +531,7 @@ export function ThemeCustomizerTab({
       setSettingsMsg(t.admin.themes.savedToast);
       setTimeout(() => setSettingsMsg(null), 3500);
     } catch (err) {
-      setSettingsError(
-        err instanceof Error ? err.message : isEn ? 'Failed to save settings' : 'تعذر حفظ الإعدادات'
-      );
+      setSettingsError(formatFirestoreErrorMessage(err, isEn));
     } finally {
       setSavingSettings(false);
     }
@@ -517,13 +561,7 @@ export function ThemeCustomizerTab({
           : `تم تفعيل كود الخصم (${res.code}) بنجاح: ${res.summary}`
       );
     } catch (err) {
-      setPromoError(
-        err instanceof Error
-          ? err.message
-          : isEn
-            ? 'Could not apply promo code'
-            : 'تعذر تفعيل كود الخصم'
-      );
+      setPromoError(formatFirestoreErrorMessage(err, isEn));
     } finally {
       setRedeemingPromo(false);
     }
@@ -895,7 +933,12 @@ export function ThemeCustomizerTab({
                     <button
                       key={m.id}
                       type="button"
-                      onClick={() => setColorMode(m.id)}
+                      onClick={() => {
+                        setColorMode(m.id);
+                        if (m.id === 'light' || m.id === 'dark') {
+                          setEditingPaletteMode(m.id);
+                        }
+                      }}
                       className={`min-h-[40px] px-2.5 py-2 rounded-xl border text-xs font-bold flex items-center justify-center gap-1 cursor-pointer transition-colors ${
                         colorMode === m.id
                           ? 'bg-zinc-950 text-white border-zinc-950'
@@ -911,167 +954,337 @@ export function ThemeCustomizerTab({
             </div>
           </div>
 
-          {/* Curated Contrast Typography Presets + Custom Color Pickers */}
-          <div className="pt-3 border-t border-zinc-100 space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-xs font-extrabold text-zinc-900">
-                {t.admin.themes.customTypographyTitle}
-              </span>
-              {(menuBgColor || menuCardBgColor || headingColor || descriptionColor || priceColor) && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMenuBgColor('');
-                    setMenuCardBgColor('');
-                    setHeadingColor('');
-                    setDescriptionColor('');
-                    setPriceColor('');
-                  }}
-                  className="text-[11px] font-bold text-zinc-700 hover:text-zinc-950 bg-zinc-100 hover:bg-zinc-200 px-2.5 py-1 rounded-lg flex items-center gap-1 cursor-pointer transition-colors"
-                >
-                  <RotateCcw className="w-3 h-3" />
-                  <span>{t.admin.themes.resetColorsBtn}</span>
-                </button>
-              )}
-            </div>
+          {/* Curated Contrast Typography Presets + Independent Day/Night Individual Color Pickers */}
+          {(() => {
+            const activeModeColors =
+              editingPaletteMode === 'dark' ? darkThemeColors : lightThemeColors;
+            const updateActiveModeColor = (key: keyof ThemeModeColorSet, val: string) => {
+              const updater = (prev: ThemeModeColorSet): ThemeModeColorSet => ({
+                ...prev,
+                [key]: val,
+              });
+              if (editingPaletteMode === 'dark') {
+                setDarkThemeColors(updater);
+              } else {
+                setLightThemeColors(updater);
+              }
+              if (colorMode === editingPaletteMode || colorMode === 'auto') {
+                if (key === 'menuBgColor') setMenuBgColor(val);
+                if (key === 'menuCardBgColor') setMenuCardBgColor(val);
+                if (key === 'headingColor') setHeadingColor(val);
+                if (key === 'descriptionColor') setDescriptionColor(val);
+                if (key === 'priceColor') setPriceColor(val);
+              }
+            };
+            const resetActiveModeColors = () => {
+              if (editingPaletteMode === 'dark') {
+                setDarkThemeColors({});
+              } else {
+                setLightThemeColors({});
+              }
+              if (colorMode === editingPaletteMode) {
+                setMenuBgColor('');
+                setMenuCardBgColor('');
+                setHeadingColor('');
+                setDescriptionColor('');
+                setPriceColor('');
+              }
+            };
+            const hasModeOverrides = Boolean(
+              activeModeColors.menuBgColor ||
+                activeModeColors.menuCardBgColor ||
+                activeModeColors.headingColor ||
+                activeModeColors.descriptionColor ||
+                activeModeColors.priceColor
+            );
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-              {CONTRAST_TYPOGRAPHY_PRESETS.map((preset) => {
-                const isPresetActive =
-                  menuBgColor.toLowerCase() === (preset.menuBgColor || '').toLowerCase() &&
-                  menuCardBgColor.toLowerCase() === (preset.menuCardBgColor || '').toLowerCase() &&
-                  headingColor.toLowerCase() === preset.headingColor.toLowerCase() &&
-                  priceColor.toLowerCase() === preset.priceColor.toLowerCase();
-                return (
+            const colorFields: Array<{
+              key: keyof ThemeModeColorSet;
+              label: string;
+              defaultHex: string;
+              swatches: string[];
+            }> = [
+              {
+                key: 'menuBgColor',
+                label: isEn ? 'Menu Page Background' : 'خلفية صفحة المنيو',
+                defaultHex: editingPaletteMode === 'dark' ? '#090D16' : '#FAF9F6',
+                swatches:
+                  editingPaletteMode === 'dark'
+                    ? ['#090D16', '#0B1120', '#18181B', '#2B303B', '#1C1917']
+                    : ['#FFFFFF', '#FAF9F6', '#F5EFE6', '#F1F5F9', '#E5E7EB'],
+              },
+              {
+                key: 'menuCardBgColor',
+                label: isEn ? 'Dish Card Background' : 'خلفية كروت الأصناف',
+                defaultHex: editingPaletteMode === 'dark' ? '#131A29' : '#FFFFFF',
+                swatches:
+                  editingPaletteMode === 'dark'
+                    ? ['#131A29', '#151E32', '#1E293B', '#27272A', '#363C49']
+                    : ['#FFFFFF', '#FFFDF9', '#F8FAFC', '#FEFCE8', '#F3F4F6'],
+              },
+              {
+                key: 'headingColor',
+                label: t.admin.themes.headingColorLabel,
+                defaultHex: editingPaletteMode === 'dark' ? '#F8FAFC' : '#0B132B',
+                swatches:
+                  editingPaletteMode === 'dark'
+                    ? ['#FFFFFF', '#F8FAFC', '#FDE68A', '#F1F5F9', '#E2E8F0']
+                    : ['#0B132B', '#0F172A', '#18181B', '#231710', '#1E293B'],
+              },
+              {
+                key: 'descriptionColor',
+                label: t.admin.themes.descColorLabel,
+                defaultHex: editingPaletteMode === 'dark' ? '#CBD5E1' : '#334155',
+                swatches:
+                  editingPaletteMode === 'dark'
+                    ? ['#E2E8F0', '#CBD5E1', '#94A3B8', '#D1D5DB', '#FDE68A']
+                    : ['#334155', '#475569', '#5C4033', '#374151', '#1E293B'],
+              },
+              {
+                key: 'priceColor',
+                label: t.admin.themes.priceColorLabel,
+                defaultHex:
+                  editingPaletteMode === 'dark' ? '#FBBF24' : primaryColor || '#991B1B',
+                swatches:
+                  editingPaletteMode === 'dark'
+                    ? ['#FBBF24', '#34D399', '#60A5FA', '#FB7185', '#FFFFFF']
+                    : ['#991B1B', '#B45309', '#047857', '#1D4ED8', '#0F172A'],
+              },
+            ];
+
+            return (
+              <div className="pt-3 border-t border-zinc-100 space-y-3.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <span className="text-xs font-extrabold text-zinc-900 block">
+                      {t.admin.themes.customTypographyTitle}
+                    </span>
+                    <span className="text-[11px] text-zinc-500">
+                      {isEn
+                        ? 'Customize Day and Night colors independently, or pick each color & swatch individually.'
+                        : 'خصّص ألوان الوضع النهاري والليلي بشكل مستقل تماماً، واضغط على أي لون لتعديله منفرداً.'}
+                    </span>
+                  </div>
+                  {hasModeOverrides && (
+                    <button
+                      type="button"
+                      onClick={resetActiveModeColors}
+                      className="text-[11px] font-bold text-zinc-700 hover:text-zinc-950 bg-zinc-100 hover:bg-zinc-200 px-2.5 py-1.5 rounded-lg flex items-center gap-1 cursor-pointer transition-colors"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      <span>
+                        {editingPaletteMode === 'dark'
+                          ? isEn
+                            ? 'Reset Night Colors'
+                            : 'إعادة ضبط الليلي'
+                          : isEn
+                            ? 'Reset Day Colors'
+                            : 'إعادة ضبط النهاري'}
+                      </span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Day / Night Palette Switcher Tabs */}
+                <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-zinc-100 border border-zinc-200">
                   <button
-                    key={preset.id}
                     type="button"
                     onClick={() => {
-                      setColorMode(preset.mode);
-                      setMenuBgColor(preset.menuBgColor || '');
-                      setMenuCardBgColor(preset.menuCardBgColor || '');
-                      setHeadingColor(preset.headingColor);
-                      setDescriptionColor(preset.descriptionColor);
-                      setPriceColor(preset.priceColor);
+                      setEditingPaletteMode('light');
+                      if (colorMode === 'dark') setColorMode('light');
                     }}
-                    className={`min-h-[42px] px-3 py-2 rounded-xl border text-xs font-bold flex items-center justify-between gap-2.5 cursor-pointer transition-colors ${
-                      isPresetActive
-                        ? 'bg-zinc-950 text-white border-zinc-950 shadow-xs'
-                        : 'bg-zinc-50 text-zinc-800 border-zinc-200 hover:bg-zinc-100'
+                    className={`min-h-[40px] px-3 py-2 rounded-lg text-xs font-extrabold flex items-center justify-center gap-2 cursor-pointer transition-all ${
+                      editingPaletteMode === 'light'
+                        ? 'bg-white text-zinc-950 shadow-xs border border-amber-300'
+                        : 'text-zinc-600 hover:text-zinc-950'
                     }`}
                   >
-                    <span className="truncate text-start">
-                      {isEn ? preset.labelEn : preset.labelAr}
-                    </span>
-                    <span
-                      aria-hidden="true"
-                      className="flex items-center gap-1 shrink-0 p-1 rounded-lg bg-white/90 border border-black/10"
-                    >
-                      <span
-                        className="w-4 h-4 rounded-md border border-black/15"
-                        style={{
-                          backgroundColor:
-                            preset.menuBgColor || (preset.mode === 'dark' ? '#090D16' : '#FAF9F6'),
-                        }}
-                      />
-                      <span
-                        className="w-4 h-4 rounded-md border border-black/15"
-                        style={{
-                          backgroundColor:
-                            preset.menuCardBgColor ||
-                            (preset.mode === 'dark' ? '#131A29' : '#FFFFFF'),
-                        }}
-                      />
-                      <span
-                        className="w-4 h-4 rounded-md border border-black/15"
-                        style={{ backgroundColor: preset.priceColor }}
-                      />
-                    </span>
+                    <Sun className="w-4 h-4 text-amber-500 shrink-0" />
+                    <span>{isEn ? 'Day Palette (Light)' : 'ألوان الوضع النهاري'}</span>
                   </button>
-                );
-              })}
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-zinc-200 bg-zinc-50/70 text-xs font-bold">
-                <label className="flex items-center justify-between gap-2 flex-1 min-w-0 cursor-pointer">
-                  <span className="truncate text-zinc-800">
-                    {isEn ? 'Menu Page Background' : 'خلفية صفحة المنيو'}
-                  </span>
-                  <input
-                    type="color"
-                    value={menuBgColor || (colorMode === 'dark' ? '#090D16' : '#FAF9F6')}
-                    onChange={(e) => setMenuBgColor(e.target.value)}
-                    className="w-7 h-7 rounded cursor-pointer border-0 bg-transparent shrink-0"
-                  />
-                </label>
-                {menuBgColor && (
                   <button
                     type="button"
-                    onClick={() => setMenuBgColor('')}
-                    aria-label={isEn ? 'Reset page background' : 'إعادة تعيين خلفية الصفحة'}
-                    className="w-6 h-6 rounded-md bg-zinc-200 hover:bg-zinc-300 text-zinc-800 flex items-center justify-center shrink-0 cursor-pointer"
+                    onClick={() => {
+                      setEditingPaletteMode('dark');
+                      if (colorMode === 'light') setColorMode('dark');
+                    }}
+                    className={`min-h-[40px] px-3 py-2 rounded-lg text-xs font-extrabold flex items-center justify-center gap-2 cursor-pointer transition-all ${
+                      editingPaletteMode === 'dark'
+                        ? 'bg-zinc-950 text-white shadow-xs'
+                        : 'text-zinc-600 hover:text-zinc-950'
+                    }`}
                   >
-                    <RotateCcw className="w-3 h-3" />
+                    <Moon className="w-4 h-4 text-amber-300 shrink-0" />
+                    <span>{isEn ? 'Night Palette (Dark)' : 'ألوان الوضع الليلي'}</span>
                   </button>
-                )}
+                </div>
+
+                {/* Ready-to-use Contrast Presets filtered / matched by Day & Night */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {CONTRAST_TYPOGRAPHY_PRESETS.filter(
+                    (p) => p.mode === editingPaletteMode
+                  ).map((preset) => {
+                    const isPresetActive =
+                      (activeModeColors.menuBgColor || '').toLowerCase() ===
+                        (preset.menuBgColor || '').toLowerCase() &&
+                      (activeModeColors.menuCardBgColor || '').toLowerCase() ===
+                        (preset.menuCardBgColor || '').toLowerCase() &&
+                      (activeModeColors.headingColor || '').toLowerCase() ===
+                        preset.headingColor.toLowerCase() &&
+                      (activeModeColors.priceColor || '').toLowerCase() ===
+                        preset.priceColor.toLowerCase();
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => {
+                          const modeSet: ThemeModeColorSet = {
+                            menuBgColor: preset.menuBgColor || '',
+                            menuCardBgColor: preset.menuCardBgColor || '',
+                            headingColor: preset.headingColor,
+                            descriptionColor: preset.descriptionColor,
+                            priceColor: preset.priceColor,
+                          };
+                          if (preset.mode === 'dark') {
+                            setDarkThemeColors(modeSet);
+                          } else {
+                            setLightThemeColors(modeSet);
+                          }
+                          setEditingPaletteMode(preset.mode);
+                          setMenuBgColor(preset.menuBgColor || '');
+                          setMenuCardBgColor(preset.menuCardBgColor || '');
+                          setHeadingColor(preset.headingColor);
+                          setDescriptionColor(preset.descriptionColor);
+                          setPriceColor(preset.priceColor);
+                        }}
+                        className={`min-h-[42px] px-3 py-2 rounded-xl border text-xs font-bold flex items-center justify-between gap-2.5 cursor-pointer transition-colors ${
+                          isPresetActive
+                            ? 'bg-zinc-950 text-white border-zinc-950 shadow-xs'
+                            : 'bg-zinc-50 text-zinc-800 border-zinc-200 hover:bg-zinc-100'
+                        }`}
+                      >
+                        <span className="truncate text-start">
+                          {isEn ? preset.labelEn : preset.labelAr}
+                        </span>
+                        <span
+                          aria-hidden="true"
+                          className="flex items-center gap-1 shrink-0 p-1 rounded-lg bg-white/90 border border-black/10"
+                        >
+                          <span
+                            className="w-4 h-4 rounded-md border border-black/15"
+                            style={{
+                              backgroundColor:
+                                preset.menuBgColor ||
+                                (preset.mode === 'dark' ? '#090D16' : '#FAF9F6'),
+                            }}
+                          />
+                          <span
+                            className="w-4 h-4 rounded-md border border-black/15"
+                            style={{
+                              backgroundColor:
+                                preset.menuCardBgColor ||
+                                (preset.mode === 'dark' ? '#131A29' : '#FFFFFF'),
+                            }}
+                          />
+                          <span
+                            className="w-4 h-4 rounded-md border border-black/15"
+                            style={{ backgroundColor: preset.priceColor }}
+                          />
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Individual Per-Element Color Pickers + Swatch Dots */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {colorFields.map((field) => {
+                    const currentVal = activeModeColors[field.key] || '';
+                    const pickerVal = currentVal || field.defaultHex;
+                    return (
+                      <div
+                        key={`${editingPaletteMode}_${field.key}`}
+                        className="p-3 rounded-xl border border-zinc-200 bg-zinc-50/70 space-y-2 text-xs font-bold"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <label className="flex items-center justify-between gap-2 flex-1 min-w-0 cursor-pointer">
+                            <span className="truncate text-zinc-900">{field.label}</span>
+                            <input
+                              type="color"
+                              value={pickerVal}
+                              onChange={(e) => updateActiveModeColor(field.key, e.target.value)}
+                              className="w-8 h-7 rounded cursor-pointer border border-zinc-300 bg-white shrink-0"
+                            />
+                          </label>
+                          {currentVal && (
+                            <button
+                              type="button"
+                              onClick={() => updateActiveModeColor(field.key, '')}
+                              title={isEn ? 'Reset this color' : 'إعادة هذا اللون للافتراضي'}
+                              className="w-6 h-6 rounded-md bg-zinc-200 hover:bg-zinc-300 text-zinc-800 flex items-center justify-center shrink-0 cursor-pointer"
+                            >
+                              <RotateCcw className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {field.swatches.map((sw) => (
+                              <button
+                                key={sw}
+                                type="button"
+                                onClick={() => updateActiveModeColor(field.key, sw)}
+                                title={sw}
+                                style={{ backgroundColor: sw }}
+                                className={`w-5 h-5 rounded-full border cursor-pointer transition-transform ${
+                                  pickerVal.toLowerCase() === sw.toLowerCase()
+                                    ? 'border-zinc-950 ring-2 ring-zinc-950/30 scale-110'
+                                    : 'border-zinc-300 hover:scale-105'
+                                }`}
+                              />
+                            ))}
+                          </div>
+                          <span className="font-mono-num text-[10px] text-zinc-500 shrink-0" dir="ltr">
+                            {currentVal || (isEn ? 'Auto' : 'تلقائي')}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Quick Cross-Family Color Strip for currently active field or custom picks */}
+                <details className="rounded-xl border border-zinc-200 bg-zinc-50/50 px-3 py-2">
+                  <summary className="text-[11px] font-bold text-zinc-600 cursor-pointer select-none">
+                    {isEn
+                      ? 'Color Palette Reference (Click any shade to apply to Prices / Headings)'
+                      : 'درجات ألوان إضافية سريعة (عناوين وأسعار)'}
+                  </summary>
+                  <div className="pt-2.5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                    {QUICK_COLOR_SHADES.map((fam) => (
+                      <div key={fam.id} className="flex items-center justify-between gap-2 text-[11px]">
+                        <span className="font-bold text-zinc-700 truncate">
+                          {isEn ? fam.labelEn : fam.labelAr}
+                        </span>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {fam.shades.map((hex) => (
+                            <button
+                              key={hex}
+                              type="button"
+                              onClick={() => updateActiveModeColor('priceColor', hex)}
+                              title={`${isEn ? 'Apply to Price' : 'تطبيق على السعر'}: ${hex}`}
+                              style={{ backgroundColor: hex }}
+                              className="w-4 h-4 rounded-sm border border-black/15 cursor-pointer hover:scale-110 transition-transform"
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </details>
               </div>
-
-              <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-zinc-200 bg-zinc-50/70 text-xs font-bold">
-                <label className="flex items-center justify-between gap-2 flex-1 min-w-0 cursor-pointer">
-                  <span className="truncate text-zinc-800">
-                    {isEn ? 'Dish Card Background' : 'خلفية كروت الأصناف'}
-                  </span>
-                  <input
-                    type="color"
-                    value={menuCardBgColor || (colorMode === 'dark' ? '#131A29' : '#FFFFFF')}
-                    onChange={(e) => setMenuCardBgColor(e.target.value)}
-                    className="w-7 h-7 rounded cursor-pointer border-0 bg-transparent shrink-0"
-                  />
-                </label>
-                {menuCardBgColor && (
-                  <button
-                    type="button"
-                    onClick={() => setMenuCardBgColor('')}
-                    aria-label={isEn ? 'Reset card background' : 'إعادة تعيين خلفية الكارت'}
-                    className="w-6 h-6 rounded-md bg-zinc-200 hover:bg-zinc-300 text-zinc-800 flex items-center justify-center shrink-0 cursor-pointer"
-                  >
-                    <RotateCcw className="w-3 h-3" />
-                  </button>
-                )}
-              </div>
-
-              <label className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-zinc-200 bg-zinc-50/70 text-xs font-bold cursor-pointer">
-                <span className="truncate text-zinc-800">{t.admin.themes.headingColorLabel}</span>
-                <input
-                  type="color"
-                  value={headingColor || (colorMode === 'dark' ? '#F8FAFC' : '#0B132B')}
-                  onChange={(e) => setHeadingColor(e.target.value)}
-                  className="w-7 h-7 rounded cursor-pointer border-0 bg-transparent shrink-0"
-                />
-              </label>
-
-              <label className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-zinc-200 bg-zinc-50/70 text-xs font-bold cursor-pointer">
-                <span className="truncate text-zinc-800">{t.admin.themes.descColorLabel}</span>
-                <input
-                  type="color"
-                  value={descriptionColor || (colorMode === 'dark' ? '#CBD5E1' : '#334155')}
-                  onChange={(e) => setDescriptionColor(e.target.value)}
-                  className="w-7 h-7 rounded cursor-pointer border-0 bg-transparent shrink-0"
-                />
-              </label>
-
-              <label className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-zinc-200 bg-zinc-50/70 text-xs font-bold cursor-pointer">
-                <span className="truncate text-zinc-800">{t.admin.themes.priceColorLabel}</span>
-                <input
-                  type="color"
-                  value={priceColor || primaryColor}
-                  onChange={(e) => setPriceColor(e.target.value)}
-                  className="w-7 h-7 rounded cursor-pointer border-0 bg-transparent shrink-0"
-                />
-              </label>
-            </div>
-          </div>
+            );
+          })()}
         </div>
 
         {/* Live Interactive Preview Viewport */}
@@ -1086,7 +1299,7 @@ export function ThemeCustomizerTab({
           >
             <div className="w-full h-full overflow-y-auto overflow-x-clip">
               <ThemeRenderer
-                key={`${selectedPreviewTheme}_${primaryColor}_${colorMode}_${menuColumns}_${menuBgColor}_${menuCardBgColor}`}
+                key={`${selectedPreviewTheme}_${primaryColor}_${colorMode}_${editingPaletteMode}_${menuColumns}_${serializeModeColors(lightThemeColors)}_${serializeModeColors(darkThemeColors)}`}
                 restaurant={previewRestaurant}
                 categories={previewCategories}
                 items={previewItems}

@@ -20,10 +20,13 @@ import { DEFAULT_LANDING_SECTIONS, DEFAULT_PLATFORM_LANDING } from '../data/defa
 import { getStarterSeedData } from '../data/demoRestaurants';
 import {
   ActiveTheme,
+  BusinessActivityType,
   Category,
   CustomerProfile,
   CustomerVisitRecord,
   CustomTheme,
+  FacilityCodeRecord,
+  FacilityPrefix,
   GuestCheckSummary,
   Hall,
   ItemAddon,
@@ -64,6 +67,12 @@ import {
   normalizeCustomerPhone,
   parseIsoBirthday,
 } from './customerLoyaltyUtils';
+import {
+  formatFacilityCode,
+  getFacilityActivityMeta,
+  normalizeFacilitySerial,
+  parseFacilityCode,
+} from './facilityCodeUtils';
 import { db, handleFirestoreError, OperationType } from './firebase';
 import { incrementActiveShiftMetric } from './shiftsService';
 import { ItemProgressStationEntry } from '../types/menu';
@@ -146,11 +155,39 @@ export async function fetchOwnerRestaurant(ownerId: string): Promise<Restaurant 
   }
 }
 
+async function generateUniqueFacilityCode(
+  businessType?: BusinessActivityType
+): Promise<{
+  businessType: BusinessActivityType;
+  prefix: FacilityPrefix;
+  serial: string;
+  code: string;
+}> {
+  const meta = getFacilityActivityMeta(businessType || 'restaurant');
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const num = Math.floor(1000 + Math.random() * 9000);
+    const serial = String(num);
+    const code = `${meta.prefix}-${serial}`;
+    const snap = await getDoc(doc(db, 'facility_codes', code));
+    if (!snap.exists()) {
+      return { businessType: meta.type, prefix: meta.prefix, serial, code };
+    }
+  }
+  const fallbackSerial = String((Date.now() % 900000) + 100000);
+  return {
+    businessType: meta.type,
+    prefix: meta.prefix,
+    serial: fallbackSerial,
+    code: `${meta.prefix}-${fallbackSerial}`,
+  };
+}
+
 export interface CreateRestaurantInput {
   ownerId: string;
   name: string;
   name_en?: string;
   slug: string;
+  businessType?: BusinessActivityType;
   tagline?: string;
   tagline_en?: string;
   whatsappNumber: string;
@@ -177,11 +214,16 @@ export async function createRestaurant(input: CreateRestaurantInput): Promise<Re
   const cleanOwnerBirthday = normalizeIsoBirthday(input.ownerBirthday);
 
   try {
+    const facility = await generateUniqueFacilityCode(input.businessType);
     const batch = writeBatch(db);
     const restPayload: Record<string, unknown> = {
       id: restId,
       ownerId: input.ownerId,
       slug: cleanSlug,
+      businessType: facility.businessType,
+      facilityPrefix: facility.prefix,
+      facilitySerial: facility.serial,
+      facilityCode: facility.code,
       name: input.name.trim().slice(0, 120),
       whatsappNumber: input.whatsappNumber.trim().slice(0, 24),
       activeTheme: input.activeTheme || 'theme-1',
@@ -221,6 +263,20 @@ export async function createRestaurant(input: CreateRestaurantInput): Promise<Re
       restaurantId: restId,
       ownerId: input.ownerId,
       createdAt: serverTimestamp(),
+    });
+    batch.set(doc(db, 'facility_codes', facility.code), {
+      code: facility.code,
+      prefix: facility.prefix,
+      serial: facility.serial,
+      businessType: facility.businessType,
+      restaurantId: restId,
+      ownerId: input.ownerId,
+      slug: cleanSlug,
+      name: restPayload.name,
+      name_en: restPayload.name_en || '',
+      logoUrl: restPayload.logoUrl || '',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     });
 
     await batch.commit();
@@ -587,6 +643,20 @@ export async function updateRestaurantSettings(
       menuColumns: safeMenuColumns,
       updatedAt: serverTimestamp(),
     });
+
+    if (restaurant.facilityCode) {
+      const codeRef = doc(db, 'facility_codes', restaurant.facilityCode);
+      const codeSnap = await getDoc(codeRef).catch(() => null);
+      if (codeSnap && codeSnap.exists()) {
+        batch.update(codeRef, {
+          slug: cleanSlug,
+          name: updates.name.trim().slice(0, 120),
+          name_en: cleanNameEn,
+          logoUrl: updates.logoUrl.trim().slice(0, 300000),
+          updatedAt: serverTimestamp(),
+        });
+      }
+    }
 
     await batch.commit();
     return {
@@ -3248,6 +3318,146 @@ export function subscribeRestaurantCustomerVisits(
     }
   );
 }
+
+export async function fetchCustomerVisitsByIds(
+  restaurantId: string,
+  visitIds: string[]
+): Promise<CustomerVisitRecord[]> {
+  const uniqueIds = Array.from(
+    new Set(visitIds.map((id) => id.trim()).filter((id) => /^[a-zA-Z0-9_-]{4,64}$/.test(id)))
+  ).slice(0, 15);
+  if (uniqueIds.length === 0) return [];
+  const snaps = await Promise.all(
+    uniqueIds.map((id) =>
+      getDoc(doc(db, 'restaurants', restaurantId, 'customer_visits', id)).catch(() => null)
+    )
+  );
+  return snaps
+    .filter((snap): snap is NonNullable<typeof snap> => Boolean(snap && snap.exists()))
+    .map((snap) => ({ ...(snap.data() as CustomerVisitRecord), id: snap.id }))
+    .sort((a, b) => (Number(b.startedAt) || 0) - (Number(a.startedAt) || 0));
+}
+
+export async function ensureRestaurantFacilityCode(
+  restaurant: Restaurant,
+  preferredType?: BusinessActivityType
+): Promise<Restaurant> {
+  const meta = getFacilityActivityMeta(preferredType || restaurant.businessType || restaurant.facilityPrefix || 'restaurant');
+  const existingCode = (restaurant.facilityCode || '').trim().toUpperCase();
+  if (existingCode && restaurant.facilityPrefix && restaurant.facilitySerial) {
+    try {
+      const codeRef = doc(db, 'facility_codes', existingCode);
+      const codeSnap = await getDoc(codeRef);
+      if (!codeSnap.exists()) {
+        await setDoc(codeRef, {
+          code: existingCode,
+          prefix: restaurant.facilityPrefix,
+          serial: restaurant.facilitySerial,
+          businessType: restaurant.businessType || meta.type,
+          restaurantId: restaurant.id,
+          ownerId: restaurant.ownerId,
+          slug: restaurant.slug,
+          name: (restaurant.name || '').slice(0, 120),
+          name_en: (restaurant.name_en || '').slice(0, 120),
+          logoUrl: (restaurant.logoUrl || '').slice(0, 300000),
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+    } catch (err) {
+      console.warn('Facility code registry verify skipped:', err);
+    }
+    return restaurant;
+  }
+
+  try {
+    const generated = await generateUniqueFacilityCode(meta.type);
+    const batch = writeBatch(db);
+    batch.update(doc(db, 'restaurants', restaurant.id), {
+      businessType: generated.businessType,
+      facilityPrefix: generated.prefix,
+      facilitySerial: generated.serial,
+      facilityCode: generated.code,
+      updatedAt: serverTimestamp(),
+    });
+    batch.set(doc(db, 'facility_codes', generated.code), {
+      code: generated.code,
+      prefix: generated.prefix,
+      serial: generated.serial,
+      businessType: generated.businessType,
+      restaurantId: restaurant.id,
+      ownerId: restaurant.ownerId,
+      slug: restaurant.slug,
+      name: (restaurant.name || '').slice(0, 120),
+      name_en: (restaurant.name_en || '').slice(0, 120),
+      logoUrl: (restaurant.logoUrl || '').slice(0, 300000),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    await batch.commit();
+    return {
+      ...restaurant,
+      businessType: generated.businessType,
+      facilityPrefix: generated.prefix,
+      facilitySerial: generated.serial,
+      facilityCode: generated.code,
+    };
+  } catch (err) {
+    console.warn('Facility code backfill skipped:', err);
+    return restaurant;
+  }
+}
+
+export async function resolveRestaurantByFacilityCode(
+  prefixOrFullCode: string,
+  rawSerial?: string
+): Promise<{ restaurant: Restaurant; record: FacilityCodeRecord }> {
+  const isEn = getActiveLang() === 'en';
+  const parsed = parseFacilityCode(prefixOrFullCode);
+  const fullCode =
+    parsed.code ||
+    formatFacilityCode(prefixOrFullCode, normalizeFacilitySerial(rawSerial || ''));
+
+  if (!fullCode) {
+    throw new Error(
+      isEn
+        ? 'Enter a valid Facility Code (select activity prefix and at least 4 digits, e.g. RE-1042).'
+        : 'يرجى إدخال كود منشأة صحيح (اختر نوع النشاط وأدخل 4 أرقام على الأقل، مثال: RE-1042).'
+    );
+  }
+
+  const codePath = `facility_codes/${fullCode}`;
+  let codeSnap;
+  try {
+    codeSnap = await getDoc(doc(db, 'facility_codes', fullCode));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, codePath);
+  }
+
+  if (!codeSnap.exists()) {
+    throw new Error(
+      isEn
+        ? `No hospitality facility was found with code "${fullCode}". Check the activity prefix and code number.`
+        : `لا توجد منشأة مسجلة بالكود "${fullCode}". تأكد من رمز نوع النشاط ورقم الكود.`
+    );
+  }
+
+  const record = { ...(codeSnap.data() as FacilityCodeRecord), code: codeSnap.id };
+  const restSnap = await getDoc(doc(db, 'restaurants', record.restaurantId));
+  if (!restSnap.exists()) {
+    throw new Error(
+      isEn
+        ? 'The facility linked to this code is no longer active.'
+        : 'المنشأة المرتبطة بهذا الكود غير متاحة حالياً.'
+    );
+  }
+
+  return {
+    restaurant: { ...(restSnap.data() as Restaurant), id: restSnap.id },
+    record,
+  };
+}
+
 
 
 

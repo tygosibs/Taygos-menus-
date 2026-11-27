@@ -692,8 +692,8 @@ export function UiStudioTab({ adminEmail }: UiStudioTabProps) {
               })}
             </div>
 
-            {/* Layout Architecture, Radius & Accent Color */}
-            <div className="pt-3 border-t border-zinc-100 grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* Layout Architecture, Radius, Accent Color & Default Page */}
+            <div className="pt-3 border-t border-zinc-100 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <div className="space-y-1.5">
                 <label className="text-[11px] font-extrabold text-zinc-700 flex items-center gap-1">
                   <Layout className="w-3.5 h-3.5 text-zinc-500" />
@@ -779,6 +779,28 @@ export function UiStudioTab({ adminEmail }: UiStudioTabProps) {
                     </button>
                   )}
                 </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-extrabold text-zinc-700 block">
+                  {isEn ? 'Default Starting Page' : 'الصفحة الافتراضية عند الفتح'}
+                </label>
+                <select
+                  value={screenCfg.defaultPageId || ''}
+                  onChange={(e) =>
+                    updateScreen((p) => ({ ...p, defaultPageId: e.target.value || undefined }))
+                  }
+                  className="w-full min-h-[34px] px-2.5 py-1.5 rounded-xl border border-zinc-200 bg-zinc-50 text-xs font-bold text-zinc-900 focus:outline-none focus:border-zinc-900"
+                >
+                  <option value="">
+                    {isEn ? 'Automatic (First Page)' : 'تلقائي (الشاشة الأولى)'}
+                  </option>
+                  {(UI_ACTION_CATALOG[selectedScreen] || []).map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {getBtnDisplayLabel(item.id)}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
           </div>

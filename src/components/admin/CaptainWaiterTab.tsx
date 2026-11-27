@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useScreenUi } from '../../contexts/PlatformUiContext';
+import { formatFirestoreErrorMessage } from '../../lib/firebase';
 import { showOperationalNotification } from '../../lib/fcmNotificationService';
 import {
   getHallTableNumbers,
@@ -207,6 +208,7 @@ export function CaptainWaiterTab({
   } | null>(null);
   const [requestingBillBusy, setRequestingBillBusy] = useState(false);
   const [drawerNotice, setDrawerNotice] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   // Text-Only Fast Captain Order Pad (no images)
   const [posOrderType, setPosOrderType] = useState<OrderType>('dine_in');
@@ -664,6 +666,7 @@ export function CaptainWaiterTab({
 
   const handleCallStatus = async (call: ServiceCall, nextStatus: ServiceCallStatus) => {
     setUpdatingCallId(call.id);
+    setActionError(null);
     try {
       await updateServiceCallStatus(call.id, nextStatus, {
         restaurantId: restaurant.id,
@@ -671,6 +674,8 @@ export function CaptainWaiterTab({
         tableLabel: `${call.hallName ? `${call.hallName} · ` : ''}${isEn ? `Table ${call.tableNumber}` : `ترابيزة ${call.tableNumber}`}`,
         actor,
       });
+    } catch (err) {
+      setActionError(formatFirestoreErrorMessage(err, isEn));
     } finally {
       setUpdatingCallId(null);
     }
@@ -683,6 +688,7 @@ export function CaptainWaiterTab({
   ) => {
     const key = `${orderId}:${itemIndices.join(',')}`;
     setServingKey(key);
+    setActionError(null);
     try {
       const updates: Record<string, ItemPrepState> = {};
       itemIndices.forEach((idx) => {
@@ -694,6 +700,8 @@ export function CaptainWaiterTab({
         orderNumber,
         actor,
       });
+    } catch (err) {
+      setActionError(formatFirestoreErrorMessage(err, isEn));
     } finally {
       setServingKey(null);
     }
@@ -732,22 +740,99 @@ export function CaptainWaiterTab({
 
   // Build Floor Grid Hall sections (honors captainScreenMeta & live shift assignments)
   const gridHalls = useMemo(() => {
-    const filtered =
-      selectedHall === 'all'
-        ? scopedHalls
-        : scopedHalls.filter((h) => h.name.trim() === selectedHall);
-    return filtered.map((h) => {
+    const entries = scopedHalls.map((h) => {
       const rawTables = getHallTableNumbers(h);
       const tableNumbers = isAssignedOnlyScope
         ? rawTables.filter((tbl) => effectiveScope.isTableAllowed(h.id, h.name, tbl))
-        : rawTables;
+        : [...rawTables];
       return {
         hall: h,
         tableNumbers,
         isHighlightedHall: isAssignedOnlyScope && isHallAssigned(h),
       };
     });
-  }, [scopedHalls, selectedHall, isAssignedOnlyScope, effectiveScope]);
+
+    if (!isAssignedOnlyScope) {
+      const unmappedMap = new Map<string, { hallName: string; tables: string[] }>();
+      const registerActiveTable = (rawHall?: string | null, rawTbl?: string | null) => {
+        const tbl = normalizeTableNumber(rawTbl);
+        if (!tbl) return;
+        const cleanRecHall = (rawHall || '').trim();
+        const matchedEntry = entries.find((entry) => {
+          const allowFallback =
+            entries.length <= 1 || entries[0]?.hall.name.trim() === entry.hall.name.trim();
+          return doesHallMatch(entry.hall, cleanRecHall, allowFallback);
+        });
+        if (matchedEntry) {
+          if (!matchedEntry.tableNumbers.some((t) => doTableNumbersMatch(t, tbl))) {
+            matchedEntry.tableNumbers.push(tbl);
+          }
+          return;
+        }
+        const virtualKey = cleanRecHall.toLowerCase() || '__empty__';
+        const existingVirtual = unmappedMap.get(virtualKey);
+        if (existingVirtual) {
+          if (!existingVirtual.tables.some((t) => doTableNumbersMatch(t, tbl))) {
+            existingVirtual.tables.push(tbl);
+          }
+        } else {
+          unmappedMap.set(virtualKey, { hallName: cleanRecHall, tables: [tbl] });
+        }
+      };
+
+      orders.forEach((o) => {
+        if (o.status !== 'completed' && o.status !== 'cancelled' && o.orderType === 'dine_in') {
+          registerActiveTable(o.hallName, o.tableNumber);
+        }
+      });
+      tableSessions.forEach((s) => {
+        if (s.status === 'active' && ((s.guests?.length || 0) > 0 || (s.items?.length || 0) > 0)) {
+          registerActiveTable(s.hallName, s.tableNumber);
+        }
+      });
+      serviceCalls.forEach((c) => {
+        if (c.status !== 'resolved') {
+          registerActiveTable(c.hallName, c.tableNumber);
+        }
+      });
+
+      unmappedMap.forEach((v, vKey) => {
+        entries.push({
+          hall: {
+            id: `__virtual_${vKey}`,
+            restaurantId: restaurant.id,
+            ownerId: restaurant.ownerId,
+            name: v.hallName,
+            name_en: v.hallName,
+            hallType: isEn ? 'Active QR / Unmapped' : 'طاولات نشطة (QR)',
+            tableCount: v.tables.length,
+            sortOrder: 999,
+            tableNumbers: v.tables,
+          },
+          tableNumbers: v.tables,
+          isHighlightedHall: false,
+        });
+      });
+    }
+
+    if (selectedHall === 'all') return entries;
+    return entries.filter(({ hall }) => {
+      const label =
+        hall.name.trim() || (isEn ? 'Active Unmapped / QR Tables' : 'طاولات نشطة (ممسوحة بـ QR)');
+      return label === selectedHall || hall.name.trim() === selectedHall;
+    });
+  }, [
+    scopedHalls,
+    selectedHall,
+    isAssignedOnlyScope,
+    effectiveScope,
+    orders,
+    tableSessions,
+    serviceCalls,
+    restaurant.id,
+    restaurant.ownerId,
+    isEn,
+  ]);
 
   const getTableSnapshot = (hallName: string, tableNumber: string) => {
     const cleanTbl = tableNumber.trim();
@@ -863,6 +948,8 @@ export function CaptainWaiterTab({
       });
       onRestaurantUpdated?.({ ...restaurant, operationsConfig: nextConfig });
       setGridSettingsOpen(false);
+    } catch (err) {
+      setActionError(formatFirestoreErrorMessage(err, isEn));
     } finally {
       setSavingGridSettings(false);
     }
@@ -875,6 +962,7 @@ export function CaptainWaiterTab({
   ) => {
     setRequestingBillBusy(true);
     setDrawerNotice(null);
+    setActionError(null);
     try {
       await sendServiceCall({
         restaurantId: restaurant.id,
@@ -893,6 +981,10 @@ export function CaptainWaiterTab({
             ? 'Check request (Visa / Card) sent to cashier.'
             : 'تم إرسال طلب الشيك (فيزا) للكاشير.'
       );
+    } catch (err) {
+      const msg = formatFirestoreErrorMessage(err, isEn);
+      setDrawerNotice(msg);
+      setActionError(msg);
     } finally {
       setRequestingBillBusy(false);
     }
@@ -1091,6 +1183,14 @@ export function CaptainWaiterTab({
       }
     >
       {/* Captain Screen Header & Controls */}
+      {actionError && (
+        <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs font-bold text-red-800 flex items-center justify-between gap-2">
+          <span>{actionError}</span>
+          <button type="button" onClick={() => setActionError(null)} className="cursor-pointer shrink-0">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
       <div
         className={`border p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 ${ui.radiusClasses.card}`}
         style={{
@@ -1448,7 +1548,8 @@ export function CaptainWaiterTab({
                   <div className="flex items-center gap-2">
                     <MapPin className="w-4 h-4" style={{ color: ui.theme.highlightHex || '#E8833A' }} />
                     <h3 className="text-sm font-extrabold" style={{ color: ui.theme.surfaceText }}>
-                      {loc(hall.name, hall.name_en)}
+                      {loc(hall.name, hall.name_en) ||
+                        (isEn ? 'Active Unmapped / QR Tables' : 'طاولات نشطة (ممسوحة بـ QR)')}
                     </h3>
                     {isHighlightedHall && !isAssignedOnlyScope && (
                       <span

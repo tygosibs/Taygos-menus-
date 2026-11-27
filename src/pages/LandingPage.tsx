@@ -2638,6 +2638,10 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
                     : '/admin'
                 );
               }}
+              onStaffNavigate={(staffSlug) => {
+                setAuthModalOpen(false);
+                onNavigate(`/staff/${staffSlug}`);
+              }}
             />
           </div>
         </div>

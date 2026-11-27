@@ -393,6 +393,34 @@ service cloud.firestore {
       return val == '' || (val is string && val.size() >= 4 && val.size() <= 16 && val.matches('^#[0-9a-fA-F]{6}$'));
     }
 
+    function isValidThemeModeColorSet(obj) {
+      return obj is map &&
+        obj.keys().hasOnly([
+          'menuBgColor', 'menuCardBgColor', 'headingColor', 'descriptionColor', 'priceColor'
+        ]) &&
+        (!('menuBgColor' in obj) || isValidHexOrEmpty(obj.menuBgColor)) &&
+        (!('menuCardBgColor' in obj) || isValidHexOrEmpty(obj.menuCardBgColor)) &&
+        (!('headingColor' in obj) || isValidHexOrEmpty(obj.headingColor)) &&
+        (!('descriptionColor' in obj) || isValidHexOrEmpty(obj.descriptionColor)) &&
+        (!('priceColor' in obj) || isValidHexOrEmpty(obj.priceColor));
+    }
+
+    function isValidBusinessType(v) {
+      return v in ['restaurant', 'restaurant_cafe', 'cafe', 'hotel', 'lounge', 'bakery', 'tourist_facility'];
+    }
+
+    function isValidFacilityPrefix(v) {
+      return v in ['RE', 'RC', 'CA', 'HO', 'LO', 'BK', 'TF'];
+    }
+
+    function isValidFacilitySerial(v) {
+      return v is string && v.size() >= 4 && v.size() <= 8 && v.matches('^[0-9]{4,8}$');
+    }
+
+    function isValidFacilityCode(v) {
+      return v is string && v.size() >= 6 && v.size() <= 20 && v.matches('^(RE|RC|CA|HO|LO|BK|TF)-[0-9]{4,8}$');
+    }
+
     function isValidRestaurantShape(data, restId) {
       return data.keys().hasAll([
           'id', 'ownerId', 'slug', 'name', 'whatsappNumber', 'activeTheme',
@@ -400,10 +428,12 @@ service cloud.firestore {
           'isOpen', 'createdAt', 'updatedAt'
         ]) &&
         data.keys().hasOnly([
-          'id', 'ownerId', 'slug', 'name', 'name_en', 'tagline', 'tagline_en',
+          'id', 'ownerId', 'slug', 'businessType', 'facilityPrefix', 'facilitySerial', 'facilityCode',
+          'name', 'name_en', 'tagline', 'tagline_en',
           'whatsappNumber', 'logoUrl', 'shareTitle', 'shareTitle_en',
           'shareDescription', 'shareDescription_en', 'activeTheme', 'primaryColor',
-          'colorMode', 'headingColor', 'descriptionColor', 'priceColor', 'menuBgColor', 'menuCardBgColor', 'menuColumns',
+          'colorMode', 'headingColor', 'descriptionColor', 'priceColor', 'menuBgColor', 'menuCardBgColor',
+          'lightThemeColors', 'darkThemeColors', 'menuColumns',
           'taxRate', 'serviceCharge', 'deliveryFee', 'currency',
           'isOpen', 'isSuspended', 'ownerBirthday',
           'appliedPlatformPromoCode', 'appliedPlatformPromoSummary', 'appliedPlatformPromoSummary_en',
@@ -413,6 +443,10 @@ service cloud.firestore {
         data.id == restId &&
         isValidId(data.ownerId) &&
         isValidSlug(data.slug) &&
+        (!('businessType' in data) || isValidBusinessType(data.businessType)) &&
+        (!('facilityPrefix' in data) || isValidFacilityPrefix(data.facilityPrefix)) &&
+        (!('facilitySerial' in data) || isValidFacilitySerial(data.facilitySerial)) &&
+        (!('facilityCode' in data) || isValidFacilityCode(data.facilityCode)) &&
         data.name is string && data.name.size() >= 2 && data.name.size() <= 120 &&
         (!('name_en' in data) || (data.name_en is string && data.name_en.size() <= 120)) &&
         (!('tagline' in data) || (data.tagline is string && data.tagline.size() <= 500)) &&
@@ -431,6 +465,8 @@ service cloud.firestore {
         (!('priceColor' in data) || isValidHexOrEmpty(data.priceColor)) &&
         (!('menuBgColor' in data) || isValidHexOrEmpty(data.menuBgColor)) &&
         (!('menuCardBgColor' in data) || isValidHexOrEmpty(data.menuCardBgColor)) &&
+        (!('lightThemeColors' in data) || isValidThemeModeColorSet(data.lightThemeColors)) &&
+        (!('darkThemeColors' in data) || isValidThemeModeColorSet(data.darkThemeColors)) &&
         (!('menuColumns' in data) || (data.menuColumns in [1, 2, 3])) &&
         data.taxRate is number && data.taxRate >= 0 && data.taxRate <= 100 &&
         data.serviceCharge is number && data.serviceCharge >= 0 && data.serviceCharge <= 100 &&
@@ -508,7 +544,7 @@ service cloud.firestore {
         ]) &&
         data.keys().hasOnly([
           'id', 'restaurantId', 'ownerId', 'fullName', 'phone',
-          'birthDay', 'birthMonth', 'birthYear', 'preferredOrderType', 'address',
+          'birthDay', 'birthMonth', 'birthYear', 'preferredOrderType', 'address', 'avatarUrl',
           'totalOrders', 'loyaltyCycleOrders', 'firstOrderDiscountUsed',
           'lastVisitAt', 'favoriteItems', 'lastOrderItems', 'createdAt', 'updatedAt'
         ]) &&
@@ -525,6 +561,7 @@ service cloud.firestore {
         data.birthYear is number && data.birthYear >= 1920 && data.birthYear <= 2020 &&
         data.preferredOrderType in ['dine_in', 'delivery', 'pickup'] &&
         (!('address' in data) || (data.address is string && data.address.size() <= 300)) &&
+        (!('avatarUrl' in data) || (data.avatarUrl is string && data.avatarUrl.size() <= 300000)) &&
         data.totalOrders is number && data.totalOrders >= 0 && data.totalOrders <= 100000 &&
         data.loyaltyCycleOrders is number && data.loyaltyCycleOrders >= 0 && data.loyaltyCycleOrders <= 100 &&
         data.firstOrderDiscountUsed is bool &&
@@ -1302,7 +1339,7 @@ service cloud.firestore {
     function isValidUiScreenConfig(scr) {
       return scr is map &&
         scr.keys().hasAll(['themeId', 'layoutStyle', 'cardRadius', 'cards', 'buttonOverrides']) &&
-        scr.keys().hasOnly(['themeId', 'layoutStyle', 'cardRadius', 'accentColorOverride', 'cards', 'buttonOverrides']) &&
+        scr.keys().hasOnly(['themeId', 'layoutStyle', 'cardRadius', 'accentColorOverride', 'defaultPageId', 'cards', 'buttonOverrides']) &&
         scr.themeId in [
           'sand_sapphire', 'obsidian_gold', 'alabaster_editorial', 'emerald_hospitality', 'midnight_sapphire',
           'espresso_bistro', 'nordic_slate', 'burgundy_velvet', 'saffron_sunrise'
@@ -1310,6 +1347,7 @@ service cloud.firestore {
         scr.layoutStyle in ['sidebar_cards', 'compact_rail', 'top_deck'] &&
         scr.cardRadius in ['sharp', 'rounded', 'soft'] &&
         (!('accentColorOverride' in scr) || (scr.accentColorOverride is string && scr.accentColorOverride.matches('^#[0-9a-fA-F]{6}$'))) &&
+        (!('defaultPageId' in scr) || (scr.defaultPageId is string && scr.defaultPageId.size() <= 64)) &&
         scr.cards is list && scr.cards.size() >= 1 && scr.cards.size() <= 12 && scr.cards[0] is map &&
         scr.buttonOverrides is map && scr.buttonOverrides.keys().size() <= 24;
     }
@@ -1384,6 +1422,60 @@ service cloud.firestore {
         data.createdAt is timestamp;
     }
 
+    function isValidFacilityCodeDoc(data, code) {
+      return data.keys().hasAll([
+          'code', 'prefix', 'serial', 'businessType', 'restaurantId', 'ownerId', 'slug', 'name', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'code', 'prefix', 'serial', 'businessType', 'restaurantId', 'ownerId',
+          'slug', 'name', 'name_en', 'logoUrl', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidFacilityCode(data.code) &&
+        data.code == code &&
+        isValidFacilityPrefix(data.prefix) &&
+        isValidFacilitySerial(data.serial) &&
+        isValidBusinessType(data.businessType) &&
+        isValidId(data.restaurantId) &&
+        isValidId(data.ownerId) &&
+        isValidSlug(data.slug) &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
+        (!('name_en' in data) || (data.name_en is string && data.name_en.size() <= 120)) &&
+        (!('logoUrl' in data) || (data.logoUrl is string && data.logoUrl.size() <= 300000)) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidCustomerVisitShape(data, restaurantId, visitId) {
+      return data.keys().hasAll([
+          'id', 'restaurantId', 'ownerId', 'customerName', 'orderType', 'source',
+          'startedAt', 'status', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'restaurantId', 'ownerId', 'customerPhone', 'customerName',
+          'hallName', 'tableNumber', 'orderType', 'source', 'orderId', 'orderNumber',
+          'startedAt', 'endedAt', 'durationMinutes', 'status', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.id) &&
+        data.id == visitId &&
+        isValidId(data.restaurantId) &&
+        data.restaurantId == restaurantId &&
+        isValidId(data.ownerId) &&
+        (!('customerPhone' in data) || (data.customerPhone is string && data.customerPhone.size() <= 24)) &&
+        data.customerName is string && data.customerName.size() >= 1 && data.customerName.size() <= 100 &&
+        (!('hallName' in data) || (data.hallName is string && data.hallName.size() <= 80)) &&
+        (!('tableNumber' in data) || (data.tableNumber is string && data.tableNumber.size() <= 20)) &&
+        data.orderType in ['dine_in', 'delivery', 'pickup'] &&
+        data.source in ['menu', 'pos'] &&
+        (!('orderId' in data) || (data.orderId is string && data.orderId.size() <= 64)) &&
+        (!('orderNumber' in data) || (data.orderNumber is string && data.orderNumber.size() <= 40)) &&
+        data.startedAt is number && data.startedAt >= 0 &&
+        (!('endedAt' in data) || (data.endedAt is number && data.endedAt >= 0)) &&
+        (!('durationMinutes' in data) || (data.durationMinutes is number && data.durationMinutes >= 0 && data.durationMinutes <= 100000)) &&
+        data.status in ['active', 'completed'] &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
     // 1. Users collection (owner-only PII + Super Admin read)
     match /users/{userId} {
       allow get: if isSuperAdmin() || (isVerifiedAccount() && isValidId(userId) && request.auth.uid == userId);
@@ -1422,6 +1514,46 @@ service cloud.firestore {
       );
     }
 
+    // 2b. Facility Activity Codes lookup collection
+    match /facility_codes/{code} {
+      allow get: if isValidFacilityCode(code);
+      allow list: if isSuperAdmin();
+      allow create: if isValidFacilityCode(code) &&
+        isValidFacilityCodeDoc(incoming(), code) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time && (
+          isSuperAdmin() ||
+          (isVerifiedAccount() && incoming().ownerId == request.auth.uid)
+        ) && (
+          (
+            exists(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)) &&
+            get(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)).data.ownerId == incoming().ownerId
+          ) || (
+            existsAfter(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)) &&
+            getAfter(/databases/$(database)/documents/restaurants/$(incoming().restaurantId)).data.ownerId == incoming().ownerId
+          )
+        );
+      allow update: if isValidFacilityCode(code) &&
+        isValidFacilityCodeDoc(incoming(), code) &&
+        incoming().code == existing().code &&
+        incoming().prefix == existing().prefix &&
+        incoming().serial == existing().serial &&
+        incoming().restaurantId == existing().restaurantId &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'businessType', 'slug', 'name', 'name_en', 'logoUrl', 'updatedAt'
+        ]) && (
+          isSuperAdmin() ||
+          (isVerifiedAccount() && existing().ownerId == request.auth.uid)
+        );
+      allow delete: if isValidFacilityCode(code) && (
+        isSuperAdmin() ||
+        (isVerifiedAccount() && existing().ownerId == request.auth.uid)
+      );
+    }
+
     // 3. Restaurants collection
     match /restaurants/{restaurantId} {
       allow get: if isValidId(restaurantId);
@@ -1448,16 +1580,21 @@ service cloud.firestore {
               incoming().diff(existing()).affectedKeys().hasOnly(['offers', 'promoCodes', 'updatedAt']) ||
               incoming().diff(existing()).affectedKeys().hasOnly(['offers', 'promoCodes', 'loyaltyConfig', 'updatedAt']) ||
               incoming().diff(existing()).affectedKeys().hasOnly([
+                'businessType', 'facilityPrefix', 'facilitySerial', 'facilityCode', 'updatedAt'
+              ]) ||
+              incoming().diff(existing()).affectedKeys().hasOnly([
                 'activeTheme', 'primaryColor', 'taxRate', 'serviceCharge',
-                'colorMode', 'headingColor', 'descriptionColor', 'priceColor', 'menuBgColor', 'menuCardBgColor', 'menuColumns',
+                'colorMode', 'headingColor', 'descriptionColor', 'priceColor', 'menuBgColor', 'menuCardBgColor',
+                'lightThemeColors', 'darkThemeColors', 'menuColumns',
                 'updatedAt'
               ]) ||
               incoming().diff(existing()).affectedKeys().hasOnly([
                 'name', 'name_en', 'tagline', 'tagline_en', 'slug', 'whatsappNumber', 'logoUrl',
                 'shareTitle', 'shareTitle_en', 'shareDescription', 'shareDescription_en',
+                'businessType', 'facilityPrefix', 'facilitySerial', 'facilityCode',
                 'currency', 'isOpen', 'ownerBirthday', 'activeTheme', 'taxRate', 'serviceCharge', 'deliveryFee',
                 'primaryColor', 'colorMode', 'headingColor', 'descriptionColor', 'priceColor', 'menuBgColor', 'menuCardBgColor',
-                'menuColumns', 'updatedAt'
+                'lightThemeColors', 'darkThemeColors', 'menuColumns', 'updatedAt'
               ]) ||
               (
                 incoming().diff(existing()).affectedKeys().hasOnly([
@@ -1495,16 +1632,21 @@ service cloud.firestore {
               incoming().diff(existing()).affectedKeys().hasOnly(['offers', 'promoCodes', 'updatedAt']) ||
               incoming().diff(existing()).affectedKeys().hasOnly(['offers', 'promoCodes', 'loyaltyConfig', 'updatedAt']) ||
               incoming().diff(existing()).affectedKeys().hasOnly([
+                'businessType', 'facilityPrefix', 'facilitySerial', 'facilityCode', 'updatedAt'
+              ]) ||
+              incoming().diff(existing()).affectedKeys().hasOnly([
                 'activeTheme', 'primaryColor', 'taxRate', 'serviceCharge',
-                'colorMode', 'headingColor', 'descriptionColor', 'priceColor', 'menuBgColor', 'menuCardBgColor', 'menuColumns',
+                'colorMode', 'headingColor', 'descriptionColor', 'priceColor', 'menuBgColor', 'menuCardBgColor',
+                'lightThemeColors', 'darkThemeColors', 'menuColumns',
                 'updatedAt'
               ]) ||
               incoming().diff(existing()).affectedKeys().hasOnly([
                 'name', 'name_en', 'tagline', 'tagline_en', 'slug', 'whatsappNumber', 'logoUrl',
                 'shareTitle', 'shareTitle_en', 'shareDescription', 'shareDescription_en',
+                'businessType', 'facilityPrefix', 'facilitySerial', 'facilityCode',
                 'currency', 'isOpen', 'isSuspended', 'ownerBirthday', 'activeTheme', 'taxRate', 'serviceCharge', 'deliveryFee',
                 'primaryColor', 'colorMode', 'headingColor', 'descriptionColor', 'priceColor', 'menuBgColor', 'menuCardBgColor',
-                'menuColumns', 'updatedAt'
+                'lightThemeColors', 'darkThemeColors', 'menuColumns', 'updatedAt'
               ]) ||
               incoming().diff(existing()).affectedKeys().hasOnly([
                 'appliedPlatformPromoCode', 'appliedPlatformPromoSummary', 'appliedPlatformPromoSummary_en', 'updatedAt'
@@ -1610,8 +1752,9 @@ service cloud.firestore {
           exists(/databases/$(database)/documents/restaurants/$(restaurantId)) && (
             (
               incoming().diff(existing()).affectedKeys().hasOnly([
-                'fullName', 'birthDay', 'birthMonth', 'birthYear', 'preferredOrderType', 'address', 'updatedAt'
-              ])
+                'fullName', 'birthDay', 'birthMonth', 'birthYear', 'preferredOrderType', 'address', 'avatarUrl', 'updatedAt'
+              ]) ||
+              incoming().diff(existing()).affectedKeys().hasOnly(['avatarUrl', 'updatedAt'])
             ) || (
               incoming().totalOrders >= existing().totalOrders &&
               incoming().totalOrders <= existing().totalOrders + 1 &&
@@ -1630,6 +1773,45 @@ service cloud.firestore {
         allow delete: if isValidId(restaurantId) && isValidPhoneId(customerPhone) && (
           isSuperAdmin() ||
           (isVerifiedAccount() && existing().ownerId == request.auth.uid) ||
+          staffHasPermission(restaurantId, 'canManageCustomers')
+        );
+      }
+
+      // 3c-2. Customer Visits & Stay Duration subcollection
+      match /customer_visits/{visitId} {
+        allow get: if isValidId(restaurantId) &&
+          isValidId(visitId) &&
+          exists(/databases/$(database)/documents/restaurants/$(restaurantId));
+        allow list: if isValidId(restaurantId) && (
+          isSuperAdmin() ||
+          (isVerifiedAccount() && resource.data.ownerId == request.auth.uid) ||
+          staffHasPermission(restaurantId, 'canManageCustomers') ||
+          ((staffHasScreen(restaurantId, 'captain') || staffHasScreen(restaurantId, 'cashier')) && staffHasPermission(restaurantId, 'canAddEditTableOrders'))
+        );
+        allow create: if isValidId(restaurantId) &&
+          isValidId(visitId) &&
+          isValidCustomerVisitShape(incoming(), restaurantId, visitId) &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          exists(/databases/$(database)/documents/restaurants/$(restaurantId)) &&
+          get(/databases/$(database)/documents/restaurants/$(restaurantId)).data.ownerId == incoming().ownerId;
+        allow update: if isValidId(restaurantId) &&
+          isValidId(visitId) &&
+          isValidCustomerVisitShape(incoming(), restaurantId, visitId) &&
+          incoming().id == existing().id &&
+          incoming().restaurantId == existing().restaurantId &&
+          incoming().ownerId == existing().ownerId &&
+          incoming().startedAt == existing().startedAt &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          exists(/databases/$(database)/documents/restaurants/$(restaurantId)) &&
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'customerPhone', 'customerName', 'hallName', 'tableNumber', 'orderType',
+            'orderId', 'orderNumber', 'endedAt', 'durationMinutes', 'status', 'updatedAt'
+          ]);
+        allow delete: if isValidId(restaurantId) && isValidId(visitId) && (
+          isSuperAdmin() ||
+          isOwnerOfRestaurant(restaurantId) ||
           staffHasPermission(restaurantId, 'canManageCustomers')
         );
       }

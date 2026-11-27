@@ -27,6 +27,7 @@ import {
   X,
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { formatFirestoreErrorMessage } from '../../lib/firebase';
 import {
   getHallTableNumbers,
   submitPublicOrder,
@@ -141,6 +142,7 @@ export function CashierFloorPosPanel({
     tableNumber: string;
   } | null>(null);
   const [callBusyId, setCallBusyId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   // Color & SLA settings modal (Owner / permitted Manager only)
   const [gridSettingsOpen, setGridSettingsOpen] = useState(false);
@@ -215,24 +217,98 @@ export function CashierFloorPosPanel({
     [menuItems]
   );
 
+  const mergedFloorHalls = useMemo(() => {
+    const entries = halls.map((h) => ({
+      hall: h,
+      tableNumbers: [...getHallTableNumbers(h)],
+    }));
+
+    const unmappedMap = new Map<string, { hallName: string; tables: string[] }>();
+
+    const registerActiveTable = (rawHall?: string | null, rawTbl?: string | null) => {
+      const tbl = normalizeTableNumber(rawTbl);
+      if (!tbl) return;
+      const cleanRecHall = (rawHall || '').trim();
+
+      const matchedEntry = entries.find((entry) => {
+        const allowFallback =
+          entries.length <= 1 || entries[0]?.hall.name.trim() === entry.hall.name.trim();
+        return doesHallMatch(entry.hall, cleanRecHall, allowFallback);
+      });
+
+      if (matchedEntry) {
+        if (!matchedEntry.tableNumbers.some((t) => doTableNumbersMatch(t, tbl))) {
+          matchedEntry.tableNumbers.push(tbl);
+        }
+        return;
+      }
+
+      const virtualKey = cleanRecHall.toLowerCase() || '__empty__';
+      const existingVirtual = unmappedMap.get(virtualKey);
+      if (existingVirtual) {
+        if (!existingVirtual.tables.some((t) => doTableNumbersMatch(t, tbl))) {
+          existingVirtual.tables.push(tbl);
+        }
+      } else {
+        unmappedMap.set(virtualKey, {
+          hallName: cleanRecHall,
+          tables: [tbl],
+        });
+      }
+    };
+
+    orders.forEach((o) => {
+      if (o.status !== 'completed' && o.status !== 'cancelled' && o.orderType === 'dine_in') {
+        registerActiveTable(o.hallName, o.tableNumber);
+      }
+    });
+    tableSessions.forEach((s) => {
+      if (s.status === 'active' && ((s.guests?.length || 0) > 0 || (s.items?.length || 0) > 0)) {
+        registerActiveTable(s.hallName, s.tableNumber);
+      }
+    });
+    serviceCalls.forEach((c) => {
+      if (c.status !== 'resolved') {
+        registerActiveTable(c.hallName, c.tableNumber);
+      }
+    });
+
+    unmappedMap.forEach((v, vKey) => {
+      entries.push({
+        hall: {
+          id: `__virtual_${vKey}`,
+          restaurantId: restaurant.id,
+          ownerId: restaurant.ownerId,
+          name: v.hallName,
+          name_en: v.hallName,
+          hallType: isEn ? 'Active QR / Unmapped' : 'طاولات نشطة (QR)',
+          tableCount: v.tables.length,
+          sortOrder: 999,
+          tableNumbers: v.tables,
+        },
+        tableNumbers: v.tables,
+      });
+    });
+
+    return entries;
+  }, [halls, orders, tableSessions, serviceCalls, restaurant.id, restaurant.ownerId, isEn]);
+
   const hallFilterOptions = useMemo(() => {
     const names = new Set<string>();
-    halls.forEach((h) => {
-      if (h.name.trim()) names.add(h.name.trim());
+    mergedFloorHalls.forEach(({ hall }) => {
+      const label = hall.name.trim() || (isEn ? 'Active Unmapped / QR Tables' : 'طاولات نشطة (ممسوحة بـ QR)');
+      names.add(label);
     });
     return Array.from(names);
-  }, [halls]);
+  }, [mergedFloorHalls, isEn]);
 
   const gridHalls = useMemo(() => {
-    const filtered =
-      selectedHallFilter === 'all'
-        ? halls
-        : halls.filter((h) => h.name.trim() === selectedHallFilter);
-    return filtered.map((h) => ({
-      hall: h,
-      tableNumbers: getHallTableNumbers(h),
-    }));
-  }, [halls, selectedHallFilter]);
+    if (selectedHallFilter === 'all') return mergedFloorHalls;
+    return mergedFloorHalls.filter(({ hall }) => {
+      const label = hall.name.trim() || (isEn ? 'Active Unmapped / QR Tables' : 'طاولات نشطة (ممسوحة بـ QR)');
+      return label === selectedHallFilter;
+    });
+  }, [mergedFloorHalls, selectedHallFilter, isEn]);
 
   const getTableSnapshot = (hallName: string, tableNumber: string) => {
     const cleanTbl = tableNumber.trim();
@@ -384,13 +460,7 @@ export function CashierFloorPosPanel({
       onRestaurantUpdated?.({ ...restaurant, operationsConfig: nextConfig });
       setGridSettingsOpen(false);
     } catch (err) {
-      setGridSettingsError(
-        err instanceof Error
-          ? err.message
-          : isEn
-            ? 'Could not save color settings.'
-            : 'تعذر حفظ إعدادات الألوان.'
-      );
+      setGridSettingsError(formatFirestoreErrorMessage(err, isEn));
     } finally {
       setSavingGridSettings(false);
     }
@@ -681,6 +751,15 @@ export function CashierFloorPosPanel({
 
   return (
     <div dir={dir} className="space-y-4">
+      {actionError && (
+        <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs font-bold text-red-800 flex items-center justify-between gap-2">
+          <span>{actionError}</span>
+          <button type="button" onClick={() => setActionError(null)} className="cursor-pointer shrink-0">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* ============================================================== */}
       {/* VIEW 1: LIVE COLOR-CODED FLOOR MAP FOR CASHIER                 */}
       {/* ============================================================== */}
@@ -814,7 +893,8 @@ export function CashierFloorPosPanel({
                   <div className="flex items-center gap-2">
                     <MapPin className="w-4 h-4 text-amber-600" />
                     <h3 className="text-sm font-extrabold text-zinc-950">
-                      {loc(hall.name, hall.name_en)}
+                      {loc(hall.name, hall.name_en) ||
+                        (isEn ? 'Active Unmapped / QR Tables' : 'طاولات نشطة (ممسوحة بـ QR)')}
                     </h3>
                     {hall.hallType && (
                       <span className="px-2 py-0.5 rounded-md bg-zinc-100 text-zinc-700 text-[11px] font-bold">
@@ -1540,8 +1620,11 @@ export function CashierFloorPosPanel({
                             disabled={callBusyId === call.id}
                             onClick={async () => {
                               setCallBusyId(call.id);
+                              setActionError(null);
                               try {
                                 await onResolveCall(call, 'resolved');
+                              } catch (err) {
+                                setActionError(formatFirestoreErrorMessage(err, isEn));
                               } finally {
                                 setCallBusyId(null);
                               }

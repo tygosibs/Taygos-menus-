@@ -1,3 +1,6 @@
+import type { BusinessActivityType, FacilityPrefix } from '../lib/facilityCodeUtils';
+export type { BusinessActivityType, FacilityPrefix };
+
 export type BuiltinTheme =
   | 'theme-1'
   | 'theme-2'
@@ -287,10 +290,29 @@ export interface TreasuryState {
   updatedAt?: number;
 }
 
+export interface FacilityCodeRecord {
+  code: string;
+  prefix: FacilityPrefix;
+  serial: string;
+  businessType: BusinessActivityType;
+  restaurantId: string;
+  ownerId: string;
+  slug: string;
+  name: string;
+  name_en?: string;
+  logoUrl?: string;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+}
+
 export interface Restaurant {
   id: string;
   ownerId: string;
   slug: string;
+  businessType?: BusinessActivityType;
+  facilityPrefix?: FacilityPrefix;
+  facilitySerial?: string;
+  facilityCode?: string;
   name: string;
   name_en?: string;
   tagline?: string;

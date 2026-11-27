@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import {
+  Building2,
   Check,
   Copy,
   Download,
@@ -11,6 +12,7 @@ import {
 } from 'lucide-react';
 import { Restaurant } from '../../types/menu';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { getFacilityActivityMeta } from '../../lib/facilityCodeUtils';
 
 interface StaffPortalShareCardProps {
   restaurant: Restaurant;
@@ -21,12 +23,15 @@ export function StaffPortalShareCard({ restaurant, managersCount }: StaffPortalS
   const { lang, dir, loc } = useLanguage();
   const isEn = lang === 'en';
   const [copied, setCopied] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const staffPortalPath = `/staff/${restaurant.slug}`;
   const staffPortalUrl = `${origin}${staffPortalPath}`;
   const restDisplayName = loc(restaurant.name, restaurant.name_en);
+  const facilityCode = (restaurant.facilityCode || '').trim();
+  const activityMeta = getFacilityActivityMeta(restaurant.businessType || restaurant.facilityPrefix);
 
   useEffect(() => {
     if (!canvasRef.current || !staffPortalUrl) return;
@@ -52,6 +57,17 @@ export function StaffPortalShareCard({ restaurant, managersCount }: StaffPortalS
     }
   };
 
+  const handleCopyFacilityCode = async () => {
+    if (!facilityCode) return;
+    try {
+      await navigator.clipboard.writeText(facilityCode);
+      setCopiedCode(true);
+      setTimeout(() => setCopiedCode(false), 2000);
+    } catch {
+      // Fallback ignored
+    }
+  };
+
   const handleDownloadQr = () => {
     if (!canvasRef.current) return;
     const pngUrl = canvasRef.current.toDataURL('image/png');
@@ -61,10 +77,12 @@ export function StaffPortalShareCard({ restaurant, managersCount }: StaffPortalS
     a.click();
   };
 
+  const codeLineEn = facilityCode ? `\nFacility Code: ${facilityCode}` : '';
+  const codeLineAr = facilityCode ? `\nكود المنشأة للدخول الموحد: ${facilityCode}` : '';
   const waMessage = encodeURIComponent(
     isEn
-      ? `Hello, here is the Staff Portal link for "${restDisplayName}":\n${staffPortalUrl}\nYou can sign in using your username, phone number, or email and password.`
-      : `مرحباً، رابط بوابة دخول الكادر لمطعم "${restDisplayName}":\n${staffPortalUrl}\nيمكنكم تسجيل الدخول باستخدام اسم المستخدم أو رقم الهاتف أو البريد الإلكتروني وكلمة المرور.`
+      ? `Hello, here is the Staff Portal link for "${restDisplayName}":\n${staffPortalUrl}${codeLineEn}\nYou can sign in using your username, phone number, or email and password.`
+      : `مرحباً، رابط بوابة دخول الكادر لمطعم "${restDisplayName}":\n${staffPortalUrl}${codeLineAr}\nيمكنكم تسجيل الدخول باستخدام اسم المستخدم أو رقم الهاتف أو البريد الإلكتروني وكلمة المرور.`
   );
   const waHref = `https://wa.me/?text=${waMessage}`;
 
@@ -80,6 +98,10 @@ export function StaffPortalShareCard({ restaurant, managersCount }: StaffPortalS
               <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
               <span>{isEn ? 'Dedicated Staff Portal' : 'صفحة الكادر المخصّصة'}</span>
             </span>
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-100 border border-zinc-200 text-zinc-700 text-xs font-bold">
+              <Building2 className="w-3.5 h-3.5 shrink-0 text-zinc-500" />
+              <span>{isEn ? activityMeta.labelEn : activityMeta.labelAr}</span>
+            </span>
             <span className="text-xs font-bold text-emerald-700 font-mono-num">
               {isEn ? `${managersCount} Active Managers` : `${managersCount} مدير مفعّل`}
             </span>
@@ -92,9 +114,41 @@ export function StaffPortalShareCard({ restaurant, managersCount }: StaffPortalS
           </h3>
           <p className="text-xs text-zinc-600 leading-relaxed max-w-2xl">
             {isEn
-              ? 'Managers, cashiers, chefs, baristas, pastry staff, and captains use this link to access only their authorized operational screens without exposing sensitive owner settings.'
-              : 'يستخدم المدير والكاشير والشيف والباريستا والباستري والكابتن هذا الرابط لفتح شاشاتهم المصرّح بها فقط دون الوصول لإعدادات المالك الحساسة.'}
+              ? 'Managers, cashiers, chefs, baristas, pastry staff, and captains use either the direct portal link or the Facility Code from the main login screen.'
+              : 'يستخدم فريق العمل هذا الرابط المباشر أو كود المنشأة من شاشة الدخول الموحدة لفتح شاشاتهم المصرّح بها فقط دون الوصول لإعدادات المالك.'}
           </p>
+
+          {facilityCode && (
+            <div className="flex flex-wrap items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl bg-amber-50 border border-amber-300">
+              <div className="space-y-0.5 min-w-0">
+                <p className="text-[11px] font-bold text-amber-900">
+                  {isEn ? 'Unified Facility Login Code' : 'كود المنشأة للدخول الموحد (من الصفحة الرئيسية)'}
+                </p>
+                <p
+                  dir="ltr"
+                  className="text-base sm:text-lg font-black font-mono-num tracking-wider text-zinc-950 select-all"
+                >
+                  {facilityCode}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleCopyFacilityCode}
+                className="min-h-[36px] px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-zinc-950 text-xs font-extrabold inline-flex items-center gap-1.5 shrink-0 cursor-pointer"
+              >
+                {copiedCode ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>
+                  {copiedCode
+                    ? isEn
+                      ? 'Code Copied'
+                      : 'تم نسخ الكود'
+                    : isEn
+                      ? 'Copy Code'
+                      : 'نسخ الكود'}
+                </span>
+              </button>
+            </div>
+          )}
 
           <div
             dir="ltr"

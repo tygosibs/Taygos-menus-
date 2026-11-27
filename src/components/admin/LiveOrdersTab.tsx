@@ -241,6 +241,7 @@ export function LiveOrdersTab({
   const [internalExpenses, setInternalExpenses] = useState<DrawerExpense[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
   const [cashierSubView, setCashierSubView] = useState<'orders' | 'tables' | 'pos'>('orders');
   const [posPrefillTable, setPosPrefillTable] = useState<{
@@ -892,6 +893,75 @@ export function LiveOrdersTab({
       });
     });
 
+    // Also include active pre-order table sessions (seated guests or shared cart items before order submission)
+    tableSessions.forEach((sess) => {
+      if (sess.status !== 'active') return;
+      const hasSeatedOrPending = (sess.guests?.length || 0) > 0 || (sess.items?.length || 0) > 0;
+      if (!hasSeatedOrPending) return;
+      const sessHall = normalizeHallName(sess.hallName);
+      const sessTable = normalizeTableNumber(sess.tableNumber);
+      if (!sessTable && !sess.id) return;
+
+      const alreadyCovered = groups.some(
+        (g) =>
+          doTableNumbersMatch(g.tableNumber, sessTable) &&
+          ((!g.hallName && halls.length <= 1) ||
+            doesHallMatch(g.hallName || halls[0]?.name || '', sessHall, halls.length <= 1))
+      );
+      if (alreadyCovered) return;
+
+      const guestMap = new Map<string, AggregatedGuestCheck>();
+      (sess.guests || []).forEach((g) => {
+        const cleanG = (g || '').trim();
+        if (cleanG && !guestMap.has(cleanG.toLowerCase())) {
+          guestMap.set(cleanG.toLowerCase(), {
+            guestName: cleanG,
+            itemsCount: 0,
+            subtotal: 0,
+            serviceCharge: 0,
+            taxAmount: 0,
+            total: 0,
+          });
+        }
+      });
+      (sess.items || []).forEach((it) => {
+        const cleanG = (it.guestName || '').trim() || (isEn ? 'Guest' : 'ضيف');
+        const qty = Number(it.quantity) || 1;
+        const itemSub = (Number(it.unitPrice) || 0) * qty;
+        const existing = guestMap.get(cleanG.toLowerCase());
+        if (existing) {
+          existing.itemsCount += qty;
+          existing.subtotal += itemSub;
+          existing.total += itemSub;
+        } else {
+          guestMap.set(cleanG.toLowerCase(), {
+            guestName: cleanG,
+            itemsCount: qty,
+            subtotal: itemSub,
+            serviceCharge: 0,
+            taxAmount: 0,
+            total: itemSub,
+          });
+        }
+      });
+
+      groups.push({
+        groupKey: `sess_${sess.id}`,
+        hallName: sessHall,
+        tableNumber: sessTable,
+        sessionId: sess.id,
+        orders: [],
+        orderIds: [],
+        orderNumbers: [],
+        guestsBreakdown: Array.from(guestMap.values()),
+        subtotal: 0,
+        serviceCharge: 0,
+        taxAmount: 0,
+        discountAmount: 0,
+        grandTotal: 0,
+      });
+    });
+
     return groups;
   }, [activeOrders, tableSessions, halls, isEn]);
 
@@ -916,6 +986,7 @@ export function LiveOrdersTab({
 
   const handleStatusChange = async (order: Order, nextStatus: OrderStatus) => {
     setUpdatingId(order.id);
+    setActionError(null);
     try {
       await updateOrderStatus(order.id, nextStatus, {
         restaurantId: restaurant.id,
@@ -923,6 +994,8 @@ export function LiveOrdersTab({
         orderNumber: order.orderNumber,
         actor,
       });
+    } catch (err) {
+      setActionError(formatFirestoreErrorMessage(err, isEn));
     } finally {
       setUpdatingId(null);
     }
@@ -935,6 +1008,7 @@ export function LiveOrdersTab({
   ) => {
     setPrintingKdsOrderId(order.id);
     setPrintFeedback(null);
+    setActionError(null);
     try {
       const job = buildStationTicketJob({
         restaurant,
@@ -953,6 +1027,8 @@ export function LiveOrdersTab({
             ? `Ticket #${order.orderNumber} (${stationMeta.shortLabel_en}) prepared for printing.`
             : `تم تجهيز تذكرة #${order.orderNumber} (${stationMeta.shortLabel}) للطباعة.`
       );
+    } catch (err) {
+      setActionError(formatFirestoreErrorMessage(err, isEn));
     } finally {
       setPrintingKdsOrderId(null);
     }
@@ -995,6 +1071,7 @@ export function LiveOrdersTab({
     if (itemIndices.length === 0) return;
     const key = `${order.id}:${nextState}:${itemIndices.join(',')}`;
     setUpdatingItemKey(key);
+    setActionError(null);
     try {
       const updates: Record<string, ItemPrepState> = {};
       itemIndices.forEach((idx) => {
@@ -1016,12 +1093,15 @@ export function LiveOrdersTab({
           actor,
         }
       );
+    } catch (err) {
+      setActionError(formatFirestoreErrorMessage(err, isEn));
     } finally {
       setUpdatingItemKey(null);
     }
   };
 
   const openSettlementModal = (target: SettleTarget, preferredMethod: OrderPaymentMethod = 'cash') => {
+    if (target.type === 'table' && target.group.orders.length === 0) return;
     const due = target.type === 'table' ? target.group.grandTotal : target.order.total;
     setSettleTarget(target);
     setSettleMethod(preferredMethod);
@@ -1604,6 +1684,15 @@ export function LiveOrdersTab({
           <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-900 flex items-center justify-between gap-2">
             <span>{printFeedback}</span>
             <button type="button" onClick={() => setPrintFeedback(null)} className="cursor-pointer">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {actionError && (
+          <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs font-bold text-red-800 flex items-center justify-between gap-2">
+            <span>{actionError}</span>
+            <button type="button" onClick={() => setActionError(null)} className="cursor-pointer shrink-0">
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -2396,7 +2485,11 @@ export function LiveOrdersTab({
                               </span>
                             </span>
                             <span className="text-[11px] font-mono-num font-bold" style={{ color: ui.theme.mutedText }}>
-                              ({group.orderNumbers.map((n) => `#${n}`).join(' + ')})
+                              {group.orders.length > 0
+                                ? `(${group.orderNumbers.map((n) => `#${n}`).join(' + ')})`
+                                : isEn
+                                  ? '(Seated — No sent orders yet)'
+                                  : '(جلسة مفتوحة — لم يُرسل طلب بعد)'}
                             </span>
                           </div>
                         </div>
@@ -2412,6 +2505,13 @@ export function LiveOrdersTab({
                       </div>
 
                       {/* Combined Items with Station & Prep Status */}
+                      {group.orders.length === 0 ? (
+                        <div className="p-3 rounded-xl bg-sky-50 border border-sky-200 text-xs font-bold text-sky-900">
+                          {isEn
+                            ? 'Guests joined this table via QR. Waiting for their first kitchen order (or add items from Cashier POS).'
+                            : 'تم مسح QR والجلوس على هذه الطاولة — في انتظار إرسال أول طلب أو إضافة أصناف من نقطة بيع الكاشير.'}
+                        </div>
+                      ) : (
                       <div className="space-y-2 max-h-56 overflow-y-auto pe-1">
                         {group.orders.flatMap((ord) =>
                           ord.items.map((it, idx) => {
@@ -2471,6 +2571,7 @@ export function LiveOrdersTab({
                           })
                         )}
                       </div>
+                      )}
 
                       {/* Separate Check Guest Breakdown */}
                       <div
@@ -2535,8 +2636,9 @@ export function LiveOrdersTab({
 
                       <button
                         type="button"
+                        disabled={group.orders.length === 0}
                         onClick={() => openSplitCheckForTableGroup(group)}
-                        className={`min-h-[42px] px-3.5 py-2 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-950 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
+                        className={`min-h-[42px] px-3.5 py-2 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-950 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed ${ui.radiusClasses.button}`}
                       >
                         <Scissors className="w-4 h-4" />
                         <span>{isEn ? 'Split Check' : 'تقسيم الشيك'}</span>
@@ -2544,11 +2646,13 @@ export function LiveOrdersTab({
 
                       <button
                         type="button"
+                        disabled={group.orders.length === 0}
                         onClick={() => {
+                          if (group.orders.length === 0) return;
                           setReceiptModalOrder(null);
                           setReceiptModalTable(group);
                         }}
-                        className={`min-h-[42px] px-4 py-2 border text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
+                        className={`min-h-[42px] px-4 py-2 border text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed ${ui.radiusClasses.button}`}
                         style={{
                           backgroundColor: ui.theme.surfaceSubtleBg,
                           borderColor: ui.theme.surfaceBorder,
@@ -2562,8 +2666,9 @@ export function LiveOrdersTab({
                       {canSettleChecks && (
                         <button
                           type="button"
+                          disabled={group.orders.length === 0}
                           onClick={() => openSettlementModal({ type: 'table', group }, 'cash')}
-                          className={`flex-1 min-h-[42px] px-4 py-2 bg-emerald-600 text-white text-xs font-extrabold hover:bg-emerald-700 flex items-center justify-center gap-1.5 cursor-pointer ${ui.radiusClasses.button}`}
+                          className={`flex-1 min-h-[42px] px-4 py-2 bg-emerald-600 text-white text-xs font-extrabold hover:bg-emerald-700 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed ${ui.radiusClasses.button}`}
                         >
                           <Banknote className="w-4 h-4" />
                           <span>{isEn ? 'Settle & Close' : 'تحصيل وإقفال الشيك'}</span>

@@ -10,6 +10,7 @@ import {
   Calculator,
   Check,
   CheckCircle2,
+  Copy,
   ExternalLink,
   Gift,
   Globe,
@@ -24,6 +25,7 @@ import {
   Palette,
   QrCode,
   Receipt,
+  RefreshCw,
   ShieldCheck,
   Sparkles,
   Tag,
@@ -56,8 +58,10 @@ import {
   getDaysUntilUpcomingBirthday,
   getResolvedLoyaltyConfig,
 } from '../lib/customerLoyaltyUtils';
-import { auth, isSuperAdminEmail } from '../lib/firebase';
+import { getFacilityActivityMeta } from '../lib/facilityCodeUtils';
+import { auth, formatFirestoreErrorMessage, isSuperAdminEmail } from '../lib/firebase';
 import {
+  ensureRestaurantFacilityCode,
   ensureUserProfile,
   fetchOwnerRestaurant,
   fetchPlatformLandingSettings,
@@ -97,12 +101,30 @@ type AdminTab =
   | 'user_guide';
 
 const OWNER_TAB_STORAGE_KEY = 'sufra_owner_active_tab';
+const VALID_ADMIN_TABS: AdminTab[] = [
+  'orders',
+  'captain',
+  'hall_assignments',
+  'stations',
+  'staff',
+  'job_titles',
+  'reports',
+  'customers',
+  'menu',
+  'offers',
+  'theme',
+  'qr',
+  'user_guide',
+];
 
 export function AdminPortal({ onNavigate }: AdminPortalProps) {
   const { lang, t, dir, loc } = useLanguage();
   const isEn = lang === 'en';
   const ui = useScreenUi('owner_admin');
   const ownerTheme = ui.theme;
+  const ownerDefaultTab: AdminTab = VALID_ADMIN_TABS.includes(ui.screenConfig.defaultPageId as AdminTab)
+    ? (ui.screenConfig.defaultPageId as AdminTab)
+    : 'orders';
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -110,34 +132,28 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [staffPortalSlug, setStaffPortalSlug] = useState<string | null>(null);
   const [loadingRestaurant, setLoadingRestaurant] = useState(false);
+  const [copiedFacilityCode, setCopiedFacilityCode] = useState(false);
   const isRtl = dir === 'rtl';
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [tabHistory, setTabHistory] = useState<AdminTab[]>([]);
+  const userInitiatedTabRef = useRef(false);
   const [activeTab, setActiveTabState] = useState<AdminTab>(() => {
-    if (typeof window === 'undefined') return 'orders';
+    if (typeof window === 'undefined') return ownerDefaultTab;
     const saved = window.sessionStorage.getItem(OWNER_TAB_STORAGE_KEY) as AdminTab | null;
-    if (
-      saved &&
-      [
-        'orders',
-        'captain',
-        'hall_assignments',
-        'stations',
-        'staff',
-        'job_titles',
-        'reports',
-        'customers',
-        'menu',
-        'offers',
-        'theme',
-        'qr',
-        'user_guide',
-      ].includes(saved)
-    ) {
+    if (saved && VALID_ADMIN_TABS.includes(saved)) {
       return saved;
     }
-    return 'orders';
+    return ownerDefaultTab;
   });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const saved = window.sessionStorage.getItem(OWNER_TAB_STORAGE_KEY);
+    if (!saved && !userInitiatedTabRef.current) {
+      setActiveTabState(ownerDefaultTab);
+    }
+  }, [ownerDefaultTab]);
+
   const scrollPageTop = () => {
     if (typeof window !== 'undefined') {
       window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
@@ -147,6 +163,7 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
     }
   };
   const setActiveTab = (tab: AdminTab, opts?: { pushHistory?: boolean }) => {
+    userInitiatedTabRef.current = true;
     const pushHistory = opts?.pushHistory ?? true;
     if (pushHistory && tab !== activeTab) {
       setTabHistory((prev) => [...prev.slice(-14), activeTab]);
@@ -200,44 +217,64 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
     return () => window.removeEventListener('pointerdown', unlock);
   }, []);
 
+  const loadOwnerWorkspace = async (u: User) => {
+    setLoadingRestaurant(true);
+    setAuthError(null);
+    // Sync user profile non-blockingly so a profile rule hiccup never prevents opening the owner workspace
+    try {
+      await ensureUserProfile(
+        u.uid,
+        u.email || '',
+        u.displayName || (lang === 'en' ? 'Restaurant Owner' : 'صاحب مطعم')
+      );
+    } catch (profileErr) {
+      console.warn('Non-blocking ensureUserProfile error:', profileErr);
+    }
+
+    try {
+      const rest = await fetchOwnerRestaurant(u.uid);
+      if (rest) {
+        let resolvedRest = rest;
+        if (!rest.facilityCode) {
+          try {
+            resolvedRest = await ensureRestaurantFacilityCode(rest);
+          } catch (codeErr) {
+            console.warn('Non-blocking facility code backfill failed:', codeErr);
+          }
+        }
+        setRestaurant(resolvedRest);
+        setStaffPortalSlug(null);
+      } else {
+        setRestaurant(null);
+        const staffAccess = await getStaffAccessForUid(u.uid);
+        if (staffAccess?.isActive) {
+          const slug = await fetchRestaurantSlugById(staffAccess.restaurantId);
+          setStaffPortalSlug(slug);
+        } else {
+          setStaffPortalSlug(null);
+        }
+      }
+    } catch (err) {
+      setAuthError(formatFirestoreErrorMessage(err, isEn));
+    } finally {
+      setLoadingRestaurant(false);
+    }
+  };
+
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (u) => {
+    const unsub = onAuthStateChanged(auth, (u) => {
       setUser(u);
       setAuthReady(true);
       if (u) {
-        setLoadingRestaurant(true);
-        setAuthError(null);
-        try {
-          await ensureUserProfile(
-            u.uid,
-            u.email || '',
-            u.displayName || (lang === 'en' ? 'Restaurant Owner' : 'صاحب مطعم')
-          );
-          const rest = await fetchOwnerRestaurant(u.uid);
-          setRestaurant(rest);
-          if (!rest) {
-            const staffAccess = await getStaffAccessForUid(u.uid);
-            if (staffAccess?.isActive) {
-              const slug = await fetchRestaurantSlugById(staffAccess.restaurantId);
-              setStaffPortalSlug(slug);
-            } else {
-              setStaffPortalSlug(null);
-            }
-          } else {
-            setStaffPortalSlug(null);
-          }
-        } catch (err) {
-          setAuthError(err instanceof Error ? err.message : t.auth.errGeneric);
-        } finally {
-          setLoadingRestaurant(false);
-        }
+        void loadOwnerWorkspace(u);
       } else {
         setRestaurant(null);
         setStaffPortalSlug(null);
+        setAuthError(null);
       }
     });
     return () => unsub();
-  }, [t.auth.errGeneric]);
+  }, [lang]);
 
   // Global live orders listener across ALL dashboard tabs so incoming kitchen orders ring even when editing menu/themes
   useEffect(() => {
@@ -451,6 +488,7 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
             </div>
           )}
           <OwnerAuthCard
+            onStaffNavigate={(staffSlug) => onNavigate(`/staff/${staffSlug}`)}
             onSuccess={(u) => {
               if (isSuperAdminEmail(u?.email)) {
                 onNavigate('/super-admin');
@@ -536,7 +574,57 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
           </div>
         </header>
 
-        {staffPortalSlug ? (
+        {authError ? (
+          <main className="max-w-xl mx-auto mt-10 px-4 pb-12">
+            <div
+              className={`border-2 p-6 sm:p-8 space-y-5 text-center ${ui.radiusClasses.card}`}
+              style={{
+                backgroundColor: ownerTheme.surfaceBg,
+                borderColor: '#fecdd3',
+                color: ownerTheme.surfaceText,
+                boxShadow: ownerTheme.cardShadow,
+              }}
+            >
+              <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center mx-auto">
+                <ShieldCheck className="w-6 h-6" />
+              </div>
+              <div className="space-y-2">
+                <h1 className="text-lg sm:text-xl font-extrabold" style={{ color: ownerTheme.surfaceText }}>
+                  {isEn ? 'Could not load your restaurant workspace' : 'تعذر تحميل مساحة عمل المطعم'}
+                </h1>
+                <p className="text-xs sm:text-sm leading-relaxed text-rose-700 font-semibold">
+                  {authError}
+                </p>
+              </div>
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 pt-1">
+                <button
+                  type="button"
+                  onClick={() => void loadOwnerWorkspace(user)}
+                  className={`w-full sm:w-auto min-h-[44px] px-5 py-2.5 text-xs sm:text-sm font-extrabold inline-flex items-center justify-center gap-2 whitespace-nowrap cursor-pointer ${ui.radiusClasses.button}`}
+                  style={{
+                    backgroundColor: ownerTheme.accentHex,
+                    color: ownerTheme.accentTextHex,
+                  }}
+                >
+                  <RefreshCw className="w-4 h-4 shrink-0" />
+                  <span>{isEn ? 'Retry Loading' : 'إعادة المحاولة'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSignOutConfirmOpen(true)}
+                  className={`w-full sm:w-auto min-h-[44px] px-5 py-2.5 border text-xs sm:text-sm font-bold whitespace-nowrap cursor-pointer ${ui.radiusClasses.button}`}
+                  style={{
+                    backgroundColor: ownerTheme.surfaceSubtleBg,
+                    borderColor: ownerTheme.surfaceBorder,
+                    color: ownerTheme.surfaceText,
+                  }}
+                >
+                  {t.admin.signOut}
+                </button>
+              </div>
+            </div>
+          </main>
+        ) : staffPortalSlug ? (
           <main className="max-w-xl mx-auto mt-10 px-4 pb-12">
             <div
               className={`border-2 p-6 sm:p-8 space-y-5 text-center ${ui.radiusClasses.card}`}
@@ -871,15 +959,27 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
       const prevTab = tabHistory[tabHistory.length - 1];
       setTabHistory((prev) => prev.slice(0, -1));
       setActiveTab(prevTab, { pushHistory: false });
-    } else if (activeTab !== 'orders') {
-      setActiveTab('orders', { pushHistory: false });
+    } else if (activeTab !== ownerDefaultTab) {
+      setActiveTab(ownerDefaultTab, { pushHistory: false });
     }
   };
 
   const handleGoOwnerHome = () => {
     setStationCreateIntent(null);
     setTabHistory([]);
-    setActiveTab('orders', { pushHistory: false });
+    setActiveTab(ownerDefaultTab, { pushHistory: false });
+  };
+
+  const facilityActivityMeta = getFacilityActivityMeta(restaurant.businessType);
+  const handleCopyFacilityCode = async () => {
+    if (!restaurant.facilityCode) return;
+    try {
+      await navigator.clipboard.writeText(restaurant.facilityCode);
+      setCopiedFacilityCode(true);
+      window.setTimeout(() => setCopiedFacilityCode(false), 1800);
+    } catch {
+      // Clipboard may be unavailable in restricted contexts
+    }
   };
 
   const openAddScreenFrom = (returnTab: AdminTab, screenType?: StationScreenType) => {
@@ -922,7 +1022,7 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
             <div className="flex items-center justify-between gap-2">
               <button
                 type="button"
-                onClick={() => setActiveTab('orders')}
+                onClick={handleGoOwnerHome}
                 title={t.nav.home}
                 className="text-base sm:text-lg font-extrabold cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 hover:opacity-80"
                 style={{ color: ownerTheme.sidebarText }}
@@ -970,6 +1070,48 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
               <p className="text-[11px] font-mono-num truncate" dir="ltr" style={{ color: ownerTheme.sidebarMuted }}>
                 /menu/{restaurant.slug}
               </p>
+              {restaurant.facilityCode && (
+                <div
+                  className="pt-1.5 border-t flex items-center justify-between gap-2"
+                  style={{ borderColor: ownerTheme.sidebarBorder }}
+                >
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold truncate" style={{ color: ownerTheme.sidebarMuted }}>
+                      {isEn ? facilityActivityMeta.labelEn : facilityActivityMeta.labelAr}
+                    </p>
+                    <p
+                      className="text-xs font-mono-num font-extrabold tracking-wide truncate"
+                      dir="ltr"
+                      style={{ color: getSidebarHighlightHex(ownerTheme) }}
+                    >
+                      {restaurant.facilityCode}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void handleCopyFacilityCode()}
+                    title={isEn ? 'Copy Facility Code' : 'نسخ كود المنشأة'}
+                    className={`min-h-[30px] px-2 py-1 border text-[10px] font-bold inline-flex items-center gap-1 shrink-0 cursor-pointer ${ui.radiusClasses.button}`}
+                    style={{
+                      backgroundColor: ownerTheme.isDarkShell ? 'rgba(255,255,255,0.08)' : ownerTheme.surfaceBg,
+                      borderColor: ownerTheme.sidebarBorder,
+                      color: ownerTheme.sidebarText,
+                    }}
+                  >
+                    {copiedFacilityCode ? (
+                      <>
+                        <Check className="w-3 h-3 text-emerald-500" />
+                        <span>{isEn ? 'Copied' : 'نُسخ'}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3 h-3" />
+                        <span>{isEn ? 'Code' : 'الكود'}</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
               <div
                 className="pt-1.5 border-t flex items-center justify-between gap-2"
                 style={{ borderColor: ownerTheme.sidebarBorder }}
@@ -1249,6 +1391,47 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
                 <p className="text-[11px] font-mono-num truncate" dir="ltr" style={{ color: ownerTheme.sidebarMuted }}>
                   /menu/{restaurant.slug}
                 </p>
+                {restaurant.facilityCode && (
+                  <div
+                    className="pt-1.5 border-t flex items-center justify-between gap-2"
+                    style={{ borderColor: ownerTheme.sidebarBorder }}
+                  >
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold truncate" style={{ color: ownerTheme.sidebarMuted }}>
+                        {isEn ? facilityActivityMeta.labelEn : facilityActivityMeta.labelAr}
+                      </p>
+                      <p
+                        className="text-xs font-mono-num font-extrabold tracking-wide truncate"
+                        dir="ltr"
+                        style={{ color: getSidebarHighlightHex(ownerTheme) }}
+                      >
+                        {restaurant.facilityCode}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void handleCopyFacilityCode()}
+                      className={`min-h-[30px] px-2 py-1 border text-[10px] font-bold inline-flex items-center gap-1 shrink-0 cursor-pointer ${ui.radiusClasses.button}`}
+                      style={{
+                        backgroundColor: ownerTheme.isDarkShell ? 'rgba(255,255,255,0.08)' : ownerTheme.surfaceBg,
+                        borderColor: ownerTheme.sidebarBorder,
+                        color: ownerTheme.sidebarText,
+                      }}
+                    >
+                      {copiedFacilityCode ? (
+                        <>
+                          <Check className="w-3 h-3 text-emerald-500" />
+                          <span>{isEn ? 'Copied' : 'نُسخ'}</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3 h-3" />
+                          <span>{isEn ? 'Code' : 'الكود'}</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
               </div>
 
               {isSuperAdminEmail(user.email) && (
@@ -1439,7 +1622,7 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0">
-            {(tabHistory.length > 0 || activeTab !== 'orders') && (
+            {(tabHistory.length > 0 || activeTab !== ownerDefaultTab) && (
               <button
                 type="button"
                 onClick={handleBackOwnerTab}
@@ -1450,7 +1633,7 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
                 <span>{isEn ? 'Back' : 'رجوع'}</span>
               </button>
             )}
-            {activeTab !== 'orders' && (
+            {activeTab !== ownerDefaultTab && (
               <button
                 type="button"
                 onClick={handleGoOwnerHome}
@@ -1767,7 +1950,7 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
               theme={ownerTheme}
               radiusClasses={ui.radiusClasses}
               entries={ownerGuideEntries}
-              onBackHome={() => setActiveTab('orders')}
+              onBackHome={handleGoOwnerHome}
             />
           )}
           {activeTab === 'orders' && (
@@ -1802,7 +1985,7 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
                 role: 'owner',
               }}
               onBack={() => setActiveTab('captain')}
-              onGoHome={() => setActiveTab('orders')}
+              onGoHome={handleGoOwnerHome}
             />
           )}
           {activeTab === 'stations' && (
@@ -1814,10 +1997,7 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
                 role: 'owner',
               }}
               createIntent={stationCreateIntent}
-              onGoHome={() => {
-                setStationCreateIntent(null);
-                setActiveTab('orders');
-              }}
+              onGoHome={handleGoOwnerHome}
               onReturnAfterCreate={() => {
                 const ret = stationCreateIntent?.returnTab;
                 setStationCreateIntent(null);
@@ -1861,7 +2041,7 @@ export function AdminPortal({ onNavigate }: AdminPortalProps) {
                 allowedCaptainScreens: [],
               }}
               onBack={() => setActiveTab('staff')}
-              onGoHome={() => setActiveTab('orders')}
+              onGoHome={handleGoOwnerHome}
             />
           )}
           {activeTab === 'reports' && (

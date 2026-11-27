@@ -33,9 +33,16 @@ import {
 } from '../../lib/customerLoyaltyUtils';
 import {
   subscribeRestaurantCustomers,
+  subscribeRestaurantCustomerVisits,
   updateRestaurantLoyaltyConfig,
 } from '../../lib/firestoreService';
-import { CustomerProfile, LoyaltyConfig, OrderType, Restaurant } from '../../types/menu';
+import {
+  CustomerProfile,
+  CustomerVisitRecord,
+  LoyaltyConfig,
+  OrderType,
+  Restaurant,
+} from '../../types/menu';
 
 interface CustomersCrmTabProps {
   restaurant: Restaurant;
@@ -113,6 +120,7 @@ export function CustomersCrmTab({ restaurant, onRestaurantUpdated }: CustomersCr
   const isEn = lang === 'en';
 
   const [customers, setCustomers] = useState<CustomerProfile[]>([]);
+  const [visits, setVisits] = useState<CustomerVisitRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -153,8 +161,39 @@ export function CustomersCrmTab({ restaurant, onRestaurantUpdated }: CustomersCr
         setLoading(false);
       }
     );
-    return () => unsub();
+    const unsubVisits = subscribeRestaurantCustomerVisits(
+      restaurant.id,
+      restaurant.ownerId,
+      setVisits,
+      () => {}
+    );
+    return () => {
+      unsub();
+      unsubVisits();
+    };
   }, [restaurant.id, restaurant.ownerId, isEn]);
+
+  const visitsByPhone = useMemo(() => {
+    const map = new Map<
+      string,
+      { count: number; latestDuration: number; latestStatus: CustomerVisitRecord['status'] }
+    >();
+    visits.forEach((v) => {
+      const p = (v.customerPhone || '').trim();
+      if (!p) return;
+      const existing = map.get(p);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        map.set(p, {
+          count: 1,
+          latestDuration: Number(v.durationMinutes) || 0,
+          latestStatus: v.status,
+        });
+      }
+    });
+    return map;
+  }, [visits]);
 
   const restaurantDisplayName = loc(restaurant.name, restaurant.name_en);
   const publicMenuUrl =
@@ -982,11 +1021,24 @@ export function CustomersCrmTab({ restaurant, onRestaurantUpdated }: CustomersCr
                       lang
                     );
 
+                    const visitInfo = visitsByPhone.get(c.phone);
+
                     return (
                       <tr key={c.id} className="hover:bg-zinc-50/70 align-middle">
                         <td className="py-3 px-3 font-bold text-zinc-950">
-                          <div className="flex items-center gap-1.5">
-                            <span>{c.fullName}</span>
+                          <div className="flex items-center gap-2">
+                            {c.avatarUrl ? (
+                              <img
+                                src={c.avatarUrl}
+                                alt={c.fullName}
+                                className="w-8 h-8 rounded-xl object-cover border border-zinc-200 shrink-0"
+                              />
+                            ) : (
+                              <span className="w-8 h-8 rounded-xl bg-zinc-100 text-zinc-700 font-extrabold text-[11px] flex items-center justify-center shrink-0">
+                                {(c.fullName || 'C').trim().slice(0, 2)}
+                              </span>
+                            )}
+                            <span className="truncate max-w-[140px]">{c.fullName}</span>
                             {daysUntilBday !== null && (
                               <span
                                 title={getBirthdayCountdownLabel(c.fullName, daysUntilBday, lang)}
@@ -1024,6 +1076,14 @@ export function CustomersCrmTab({ restaurant, onRestaurantUpdated }: CustomersCr
                         </td>
                         <td className="py-3 px-3 text-zinc-600 whitespace-nowrap">
                           <p>{lastVisit || '—'}</p>
+                          {visitInfo && (
+                            <p className="text-[10px] font-bold text-zinc-500 font-mono-num">
+                              {isEn ? `${visitInfo.count} visits` : `${visitInfo.count} زيارات`}
+                              {visitInfo.latestDuration > 0
+                                ? ` · ${visitInfo.latestDuration} ${isEn ? 'min' : 'د'}`
+                                : ''}
+                            </p>
+                          )}
                           {daysSince !== null && daysSince >= 15 && (
                             <p className="text-[10px] font-bold text-amber-700 font-mono-num">
                               {isEn ? `${daysSince}d ago` : `منذ ${daysSince} يوم`}
@@ -1077,20 +1137,35 @@ export function CustomersCrmTab({ restaurant, onRestaurantUpdated }: CustomersCr
                   lang
                 );
 
+                const visitInfo = visitsByPhone.get(c.phone);
+
                 return (
                   <div key={`mob_${c.id}`} className="p-3.5 space-y-2.5 bg-white">
                     <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="text-sm font-extrabold text-zinc-950 flex items-center gap-1.5 truncate">
-                          <span className="truncate">{c.fullName}</span>
-                          {daysUntilBday !== null && (
-                            <Cake className="w-4 h-4 text-amber-600 shrink-0" />
-                          )}
-                        </p>
-                        <p className="text-xs font-mono-num text-zinc-600 flex items-center gap-1.5 mt-0.5">
-                          <Phone className="w-3 h-3 text-zinc-400 shrink-0" />
-                          <span dir="ltr">{c.phone}</span>
-                        </p>
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        {c.avatarUrl ? (
+                          <img
+                            src={c.avatarUrl}
+                            alt={c.fullName}
+                            className="w-10 h-10 rounded-xl object-cover border border-zinc-200 shrink-0"
+                          />
+                        ) : (
+                          <span className="w-10 h-10 rounded-xl bg-zinc-100 text-zinc-700 font-extrabold text-xs flex items-center justify-center shrink-0">
+                            {(c.fullName || 'C').trim().slice(0, 2)}
+                          </span>
+                        )}
+                        <div className="min-w-0">
+                          <p className="text-sm font-extrabold text-zinc-950 flex items-center gap-1.5 truncate">
+                            <span className="truncate">{c.fullName}</span>
+                            {daysUntilBday !== null && (
+                              <Cake className="w-4 h-4 text-amber-600 shrink-0" />
+                            )}
+                          </p>
+                          <p className="text-xs font-mono-num text-zinc-600 flex items-center gap-1.5 mt-0.5">
+                            <Phone className="w-3 h-3 text-zinc-400 shrink-0" />
+                            <span dir="ltr">{c.phone}</span>
+                          </p>
+                        </div>
                       </div>
                       <span className="text-[11px] font-bold text-zinc-800 bg-zinc-100 px-2.5 py-1 rounded-lg shrink-0">
                         {getOrderTypeLabel(c.preferredOrderType, lang)}
@@ -1130,6 +1205,15 @@ export function CustomersCrmTab({ restaurant, onRestaurantUpdated }: CustomersCr
                         <span>
                           {isEn ? 'Last visit:' : 'آخر زيارة:'} {lastVisit || '—'}
                         </span>
+                        {visitInfo && (
+                          <span className="font-mono-num font-bold text-zinc-700">
+                            ({isEn ? `${visitInfo.count} visits` : `${visitInfo.count} زيارات`}
+                            {visitInfo.latestDuration > 0
+                              ? ` · ${visitInfo.latestDuration} ${isEn ? 'min' : 'د'}`
+                              : ''}
+                            )
+                          </span>
+                        )}
                         {daysSince !== null && daysSince >= 15 && (
                           <span className="font-bold text-amber-700 font-mono-num">
                             ({isEn ? `${daysSince}d ago` : `منذ ${daysSince} يوم`})

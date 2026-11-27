@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import {
   ArrowLeft,
@@ -50,27 +50,46 @@ type SuperAdminTab =
   | 'domain'
   | 'user_guide';
 const SUPER_TAB_STORAGE_KEY = 'sufra_superadmin_active_tab';
+const VALID_SUPER_TABS: SuperAdminTab[] = [
+  'tenants',
+  'promos',
+  'ui_studio',
+  'themes',
+  'landing',
+  'domain',
+  'user_guide',
+];
 
 export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
   const { lang, t, dir, isRtl } = useLanguage();
   const isEn = lang === 'en';
   const ui = useScreenUi('super_admin');
   const theme = ui.theme;
+  const superDefaultTab: SuperAdminTab = VALID_SUPER_TABS.includes(ui.screenConfig.defaultPageId as SuperAdminTab)
+    ? (ui.screenConfig.defaultPageId as SuperAdminTab)
+    : 'tenants';
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [tabHistory, setTabHistory] = useState<SuperAdminTab[]>([]);
+  const userChangedTabRef = useRef(false);
   const [activeTab, setActiveTabState] = useState<SuperAdminTab>(() => {
-    if (typeof window === 'undefined') return 'tenants';
+    if (typeof window === 'undefined') return superDefaultTab;
     const saved = window.sessionStorage.getItem(SUPER_TAB_STORAGE_KEY) as SuperAdminTab | null;
-    if (
-      saved &&
-      ['tenants', 'promos', 'ui_studio', 'themes', 'landing', 'domain', 'user_guide'].includes(saved)
-    ) {
+    if (saved && VALID_SUPER_TABS.includes(saved)) {
       return saved;
     }
-    return 'tenants';
+    return superDefaultTab;
   });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const saved = window.sessionStorage.getItem(SUPER_TAB_STORAGE_KEY);
+    if (!saved && !userChangedTabRef.current) {
+      setActiveTabState(superDefaultTab);
+    }
+  }, [superDefaultTab]);
+
   const scrollPageTop = () => {
     if (typeof window !== 'undefined') {
       window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
@@ -80,6 +99,7 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
     }
   };
   const setActiveTab = (tab: SuperAdminTab, opts?: { pushHistory?: boolean }) => {
+    userChangedTabRef.current = true;
     const pushHistory = opts?.pushHistory ?? true;
     if (pushHistory && tab !== activeTab) {
       setTabHistory((prev) => [...prev.slice(-14), activeTab]);
@@ -97,13 +117,13 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
       const prevTab = tabHistory[tabHistory.length - 1];
       setTabHistory((prev) => prev.slice(0, -1));
       setActiveTab(prevTab, { pushHistory: false });
-    } else if (activeTab !== 'tenants') {
-      setActiveTab('tenants', { pushHistory: false });
+    } else if (activeTab !== superDefaultTab) {
+      setActiveTab(superDefaultTab, { pushHistory: false });
     }
   };
   const handleGoSuperHome = () => {
     setTabHistory([]);
-    setActiveTab('tenants', { pushHistory: false });
+    setActiveTab(superDefaultTab, { pushHistory: false });
   };
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [testingConn, setTestingConn] = useState(false);
@@ -211,7 +231,7 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
             <ShieldCheck className="w-4 h-4 shrink-0" style={{ color: theme.highlightHex || '#E8833A' }} />
             <span>{t.superAdmin.loginRequiredDesc}</span>
           </div>
-          <OwnerAuthCard />
+          <OwnerAuthCard onStaffNavigate={(staffSlug) => onNavigate(`/staff/${staffSlug}`)} />
         </main>
 
         <footer className="text-center text-xs" style={{ color: theme.mutedText }}>
@@ -455,7 +475,7 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
             <div className="flex items-center justify-between gap-2">
               <button
                 type="button"
-                onClick={() => setActiveTab('tenants')}
+                onClick={handleGoSuperHome}
                 className="text-base sm:text-lg font-extrabold cursor-pointer flex items-center gap-2 min-w-0"
                 style={{ color: theme.sidebarText }}
               >
@@ -856,7 +876,7 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0">
-            {(tabHistory.length > 0 || activeTab !== 'tenants') && (
+            {(tabHistory.length > 0 || activeTab !== superDefaultTab) && (
               <button
                 type="button"
                 onClick={handleBackSuperTab}
@@ -867,7 +887,7 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
                 <span>{isEn ? 'Back' : 'رجوع'}</span>
               </button>
             )}
-            {activeTab !== 'tenants' && (
+            {activeTab !== superDefaultTab && (
               <button
                 type="button"
                 onClick={handleGoSuperHome}
@@ -999,7 +1019,7 @@ export function SuperAdminPortal({ onNavigate }: SuperAdminPortalProps) {
               theme={theme}
               radiusClasses={ui.radiusClasses}
               entries={superGuideEntries}
-              onBackHome={() => setActiveTab('tenants')}
+              onBackHome={handleGoSuperHome}
             />
           )}
           {activeTab === 'tenants' && (

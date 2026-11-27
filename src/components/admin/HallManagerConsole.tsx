@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useScreenUi } from '../../contexts/PlatformUiContext';
+import { formatFirestoreErrorMessage } from '../../lib/firebase';
 import {
   getHallTableNumbers,
   sendServiceCall,
@@ -174,6 +175,7 @@ export function HallManagerConsole({
   >([]);
   const [drawerBusy, setDrawerBusy] = useState(false);
   const [drawerFeedback, setDrawerFeedback] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [consoleError, setConsoleError] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNowTick(Date.now()), 30000);
@@ -400,12 +402,78 @@ export function HallManagerConsole({
     };
   };
 
+  const mergedHalls = useMemo(() => {
+    const nextHalls = halls.map((h) => ({
+      ...h,
+      tableNumbers: [...getHallTableNumbers(h)],
+    }));
+    const unmappedMap = new Map<string, { hallName: string; tables: string[] }>();
+
+    const registerActiveTable = (rawHall?: string | null, rawTbl?: string | null) => {
+      const tbl = normalizeTableNumber(rawTbl);
+      if (!tbl) return;
+      const cleanRecHall = (rawHall || '').trim();
+      const matched = nextHalls.find((h) => {
+        const allowFallback =
+          nextHalls.length <= 1 || nextHalls[0]?.name.trim() === h.name.trim();
+        return doesHallMatch(h, cleanRecHall, allowFallback);
+      });
+      if (matched) {
+        if (!matched.tableNumbers.some((t) => doTableNumbersMatch(t, tbl))) {
+          matched.tableNumbers.push(tbl);
+        }
+        return;
+      }
+      const virtualKey = cleanRecHall.toLowerCase() || '__empty__';
+      const existing = unmappedMap.get(virtualKey);
+      if (existing) {
+        if (!existing.tables.some((t) => doTableNumbersMatch(t, tbl))) {
+          existing.tables.push(tbl);
+        }
+      } else {
+        unmappedMap.set(virtualKey, { hallName: cleanRecHall, tables: [tbl] });
+      }
+    };
+
+    orders.forEach((o) => {
+      if (o.status !== 'completed' && o.status !== 'cancelled' && o.orderType === 'dine_in') {
+        registerActiveTable(o.hallName, o.tableNumber);
+      }
+    });
+    tableSessions.forEach((s) => {
+      if (s.status === 'active' && ((s.guests?.length || 0) > 0 || (s.items?.length || 0) > 0)) {
+        registerActiveTable(s.hallName, s.tableNumber);
+      }
+    });
+    serviceCalls.forEach((c) => {
+      if (c.status !== 'resolved') {
+        registerActiveTable(c.hallName, c.tableNumber);
+      }
+    });
+
+    unmappedMap.forEach((v, vKey) => {
+      nextHalls.push({
+        id: `__virtual_${vKey}`,
+        restaurantId: restaurant.id,
+        ownerId: restaurant.ownerId,
+        name: v.hallName,
+        name_en: v.hallName,
+        hallType: isEn ? 'Active QR / Unmapped' : 'طاولات نشطة (QR)',
+        tableCount: v.tables.length,
+        sortOrder: 999,
+        tableNumbers: v.tables,
+      });
+    });
+
+    return nextHalls;
+  }, [halls, orders, tableSessions, serviceCalls, restaurant.id, restaurant.ownerId, isEn]);
+
   // Floor KPI metrics
   const kpiStats = useMemo(() => {
     let totalTables = 0;
     let occupiedTables = 0;
     let overdueTables = 0;
-    halls.forEach((h) => {
+    mergedHalls.forEach((h) => {
       const nums = getHallTableNumbers(h);
       totalTables += nums.length;
       nums.forEach((tbl) => {
@@ -423,12 +491,12 @@ export function HallManagerConsole({
       onlineCaptainsCount,
       assignedCaptainsCount: shiftAssignments.length,
     };
-  }, [halls, orders, serviceCalls, tableSessions, captains, activeShiftByStaffUid, shiftAssignments, nowTick]);
+  }, [mergedHalls, orders, serviceCalls, tableSessions, captains, activeShiftByStaffUid, shiftAssignments, nowTick]);
 
   const visibleHalls = useMemo(() => {
-    if (selectedHallFilter === 'all') return halls;
-    return halls.filter((h) => h.id === selectedHallFilter);
-  }, [halls, selectedHallFilter]);
+    if (selectedHallFilter === 'all') return mergedHalls;
+    return mergedHalls.filter((h) => h.id === selectedHallFilter);
+  }, [mergedHalls, selectedHallFilter]);
 
   const filteredDrawerItems = useMemo(() => {
     const q = drawerSearch.trim().toLowerCase();
@@ -476,6 +544,7 @@ export function HallManagerConsole({
 
   const handleCallStatus = async (call: ServiceCall, nextStatus: ServiceCallStatus) => {
     setUpdatingCallId(call.id);
+    setConsoleError(null);
     try {
       await updateServiceCallStatus(call.id, nextStatus, {
         restaurantId: restaurant.id,
@@ -483,6 +552,8 @@ export function HallManagerConsole({
         tableLabel: `${call.hallName ? `${call.hallName} · ` : ''}${isEn ? `Table ${call.tableNumber}` : `ترابيزة ${call.tableNumber}`}`,
         actor,
       });
+    } catch (err) {
+      setConsoleError(formatFirestoreErrorMessage(err, isEn));
     } finally {
       setUpdatingCallId(null);
     }
@@ -491,6 +562,7 @@ export function HallManagerConsole({
   const handleMarkItemServed = async (orderId: string, orderNumber: string, itemIdx: number) => {
     const key = `${orderId}:${itemIdx}`;
     setServingKey(key);
+    setConsoleError(null);
     try {
       const updates: Record<string, ItemPrepState> = { [String(itemIdx)]: 'served' };
       await updateOrderItemProgress(orderId, updates, undefined, {
@@ -499,6 +571,8 @@ export function HallManagerConsole({
         orderNumber,
         actor,
       });
+    } catch (err) {
+      setConsoleError(formatFirestoreErrorMessage(err, isEn));
     } finally {
       setServingKey(null);
     }
@@ -619,6 +693,11 @@ export function HallManagerConsole({
               ? 'Check request (Visa) sent to cashier.'
               : 'تم إرسال طلب الشيك (فيزا) للكاشير.',
       });
+    } catch (err) {
+      setDrawerFeedback({
+        type: 'err',
+        text: formatFirestoreErrorMessage(err, isEn),
+      });
     } finally {
       setDrawerBusy(false);
     }
@@ -640,6 +719,14 @@ export function HallManagerConsole({
 
   return (
     <div dir={dir} className="space-y-5">
+      {consoleError && (
+        <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs font-bold text-red-800 flex items-center justify-between gap-2">
+          <span>{consoleError}</span>
+          <button type="button" onClick={() => setConsoleError(null)} className="cursor-pointer shrink-0">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
       {/* Top Action Header */}
       <section
         className={`border p-4 sm:p-5 space-y-4 ${ui.radiusClasses.card}`}
@@ -1063,7 +1150,8 @@ export function HallManagerConsole({
                   <div className="flex flex-wrap items-center gap-2">
                     <MapPin className="w-4 h-4 shrink-0" style={{ color: ui.theme.highlightHex || '#E8833A' }} />
                     <h3 className="text-sm font-extrabold" style={{ color: ui.theme.surfaceText }}>
-                      {loc(hall.name, hall.name_en)}
+                      {loc(hall.name, hall.name_en) ||
+                        (isEn ? 'Active Unmapped / QR Tables' : 'طاولات نشطة (ممسوحة بـ QR)')}
                     </h3>
                     {hallCaptains.length > 0 ? (
                       hallCaptains.map((capAssign) => {

@@ -173,6 +173,11 @@ export function formatFirestoreErrorMessage(error: unknown, isEn = false): strin
   }
 
   const lower = `${parsedCode || ''} ${parsedMsg}`.toLowerCase();
+  if (lower.includes('api-key-expired') || lower.includes('api key expired') || lower.includes('api_key_invalid')) {
+    return isEn
+      ? 'The Firebase Web API Key for this project has expired or was invalidated in Google Cloud Console. Renew or create a valid Browser API key in Google Cloud Credentials and update the app config.'
+      : 'انتهت صلاحية مفتاح Firebase API الخاص بالمشروع في Google Cloud Console. يرجى تجديد المفتاح أو إنشاء مفتاح جديد من Google Cloud Credentials ثم تحديث إعدادات التطبيق.';
+  }
   if (lower.includes('permission-denied') || lower.includes('insufficient permissions')) {
     return isEn
       ? 'You do not have database permission to perform this action. Contact the restaurant owner or manager.'

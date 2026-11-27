@@ -196,7 +196,8 @@ function computeEffectiveStaffScreens(
 
 function resolveInitialScreenWithQuery(
   restaurant: Restaurant,
-  staff: StaffMember
+  staff: StaffMember,
+  preferredDefaultScreen?: string
 ): StaffScreen {
   const perms = getResolvedOperationsConfig(restaurant).managerPermissions;
   const effectivePerms = resolveEffectiveStaffPermissions(staff, perms);
@@ -207,9 +208,15 @@ function resolveInitialScreenWithQuery(
       return urlScr as StaffScreen;
     }
   }
-  const safeDefault = effectiveAllowed.includes(staff.defaultScreen)
-    ? staff.defaultScreen
-    : effectiveAllowed[0];
+  const preferredAllowed =
+    preferredDefaultScreen && effectiveAllowed.includes(preferredDefaultScreen as StaffScreen)
+      ? (preferredDefaultScreen as StaffScreen)
+      : undefined;
+  const safeDefault = preferredAllowed
+    ? preferredAllowed
+    : effectiveAllowed.includes(staff.defaultScreen)
+      ? staff.defaultScreen
+      : effectiveAllowed[0];
   return getSavedStaffScreen(
     restaurant.id,
     staff.uid,
@@ -408,14 +415,33 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
 
         if (hydratedStaffUidRef.current !== effectiveProfile.uid && restaurant) {
           hydratedStaffUidRef.current = effectiveProfile.uid;
-          const initial = resolveInitialScreenWithQuery(restaurant, effectiveProfile);
+          const mgrPref = managerUi.screenConfig.defaultPageId;
+          const initial = resolveInitialScreenWithQuery(
+            restaurant,
+            effectiveProfile,
+            effectiveProfile.role === 'manager' && mgrPref && mgrPref !== 'supervision' ? mgrPref : undefined
+          );
           setActiveScreen(initial);
           const urlScr =
             typeof window !== 'undefined'
               ? (new URLSearchParams(window.location.search).get('screen') || '').trim()
               : '';
+          const savedMgrMode =
+            typeof window !== 'undefined'
+              ? (window.sessionStorage.getItem(`sufra_staff_mgr_mode_${slug}`) as ManagerPortalMode | null)
+              : null;
           if (effectiveProfile.role === 'manager' && !urlScr) {
-            setManagerMode('supervision');
+            if (savedMgrMode && ['supervision', 'stations', 'menu_editor', 'shift_reports', 'screen'].includes(savedMgrMode)) {
+              setManagerMode(savedMgrMode);
+            } else if (mgrPref === 'stations' || mgrPref === 'menu_editor' || mgrPref === 'shift_reports') {
+              setManagerMode(mgrPref);
+              setActiveScreen(mgrPref as StaffScreen);
+            } else if (mgrPref && mgrPref !== 'supervision') {
+              setActiveScreen(initial);
+              setManagerMode('screen');
+            } else {
+              setManagerMode('supervision');
+            }
           } else {
             setManagerMode('screen');
           }
@@ -600,10 +626,22 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
       });
       setStaff(loggedStaff);
       setMismatchAuthNotice(false);
-      const initial = resolveInitialScreenWithQuery(restaurant, loggedStaff);
+      const mgrPref = managerUi.screenConfig.defaultPageId;
+      const initial = resolveInitialScreenWithQuery(
+        restaurant,
+        loggedStaff,
+        loggedStaff.role === 'manager' && mgrPref && mgrPref !== 'supervision' ? mgrPref : undefined
+      );
       setActiveScreen(initial);
       if (loggedStaff.role === 'manager') {
-        setManagerMode('supervision');
+        if (mgrPref === 'stations' || mgrPref === 'menu_editor' || mgrPref === 'shift_reports') {
+          setManagerMode(mgrPref);
+          setActiveScreen(mgrPref as StaffScreen);
+        } else if (mgrPref && mgrPref !== 'supervision') {
+          setManagerMode('screen');
+        } else {
+          setManagerMode('supervision');
+        }
       } else {
         setManagerMode('screen');
       }
@@ -1307,8 +1345,12 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
 
   const activeNavId =
     isManager && managerMode !== 'screen' ? managerMode : safeCurrentScreen;
+  const preferredMgrDefault = managerUi.screenConfig.defaultPageId;
   const defaultHomeNavId = isManager
-    ? 'supervision'
+    ? preferredMgrDefault &&
+      (preferredMgrDefault === 'supervision' || orderedManagerNavIds.includes(preferredMgrDefault))
+      ? preferredMgrDefault
+      : 'supervision'
     : orderedManagerNavIds[0] || safeCurrentScreen;
 
   const navigateStaffNavId = (navId: string, opts?: { pushHistory?: boolean }) => {
@@ -1929,7 +1971,7 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
             <div className="pt-2">
               <button
                 type="button"
-                onClick={() => setShowUserGuide(true)}
+                onClick={openStaffUserGuide}
                 className={`w-full min-h-[46px] flex items-center justify-start gap-2 px-3 py-2.5 text-[13px] font-bold leading-snug text-start transition-all cursor-pointer border ${activePortalUi.radiusClasses.button}`}
                 style={
                   showUserGuide
@@ -2272,97 +2314,89 @@ export function StaffPortalPage({ slug, onNavigate }: StaffPortalPageProps) {
             actor={actor}
             activeShifts={allActiveShifts}
             createIntent={stationCreateIntent}
-            onGoHome={() => {
-              setStationCreateIntent(null);
-              if (isManager) {
-                setManagerMode('supervision');
-              } else {
-                handleScreenChange(allowedScreens.find((s) => s !== 'stations') || 'cashier');
-              }
-            }}
-            onReturnAfterCreate={() => {
-              const retMode = stationCreateIntent?.returnMode;
-              const retScreen = stationCreateIntent?.returnScreen;
-              setStationCreateIntent(null);
-              if (retMode === 'screen' && retScreen) {
-                setActiveScreen(retScreen);
-                setManagerMode('screen');
-              } else if (retMode) {
-                setManagerMode(retMode);
-              }
-            }}
-            onCancelReturn={() => {
-              const retMode = stationCreateIntent?.returnMode;
-              const retScreen = stationCreateIntent?.returnScreen;
-              setStationCreateIntent(null);
-              if (retMode === 'screen' && retScreen) {
-                setActiveScreen(retScreen);
-                setManagerMode('screen');
-              } else if (retMode) {
-                setManagerMode(retMode);
-              }
-            }}
-          />
-        ) : ((isManager && managerMode === 'menu_editor') || safeCurrentScreen === 'menu_editor') &&
-          (effectivePerms.canEditMenu || effectivePerms.canPauseItems) ? (
-          <MenuBuilderTab
-            restaurant={restaurant}
-            canEditMenu={effectivePerms.canEditMenu}
-            canPauseItems={effectivePerms.canPauseItems}
-            onOpenAddScreen={
-              canManageStations
-                ? () =>
-                    openManagerAddScreen(
-                      isManager ? 'menu_editor' : 'screen',
-                      isManager ? undefined : 'menu_editor',
-                      'prep'
-                    )
-                : undefined
-            }
-          />
-        ) : ((isManager && managerMode === 'shift_reports') || safeCurrentScreen === 'shift_reports') &&
-          effectivePerms.canViewShiftReports ? (
-          <OwnerShiftReportTab
-            restaurant={restaurant}
-            actor={actor}
-            shiftsOverride={allRestaurantShifts}
-            expensesOverride={drawerExpenses}
-            auditLogsOverride={auditLogs}
-            transfersOverride={treasuryTransfers}
-            onRestaurantUpdated={(updated) => setRestaurant(updated)}
-          />
-        ) : (
-          <>
-            {safeCurrentScreen === 'staff_management' && effectivePerms.canManageStaff && (
-              <StaffManagementTab
-                restaurant={restaurant}
-                mode="manager"
-                actor={actor}
-                actorCeiling={callerCeiling}
-                onRestaurantUpdated={(updated) => setRestaurant(updated)}
-                onOpenJobTitles={() => handleScreenChange('job_titles')}
-                onOpenAddScreen={
-                  canManageStations
-                    ? (scrType) => openManagerAddScreen('screen', 'staff_management', scrType)
-                    : undefined
+              onGoHome={() => {
+                setStationCreateIntent(null);
+                handleGoStaffHome();
+              }}
+              onReturnAfterCreate={() => {
+                const retMode = stationCreateIntent?.returnMode;
+                const retScreen = stationCreateIntent?.returnScreen;
+                setStationCreateIntent(null);
+                if (retMode === 'screen' && retScreen) {
+                  setActiveScreen(retScreen);
+                  setManagerMode('screen');
+                } else if (retMode) {
+                  setManagerMode(retMode);
                 }
-              />
-            )}
+              }}
+              onCancelReturn={() => {
+                const retMode = stationCreateIntent?.returnMode;
+                const retScreen = stationCreateIntent?.returnScreen;
+                setStationCreateIntent(null);
+                if (retMode === 'screen' && retScreen) {
+                  setActiveScreen(retScreen);
+                  setManagerMode('screen');
+                } else if (retMode) {
+                  setManagerMode(retMode);
+                }
+              }}
+            />
+          ) : ((isManager && managerMode === 'menu_editor') || safeCurrentScreen === 'menu_editor') &&
+            (effectivePerms.canEditMenu || effectivePerms.canPauseItems) ? (
+            <MenuBuilderTab
+              restaurant={restaurant}
+              canEditMenu={effectivePerms.canEditMenu}
+              canPauseItems={effectivePerms.canPauseItems}
+              onOpenAddScreen={
+                canManageStations
+                  ? () =>
+                      openManagerAddScreen(
+                        isManager ? 'menu_editor' : 'screen',
+                        isManager ? undefined : 'menu_editor',
+                        'prep'
+                      )
+                  : undefined
+              }
+            />
+          ) : ((isManager && managerMode === 'shift_reports') || safeCurrentScreen === 'shift_reports') &&
+            effectivePerms.canViewShiftReports ? (
+            <OwnerShiftReportTab
+              restaurant={restaurant}
+              actor={actor}
+              shiftsOverride={allRestaurantShifts}
+              expensesOverride={drawerExpenses}
+              auditLogsOverride={auditLogs}
+              transfersOverride={treasuryTransfers}
+              onRestaurantUpdated={(updated) => setRestaurant(updated)}
+            />
+          ) : (
+            <>
+              {safeCurrentScreen === 'staff_management' && effectivePerms.canManageStaff && (
+                <StaffManagementTab
+                  restaurant={restaurant}
+                  mode="manager"
+                  actor={actor}
+                  actorCeiling={callerCeiling}
+                  onRestaurantUpdated={(updated) => setRestaurant(updated)}
+                  onOpenJobTitles={() => handleScreenChange('job_titles')}
+                  onOpenAddScreen={
+                    canManageStations
+                      ? (scrType) => openManagerAddScreen('screen', 'staff_management', scrType)
+                      : undefined
+                  }
+                />
+              )}
 
-            {safeCurrentScreen === 'job_titles' && effectivePerms.canManageStaff && (
-              <JobTitlesTab
-                restaurant={restaurant}
-                mode="manager"
-                actor={actor}
-                actorCeiling={callerCeiling}
-                onBack={() => handleScreenChange('staff_management')}
-                onGoHome={() =>
-                  isManager
-                    ? setManagerMode('supervision')
-                    : handleScreenChange(allowedScreens.find((s) => s !== 'job_titles') || 'cashier')
-                }
-              />
-            )}
+              {safeCurrentScreen === 'job_titles' && effectivePerms.canManageStaff && (
+                <JobTitlesTab
+                  restaurant={restaurant}
+                  mode="manager"
+                  actor={actor}
+                  actorCeiling={callerCeiling}
+                  onBack={() => handleScreenChange('staff_management')}
+                  onGoHome={handleGoStaffHome}
+                />
+              )}
 
             {safeCurrentScreen === 'customers' && effectivePerms.canManageCustomers && (
               <CustomersCrmTab

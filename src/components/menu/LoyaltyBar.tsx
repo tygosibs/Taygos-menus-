@@ -3,6 +3,7 @@ import {
   Award,
   Cake,
   Check,
+  Clock,
   Gift,
   Heart,
   Plus,
@@ -17,6 +18,7 @@ import { formatLastVisitDate, isInBirthdayWindow } from '../../lib/customerLoyal
 import {
   CustomerLastOrderItem,
   CustomerProfile,
+  CustomerVisitRecord,
   LoyaltyConfig,
   MenuItem,
   Restaurant,
@@ -27,6 +29,7 @@ interface LoyaltyBarProps {
   restaurant: Restaurant;
   items: MenuItem[];
   customer: CustomerProfile | null;
+  visits?: CustomerVisitRecord[];
   loyaltyConfig: Required<LoyaltyConfig>;
   isDarkSurface: boolean;
   onOpenRegisterModal: () => void;
@@ -38,6 +41,7 @@ export function LoyaltyBar({
   restaurant,
   items,
   customer,
+  visits = [],
   loyaltyConfig,
   isDarkSurface,
   onOpenRegisterModal,
@@ -220,35 +224,64 @@ export function LoyaltyBar({
         {/* Welcome + Digital Punch Card */}
         <div className={`rounded-2xl border p-3.5 sm:p-4 space-y-3 ${cardSurface}`}>
           <div className="flex flex-wrap items-start justify-between gap-2">
-            <div className="min-w-0 space-y-0.5">
-              <p className="text-sm font-extrabold truncate">
-                {isEn ? `Welcome back, ${customer.fullName}` : `أهلاً بيك يا ${customer.fullName}`}
-              </p>
-              <p className={`text-xs leading-relaxed ${mutedText}`}>
-                {lastVisitLabel ? (
-                  isEn ? (
-                    `Your last visit was on ${lastVisitLabel}`
+            <div className="flex items-start gap-2.5 min-w-0 flex-1">
+              {customer.avatarUrl ? (
+                <img
+                  src={customer.avatarUrl}
+                  alt={customer.fullName}
+                  className="w-11 h-11 rounded-2xl object-cover shrink-0 border border-black/10"
+                />
+              ) : (
+                <span
+                  style={{ backgroundColor: accent, color: accentText }}
+                  className="w-11 h-11 rounded-2xl flex items-center justify-center font-extrabold text-sm shrink-0"
+                >
+                  {(customer.fullName || 'G').trim().slice(0, 2)}
+                </span>
+              )}
+              <div className="min-w-0 space-y-0.5">
+                <p className="text-sm font-extrabold truncate">
+                  {isEn ? `Welcome back, ${customer.fullName}` : `أهلاً بيك يا ${customer.fullName}`}
+                </p>
+                <p className={`text-xs leading-relaxed ${mutedText}`}>
+                  {lastVisitLabel ? (
+                    isEn ? (
+                      `Your last visit was on ${lastVisitLabel}`
+                    ) : (
+                      `آخر زيارة ليك كانت يوم ${lastVisitLabel}`
+                    )
+                  ) : !customer.firstOrderDiscountUsed &&
+                    loyaltyConfig.firstOrderEnabled &&
+                    loyaltyConfig.firstOrderDiscountPercent > 0 ? (
+                    <span
+                      className="font-bold inline-flex items-center gap-1"
+                      style={{ color: isDarkSurface ? '#fbbf24' : accent }}
+                    >
+                      <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                      {isEn
+                        ? `Your ${loyaltyConfig.firstOrderDiscountPercent}% welcome discount applies automatically on your first order.`
+                        : `خصم ${loyaltyConfig.firstOrderDiscountPercent}% على أول طلب سيتطبق تلقائياً في السلة!`}
+                    </span>
+                  ) : isEn ? (
+                    'Order now to enjoy personalized member rewards.'
                   ) : (
-                    `آخر زيارة ليك كانت يوم ${lastVisitLabel}`
-                  )
-                ) : !customer.firstOrderDiscountUsed &&
-                  loyaltyConfig.firstOrderEnabled &&
-                  loyaltyConfig.firstOrderDiscountPercent > 0 ? (
-                  <span
-                    className="font-bold inline-flex items-center gap-1"
-                    style={{ color: isDarkSurface ? '#fbbf24' : accent }}
-                  >
-                    <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                    {isEn
-                      ? `Your ${loyaltyConfig.firstOrderDiscountPercent}% welcome discount applies automatically on your first order.`
-                      : `خصم ${loyaltyConfig.firstOrderDiscountPercent}% على أول طلب سيتطبق تلقائياً في السلة!`}
-                  </span>
-                ) : isEn ? (
-                  'Order now to enjoy personalized member rewards.'
-                ) : (
-                  'اطلب الآن للاستمتاع بمكافآت وعروض أعضائنا.'
+                    'اطلب الآن للاستمتاع بمكافآت وعروض أعضائنا.'
+                  )}
+                </p>
+                {visits.length > 0 && (
+                  <p className={`text-[11px] font-bold flex items-center gap-1.5 pt-0.5 ${mutedText}`}>
+                    <Clock className="w-3 h-3 shrink-0" />
+                    <span className="font-mono-num">
+                      {isEn ? `${visits.length} recorded visits` : `${visits.length} زيارة مسجلة`}
+                      {visits[0]?.durationMinutes && visits[0].durationMinutes > 0
+                        ? ` · ${visits[0].durationMinutes} ${isEn ? 'min' : 'دقيقة'}`
+                        : visits[0]?.status === 'active'
+                          ? ` · ${isEn ? 'Active visit' : 'زيارة نشطة الآن'}`
+                          : ''}
+                    </span>
+                  </p>
                 )}
-              </p>
+              </div>
             </div>
 
             <button

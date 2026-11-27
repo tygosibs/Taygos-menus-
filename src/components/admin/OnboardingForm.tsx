@@ -19,13 +19,17 @@ import { DEMO_RESTAURANTS } from '../../data/demoRestaurants';
 import { COLOR_PRESETS, getThemeMeta, isCustomThemeId, MENU_THEMES } from '../../data/themes';
 import { autoSuggestEnglish } from '../../data/translations';
 import {
+  FACILITY_ACTIVITY_OPTIONS,
+} from '../../lib/facilityCodeUtils';
+import { formatFirestoreErrorMessage } from '../../lib/firebase';
+import {
   createRestaurant,
   fetchActiveCustomThemes,
   isSlugAvailable,
   sanitizeSlug,
 } from '../../lib/firestoreService';
 import { CURATED_FOOD_IMAGES, uploadRestaurantAsset } from '../../lib/imageUtils';
-import { ActiveTheme, CartItem, CustomTheme, MenuItem, Restaurant } from '../../types/menu';
+import { ActiveTheme, BusinessActivityType, CartItem, CustomTheme, MenuItem, Restaurant } from '../../types/menu';
 import { SafeImage } from '../SafeImage';
 import { CartDrawer } from '../menu/CartDrawer';
 import { ItemModal } from '../menu/ItemModal';
@@ -45,6 +49,7 @@ export function OnboardingForm({ ownerId, ownerDisplayName, onCreated }: Onboard
   const [step, setStep] = useState<1 | 2>(1);
 
   // Step 1: Restaurant Core Details
+  const [businessType, setBusinessType] = useState<BusinessActivityType>('restaurant');
   const [name, setName] = useState('');
   const [nameEn, setNameEn] = useState('');
   const [slug, setSlug] = useState('');
@@ -147,9 +152,7 @@ export function OnboardingForm({ ownerId, ownerDisplayName, onCreated }: Onboard
       setStep(2);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err) {
-      setErrorMsg(
-        err instanceof Error ? err.message : isEn ? 'Could not verify URL slug' : 'تعذر التحقق من الرابط'
-      );
+      setErrorMsg(formatFirestoreErrorMessage(err, isEn));
     } finally {
       setValidatingStep1(false);
     }
@@ -176,6 +179,7 @@ export function OnboardingForm({ ownerId, ownerDisplayName, onCreated }: Onboard
 
       const created = await createRestaurant({
         ownerId,
+        businessType,
         name,
         name_en: nameEn,
         slug: cleanSlug,
@@ -194,9 +198,7 @@ export function OnboardingForm({ ownerId, ownerDisplayName, onCreated }: Onboard
       });
       onCreated(created);
     } catch (err) {
-      setErrorMsg(
-        err instanceof Error ? err.message : isEn ? 'Failed to create restaurant' : 'تعذر إنشاء المطعم'
-      );
+      setErrorMsg(formatFirestoreErrorMessage(err, isEn));
     } finally {
       setSubmitting(false);
     }
@@ -412,6 +414,45 @@ export function OnboardingForm({ ownerId, ownerDisplayName, onCreated }: Onboard
           </div>
 
           <form onSubmit={handleNextStep} className="space-y-6">
+            <div>
+              <label className="block text-xs font-bold text-zinc-700 mb-2">
+                {isEn
+                  ? 'Facility Activity Type (assigns your unique Staff Login Code prefix)'
+                  : 'نوع النشاط (يحدد بادئة كود المنشأة الفريد لدخول الموظفين)'}
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                {FACILITY_ACTIVITY_OPTIONS.map((opt) => {
+                  const active = businessType === opt.type;
+                  return (
+                    <button
+                      key={opt.type}
+                      type="button"
+                      onClick={() => setBusinessType(opt.type)}
+                      className={`p-2.5 rounded-xl border text-start transition-all cursor-pointer ${
+                        active
+                          ? 'border-zinc-950 bg-zinc-950 text-white shadow-xs'
+                          : 'border-zinc-200 bg-zinc-50/70 text-zinc-800 hover:bg-zinc-100'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-1.5">
+                        <span className="text-xs font-extrabold truncate">
+                          {isEn ? opt.labelEn : opt.labelAr}
+                        </span>
+                        <span
+                          dir="ltr"
+                          className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono-num font-extrabold shrink-0 ${
+                            active ? 'bg-amber-400 text-zinc-950' : 'bg-white border border-zinc-200 text-zinc-700'
+                          }`}
+                        >
+                          {opt.prefix}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-bold text-zinc-700 mb-1.5">

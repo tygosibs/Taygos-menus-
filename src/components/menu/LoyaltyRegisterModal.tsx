@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { Cake, Check, Gift, Loader2, LogOut, MapPin, Phone, User, X } from 'lucide-react';
+import { Cake, Camera, Check, Gift, Loader2, LogOut, MapPin, Phone, Trash2, User, X } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { getContrastOnAccent } from '../../lib/contrastUtils';
 import {
@@ -61,6 +61,49 @@ const DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
 const CURRENT_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: 85 }, (_, i) => CURRENT_YEAR - 10 - i);
 
+function makeAvatarSvg(bg: string, label: string, subBg: string): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96"><rect width="96" height="96" rx="28" fill="${bg}"/><circle cx="48" cy="48" r="34" fill="${subBg}" opacity="0.28"/><text x="48" y="61" text-anchor="middle" font-size="40">${label}</text></svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+const PRESET_AVATARS = [
+  { id: 'crown', src: makeAvatarSvg('#F59E0B', '👑', '#FFFFFF'), labelAr: 'VIP', labelEn: 'VIP' },
+  { id: 'coffee', src: makeAvatarSvg('#78350F', '☕', '#FDE68A'), labelAr: 'قهوة', labelEn: 'Coffee' },
+  { id: 'burger', src: makeAvatarSvg('#DC2626', '🍔', '#FED7AA'), labelAr: 'برجر', labelEn: 'Burger' },
+  { id: 'pizza', src: makeAvatarSvg('#EA580C', '🍕', '#FEF08A'), labelAr: 'بيتزا', labelEn: 'Pizza' },
+  { id: 'cake', src: makeAvatarSvg('#BE185D', '🍰', '#FBCFE8'), labelAr: 'حلوى', labelEn: 'Dessert' },
+  { id: 'star', src: makeAvatarSvg('#0F766E', '⭐', '#99F6E4'), labelAr: 'نجم', labelEn: 'Star' },
+];
+
+async function compressAvatarFile(file: File): Promise<string> {
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error('Invalid image file'));
+      el.src = objectUrl;
+    });
+    const maxDim = 192;
+    const scale = Math.min(1, maxDim / Math.max(img.width || 1, img.height || 1));
+    const width = Math.max(48, Math.round((img.width || maxDim) * scale));
+    const height = Math.max(48, Math.round((img.height || maxDim) * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas unavailable');
+    ctx.drawImage(img, 0, 0, width, height);
+    let dataUrl = canvas.toDataURL('image/jpeg', 0.78);
+    if (dataUrl.length > 180000) {
+      dataUrl = canvas.toDataURL('image/jpeg', 0.58);
+    }
+    return dataUrl;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
 export function LoyaltyRegisterModal({
   open,
   restaurant,
@@ -82,6 +125,8 @@ export function LoyaltyRegisterModal({
   const [birthYear, setBirthYear] = useState(1995);
   const [preferredOrderType, setPreferredOrderType] = useState<OrderType>('dine_in');
   const [address, setAddress] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [avatarBusy, setAvatarBusy] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -94,6 +139,7 @@ export function LoyaltyRegisterModal({
     setBirthYear(existingCustomer?.birthYear || 1995);
     setPreferredOrderType(existingCustomer?.preferredOrderType || 'dine_in');
     setAddress(existingCustomer?.address || '');
+    setAvatarUrl(existingCustomer?.avatarUrl || '');
     setError(null);
   }, [open, existingCustomer]);
 
@@ -155,6 +201,7 @@ export function LoyaltyRegisterModal({
               birthYear,
               preferredOrderType,
               address: address.trim(),
+              avatarUrl: avatarUrl.trim(),
               updatedAt: nowMs,
             }
           : {
@@ -168,6 +215,7 @@ export function LoyaltyRegisterModal({
               birthYear,
               preferredOrderType,
               ...(address.trim() ? { address: address.trim() } : {}),
+              ...(avatarUrl.trim() ? { avatarUrl: avatarUrl.trim() } : {}),
               totalOrders: 0,
               loyaltyCycleOrders: 0,
               firstOrderDiscountUsed: false,
@@ -188,6 +236,7 @@ export function LoyaltyRegisterModal({
           birthYear,
           preferredOrderType,
           address: address.trim(),
+          avatarUrl: avatarUrl.trim(),
         });
       }
 
@@ -367,6 +416,91 @@ export function LoyaltyRegisterModal({
               className={`w-full min-h-[44px] px-3.5 py-2.5 rounded-xl border text-sm focus:outline-none ${inputClass}`}
               required
             />
+          </div>
+
+          {/* Avatar Picker & Upload */}
+          <div>
+            <label className="text-xs font-bold flex items-center gap-1.5 mb-2">
+              <Camera className="w-3.5 h-3.5 opacity-70" />
+              <span>{isEn ? 'Profile Avatar (Optional)' : 'صورة أو أفاتار العميل (اختياري)'}</span>
+            </label>
+            <div className="flex flex-wrap items-center gap-2">
+              {avatarUrl ? (
+                <div className="relative shrink-0">
+                  <img
+                    src={avatarUrl}
+                    alt="Avatar"
+                    className="w-11 h-11 rounded-2xl object-cover border-2"
+                    style={{ borderColor: accent }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setAvatarUrl('')}
+                    aria-label={isEn ? 'Remove avatar' : 'إزالة الصورة'}
+                    className="w-5 h-5 rounded-full bg-red-600 text-white flex items-center justify-center absolute -top-1.5 -end-1.5 cursor-pointer shadow-xs"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
+              ) : null}
+
+              {PRESET_AVATARS.map((preset) => {
+                const selected = avatarUrl === preset.src;
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => setAvatarUrl(preset.src)}
+                    title={isEn ? preset.labelEn : preset.labelAr}
+                    className={`w-10 h-10 rounded-xl overflow-hidden border-2 transition-transform cursor-pointer shrink-0 ${
+                      selected ? 'scale-105' : 'border-transparent opacity-80 hover:opacity-100'
+                    }`}
+                    style={selected ? { borderColor: accent } : undefined}
+                  >
+                    <img src={preset.src} alt={preset.labelEn} className="w-full h-full object-cover" />
+                  </button>
+                );
+              })}
+
+              <label
+                className={`min-h-[40px] px-3 py-1.5 rounded-xl border text-[11px] font-bold flex items-center gap-1.5 cursor-pointer ${
+                  isDarkSurface
+                    ? 'border-zinc-700 bg-zinc-950 text-zinc-200 hover:bg-zinc-800'
+                    : 'border-stone-300 bg-stone-50 text-stone-800 hover:bg-stone-100'
+                }`}
+              >
+                {avatarBusy ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Camera className="w-3.5 h-3.5" />
+                )}
+                <span>{isEn ? 'Upload Photo' : 'رفع صورة'}</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = '';
+                    if (!file) return;
+                    setAvatarBusy(true);
+                    setError(null);
+                    try {
+                      const compressed = await compressAvatarFile(file);
+                      setAvatarUrl(compressed);
+                    } catch {
+                      setError(
+                        isEn
+                          ? 'Could not process this image. Please choose another photo.'
+                          : 'تعذر معالجة الصورة المختارة، جرّب صورة أخرى.'
+                      );
+                    } finally {
+                      setAvatarBusy(false);
+                    }
+                  }}
+                />
+              </label>
+            </div>
           </div>
 
           {/* Birth Date */}

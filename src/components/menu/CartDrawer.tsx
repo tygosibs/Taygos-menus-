@@ -33,6 +33,7 @@ import {
 import {
   recordCustomerOrderLoyalty,
   registerGuestInTableSession,
+  startOrSyncCustomerVisit,
   submitPublicOrder,
 } from '../../lib/firestoreService';
 import { getDefaultFallbackStationId, resolveMenuItemStations, StationMeta } from '../../lib/stationUtils';
@@ -70,6 +71,8 @@ interface CartDrawerProps {
   loyaltyConfig?: Required<LoyaltyConfig>;
   onCustomerUpdated?: (customer: CustomerProfile) => void;
   onOpenLoyaltyModal?: () => void;
+  activeVisitId?: string | null;
+  onVisitSynced?: (visitId: string) => void;
   hallName?: string;
   tableNumber?: string;
   sessionId?: string;
@@ -156,6 +159,8 @@ export function CartDrawer({
   loyaltyConfig,
   onCustomerUpdated,
   onOpenLoyaltyModal,
+  activeVisitId = null,
+  onVisitSynced,
   hallName = '',
   tableNumber: activeTableNumber = '',
   sessionId = '',
@@ -775,6 +780,21 @@ export function CartDrawer({
           total,
         });
         orderNumber = res.orderNumber;
+        const syncedVisitId = await startOrSyncCustomerVisit({
+          restaurantId: restaurant.id,
+          ownerId: restaurant.ownerId,
+          visitId: activeVisitId || undefined,
+          customerPhone: customerPhone.trim() || customerProfile?.phone || undefined,
+          customerName: resolvedName,
+          hallName: orderType === 'dine_in' && resolvedHall ? resolvedHall : undefined,
+          tableNumber: orderType === 'dine_in' && normalizedTbl ? normalizedTbl : undefined,
+          orderType,
+          source: 'menu',
+          orderId: res.id,
+          orderNumber: res.orderNumber,
+          status: orderType === 'dine_in' ? 'active' : 'completed',
+        });
+        onVisitSynced?.(syncedVisitId);
       }
 
       // Sync customer loyalty stats (visits, punch card, favorites, last order) if registered
