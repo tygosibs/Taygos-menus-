@@ -3,7 +3,7 @@ importScripts('https://www.gstatic.com/firebasejs/11.0.2/firebase-app-compat.js'
 importScripts('https://www.gstatic.com/firebasejs/11.0.2/firebase-messaging-compat.js');
 
 firebase.initializeApp({
-  apiKey: 'AIzaSyBf0diTFe-DahUE9n8_V1B1fpAFkNZ4akU',
+  apiKey: 'AIzaSyCzIvGmQ_H01nlnooN77d2ml76YqHyGQkQ',
   authDomain: 'gen-lang-client-0179420211.firebaseapp.com',
   projectId: 'gen-lang-client-0179420211',
   storageBucket: 'gen-lang-client-0179420211.firebasestorage.app',

@@ -74,6 +74,20 @@ function mapFirebaseAuthError(
     };
   }
 
+  if (
+    code.toLowerCase().includes('requests-to-this-api') ||
+    rawMsg.toLowerCase().includes('api_key_service_blocked') ||
+    rawMsg.toLowerCase().includes('are blocked')
+  ) {
+    return {
+      diagnosticHint:
+        'Google Cloud Console → Project gen-lang-client-0179420211 → Credentials → API key → API restrictions → Enable Identity Toolkit API, Token Service API, Cloud Firestore API & Firebase Installations API',
+      message: isEn
+        ? 'This API Key is blocked from calling Identity Toolkit API. In Google Cloud Console → Credentials → Edit API key → API restrictions, add "Identity Toolkit API" (or set to "Don\'t restrict key").'
+        : 'مفتاح الـ API الحالي مقيد ولا يشمل Identity Toolkit API. من Google Cloud Console ← Credentials ← عدّل المفتاح ← أضف Identity Toolkit API إلى API restrictions (أو اختر Don\'t restrict key).',
+    };
+  }
+
   switch (code) {
     case 'auth/operation-not-allowed':
     case 'auth/configuration-not-found':

@@ -178,6 +178,11 @@ export function formatFirestoreErrorMessage(error: unknown, isEn = false): strin
       ? 'The Firebase Web API Key for this project has expired or was invalidated in Google Cloud Console. Renew or create a valid Browser API key in Google Cloud Credentials and update the app config.'
       : 'انتهت صلاحية مفتاح Firebase API الخاص بالمشروع في Google Cloud Console. يرجى تجديد المفتاح أو إنشاء مفتاح جديد من Google Cloud Credentials ثم تحديث إعدادات التطبيق.';
   }
+  if (lower.includes('api_key_service_blocked') || lower.includes('requests-to-this-api') || lower.includes('are blocked')) {
+    return isEn
+      ? 'The current Firebase API Key is missing required API restrictions (such as Identity Toolkit API or Cloud Firestore API) in Google Cloud Credentials.'
+      : 'مفتاح Firebase API الحالي مقيّد ولا يشمل كل الخدمات المطلوبة (مثل Identity Toolkit API أو Cloud Firestore API) في Google Cloud Credentials.';
+  }
   if (lower.includes('permission-denied') || lower.includes('insufficient permissions')) {
     return isEn
       ? 'You do not have database permission to perform this action. Contact the restaurant owner or manager.'
